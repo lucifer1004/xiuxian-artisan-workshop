@@ -2,6 +2,8 @@ use clap::Subcommand;
 
 #[cfg(feature = "zhenfa-router")]
 use super::GatewayArgs;
+#[cfg(feature = "zhenfa-router")]
+use super::QueryCommand;
 use super::{
     AgenticCommand, AttachmentsArgs, AuditArgs, FixArgs, HmasCommand, MetadataArgs, NeighborsArgs,
     RelatedArgs, RepoCommand, ResolveArgs, SaliencyCommand, SearchArgs, SentinelArgs, TocArgs,
@@ -46,6 +48,12 @@ pub(crate) enum Command {
     Repo {
         #[command(subcommand)]
         command: RepoCommand,
+    },
+    /// Execute one query-language adapter against the shared search query system.
+    #[cfg(feature = "zhenfa-router")]
+    Query {
+        #[command(subcommand)]
+        command: QueryCommand,
     },
     /// Apply automated fixes to documents based on semantic audit issues.
     ///

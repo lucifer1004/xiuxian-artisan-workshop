@@ -43,8 +43,11 @@ This RFC is governed by:
 1. [2026-03-29-python-arrow-flight-boundary-rfc.md](./2026-03-29-python-arrow-flight-boundary-rfc.md)
 2. [2026-03-27-wendao-arrow-plugin-flight-rfc.md](./2026-03-27-wendao-arrow-plugin-flight-rfc.md)
 3. [2026-03-27-wendao-core-runtime-plugin-migration-rfc.md](./2026-03-27-wendao-core-runtime-plugin-migration-rfc.md)
-4. [wendao_arrow_plugin_core_runtime_migration.md](../../.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md)
-5. [2026-03-31-python-wendao-analyzer-package-rfc.md](./2026-03-31-python-wendao-analyzer-package-rfc.md)
+4. [2026-03-31-python-wendao-analyzer-package-rfc.md](./2026-03-31-python-wendao-analyzer-package-rfc.md)
+
+The paired execution tracking also follows the active core/runtime/plugin
+migration blueprint, but canonical RFCs do not link hidden workspace paths
+directly.
 
 ## 3. Problem Statement
 

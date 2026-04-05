@@ -20,11 +20,9 @@ fn projected_retrieval_context_lookup_resolves_page_context() -> TestResult {
         },
         &analysis,
     );
-    let page = pages
-        .pages
-        .iter()
-        .find(|page| page.title == "solve")
-        .expect("expected a projected page titled `solve`");
+    let Some(page) = pages.pages.iter().find(|page| page.title == "solve") else {
+        panic!("expected a projected page titled `solve`");
+    };
 
     let result = build_repo_projected_retrieval_context(
         &RepoProjectedRetrievalContextQuery {
@@ -54,13 +52,12 @@ fn projected_retrieval_context_lookup_resolves_node_context() -> TestResult {
         &analysis,
     )?;
 
-    let tree = trees
-        .trees
-        .iter()
-        .find(|tree| tree.title == "solve")
-        .expect("expected a projected page-index tree titled `solve`");
-    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+    let Some(tree) = trees.trees.iter().find(|tree| tree.title == "solve") else {
+        panic!("expected a projected page-index tree titled `solve`");
+    };
+    let Some(node_id) = find_node_id(tree.roots.as_slice(), "Anchors") else {
+        panic!("expected a projected page-index node titled `Anchors`");
+    };
 
     let result = build_repo_projected_retrieval_context(
         &RepoProjectedRetrievalContextQuery {

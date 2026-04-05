@@ -24,6 +24,13 @@ pub fn register_into(registry: &mut PluginRegistry) -> Result<(), RepoIntelligen
     registry.register(ModelicaRepoIntelligencePlugin)
 }
 
+inventory::submit! {
+    xiuxian_wendao_core::repo_intelligence::BuiltinPluginRegistrar::new(
+        MODELICA_PLUGIN_ID,
+        register_into,
+    )
+}
+
 impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
     fn id(&self) -> &'static str {
         MODELICA_PLUGIN_ID

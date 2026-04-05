@@ -1,0 +1,34 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/search/queries/tests/snapshots.rs
+expression: value
+---
+{
+  "discovery": {
+    "document": "\n    {\n      wendao_sql_tables(\n        filter: { sql_object_kind: \"table\" }\n        sort: [{ field: \"sql_table_name\" }]\n        limit: 10\n      ) {\n        sql_table_name\n        sql_object_kind\n        source_count\n      }\n    }\n    ",
+    "payload": {
+      "data": {
+        "wendao_sql_tables": [
+          {
+            "source_count": 0,
+            "sql_object_kind": "table",
+            "sql_table_name": "reference_occurrence"
+          }
+        ]
+      }
+    }
+  },
+  "reference_occurrence": {
+    "document": "\n    {\n      reference_occurrence(\n        filter: { name: \"AlphaService\" }\n        sort: [{ field: \"line\", order: \"desc\" }]\n        limit: 1\n      ) {\n        name\n        path\n        line\n      }\n    }\n    ",
+    "payload": {
+      "data": {
+        "reference_occurrence": [
+          {
+            "line": 10,
+            "name": "AlphaService",
+            "path": "src/lib.rs"
+          }
+        ]
+      }
+    }
+  }
+}

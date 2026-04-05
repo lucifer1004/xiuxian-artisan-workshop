@@ -173,18 +173,12 @@ fn validate_repo_overview_request_metadata_accepts_stable_request() {
 fn validate_repo_index_status_request_metadata_accepts_stable_request() {
     let metadata = build_repo_index_status_metadata(Some("gateway-sync"));
 
-    let repo_id = must_ok(
-        validate_repo_index_status_request_metadata(&metadata),
-        "stable repo index status metadata should validate",
-    );
+    let repo_id = validate_repo_index_status_request_metadata(&metadata);
 
     assert_eq!(repo_id.as_deref(), Some("gateway-sync"));
 
     let metadata = build_repo_index_status_metadata(None);
-    let repo_id = must_ok(
-        validate_repo_index_status_request_metadata(&metadata),
-        "unfiltered repo index status metadata should validate",
-    );
+    let repo_id = validate_repo_index_status_request_metadata(&metadata);
     assert_eq!(repo_id, None);
 }
 

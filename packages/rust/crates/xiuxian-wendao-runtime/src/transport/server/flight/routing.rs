@@ -97,7 +97,7 @@ impl WendaoFlightService {
             let (repo_id, refresh, request_id) = validate_repo_index_request_metadata(metadata)?;
             Ok(format!("{route}|{repo_id:?}|{refresh}|{request_id:?}"))
         } else if route == ANALYSIS_REPO_INDEX_STATUS_ROUTE {
-            let repo_id = validate_repo_index_status_request_metadata(metadata)?;
+            let repo_id = validate_repo_index_status_request_metadata(metadata);
             Ok(format!("{route}|{repo_id:?}"))
         } else if route == ANALYSIS_REPO_SYNC_ROUTE {
             let (repo_id, mode) = validate_repo_sync_request_metadata(metadata)?;
@@ -457,7 +457,7 @@ impl WendaoFlightService {
         route: &str,
         metadata: &tonic::metadata::MetadataMap,
     ) -> Result<FlightRoutePayload, Status> {
-        let repo_id = validate_repo_index_status_request_metadata(metadata)?;
+        let repo_id = validate_repo_index_status_request_metadata(metadata);
         let provider = self.repo_index_status_provider.as_ref().ok_or_else(|| {
             Status::unimplemented(format!(
                 "repo index status Flight route `{route}` is not configured for this runtime host"

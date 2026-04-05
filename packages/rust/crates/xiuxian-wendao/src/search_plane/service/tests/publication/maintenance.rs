@@ -43,8 +43,7 @@ async fn repo_publication_runs_prewarm_via_maintenance_task_and_releases_repo_sl
         !entity
             .maintenance
             .as_ref()
-            .map(|maintenance| maintenance.prewarm_running)
-            .unwrap_or(false)
+            .is_some_and(|maintenance| maintenance.prewarm_running)
     );
     assert!(
         content
@@ -57,8 +56,7 @@ async fn repo_publication_runs_prewarm_via_maintenance_task_and_releases_repo_sl
         !content
             .maintenance
             .as_ref()
-            .map(|maintenance| maintenance.prewarm_running)
-            .unwrap_or(false)
+            .is_some_and(|maintenance| maintenance.prewarm_running)
     );
     assert!(
         service

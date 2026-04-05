@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 arrow = { workspace = true }
+inventory = "0.3"
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

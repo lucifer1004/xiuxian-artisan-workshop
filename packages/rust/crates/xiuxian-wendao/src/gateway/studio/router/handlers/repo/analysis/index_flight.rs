@@ -47,14 +47,14 @@ impl RepoIndexFlightRouteProvider for StudioRepoIndexFlightRouteProvider {
             },
         )
         .await
-        .map_err(map_studio_api_error)?;
+        .map_err(|error| map_studio_api_error(&error))?;
         let batch = build_repo_index_status_flight_batch(&response)?;
         let metadata = build_repo_index_status_flight_metadata(&response)?;
         Ok(AnalysisFlightRouteResponse::new(batch).with_app_metadata(metadata))
     }
 }
 
-fn map_studio_api_error(error: crate::gateway::studio::router::StudioApiError) -> String {
+fn map_studio_api_error(error: &crate::gateway::studio::router::StudioApiError) -> String {
     error
         .error
         .details

@@ -56,8 +56,9 @@ This RFC is governed by:
 1. [2026-03-31-wendao-flight-query-contract-evolution-rfc.md](./2026-03-31-wendao-flight-query-contract-evolution-rfc.md)
 2. [2026-03-29-python-arrow-flight-boundary-rfc.md](./2026-03-29-python-arrow-flight-boundary-rfc.md)
 3. [2026-03-27-wendao-arrow-plugin-flight-rfc.md](./2026-03-27-wendao-arrow-plugin-flight-rfc.md)
-4. [.data/WendaoArrow/README.md](../../.data/WendaoArrow/README.md)
-5. [.data/WendaoAnalyzer/README.md](../../.data/WendaoAnalyzer/README.md)
+
+This alignment also mirrors the existing `WendaoArrow` / `WendaoAnalyzer`
+Julia package split without linking hidden workspace checkouts from the RFC.
 
 ## 3. Problem Statement
 

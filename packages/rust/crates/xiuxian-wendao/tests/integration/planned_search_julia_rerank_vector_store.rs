@@ -8,10 +8,9 @@ use xiuxian_vector::VectorStore;
 use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
-use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_RERANK_FLIGHT_ROUTE;
-
-use crate::support::wendaoarrow_custom_service::{
-    WendaoArrowScoreRow, spawn_wendaoarrow_custom_scoring_service,
+use xiuxian_wendao_julia::integration_support::{
+    WendaoArrowScoreRow, julia_planned_search_vector_store_runtime_config_toml,
+    spawn_wendaoarrow_custom_scoring_service,
 };
 
 #[test]
@@ -60,27 +59,9 @@ fn test_planned_search_payload_with_query_vector_applies_julia_rerank_on_vector_
     let config_path = temp.path().join("wendao.toml");
     fs::write(
         &config_path,
-        format!(
-            r#"[link_graph.retrieval]
-mode = "hybrid"
-candidate_multiplier = 2
-max_sources = 2
-graph_rows_per_source = 2
-
-[link_graph.retrieval.semantic_ignition]
-backend = "vector-store"
-vector_store_path = "{}"
-table_name = "wendao_semantic_docs"
-
-[link_graph.retrieval.julia_rerank]
-base_url = "{}"
-route = "{}"
-schema_version = "v1"
-timeout_secs = 10
-"#,
-            vector_store_path.to_string_lossy(),
-            server_base_url,
-            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
+        julia_planned_search_vector_store_runtime_config_toml(
+            vector_store_path.to_string_lossy().as_ref(),
+            server_base_url.as_str(),
         ),
     )?;
     let config_path_string = config_path.to_string_lossy().to_string();

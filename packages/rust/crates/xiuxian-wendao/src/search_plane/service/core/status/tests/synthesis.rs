@@ -20,7 +20,7 @@ fn synthesize_repo_status_marks_indexing_corpus_as_prewarming_when_staging_was_p
     };
     let staging_epoch = repo_corpus_staging_epoch(
         SearchCorpusKind::RepoEntity,
-        &[runtime_status.clone()],
+        std::slice::from_ref(&runtime_status),
         None,
     )
     .unwrap_or_else(|| panic!("staging epoch should exist"));

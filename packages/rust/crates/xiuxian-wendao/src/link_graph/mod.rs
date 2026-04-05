@@ -8,8 +8,6 @@ mod models;
 mod narrator;
 mod page_index;
 pub mod parser;
-/// Generic plugin-runtime vocabulary and compatibility helpers for link-graph plugin providers.
-pub mod plugin_runtime;
 pub mod ppr_hybrid;
 mod query;
 pub(crate) mod runtime_config;
@@ -91,10 +89,10 @@ pub use parser::blocks::extract_blocks;
 pub use query::{ParsedLinkGraphQuery, parse_search_query};
 pub use runtime_config::{
     LinkGraphIndexRuntimeConfig, LinkGraphRerankFlightRuntimeSettings,
-    julia_deployment_artifact_selector, resolve_link_graph_index_runtime,
-    resolve_link_graph_rerank_binding, resolve_link_graph_rerank_flight_runtime_settings,
-    resolve_link_graph_rerank_schema_version, resolve_link_graph_rerank_score_weights,
-    set_link_graph_config_home_override, set_link_graph_wendao_config_override,
+    resolve_link_graph_index_runtime, resolve_link_graph_rerank_binding,
+    resolve_link_graph_rerank_flight_runtime_settings, resolve_link_graph_rerank_schema_version,
+    resolve_link_graph_rerank_score_weights, set_link_graph_config_home_override,
+    set_link_graph_wendao_config_override,
 };
 pub use saliency::{
     LINK_GRAPH_SALIENCY_SCHEMA_VERSION, LinkGraphSaliencyDecaySweepRequest,

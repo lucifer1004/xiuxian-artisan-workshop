@@ -199,23 +199,26 @@ mod tests {
                 attempt_count: 2,
             }],
         })
-        .expect("repo index status batch should build");
+        .unwrap_or_else(|error| panic!("repo index status batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let ready = batch
-            .column_by_name("ready")
-            .expect("ready column")
-            .as_any()
-            .downcast_ref::<LanceInt32Array>()
-            .expect("ready should be int32");
+        let Some(ready_column) = batch.column_by_name("ready") else {
+            panic!("ready column");
+        };
+        let Some(ready) = ready_column.as_any().downcast_ref::<LanceInt32Array>() else {
+            panic!("ready should be int32");
+        };
         assert_eq!(ready.value(0), 1);
 
-        let repos_json = batch
-            .column_by_name("reposJson")
-            .expect("reposJson column")
+        let Some(repos_json_column) = batch.column_by_name("reposJson") else {
+            panic!("reposJson column");
+        };
+        let Some(repos_json) = repos_json_column
             .as_any()
             .downcast_ref::<LanceStringArray>()
-            .expect("reposJson should be utf8");
+        else {
+            panic!("reposJson should be utf8");
+        };
         assert!(repos_json.value(0).contains("gateway-sync"));
     }
 
@@ -246,10 +249,10 @@ mod tests {
                 attempt_count: 2,
             }],
         })
-        .expect("repo index status metadata should encode");
+        .unwrap_or_else(|error| panic!("repo index status metadata should encode: {error}"));
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["total"], 3);
         assert_eq!(payload["syncConcurrencyLimit"], 1);
         assert_eq!(payload["currentRepoId"], "gateway-sync");

@@ -109,16 +109,8 @@ async fn status_with_repo_content_requires_published_state_even_when_disk_tables
     publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-1")).await;
     service.clear_repo_publications("alpha/repo");
 
-    assert!(
-        !service
-            .has_published_repo_corpus(SearchCorpusKind::RepoEntity, "alpha/repo")
-            .await
-    );
-    assert!(
-        !service
-            .has_published_repo_corpus(SearchCorpusKind::RepoContentChunk, "alpha/repo")
-            .await
-    );
+    assert!(!service.has_published_repo_corpus(SearchCorpusKind::RepoEntity, "alpha/repo"));
+    assert!(!service.has_published_repo_corpus(SearchCorpusKind::RepoContentChunk, "alpha/repo"));
 
     let status = service
         .status_with_repo_content(&ready_repo_status("alpha/repo"))

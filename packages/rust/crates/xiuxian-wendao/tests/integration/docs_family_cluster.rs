@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page family cluster lookup.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 
@@ -35,15 +36,13 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page = pages
-        .pages
-        .iter()
-        .find(|page| {
-            page.kind == ProjectionPageKind::Reference && page.title == "Projectionica.Controllers"
-        })
-        .expect(
-            "expected a module-backed projected reference page titled `Projectionica.Controllers`",
+    let Some(page) = pages.pages.iter().find(|page| {
+        page.kind == ProjectionPageKind::Reference && page.title == "Projectionica.Controllers"
+    }) else {
+        panic!(
+            "expected a module-backed projected reference page titled `Projectionica.Controllers`"
         );
+    };
 
     let result = docs_family_cluster_from_config(
         &DocsFamilyClusterQuery {

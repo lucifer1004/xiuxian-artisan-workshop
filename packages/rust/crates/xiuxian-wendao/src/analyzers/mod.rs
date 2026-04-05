@@ -109,13 +109,6 @@ pub use service::{
     JULIA_ARROW_TRACE_ID_COLUMN, JULIA_ARROW_VECTOR_SCORE_COLUMN, julia_arrow_request_schema,
     julia_arrow_response_schema,
 };
-#[cfg(feature = "julia")]
-pub use service::{
-    JuliaArrowRequestRow, JuliaArrowScoreRow, PluginArrowRequestRow, PluginArrowScoreRow,
-    build_julia_arrow_request_batch, build_plugin_arrow_request_batch,
-    decode_julia_arrow_score_rows, decode_plugin_arrow_score_rows,
-    fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
-};
 pub use service::{
     analyze_registered_repository, analyze_registered_repository_cached_with_registry,
     analyze_registered_repository_with_registry, analyze_repository_from_config,

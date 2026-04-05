@@ -2,6 +2,7 @@
 
 mod doc_identity;
 mod fixes;
+mod hidden_links;
 mod index_links;
 mod package_docs;
 mod scope;

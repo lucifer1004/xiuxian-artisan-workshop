@@ -12,7 +12,7 @@ default-run = "wendao"
 default = ["zhenfa-router", "julia", "modelica"]
 pybindings = ["pyo3"]
 zhenfa-router = ["dep:axum", "dep:tower"]
-julia = ["xiuxian-wendao-runtime/julia"]
+julia = ["dep:xiuxian-wendao-julia"]
 modelica = ["dep:xiuxian-wendao-modelica"]
 tree-sitter = ["modelica", "xiuxian-ast/modelica", "xiuxian-wendao-modelica/tree-sitter"]
 performance = ["xiuxian-testing/performance"]
@@ -44,6 +44,7 @@ chrono = { workspace = true, features = ["clock", "serde"] }
 uuid = { workspace = true }
 specta = { workspace = true }
 specta-typescript = { workspace = true }
+prost = "0.14"
 
 # Path resolution
 dirs = "5"
@@ -61,9 +62,9 @@ xiuxian-vector = { path = "../xiuxian-vector" }
 xiuxian-io = { path = "../xiuxian-io" }
 xiuxian-llm = { path = "../xiuxian-llm" }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
-xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia" }
+xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }
 xiuxian-wendao-modelica = { path = "../xiuxian-wendao-modelica", optional = true, default-features = false }
-xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false }
+xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false, features = ["transport"] }
 xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 xiuxian-testing = { path = "../xiuxian-testing" }
@@ -98,7 +99,8 @@ rayon = "1.11"
 unicode-normalization = "0.1"
 
 arrow = { workspace = true }
-arrow-flight = { workspace = true }
+arrow-flight = { workspace = true, features = ["flight-sql"] }
+datafusion = { workspace = true }
 tonic = { version = "0.14.5", default-features = false, features = ["transport"] }
 tonic-web = "0.14"
 
@@ -122,6 +124,7 @@ notify-debouncer-full = "0.7.0"
 reqwest = { workspace = true }
 git2 = { workspace = true }
 tantivy = "0.25"
+graphql-parser = "0.4"
 
 [dev-dependencies]
 tempfile = { workspace = true }

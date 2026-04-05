@@ -129,59 +129,50 @@ impl From<PluginArtifactPayload> for UiPluginArtifact {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "julia"))]
 mod tests {
-    use super::{UiPluginArtifact, UiPluginLaunchSpec, UiPluginTransportKind};
-    use xiuxian_wendao_core::{
-        artifacts::{PluginArtifactPayload, PluginLaunchSpec},
-        capabilities::ContractVersion,
-        ids::{ArtifactId, PluginId},
-        transport::{PluginTransportEndpoint, PluginTransportKind},
-    };
-    use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
+    use super::{UiPluginArtifact, UiPluginLaunchSpec};
+    use xiuxian_wendao_julia::integration_support::julia_ui_artifact_payload_fixture;
 
     #[test]
     fn generic_ui_artifact_builds_from_plugin_artifact_payload() {
-        let payload = PluginArtifactPayload {
-            plugin_id: PluginId("xiuxian-wendao-julia".to_string()),
-            artifact_id: ArtifactId("deployment".to_string()),
-            artifact_schema_version: ContractVersion("v1".to_string()),
-            generated_at: "2026-03-27T12:00:00Z".to_string(),
-            endpoint: Some(PluginTransportEndpoint {
-                base_url: Some("http://127.0.0.1:8088".to_string()),
-                route: Some("/rerank".to_string()),
-                health_route: Some("/healthz".to_string()),
-                timeout_secs: Some(15),
-            }),
-            schema_version: Some("v1".to_string()),
-            launch: Some(PluginLaunchSpec {
-                launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
-                args: vec!["--service-mode".to_string(), "stream".to_string()],
-            }),
-            selected_transport: Some(PluginTransportKind::ArrowFlight),
-            fallback_from: None,
-            fallback_reason: None,
-        };
+        let payload = julia_ui_artifact_payload_fixture();
+        let expected_endpoint = payload
+            .endpoint
+            .clone()
+            .unwrap_or_else(|| panic!("fixture should include endpoint"));
+        let expected_launch = payload
+            .launch
+            .clone()
+            .unwrap_or_else(|| panic!("fixture should include launch spec"));
+        let expected_plugin_id = payload.plugin_id.0.clone();
+        let expected_artifact_id = payload.artifact_id.0.clone();
+        let expected_artifact_schema_version = payload.artifact_schema_version.0.clone();
+        let expected_generated_at = payload.generated_at.clone();
+        let expected_schema_version = payload.schema_version.clone();
+        let expected_selected_transport = payload.selected_transport;
+        let expected_fallback_from = payload.fallback_from;
+        let expected_fallback_reason = payload.fallback_reason.clone();
 
         assert_eq!(
             UiPluginArtifact::from(payload),
             UiPluginArtifact {
-                plugin_id: "xiuxian-wendao-julia".to_string(),
-                artifact_id: "deployment".to_string(),
-                artifact_schema_version: "v1".to_string(),
-                generated_at: "2026-03-27T12:00:00Z".to_string(),
-                base_url: Some("http://127.0.0.1:8088".to_string()),
-                route: Some("/rerank".to_string()),
-                health_route: Some("/healthz".to_string()),
-                timeout_secs: Some(15),
-                schema_version: Some("v1".to_string()),
+                plugin_id: expected_plugin_id,
+                artifact_id: expected_artifact_id,
+                artifact_schema_version: expected_artifact_schema_version,
+                generated_at: expected_generated_at,
+                base_url: expected_endpoint.base_url,
+                route: expected_endpoint.route,
+                health_route: expected_endpoint.health_route,
+                timeout_secs: expected_endpoint.timeout_secs,
+                schema_version: expected_schema_version,
                 launch: Some(UiPluginLaunchSpec {
-                    launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
-                    args: vec!["--service-mode".to_string(), "stream".to_string()],
+                    launcher_path: expected_launch.launcher_path,
+                    args: expected_launch.args,
                 }),
-                selected_transport: Some(UiPluginTransportKind::ArrowFlight),
-                fallback_from: None,
-                fallback_reason: None,
+                selected_transport: expected_selected_transport.map(Into::into),
+                fallback_from: expected_fallback_from.map(Into::into),
+                fallback_reason: expected_fallback_reason,
             }
         );
     }

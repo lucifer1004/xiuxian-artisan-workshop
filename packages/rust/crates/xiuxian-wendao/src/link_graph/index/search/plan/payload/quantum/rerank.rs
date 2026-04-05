@@ -1,17 +1,8 @@
-#[cfg(feature = "julia")]
-use crate::analyzers::languages::validate_julia_arrow_response_batches;
-#[cfg(feature = "julia")]
-use crate::analyzers::{PluginArrowScoreRow, decode_plugin_arrow_score_rows};
 use crate::link_graph::models::{
     LinkGraphJuliaRerankTelemetry, LinkGraphRetrievalPlanRecord, QuantumContext,
 };
 #[cfg(feature = "julia")]
 use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
-#[cfg(feature = "julia")]
-use crate::link_graph::plugin_runtime::{
-    NegotiatedFlightTransportClient, NegotiatedTransportSelection,
-    negotiate_flight_transport_client_from_bindings,
-};
 use crate::link_graph::{OpenAiCompatibleSemanticIgnition, VectorStoreSemanticIgnition};
 #[cfg(feature = "julia")]
 use arrow::record_batch::RecordBatch;
@@ -22,8 +13,15 @@ use std::collections::BTreeMap;
 #[cfg(feature = "julia")]
 use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::capabilities::PluginCapabilityBinding;
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::validate_julia_arrow_response_batches;
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::{PluginArrowScoreRow, decode_plugin_arrow_score_rows};
+#[cfg(feature = "julia")]
 use xiuxian_wendao_runtime::transport::{
-    DEFAULT_FLIGHT_SCHEMA_VERSION, FLIGHT_SCHEMA_VERSION_METADATA_KEY, FLIGHT_TRACE_ID_METADATA_KEY,
+    DEFAULT_FLIGHT_SCHEMA_VERSION, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+    FLIGHT_TRACE_ID_METADATA_KEY, NegotiatedFlightTransportClient, NegotiatedTransportSelection,
+    negotiate_flight_transport_client_from_bindings,
 };
 
 #[cfg(feature = "julia")]

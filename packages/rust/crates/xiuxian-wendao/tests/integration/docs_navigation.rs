@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page navigation bundles.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 
@@ -36,15 +37,15 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page = pages
-        .pages
-        .iter()
-        .find(|page| {
-            page.kind == ProjectionPageKind::Reference
-                && page.title == "Projectionica.Controllers.PI"
-                && page.page_id.contains(":symbol:")
-        })
-        .expect("expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`");
+    let Some(page) = pages.pages.iter().find(|page| {
+        page.kind == ProjectionPageKind::Reference
+            && page.title == "Projectionica.Controllers.PI"
+            && page.page_id.contains(":symbol:")
+    }) else {
+        panic!(
+            "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+        );
+    };
 
     let trees = repo_projected_page_index_trees_from_config(
         &RepoProjectedPageIndexTreesQuery {
@@ -53,13 +54,12 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let tree = trees
-        .trees
-        .iter()
-        .find(|tree| tree.page_id == page.page_id)
-        .expect("expected a projected page-index tree for the selected page");
-    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+    let Some(tree) = trees.trees.iter().find(|tree| tree.page_id == page.page_id) else {
+        panic!("expected a projected page-index tree for the selected page");
+    };
+    let Some(node_id) = find_node_id(tree.roots.as_slice(), "Anchors") else {
+        panic!("expected a projected page-index node titled `Anchors`");
+    };
 
     let result = docs_navigation_from_config(
         &DocsNavigationQuery {

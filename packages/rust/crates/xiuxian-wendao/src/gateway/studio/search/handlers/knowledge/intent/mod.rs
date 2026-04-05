@@ -1,6 +1,5 @@
 mod cache;
 mod entry;
-#[cfg(feature = "julia")]
 pub(crate) mod flight;
 mod indices;
 mod response;

@@ -22,7 +22,9 @@ Primary references:
 - `[[06_roadmap/410_p1_generic_plugin_contract_staging]]`
 - `[[06_roadmap/411_p1_first_code_slice_plan]]`
 - `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
-- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
+
+The active task-scoped blueprint for this migration remains recorded in the
+paired ExecPlan rather than this persistent package-list note.
 
 ## M2 Goal
 
@@ -279,7 +281,7 @@ After this note lands, the next program move should be:
    reduces `M4` Julia-package coupling
 
 :RELATIONS:
-:LINKS: [[index]], [[06_roadmap/412_core_runtime_plugin_program]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
+:LINKS: [[index]], [[06_roadmap/412_core_runtime_plugin_program]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
 :END:
 
 ---

@@ -267,7 +267,10 @@ fn count_changed_hits(plan: &LocalSymbolBuildPlan) -> usize {
 
 fn only_partition(plan: &LocalSymbolBuildPlan) -> &LocalSymbolPartitionBuildPlan {
     assert_eq!(plan.partitions.len(), 1);
-    plan.partitions.values().next().expect("single partition")
+    let Some(partition) = plan.partitions.values().next() else {
+        panic!("single partition");
+    };
+    partition
 }
 
 async fn wait_for_local_symbol_ready(service: &SearchPlaneService, previous_epoch: Option<u64>) {

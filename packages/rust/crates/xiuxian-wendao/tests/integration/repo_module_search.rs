@@ -75,7 +75,9 @@ fn module_search_exposes_ranked_hits_for_frontend_sorting() -> TestResult {
         backlink_item.is_some(),
         "module hit backlink items should expose structured metadata when relations exist"
     );
-    let backlink_item = backlink_item.expect("backlink item should exist");
+    let Some(backlink_item) = backlink_item else {
+        panic!("backlink item should exist");
+    };
     assert!(!backlink_item.id.trim().is_empty());
     assert_eq!(backlink_item.kind.as_deref(), Some("documents"));
     Ok(())
@@ -121,10 +123,8 @@ fn module_search_uses_shared_tantivy_fuzzy_index_for_typos() {
 
     assert_eq!(result.modules.len(), 1);
     assert_eq!(result.modules[0].qualified_name, "ProjectionPkg");
-    assert!(
-        result.module_hits[0]
-            .score
-            .expect("shared fuzzy search should emit a score")
-            > 0.0
-    );
+    let Some(score) = result.module_hits[0].score else {
+        panic!("shared fuzzy search should emit a score");
+    };
+    assert!(score > 0.0);
 }

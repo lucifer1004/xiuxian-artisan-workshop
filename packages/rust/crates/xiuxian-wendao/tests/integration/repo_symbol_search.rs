@@ -1,11 +1,14 @@
 //! Integration tests for Repo Intelligence symbol search flow.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 use std::process::Command;
 
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
-    sample_projection_analysis, write_repo_config,
+    assert_repo_json_snapshot, create_sample_julia_repo, sample_projection_analysis,
+    write_repo_config,
 };
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
@@ -107,7 +110,9 @@ fn symbol_search_exposes_ranked_hits_for_frontend_sorting() -> TestResult {
         backlink_item.is_some(),
         "symbol hit backlink items should expose structured metadata when relations exist"
     );
-    let backlink_item = backlink_item.expect("backlink item should exist");
+    let Some(backlink_item) = backlink_item else {
+        panic!("backlink item should exist");
+    };
     assert!(!backlink_item.id.trim().is_empty());
     assert_eq!(backlink_item.kind.as_deref(), Some("documents"));
     Ok(())
@@ -184,10 +189,8 @@ fn symbol_search_uses_shared_tantivy_fuzzy_index_for_typos() {
 
     assert_eq!(result.symbols.len(), 1);
     assert_eq!(result.symbols[0].name, "solve");
-    assert!(
-        result.symbol_hits[0]
-            .score
-            .expect("shared fuzzy search should emit a score")
-            > 0.0
-    );
+    let Some(score) = result.symbol_hits[0].score else {
+        panic!("shared fuzzy search should emit a score");
+    };
+    assert!(score > 0.0);
 }

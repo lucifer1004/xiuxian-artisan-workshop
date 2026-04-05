@@ -19,10 +19,12 @@ Primary references:
 
 - `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
 - `[[docs/rfcs/2026-03-27-wendao-arrow-plugin-flight-rfc.md]]`
-- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
 - `[[06_roadmap/409_core_runtime_plugin_surface_inventory]]`
 - `[[06_roadmap/410_p1_generic_plugin_contract_staging]]`
 - `[[06_roadmap/411_p1_first_code_slice_plan]]`
+
+The active task-scoped blueprint for this migration remains recorded in the
+paired ExecPlan rather than this persistent program note.
 
 ## Program Position
 
@@ -1550,6 +1552,116 @@ extract_markdown_config_blocks}`
       `/api/topology/3d` plus `/api/vfs*` remain the next bounded utility
       audit surfaces
 
+## Landed Slice: Modelica Docs Integration File Gating
+
+Macro phase:
+
+1. `M6` additive plugin proof follow-through
+
+Gate:
+
+1. plugin-specific integration-test execution hygiene
+
+Ownership seam:
+
+1. plugin-specific integration tests should disappear cleanly from non-plugin
+   lanes instead of compiling as half-empty modules that emit warning noise
+
+The landed changes are:
+
+1. add file-level `feature = "modelica"` gating to the bounded
+   `tests/integration/docs_*` family
+2. keep the slice out of query/runtime implementation and out of the
+   Julia-specific plugin-first lane
+3. rerun a focused non-plugin `xiuxian-testing-gate` probe and confirm the
+   `docs_*` warning front disappears while test semantics remain unchanged
+
+## Landed Slice: Modelica Repo Integration Warning Closure
+
+Macro phase:
+
+1. `M6` additive plugin proof follow-through
+
+Gate:
+
+1. plugin-specific mixed integration-test warning closure
+
+Ownership seam:
+
+1. mixed repo integration files may keep generic Julia coverage visible in the
+   non-plugin lane, but Modelica-only imports, helpers, and support fixtures
+   must not stay unguarded once their proof cases are `feature = "modelica"`
+   gated
+
+The landed changes are:
+
+1. gate Modelica-only imports and helper usage in the bounded
+   `tests/integration/repo_*` files that still mix generic and Modelica test
+   cases
+2. gate `create_sample_modelica_repo` in the shared test-support helpers so
+   non-plugin lanes no longer compile dead Modelica-only setup code
+3. rerun a focused non-plugin `xiuxian-testing-gate` warning probe and confirm
+   the remaining `repo_*` / `tests/support/repo_*` warning front narrows
+   without changing plugin semantics
+
+## Landed Slice: Builtin Plugin Self-Registration
+
+Macro phase:
+
+1. `M4` external plugin ownership follow-through
+
+Gate:
+
+1. builtin plugin bootstrap ownership
+
+Ownership seam:
+
+1. plugin crates should declare their own builtin registration surface, while
+   `xiuxian-wendao` should only consume one generic registrar inventory instead
+   of naming each plugin crate directly in host bootstrap code
+
+The landed changes are:
+
+1. add a generic builtin-plugin registrar contract to the common repo-intelligence
+   surface
+2. make Julia and Modelica submit their own builtin registrars from the plugin
+   crates
+3. reduce `xiuxian-wendao` bootstrap to a generic registrar iteration path so
+   adding a new plugin dependency no longer requires editing host registration
+   code
+
+## Landed Slice: Host Plugin Facade Thinning
+
+Macro phase:
+
+1. `M4` external plugin ownership follow-through
+
+Gate:
+
+1. host public plugin-facade ownership
+
+Ownership seam:
+
+1. `xiuxian-wendao` should stop re-exporting plugin-owned registration and
+   transport-heavy Julia or Modelica APIs from `analyzers/*`; the host should
+   keep only generic bootstrap or domain-facing surfaces, while plugin crates
+   remain the owner of plugin-specific thick APIs
+
+The landed changes are:
+
+1. remove plugin-registration and thick Julia transport facade re-exports from
+   the bounded `src/analyzers/languages/`, `src/analyzers/service/`, and
+   `src/analyzers/mod.rs` host seams
+2. switch the remaining in-repo Julia graph-structural proof and the bounded
+   host link-graph transport call sites to direct `xiuxian-wendao-julia`
+   imports instead of routing through `xiuxian-wendao`
+3. add a host-private builtin-plugin link anchor so Julia and Modelica
+   inventory-submitted registrars still link into the host without reopening
+   the public facade
+4. rerun focused host bootstrap, Julia proof, and non-Julia compile probes to
+   confirm the public facade cut lands without a new touched-scope warning
+   front
+
 ## Governance Rule
 
 Any future implementation note, ExecPlan, or code slice that affects this
@@ -1563,7 +1675,7 @@ program should explicitly state:
 If it does not, it is not yet ready to be treated as migration-program work.
 
 :RELATIONS:
-:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
 :END:
 
 ---

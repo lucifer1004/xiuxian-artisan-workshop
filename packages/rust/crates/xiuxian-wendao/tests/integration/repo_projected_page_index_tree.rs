@@ -1,14 +1,18 @@
 //! Integration tests for deterministic projected page-index tree lookup.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 
-use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_modelica_repo, sample_projection_analysis,
-};
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
+use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     RepoProjectedPageIndexTreeQuery, RepoProjectedPageIndexTreesQuery,
     build_repo_projected_page_index_tree, build_repo_projected_page_index_trees,
+};
+#[cfg(feature = "modelica")]
+use xiuxian_wendao::analyzers::{
     repo_projected_page_index_tree_from_config, repo_projected_page_index_trees_from_config,
 };
 
@@ -25,12 +29,14 @@ fn projected_page_index_tree_lookup_resolves_one_stable_tree() -> TestResult {
         &analysis,
     )?;
 
-    let page_id = trees
+    let Some(page_id) = trees
         .trees
         .iter()
         .find(|tree| tree.title == "solve")
         .map(|tree| tree.page_id.clone())
-        .expect("expected a projected page-index tree titled `solve`");
+    else {
+        panic!("expected a projected page-index tree titled `solve`");
+    };
 
     let result = build_repo_projected_page_index_tree(
         &RepoProjectedPageIndexTreeQuery {
@@ -71,12 +77,14 @@ plugins = ["modelica"]
         temp.path(),
     )?;
 
-    let page_id = trees
+    let Some(page_id) = trees
         .trees
         .iter()
         .find(|tree| tree.title == "Projectionica.Controllers.PI")
         .map(|tree| tree.page_id.clone())
-        .expect("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
+    else {
+        panic!("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
+    };
 
     let result = repo_projected_page_index_tree_from_config(
         &RepoProjectedPageIndexTreeQuery {

@@ -10,7 +10,11 @@ metadata:
 
 ## 1. Overview
 
-The "Living Brain" feature implements biological-inspired neural evolution within the [[packages/rust/crates/xiuxian-wendao|Wendao LinkGraph]]. It allows knowledge nodes and edges to evolve their structural authority based on retrieval frequency and temporal decay, following the principles of **[[.data/research/papers/HippoRAG_2405.14831.pdf|HippoRAG 2 (2025)]]**.
+The "Living Brain" feature implements biological-inspired neural evolution
+within the [[packages/rust/crates/xiuxian-wendao|Wendao LinkGraph]]. It allows
+knowledge nodes and edges to evolve their structural authority based on
+retrieval frequency and temporal decay, following the principles of
+**HippoRAG 2 (2025)**.
 
 ## 2. Core Mechanisms
 

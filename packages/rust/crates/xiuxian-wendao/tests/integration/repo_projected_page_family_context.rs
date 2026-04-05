@@ -1,10 +1,12 @@
 //! Integration tests for deterministic projected page-family context.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
-    write_repo_config,
+    assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
 };
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
@@ -71,11 +73,13 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page = pages
+    let Some(page) = pages
         .pages
         .iter()
         .find(|page| page.kind == ProjectionPageKind::HowTo)
-        .expect("expected a projected how-to page");
+    else {
+        panic!("expected a projected how-to page");
+    };
 
     let result = repo_projected_page_family_context_from_config(
         &RepoProjectedPageFamilyContextQuery {

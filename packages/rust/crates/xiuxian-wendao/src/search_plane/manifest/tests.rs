@@ -180,8 +180,8 @@ fn repo_publication_defaults_legacy_storage_format_when_field_is_missing() {
         "published_at": "2026-03-23T12:00:00Z"
     });
 
-    let record: SearchRepoPublicationRecord =
-        serde_json::from_value(legacy_payload).expect("legacy payload should deserialize");
+    let record: SearchRepoPublicationRecord = serde_json::from_value(legacy_payload)
+        .unwrap_or_else(|error| panic!("legacy payload should deserialize: {error}"));
 
     assert_eq!(record.storage_format, SearchPublicationStorageFormat::Lance);
 }

@@ -2,6 +2,10 @@
 
 /// Shared lexical fuzzy-search utilities.
 pub mod fuzzy;
+/// Shared query-language adapters that sit above the Wendao search plane.
+pub mod queries;
+/// Shared repo-search execution seams above the search plane.
+pub(crate) mod repo_search;
 /// Shared Tantivy-backed search primitives.
 pub mod tantivy;
 

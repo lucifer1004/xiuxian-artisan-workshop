@@ -1,12 +1,10 @@
-use std::collections::BTreeMap;
 #[cfg(test)]
 use std::time::Duration;
 
-use crate::search_plane::{RepoSearchAvailability, RepoSearchPublicationState, SearchPlaneService};
-
 #[cfg(test)]
 use super::types::ParsedCodeSearchQuery;
-use super::types::{ParsedRepoCodeSearchQuery, RepoSearchDispatch, RepoSearchTarget};
+#[cfg(test)]
+pub(crate) use crate::search::repo_search::RepoSearchResultLimits;
 
 #[cfg(test)]
 const DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -14,13 +12,6 @@ const DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_REPO_WIDE_PER_REPO_ENTITY_RESULT_LIMIT: usize = 12;
 #[cfg(test)]
 const DEFAULT_REPO_WIDE_PER_REPO_CONTENT_RESULT_LIMIT: usize = 4;
-
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct RepoSearchResultLimits {
-    pub(crate) entity_limit: usize,
-    pub(crate) content_limit: usize,
-}
 
 #[cfg(test)]
 pub(crate) fn repo_wide_code_search_timeout(repo_hint: Option<&str>) -> Option<Duration> {
@@ -45,72 +36,6 @@ pub(crate) fn repo_search_result_limits(
         entity_limit: limit.min(DEFAULT_REPO_WIDE_PER_REPO_ENTITY_RESULT_LIMIT),
         content_limit: limit.min(DEFAULT_REPO_WIDE_PER_REPO_CONTENT_RESULT_LIMIT),
     }
-}
-
-pub(crate) fn collect_repo_search_targets(
-    repo_ids: Vec<String>,
-    publication_states: &BTreeMap<String, RepoSearchPublicationState>,
-) -> RepoSearchDispatch {
-    let mut dispatch = RepoSearchDispatch::default();
-    for repo_id in repo_ids {
-        let publication_state = publication_states.get(repo_id.as_str()).copied().unwrap_or(
-            RepoSearchPublicationState {
-                entity_published: false,
-                content_published: false,
-                availability: RepoSearchAvailability::Pending,
-            },
-        );
-        if publication_state.is_searchable() {
-            dispatch.searchable.push(RepoSearchTarget {
-                repo_id,
-                publication_state,
-            });
-            continue;
-        }
-        match publication_state.availability {
-            RepoSearchAvailability::Skipped => dispatch.skipped.push(repo_id),
-            RepoSearchAvailability::Pending => dispatch.pending.push(repo_id),
-            RepoSearchAvailability::Searchable => {}
-        }
-    }
-    dispatch
-}
-
-pub(crate) fn repo_search_parallelism(
-    search_plane: &SearchPlaneService,
-    repo_count: usize,
-) -> usize {
-    search_plane.repo_search_parallelism(repo_count)
-}
-
-pub(crate) fn parse_repo_code_search_query(query: &str) -> ParsedRepoCodeSearchQuery {
-    let mut spec = ParsedRepoCodeSearchQuery::default();
-    let mut search_tokens = Vec::new();
-    for token in query.split_whitespace() {
-        if let Some(value) = token.strip_prefix("lang:") {
-            let normalized = value.trim().to_ascii_lowercase();
-            if !normalized.is_empty() {
-                spec.language_filters.insert(normalized);
-            }
-            continue;
-        }
-
-        if let Some(value) = token.strip_prefix("kind:") {
-            let normalized = value.trim().to_ascii_lowercase();
-            if matches!(
-                normalized.as_str(),
-                "file" | "symbol" | "function" | "module" | "example"
-            ) {
-                spec.kind_filters.insert(normalized);
-                continue;
-            }
-        }
-
-        search_tokens.push(token.to_string());
-    }
-
-    spec.search_term = (!search_tokens.is_empty()).then(|| search_tokens.join(" "));
-    spec
 }
 
 #[cfg(test)]
@@ -187,8 +112,8 @@ where
 #[cfg(test)]
 fn normalize_repo_search_seed(value: &str) -> String {
     let mut normalized = value.trim().to_ascii_lowercase();
-    if normalized.ends_with(".jl") {
-        normalized.truncate(normalized.len().saturating_sub(3));
+    if let Some(stripped) = normalized.strip_suffix(".jl") {
+        normalized = stripped.to_string();
     }
 
     let mut collapsed = String::with_capacity(normalized.len());

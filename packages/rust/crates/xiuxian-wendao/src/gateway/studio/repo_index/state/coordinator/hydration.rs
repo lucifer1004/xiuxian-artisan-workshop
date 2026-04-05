@@ -226,6 +226,22 @@ mod tests {
         record_managed_remote_probe_failure, record_managed_remote_probe_state,
     };
 
+    fn tempdir_or_panic() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"))
+    }
+
+    fn read_json_value_or_panic(path: &std::path::Path) -> serde_json::Value {
+        let payload = fs::read(path).unwrap_or_else(|error| panic!("read probe state: {error}"));
+        serde_json::from_slice(&payload)
+            .unwrap_or_else(|error| panic!("parse probe state: {error}"))
+    }
+
+    fn write_json_value_or_panic(path: &std::path::Path, payload: &serde_json::Value) {
+        let encoded = serde_json::to_vec(payload)
+            .unwrap_or_else(|error| panic!("encode probe state: {error}"));
+        fs::write(path, encoded).unwrap_or_else(|error| panic!("rewrite probe state: {error}"));
+    }
+
     #[test]
     fn managed_remote_bootstrap_requires_ready_status_and_matching_revision() {
         let repository = managed_remote_repository(RepositoryRefreshPolicy::Fetch);
@@ -328,9 +344,9 @@ mod tests {
         let mut sync_result = managed_remote_sync_result();
         sync_result.staleness_state = RepoSyncStalenessState::Stale;
 
-        let probe_dir = tempfile::tempdir().expect("tempdir");
+        let probe_dir = tempdir_or_panic();
         record_managed_remote_probe_state(probe_dir.path(), Some("rev-1"))
-            .expect("record probe state");
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
         sync_result.mirror_path = Some(probe_dir.path().display().to_string());
 
         assert!(managed_remote_bootstrap_is_safe(
@@ -345,9 +361,9 @@ mod tests {
     #[test]
     fn managed_remote_probe_freshness_ignores_mismatched_revision() {
         let mut sync_result = managed_remote_sync_result();
-        let probe_dir = tempfile::tempdir().expect("tempdir");
+        let probe_dir = tempdir_or_panic();
         record_managed_remote_probe_state(probe_dir.path(), Some("rev-2"))
-            .expect("record probe state");
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
         sync_result.mirror_path = Some(probe_dir.path().display().to_string());
 
         assert_eq!(managed_remote_probe_freshness(&sync_result), None);
@@ -356,19 +372,13 @@ mod tests {
     #[test]
     fn managed_remote_probe_freshness_reports_stale_for_old_probe_state() {
         let mut sync_result = managed_remote_sync_result();
-        let probe_dir = tempfile::tempdir().expect("tempdir");
+        let probe_dir = tempdir_or_panic();
         record_managed_remote_probe_state(probe_dir.path(), Some("rev-1"))
-            .expect("record probe state");
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
         let state_path = probe_dir.path().join("xiuxian-upstream-probe-state.json");
-        let mut payload: serde_json::Value =
-            serde_json::from_slice(&fs::read(&state_path).expect("read probe state"))
-                .expect("parse probe state");
+        let mut payload = read_json_value_or_panic(&state_path);
         payload["checked_at"] = serde_json::Value::String("2000-01-01T00:00:00+00:00".to_string());
-        fs::write(
-            &state_path,
-            serde_json::to_vec(&payload).expect("encode probe state"),
-        )
-        .expect("rewrite probe state");
+        write_json_value_or_panic(&state_path, &payload);
         sync_result.mirror_path = Some(probe_dir.path().display().to_string());
 
         assert_eq!(
@@ -383,9 +393,9 @@ mod tests {
         let mut sync_result = managed_remote_sync_result();
         sync_result.staleness_state = RepoSyncStalenessState::Stale;
 
-        let probe_dir = tempfile::tempdir().expect("tempdir");
+        let probe_dir = tempdir_or_panic();
         record_managed_remote_probe_failure(probe_dir.path(), "operation timed out", true)
-            .expect("record probe failure");
+            .unwrap_or_else(|error| panic!("record probe failure: {error}"));
         sync_result.mirror_path = Some(probe_dir.path().display().to_string());
 
         assert!(managed_remote_retryable_probe_failure_is_recent(
@@ -406,9 +416,9 @@ mod tests {
         let mut sync_result = managed_remote_sync_result();
         sync_result.staleness_state = RepoSyncStalenessState::Stale;
 
-        let probe_dir = tempfile::tempdir().expect("tempdir");
+        let probe_dir = tempdir_or_panic();
         record_managed_remote_probe_failure(probe_dir.path(), "authentication required", false)
-            .expect("record probe failure");
+            .unwrap_or_else(|error| panic!("record probe failure: {error}"));
         sync_result.mirror_path = Some(probe_dir.path().display().to_string());
 
         assert!(!managed_remote_retryable_probe_failure_is_recent(
@@ -426,11 +436,11 @@ mod tests {
     #[test]
     fn managed_remote_probe_freshness_uses_last_success_marker_after_retryable_failure() {
         let mut sync_result = managed_remote_sync_result();
-        let probe_dir = tempfile::tempdir().expect("tempdir");
+        let probe_dir = tempdir_or_panic();
         record_managed_remote_probe_state(probe_dir.path(), Some("rev-1"))
-            .expect("record probe state");
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
         record_managed_remote_probe_failure(probe_dir.path(), "operation timed out", true)
-            .expect("record probe failure");
+            .unwrap_or_else(|error| panic!("record probe failure: {error}"));
         sync_result.mirror_path = Some(probe_dir.path().display().to_string());
 
         assert!(matches!(

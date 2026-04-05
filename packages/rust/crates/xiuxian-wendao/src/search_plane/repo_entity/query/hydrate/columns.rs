@@ -1,7 +1,7 @@
 use arrow::array::{Array, Float64Array, ListArray, StringArray, StringViewArray, UInt32Array};
 use xiuxian_vector::EngineRecordBatch;
 
-use crate::search_plane::repo_entity::query::types::RepoEntitySearchError;
+use crate::search_plane::repo_entity::query::search::RepoEntitySearchError;
 use crate::search_plane::repo_entity::schema::{
     COLUMN_ATTRIBUTES_JSON, COLUMN_AUDIT_STATUS, COLUMN_HIERARCHICAL_URI, COLUMN_HIERARCHY,
     COLUMN_IMPLICIT_BACKLINK_ITEMS_JSON, COLUMN_IMPLICIT_BACKLINKS, COLUMN_LINE_END,

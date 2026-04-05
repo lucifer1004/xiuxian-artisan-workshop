@@ -65,8 +65,9 @@ plugins = [{ id = "   ", flight_transport = { base_url = "http://127.0.0.1:8815"
 "#,
     )?;
 
-    let error = load_repo_intelligence_config(Some(&config_path), temp.path())
-        .expect_err("expected empty plugin id to be rejected");
+    let Err(error) = load_repo_intelligence_config(Some(&config_path), temp.path()) else {
+        panic!("expected empty plugin id to be rejected");
+    };
     assert_eq!(
         error.to_string(),
         format!(

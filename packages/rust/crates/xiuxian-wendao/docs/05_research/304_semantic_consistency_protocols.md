@@ -42,5 +42,5 @@ The harness monitors the **State Delta Trajectory**. If the agent repeats an act
 
 :RELATIONS:
 :LINKS: [[06_roadmap/401_project_sentinel]], [[addressing/mod.rs]]
-:ASSETS: [[.data/research/papers/2025_opendev_workflow.pdf]]
+:ASSETS: OpenDev 2026 workflow paper
 :END:

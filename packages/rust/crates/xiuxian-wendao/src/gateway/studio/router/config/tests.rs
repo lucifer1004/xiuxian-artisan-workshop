@@ -22,7 +22,9 @@ plugins = [
 "#,
     )?;
 
-    let config = load_ui_config_from_wendao_toml(temp.path()).expect("ui config should load");
+    let Some(config) = load_ui_config_from_wendao_toml(temp.path()) else {
+        panic!("ui config should load");
+    };
     assert_eq!(config.repo_projects.len(), 1);
     assert_eq!(config.repo_projects[0].id, "sample");
     assert_eq!(config.repo_projects[0].plugins, vec!["julia".to_string()]);
@@ -60,11 +62,9 @@ plugins = [
     )?;
 
     let persisted: WendaoTomlConfig = toml::from_str(&fs::read_to_string(&config_path)?)?;
-    let project = persisted
-        .link_graph
-        .projects
-        .get("sample")
-        .expect("sample project should persist");
+    let Some(project) = persisted.link_graph.projects.get("sample") else {
+        panic!("sample project should persist");
+    };
     assert_eq!(project.plugins.len(), 2);
     assert!(matches!(
         &project.plugins[0],

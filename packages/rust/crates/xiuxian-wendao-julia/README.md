@@ -6,6 +6,7 @@
 
 - `xiuxian-wendao-runtime` owns the reusable Arrow Flight runtime client and negotiation seam.
 - `xiuxian-wendao-julia` owns Julia-specific interpretation of repository plugin options and translates them into the runtime-owned Flight binding.
+- `xiuxian-wendao-julia` owns the Julia Arrow rerank exchange seam, including typed request or score rows, request-batch assembly, response decoding, repository fetch helpers, and plugin-local tests.
 - `xiuxian-wendao-julia` also owns Julia-specific graph-structural transport option parsing, route-kind dispatch defaults, and staged request or response validation for promoted structural-search downcalls.
 - `xiuxian-wendao-julia` also owns Julia-specific graph-structural route names, draft schema-version defaults, semantic projection DTOs, typed request or response row helpers, and Arrow batch validation for the mixed-graph structural plugin lane.
 - `xiuxian-wendao-julia` also owns stable two-node pair projection helpers for that lane, including pair candidate id normalization, pair candidate subgraph projection, and pair-to-request-row builders.
@@ -249,6 +250,7 @@ That means:
 ## Validation
 
 - `direnv exec . cargo test -p xiuxian-wendao-julia transport --lib`
+- `direnv exec . cargo test -p xiuxian-wendao-julia --lib rerank_exchange`
 - `direnv exec . cargo test -p xiuxian-wendao-julia graph_structural_exchange --lib`
 - `direnv exec . cargo test -p xiuxian-wendao-julia graph_structural_projection --lib`
 - `direnv exec . cargo test -p xiuxian-wendao-julia process_julia_flight_batches_against_real_wendaoarrow_service --lib`

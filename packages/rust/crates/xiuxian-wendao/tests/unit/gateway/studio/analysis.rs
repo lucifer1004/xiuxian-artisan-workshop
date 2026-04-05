@@ -8,7 +8,7 @@ use tempfile::tempdir;
 
 struct AnalysisFixture {
     state: StudioState,
-    _temp_dir: tempfile::TempDir,
+    temp_dir: tempfile::TempDir,
 }
 
 fn make_analysis_fixture() -> AnalysisFixture {
@@ -56,10 +56,7 @@ fn compile() {}
         repo_projects: Vec::new(),
     });
 
-    AnalysisFixture {
-        state,
-        _temp_dir: temp_dir,
-    }
+    AnalysisFixture { state, temp_dir }
 }
 
 #[tokio::test]
@@ -207,13 +204,13 @@ async fn analyze_markdown_emits_retrieval_atoms_for_document_sections_and_code_b
 async fn analyze_markdown_emits_retrieval_atoms_for_tables() {
     let fixture = make_analysis_fixture();
     std::fs::write(
-        fixture._temp_dir.path().join("docs/table.md"),
-        r#"# Performance
+        fixture.temp_dir.path().join("docs/table.md"),
+        r"# Performance
 
 | Model | FP32 | INT8 |
 | --- | --- | --- |
 | BERT | 120 | 42 |
-"#,
+",
     )
     .unwrap_or_else(|err| panic!("failed to write table markdown fixture: {err}"));
 
@@ -236,7 +233,7 @@ async fn analyze_markdown_emits_retrieval_atoms_for_tables() {
 async fn analyze_markdown_emits_retrieval_atoms_for_display_math() {
     let fixture = make_analysis_fixture();
     std::fs::write(
-        fixture._temp_dir.path().join("docs/math.md"),
+        fixture.temp_dir.path().join("docs/math.md"),
         "# Formula\n\n$$\nQ = clamp(round(R / S + Z), qmin, qmax)\n$$\n",
     )
     .unwrap_or_else(|err| panic!("failed to write math markdown fixture: {err}"));

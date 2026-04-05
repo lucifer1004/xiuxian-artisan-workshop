@@ -198,7 +198,8 @@ Initial bounded progress for that slice is now landed:
 
 ## Gateway-Driven Tantivy Performance Landing
 
-The next bounded repo-intelligence performance slice is now active under `[[.cache/codex/execplans/wendao-gateway-tantivy-performance-landing.md]]`.
+The next bounded repo-intelligence performance slice is now tracked in the
+active performance-landing ExecPlan rather than this persistent roadmap note.
 
 Its execution contract is:
 
@@ -324,4 +325,7 @@ rust-wendao-performance-gate` expands into
 
 ## Open Constraint
 
-The repository-level AGENTS reference points at `[[.data/blueprints/project_anchor_semantic_addressing.md]]`, but that file is not currently present in the workspace. The Repo Intelligence MVP should therefore treat this roadmap note plus the paired ExecPlan as the immediate execution guide until the canonical semantic-addressing blueprint is restored or replaced.
+The repository-level semantic-addressing blueprint is now present again in the
+workspace. The Repo Intelligence MVP should treat that blueprint plus this
+roadmap note and the paired ExecPlan as the active execution guide, while the
+exact hidden-path reference remains in the tracking record.

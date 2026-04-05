@@ -7,8 +7,9 @@ use xiuxian_wendao_core::{
 };
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
-use crate::link_graph::plugin_runtime::{
-    render_plugin_artifact_toml_for_selector, resolve_plugin_artifact_for_selector,
+use crate::link_graph::runtime_config::{
+    render_link_graph_plugin_artifact_toml_for_selector,
+    resolve_link_graph_plugin_artifact_for_selector,
 };
 
 /// Output formats for visible plugin-artifact export.
@@ -92,7 +93,7 @@ pub fn wendao_plugin_artifact(
 pub fn render_plugin_artifact_toml(
     selector: &PluginArtifactSelector,
 ) -> Result<String, ZhenfaError> {
-    render_plugin_artifact_toml_for_selector(selector)
+    render_link_graph_plugin_artifact_toml_for_selector(selector)
         .map_err(|error| ZhenfaError::execution(format!("export plugin artifact: {error}")))?
         .ok_or_else(|| ZhenfaError::execution("export plugin artifact: not found"))
 }
@@ -105,7 +106,7 @@ pub fn render_plugin_artifact_toml(
 pub fn render_plugin_artifact_json(
     selector: &PluginArtifactSelector,
 ) -> Result<String, ZhenfaError> {
-    resolve_plugin_artifact_for_selector(selector)
+    resolve_link_graph_plugin_artifact_for_selector(selector)
         .ok_or_else(|| ZhenfaError::execution("export plugin artifact as json: not found"))?
         .to_json_string()
         .map_err(|error| ZhenfaError::execution(format!("export plugin artifact as json: {error}")))
@@ -135,7 +136,7 @@ pub fn export_plugin_artifact(args: &WendaoPluginArtifactArgs) -> Result<String,
     let selector = args.selector()?;
 
     if let Some(output_path) = args.output_path.as_deref() {
-        let artifact = resolve_plugin_artifact_for_selector(&selector)
+        let artifact = resolve_link_graph_plugin_artifact_for_selector(&selector)
             .ok_or_else(|| ZhenfaError::execution("write plugin artifact: artifact not found"))?;
         let path = Path::new(output_path);
         match args.output_format {
@@ -166,6 +167,6 @@ pub fn export_plugin_artifact(args: &WendaoPluginArtifactArgs) -> Result<String,
     render_plugin_artifact(&selector, args.output_format)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "julia"))]
 #[path = "../../../tests/unit/zhenfa_router/native/deployment.rs"]
 mod tests;

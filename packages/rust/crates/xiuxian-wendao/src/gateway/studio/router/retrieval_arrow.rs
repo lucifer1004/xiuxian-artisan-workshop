@@ -187,40 +187,42 @@ mod tests {
             },
         ];
 
-        let encoded = encode_retrieval_chunks_ipc(&chunks).expect("arrow encoding should succeed");
-        let reader =
-            StreamReader::try_new(Cursor::new(encoded), None).expect("stream reader should open");
+        let encoded = encode_retrieval_chunks_ipc(&chunks)
+            .unwrap_or_else(|error| panic!("arrow encoding should succeed: {error}"));
+        let reader = StreamReader::try_new(Cursor::new(encoded), None)
+            .unwrap_or_else(|error| panic!("stream reader should open: {error}"));
         let batches = reader
             .collect::<Result<Vec<_>, _>>()
-            .expect("batches should decode");
+            .unwrap_or_else(|error| panic!("batches should decode: {error}"));
         assert_eq!(batches.len(), 1);
         let batch = &batches[0];
         assert_eq!(batch.num_rows(), 2);
 
-        let owner_ids = batch
-            .column_by_name("ownerId")
-            .expect("ownerId column")
-            .as_any()
-            .downcast_ref::<StringArray>()
-            .expect("ownerId should be utf8");
+        let Some(owner_id_column) = batch.column_by_name("ownerId") else {
+            panic!("ownerId column");
+        };
+        let Some(owner_ids) = owner_id_column.as_any().downcast_ref::<StringArray>() else {
+            panic!("ownerId should be utf8");
+        };
         assert_eq!(owner_ids.value(0), "section:intro");
         assert_eq!(owner_ids.value(1), "block:return:solve");
 
-        let token_estimates = batch
-            .column_by_name("tokenEstimate")
-            .expect("tokenEstimate column")
-            .as_any()
-            .downcast_ref::<UInt64Array>()
-            .expect("tokenEstimate should be u64");
+        let Some(token_estimate_column) = batch.column_by_name("tokenEstimate") else {
+            panic!("tokenEstimate column");
+        };
+        let Some(token_estimates) = token_estimate_column.as_any().downcast_ref::<UInt64Array>()
+        else {
+            panic!("tokenEstimate should be u64");
+        };
         assert_eq!(token_estimates.value(0), 18);
         assert_eq!(token_estimates.value(1), 9);
 
-        let surfaces = batch
-            .column_by_name("surface")
-            .expect("surface column")
-            .as_any()
-            .downcast_ref::<StringArray>()
-            .expect("surface should be utf8");
+        let Some(surface_column) = batch.column_by_name("surface") else {
+            panic!("surface column");
+        };
+        let Some(surfaces) = surface_column.as_any().downcast_ref::<StringArray>() else {
+            panic!("surface should be utf8");
+        };
         assert_eq!(surfaces.value(0), "section");
         assert_eq!(surfaces.value(1), "block");
     }

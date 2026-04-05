@@ -3,8 +3,8 @@ use std::fs;
 
 use super::types::SearchPlaneService;
 use crate::search_plane::{
-    SearchCorpusKind, SearchPublicationStorageFormat, SearchRepoCorpusRecord,
-    SearchRepoPublicationInput, SearchRepoPublicationRecord,
+    RepoContentChunkSearchFilters, SearchCorpusKind, SearchPublicationStorageFormat,
+    SearchRepoCorpusRecord, SearchRepoPublicationInput, SearchRepoPublicationRecord,
 };
 
 impl SearchPlaneService {
@@ -86,11 +86,34 @@ impl SearchPlaneService {
         Vec<crate::gateway::studio::types::SearchHit>,
         crate::search_plane::repo_content_chunk::RepoContentChunkSearchError,
     > {
-        crate::search_plane::repo_content_chunk::search_repo_content_chunks(
+        let filters = RepoContentChunkSearchFilters::default();
+        self.search_repo_content_chunks_with_filters(
+            repo_id,
+            search_term,
+            language_filters,
+            &filters,
+            limit,
+        )
+        .await
+    }
+
+    pub(crate) async fn search_repo_content_chunks_with_filters(
+        &self,
+        repo_id: &str,
+        search_term: &str,
+        language_filters: &HashSet<String>,
+        filters: &RepoContentChunkSearchFilters,
+        limit: usize,
+    ) -> Result<
+        Vec<crate::gateway::studio::types::SearchHit>,
+        crate::search_plane::repo_content_chunk::RepoContentChunkSearchError,
+    > {
+        crate::search_plane::repo_content_chunk::search_repo_content_chunks_with_filters(
             self,
             repo_id,
             search_term,
             language_filters,
+            filters,
             limit,
         )
         .await
@@ -166,7 +189,7 @@ impl SearchPlaneService {
     }
 
     #[cfg(test)]
-    pub(crate) async fn has_published_repo_corpus(
+    pub(crate) fn has_published_repo_corpus(
         &self,
         corpus: SearchCorpusKind,
         repo_id: &str,

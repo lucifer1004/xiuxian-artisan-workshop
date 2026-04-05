@@ -94,12 +94,10 @@ fn example_search_uses_shared_tantivy_fuzzy_index_for_title_typos() -> TestResul
 
     assert_eq!(result.examples.len(), 1);
     assert_eq!(result.examples[0].title, "basic");
-    assert!(
-        result.example_hits[0]
-            .score
-            .expect("shared fuzzy example search should emit a score")
-            > 0.0
-    );
+    let Some(score) = result.example_hits[0].score else {
+        panic!("shared fuzzy example search should emit a score");
+    };
+    assert!(score > 0.0);
     Ok(())
 }
 

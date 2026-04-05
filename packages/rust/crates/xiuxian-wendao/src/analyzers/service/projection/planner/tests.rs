@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::analyzers::projection::ProjectionPageKind;
 use crate::analyzers::query::{
     DocsPlannerWorksetBalance, DocsPlannerWorksetFamilyBalanceEntry,

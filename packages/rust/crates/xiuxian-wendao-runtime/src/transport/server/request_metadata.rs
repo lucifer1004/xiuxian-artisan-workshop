@@ -4,7 +4,7 @@ use tonic::Status;
 use tonic::metadata::MetadataMap;
 
 use super::types::RepoSearchFlightRequest;
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 use crate::transport::query_contract::validate_sql_query_request;
 use crate::transport::query_contract::{
     SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE,
@@ -267,11 +267,11 @@ pub(crate) fn validate_repo_overview_request_metadata(
 
 pub(crate) fn validate_repo_index_status_request_metadata(
     metadata: &MetadataMap,
-) -> Result<RepoIndexStatusMetadata, Status> {
+) -> RepoIndexStatusMetadata {
     let repo_id = metadata
         .get(WENDAO_REPO_INDEX_STATUS_REPO_HEADER)
         .and_then(|value| value.to_str().ok());
-    validate_repo_index_status_request(repo_id).map_err(Status::invalid_argument)
+    validate_repo_index_status_request(repo_id)
 }
 
 pub(crate) fn validate_repo_index_request_metadata(
@@ -359,7 +359,7 @@ pub(crate) fn validate_sql_request_metadata(metadata: &MetadataMap) -> Result<St
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_string();
-    #[cfg(feature = "julia")]
+    #[cfg(feature = "transport")]
     validate_sql_query_request(query_text.as_str()).map_err(Status::invalid_argument)?;
     Ok(query_text)
 }

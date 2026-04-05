@@ -134,8 +134,9 @@ mod tests {
 
     #[test]
     fn import_search_filters_require_package_or_module() {
-        let error = required_import_search_filters(None, None)
-            .expect_err("missing import filters should fail");
+        let Err(error) = required_import_search_filters(None, None) else {
+            panic!("missing import filters should fail");
+        };
         assert_eq!(error.code(), "MISSING_IMPORT_FILTER");
     }
 }

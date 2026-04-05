@@ -1,7 +1,7 @@
 #![cfg(feature = "julia")]
 
 //! Integration test for planned-search Julia rerank against the analyzer-owned
-//! WendaoAnalyzer server with a non-default runtime-selected strategy.
+//! `WendaoAnalyzer` server with a non-default runtime-selected strategy.
 
 use serial_test::serial;
 use std::fs;
@@ -13,8 +13,7 @@ use xiuxian_wendao_julia::compatibility::link_graph::{
     DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
     LinkGraphJuliaRerankRuntimeConfig,
 };
-
-use crate::support::wendaoarrow_official_examples::{
+use xiuxian_wendao_julia::integration_support::{
     spawn_wendaoanalyzer_service_from_artifact, wendaoanalyzer_deployment_artifact_from_runtime,
 };
 

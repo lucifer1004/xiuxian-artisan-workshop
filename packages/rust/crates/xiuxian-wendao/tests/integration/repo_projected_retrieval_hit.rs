@@ -38,13 +38,12 @@ fn projected_retrieval_hit_lookup_resolves_node_hit_when_node_id_is_present() ->
         &analysis,
     )?;
 
-    let tree = trees
-        .trees
-        .iter()
-        .find(|tree| tree.title == "solve")
-        .expect("expected a projected page-index tree titled `solve`");
-    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+    let Some(tree) = trees.trees.iter().find(|tree| tree.title == "solve") else {
+        panic!("expected a projected page-index tree titled `solve`");
+    };
+    let Some(node_id) = find_node_id(tree.roots.as_slice(), "Anchors") else {
+        panic!("expected a projected page-index node titled `Anchors`");
+    };
 
     let result = build_repo_projected_retrieval_hit(
         &RepoProjectedRetrievalHitQuery {

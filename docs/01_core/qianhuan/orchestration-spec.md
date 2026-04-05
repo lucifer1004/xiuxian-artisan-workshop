@@ -115,14 +115,15 @@ To align with the **Open-Closed Principle** and prevent hardcoded configuration 
 
 ## 5. Research References & Attachments
 
-This specification is grounded in the following 2025-2026 research papers. The LinkGraph engine (Wendao) should use these attachments for grounding.
+This specification is grounded in the following 2025-2026 research papers. The
+LinkGraph engine (Wendao) should use these cited papers for grounding.
 
-| Paper Title              | Year | Key Mechanism            | Local Attachment                                                                                                         | External Link                                            |
-| :----------------------- | :--- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------- |
-| **Agent-G**              | 2025 | Critic-driven Refinement | [PDF](../../.data/research/papers/AgentG_2501.pdf) / [Text](../../.data/research/papers/AgentG_2501.txt)                 | [OpenReview](https://openreview.net/forum?id=uxvUI6XvQq) |
-| **Contextual Snapshots** | 2025 | Immutable Snapshots      | [PDF](../../.data/research/papers/ContextSnap_2502.pdf) / [Text](../../.data/research/papers/ContextSnap_2502.txt)       | [arXiv:2502.01647](https://arxiv.org/abs/2502.01647)     |
-| **HippoRAG (v2)**        | 2025 | Hippocampal Indexing     | [PDF](../../.data/research/papers/HippoRAG_2405.14831.pdf) / [Text](../../.data/research/papers/HippoRAG_2405.14831.txt) | [arXiv:2405.14831](https://arxiv.org/abs/2405.14831)     |
-| **XML Prompting**        | 2025 | Semantic Isolation       | (Conceptual Anchor)                                                                                                      | [Reference](https://arxiv.org/abs/2402.11714)            |
-| **MIPROv2**              | 2025 | Multi-stage Optimization | (Conceptual Anchor)                                                                                                      | [arXiv:2410.05229](https://arxiv.org/abs/2410.05229)     |
+| Paper Title              | Year | Key Mechanism            | Canonical Reference        | External Link                                            |
+| :----------------------- | :--- | :----------------------- | :------------------------- | :------------------------------------------------------- |
+| **Agent-G**              | 2025 | Critic-driven Refinement | Agent-G paper              | [OpenReview](https://openreview.net/forum?id=uxvUI6XvQq) |
+| **Contextual Snapshots** | 2025 | Immutable Snapshots      | Contextual Snapshots paper | [arXiv:2502.01647](https://arxiv.org/abs/2502.01647)     |
+| **HippoRAG (v2)**        | 2025 | Hippocampal Indexing     | HippoRAG v2 paper          | [arXiv:2405.14831](https://arxiv.org/abs/2405.14831)     |
+| **XML Prompting**        | 2025 | Semantic Isolation       | (Conceptual Anchor)        | [Reference](https://arxiv.org/abs/2402.11714)            |
+| **MIPROv2**              | 2025 | Multi-stage Optimization | (Conceptual Anchor)        | [arXiv:2410.05229](https://arxiv.org/abs/2410.05229)     |
 
 > **Audit Note:** The `xiuxian-wendao` engine must index these files with `saliency: 10` to ensure they act as top-level "Hippocampal Index" nodes for all agentic reasoning.

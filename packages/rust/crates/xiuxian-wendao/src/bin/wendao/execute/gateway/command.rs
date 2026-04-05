@@ -5,19 +5,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use arrow_flight::flight_service_server::FlightServiceServer;
 use axum::Json;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use axum::routing::any_service;
 use axum::routing::{Router, get};
 use log::info;
 use tokio::sync::mpsc;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use tonic_web::GrpcWebLayer;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use tower::Layer;
 use tower::{BoxError, ServiceBuilder};
 
@@ -30,12 +30,12 @@ use crate::execute::gateway::{
 };
 use crate::types::{Cli, GatewayArgs, GatewayCommand, GatewayStartArgs};
 use xiuxian_wendao::LinkGraphIndex;
+#[cfg(feature = "zhenfa-router")]
+use xiuxian_wendao::gateway::studio::build_studio_flight_service_with_weights;
 use xiuxian_wendao::gateway::{openapi::paths as openapi_paths, studio::studio_routes};
-#[cfg(feature = "julia")]
-use xiuxian_wendao::link_graph::plugin_runtime::build_search_plane_studio_flight_service_with_weights;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::link_graph::resolve_link_graph_rerank_flight_runtime_settings;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao_runtime::transport::{
     EffectiveRerankFlightHostSettings, rerank_score_weights_from_env,
     resolve_effective_rerank_flight_host_settings as resolve_runtime_effective_rerank_flight_host_settings,
@@ -58,7 +58,7 @@ const MIN_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 5;
 const MAX_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 60;
 pub(crate) const GATEWAY_FLIGHT_SERVICE_AXUM_PATH: &str =
     "/arrow.flight.protocol.FlightService/{*grpc_method}";
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 const DEFAULT_GATEWAY_SEARCH_FLIGHT_RERANK_DIMENSION: usize = 3;
 
 /// Handle the gateway command.
@@ -143,11 +143,8 @@ async fn handle_start(
         "  - GET {}  - Notification service status",
         openapi_paths::API_NOTIFY_AXUM_PATH
     );
-    #[cfg(feature = "julia")]
-    info!(
-        "  - POST {}  - Arrow Flight business plane",
-        GATEWAY_FLIGHT_SERVICE_AXUM_PATH
-    );
+    #[cfg(feature = "zhenfa-router")]
+    info!("  - POST {GATEWAY_FLIGHT_SERVICE_AXUM_PATH}  - Arrow Flight business plane");
 
     let socket = tokio::net::TcpSocket::new_v4()?;
     socket.set_reuseaddr(true)?;
@@ -175,16 +172,16 @@ pub(crate) fn build_gateway_router(
         .merge(studio_app)
         .with_state(app_state.clone());
 
-    #[cfg(feature = "julia")]
+    #[cfg(feature = "zhenfa-router")]
     let app = mount_gateway_flight_service(app, app_state)?;
 
     Ok(app)
 }
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 fn mount_gateway_flight_service(app: Router, app_state: Arc<AppState>) -> Result<Router> {
     let effective_settings = resolve_gateway_effective_search_host_settings()?;
-    let flight_service = build_search_plane_studio_flight_service_with_weights(
+    let flight_service = build_studio_flight_service_with_weights(
         Arc::new(app_state.studio.search_plane_service()),
         app_state,
         effective_settings.expected_schema_version,
@@ -199,7 +196,7 @@ fn mount_gateway_flight_service(app: Router, app_state: Arc<AppState>) -> Result
     ))
 }
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 fn resolve_gateway_effective_search_host_settings() -> Result<EffectiveRerankFlightHostSettings> {
     let file_backed_settings = resolve_link_graph_rerank_flight_runtime_settings();
     Ok(resolve_runtime_effective_rerank_flight_host_settings(

@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing deep-wiki planner ranking.
+#![cfg(feature = "modelica")]
 
 use std::cmp::Reverse;
 use std::fs;

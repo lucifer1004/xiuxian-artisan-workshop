@@ -80,9 +80,7 @@ pub(crate) async fn build_vfs_content_response(
             "`path` is required",
         ));
     }
-    read_content(studio, path)
-        .await
-        .map_err(crate::gateway::studio::router::StudioApiError::from)
+    read_content(studio, path).await
 }
 
 pub(crate) fn vfs_content_response_batch(
@@ -139,23 +137,23 @@ mod tests {
             content: "# Index".to_string(),
             modified: 42,
         })
-        .expect("build VFS content batch");
+        .unwrap_or_else(|error| panic!("build VFS content batch: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let contents = batch
-            .column_by_name("content")
-            .expect("content column")
-            .as_any()
-            .downcast_ref::<LanceStringArray>()
-            .expect("content column type");
+        let Some(content_column) = batch.column_by_name("content") else {
+            panic!("content column");
+        };
+        let Some(contents) = content_column.as_any().downcast_ref::<LanceStringArray>() else {
+            panic!("content column type");
+        };
         assert_eq!(contents.value(0), "# Index");
 
-        let modified = batch
-            .column_by_name("modified")
-            .expect("modified column")
-            .as_any()
-            .downcast_ref::<LanceUInt64Array>()
-            .expect("modified column type");
+        let Some(modified_column) = batch.column_by_name("modified") else {
+            panic!("modified column");
+        };
+        let Some(modified) = modified_column.as_any().downcast_ref::<LanceUInt64Array>() else {
+            panic!("modified column type");
+        };
         assert_eq!(modified.value(0), 42);
     }
 
@@ -167,10 +165,10 @@ mod tests {
             content: "# Index".to_string(),
             modified: 42,
         })
-        .expect("encode VFS content metadata");
+        .unwrap_or_else(|error| panic!("encode VFS content metadata: {error}"));
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["path"], "main/docs/index.md");
         assert_eq!(payload["contentType"], "text/plain");
         assert_eq!(payload["modified"], 42);

@@ -86,19 +86,19 @@ fn sample_repository() -> RegisteredRepository {
 fn register_rejects_duplicate_plugin_ids() {
     let mut registry = PluginRegistry::new();
 
-    registry
-        .register(TestPlugin {
-            plugin_id: "julia",
-            supported_repo: "sciml-diffeq",
-        })
-        .expect("first registration should succeed");
+    let Ok(()) = registry.register(TestPlugin {
+        plugin_id: "julia",
+        supported_repo: "sciml-diffeq",
+    }) else {
+        panic!("first registration should succeed");
+    };
 
-    let error = registry
-        .register(TestPlugin {
-            plugin_id: "julia",
-            supported_repo: "sciml-diffeq",
-        })
-        .expect_err("duplicate registration should fail");
+    let Err(error) = registry.register(TestPlugin {
+        plugin_id: "julia",
+        supported_repo: "sciml-diffeq",
+    }) else {
+        panic!("duplicate registration should fail");
+    };
 
     assert_eq!(
         error,
@@ -111,16 +111,16 @@ fn register_rejects_duplicate_plugin_ids() {
 #[test]
 fn resolve_for_repository_returns_matching_plugins() {
     let mut registry = PluginRegistry::new();
-    registry
-        .register(TestPlugin {
-            plugin_id: "julia",
-            supported_repo: "sciml-diffeq",
-        })
-        .expect("registration should succeed");
+    let Ok(()) = registry.register(TestPlugin {
+        plugin_id: "julia",
+        supported_repo: "sciml-diffeq",
+    }) else {
+        panic!("registration should succeed");
+    };
 
-    let resolved = registry
-        .resolve_for_repository(&sample_repository())
-        .expect("plugin resolution should succeed");
+    let Ok(resolved) = registry.resolve_for_repository(&sample_repository()) else {
+        panic!("plugin resolution should succeed");
+    };
 
     assert_eq!(resolved.len(), 1);
     assert_eq!(resolved[0].id(), "julia");
@@ -130,9 +130,8 @@ fn resolve_for_repository_returns_matching_plugins() {
 fn resolve_for_repository_fails_when_plugin_is_missing() {
     let registry = PluginRegistry::new();
 
-    let error = match registry.resolve_for_repository(&sample_repository()) {
-        Ok(_) => panic!("missing plugin should fail"),
-        Err(error) => error,
+    let Err(error) = registry.resolve_for_repository(&sample_repository()) else {
+        panic!("missing plugin should fail");
     };
 
     assert_eq!(

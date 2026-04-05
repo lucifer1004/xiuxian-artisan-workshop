@@ -136,3 +136,7 @@ pub(super) const fn language_column() -> &'static str {
 pub(super) const fn path_column() -> &'static str {
     COLUMN_PATH
 }
+
+pub(super) const fn path_folded_column() -> &'static str {
+    COLUMN_PATH_FOLDED
+}

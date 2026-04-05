@@ -22,9 +22,11 @@ Primary references:
 
 - `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
 - `[[docs/rfcs/2026-03-27-wendao-arrow-plugin-flight-rfc.md]]`
-- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
 - `[[06_roadmap/409_core_runtime_plugin_surface_inventory]]`
 - `[[06_roadmap/411_p1_first_code_slice_plan]]`
+
+The active task-scoped blueprint for this migration remains recorded in the
+paired ExecPlan rather than this persistent staging note.
 
 The goal of this phase is not to finish extraction. The goal is to freeze the
 generic vocabulary and first target types so implementation can stop adding
@@ -341,7 +343,7 @@ call sites.
 4. the new contracts live in feature folders with interface-only `mod.rs`
 
 :RELATIONS:
-:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
 :END:
 
 ---

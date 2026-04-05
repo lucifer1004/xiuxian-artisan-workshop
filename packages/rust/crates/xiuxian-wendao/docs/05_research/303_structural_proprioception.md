@@ -47,5 +47,5 @@ The refiner dynamically adjusts the compression ratio $\gamma = |D|/|D'|$ based 
 
 :RELATIONS:
 :LINKS: [[03_features/202_block_addressing]], [[01_core/101_triple_a_protocol]]
-:ASSETS: [[.data/research/papers/2025_hisem_rag_hierarchical.pdf]] (LongRefiner 2025)
+:ASSETS: LongRefiner 2025 paper
 :END:

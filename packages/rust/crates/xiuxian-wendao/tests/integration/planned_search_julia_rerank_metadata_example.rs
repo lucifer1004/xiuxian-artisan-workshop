@@ -1,7 +1,7 @@
 #![cfg(feature = "julia")]
 
 //! Integration test for planned-search Julia rerank against the official
-//! WendaoArrow stream metadata example.
+//! `WendaoArrow` stream metadata example.
 
 use serial_test::serial;
 use std::fs;
@@ -9,9 +9,10 @@ use xiuxian_vector::VectorStore;
 use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
-use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_RERANK_FLIGHT_ROUTE;
-
-use crate::support::wendaoarrow_official_examples::spawn_wendaoarrow_stream_metadata_service;
+use xiuxian_wendao_julia::integration_support::{
+    julia_planned_search_vector_store_runtime_config_toml,
+    spawn_wendaoarrow_stream_metadata_service,
+};
 
 #[test]
 #[serial(link_graph_runtime_config)]
@@ -48,27 +49,9 @@ fn test_planned_search_payload_applies_official_stream_metadata_example()
     let config_path = temp.path().join("wendao.toml");
     fs::write(
         &config_path,
-        format!(
-            r#"[link_graph.retrieval]
-mode = "hybrid"
-candidate_multiplier = 2
-max_sources = 2
-graph_rows_per_source = 2
-
-[link_graph.retrieval.semantic_ignition]
-backend = "vector-store"
-vector_store_path = "{}"
-table_name = "wendao_semantic_docs"
-
-[link_graph.retrieval.julia_rerank]
-base_url = "{}"
-route = "{}"
-schema_version = "v1"
-timeout_secs = 10
-"#,
-            vector_store_path.to_string_lossy(),
-            server_base_url,
-            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
+        julia_planned_search_vector_store_runtime_config_toml(
+            vector_store_path.to_string_lossy().as_ref(),
+            server_base_url.as_str(),
         ),
     )?;
     let config_path_string = config_path.to_string_lossy().to_string();

@@ -131,24 +131,24 @@ mod tests {
                 format: None,
             },
         ])
-        .expect("repo doc coverage batch should build");
+        .unwrap_or_else(|error| panic!("repo doc coverage batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 2);
-        let doc_ids = batch
-            .column_by_name("docId")
-            .expect("docId column")
-            .as_any()
-            .downcast_ref::<LanceStringArray>()
-            .expect("docId should be utf8");
+        let Some(doc_id_column) = batch.column_by_name("docId") else {
+            panic!("docId column");
+        };
+        let Some(doc_ids) = doc_id_column.as_any().downcast_ref::<LanceStringArray>() else {
+            panic!("docId should be utf8");
+        };
         assert_eq!(doc_ids.value(0), "repo:gateway-sync:doc:README.md");
         assert_eq!(doc_ids.value(1), "repo:gateway-sync:doc:docs/solve.md");
 
-        let formats = batch
-            .column_by_name("format")
-            .expect("format column")
-            .as_any()
-            .downcast_ref::<LanceStringArray>()
-            .expect("format should be utf8");
+        let Some(format_column) = batch.column_by_name("format") else {
+            panic!("format column");
+        };
+        let Some(formats) = format_column.as_any().downcast_ref::<LanceStringArray>() else {
+            panic!("format should be utf8");
+        };
         assert_eq!(formats.value(0), "markdown");
         assert!(formats.is_null(1));
     }
@@ -164,10 +164,10 @@ mod tests {
             hierarchical_uri: Some("repo://gateway-sync/docs".to_string()),
             hierarchy: Some(vec!["repo".to_string(), "gateway-sync".to_string()]),
         })
-        .expect("repo doc coverage metadata should encode");
+        .unwrap_or_else(|error| panic!("repo doc coverage metadata should encode: {error}"));
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["repoId"], "gateway-sync");
         assert_eq!(payload["moduleId"], "GatewaySyncPkg");
         assert_eq!(payload["coveredSymbols"], 3);

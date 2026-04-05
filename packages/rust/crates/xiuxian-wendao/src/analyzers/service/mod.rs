@@ -5,8 +5,6 @@ mod bootstrap;
 mod cached;
 mod helpers;
 mod julia_transport;
-#[cfg(test)]
-mod julia_transport_tests;
 mod merge;
 mod projection;
 mod registry;
@@ -35,13 +33,6 @@ pub use julia_transport::{
     JULIA_ARROW_FINAL_SCORE_COLUMN, JULIA_ARROW_QUERY_EMBEDDING_COLUMN,
     JULIA_ARROW_TRACE_ID_COLUMN, JULIA_ARROW_VECTOR_SCORE_COLUMN, julia_arrow_request_schema,
     julia_arrow_response_schema,
-};
-#[cfg(feature = "julia")]
-pub use julia_transport::{
-    JuliaArrowRequestRow, JuliaArrowScoreRow, PluginArrowRequestRow, PluginArrowScoreRow,
-    build_julia_arrow_request_batch, build_plugin_arrow_request_batch,
-    decode_julia_arrow_score_rows, decode_plugin_arrow_score_rows,
-    fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
 };
 
 pub(crate) use projection::build_repo_projected_page_search_with_artifacts;

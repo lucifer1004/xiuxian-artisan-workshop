@@ -416,12 +416,12 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
                             "repoReadPressure.inFlight cannot exceed budget; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
                         ));
                     }
-                    if let Some(parallelism) = repo_read.parallelism {
-                        if parallelism == 0 || parallelism > repo_read.budget {
-                            return Err(anyhow!(
-                                "repoReadPressure.parallelism should stay within the shared repo-read budget; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
-                            ));
-                        }
+                    if let Some(parallelism) = repo_read.parallelism
+                        && (parallelism == 0 || parallelism > repo_read.budget)
+                    {
+                        return Err(anyhow!(
+                            "repoReadPressure.parallelism should stay within the shared repo-read budget; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
+                        ));
                     }
                     if let (Some(searchable_repo_count), Some(parallelism)) =
                         (repo_read.searchable_repo_count, repo_read.parallelism)

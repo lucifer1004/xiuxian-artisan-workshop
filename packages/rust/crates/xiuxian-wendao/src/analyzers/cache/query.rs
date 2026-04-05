@@ -66,7 +66,7 @@ where
 ///
 /// Returns an error when the in-memory cache lock is poisoned or payload serialization fails.
 pub fn store_cached_repository_search_result<T>(
-    key: RepositorySearchQueryCacheKey,
+    key: &RepositorySearchQueryCacheKey,
     value: &T,
 ) -> Result<(), RepoIntelligenceError>
 where
@@ -85,7 +85,7 @@ where
             cache.insert(key.clone(), encoded);
         })?;
     if let Some(valkey_cache) = ValkeyAnalysisCache::new()? {
-        valkey_cache.set_query_result(&key, value);
+        valkey_cache.set_query_result(key, value);
     }
     Ok(())
 }

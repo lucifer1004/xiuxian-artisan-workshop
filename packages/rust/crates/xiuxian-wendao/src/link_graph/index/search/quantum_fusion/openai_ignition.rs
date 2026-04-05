@@ -1,14 +1,14 @@
 use super::semantic_ignition::{QuantumSemanticIgnition, QuantumSemanticIgnitionFuture};
 #[cfg(feature = "julia")]
-use crate::analyzers::{
-    PluginArrowRequestRow, RepoIntelligenceError, build_plugin_arrow_request_batch,
-};
+use crate::analyzers::RepoIntelligenceError;
 use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
 #[cfg(feature = "julia")]
 use arrow::record_batch::RecordBatch;
 use thiserror::Error;
 use xiuxian_llm::embedding::openai_compat::embed_openai_compatible;
 use xiuxian_vector::{SearchOptions, VectorStore, VectorStoreError, distance_to_score};
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::{PluginArrowRequestRow, build_plugin_arrow_request_batch};
 
 /// Semantic ignition adapter backed by an OpenAI-compatible embeddings API plus
 /// the Rust vector store.
@@ -299,14 +299,18 @@ impl QuantumSemanticIgnition for OpenAiCompatibleSemanticIgnition {
 mod tests {
     use super::*;
 
+    fn tempdir_or_panic() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"))
+    }
+
     #[tokio::test]
     async fn build_plugin_rerank_request_batch_uses_explicit_query_vector() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempdir_or_panic();
         let db_path = temp_dir.path().join("openai_ignition_julia");
         let db_path_str = db_path.to_string_lossy();
         let mut store = VectorStore::new(db_path_str.as_ref(), Some(3))
             .await
-            .expect("create vector store");
+            .unwrap_or_else(|error| panic!("create vector store: {error}"));
         store
             .replace_documents(
                 "anchors",
@@ -316,7 +320,7 @@ mod tests {
                 vec!["{}".to_string()],
             )
             .await
-            .expect("seed vector table");
+            .unwrap_or_else(|error| panic!("seed vector table: {error}"));
 
         let ignition =
             OpenAiCompatibleSemanticIgnition::new(store, "anchors", "http://127.0.0.1:9999");
@@ -336,7 +340,7 @@ mod tests {
                 }],
             )
             .await
-            .expect("request batch should build");
+            .unwrap_or_else(|error| panic!("request batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
         assert!(batch.column_by_name("query_embedding").is_some());
@@ -344,16 +348,16 @@ mod tests {
 
     #[tokio::test]
     async fn build_plugin_rerank_request_batch_rejects_missing_query_signal() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempdir_or_panic();
         let db_path = temp_dir.path().join("openai_ignition_julia_error");
         let db_path_str = db_path.to_string_lossy();
         let store = VectorStore::new(db_path_str.as_ref(), Some(3))
             .await
-            .expect("create vector store");
+            .unwrap_or_else(|error| panic!("create vector store: {error}"));
 
         let ignition =
             OpenAiCompatibleSemanticIgnition::new(store, "anchors", "http://127.0.0.1:9999");
-        let error = ignition
+        let Err(error) = ignition
             .build_plugin_rerank_request_batch(
                 QuantumSemanticSearchRequest {
                     query_text: None,
@@ -368,7 +372,9 @@ mod tests {
                 }],
             )
             .await
-            .expect_err("missing query signal should fail");
+        else {
+            panic!("missing query signal should fail");
+        };
 
         assert!(matches!(
             error,

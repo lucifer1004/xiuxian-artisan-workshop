@@ -1,0 +1,77 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/search/queries/tests/snapshots.rs
+expression: value
+---
+{
+  "graphql": {
+    "payload": {
+      "payload": {
+        "data": {
+          "reference_occurrence": [
+            {
+              "name": "AlphaService",
+              "path": "src/lib.rs"
+            }
+          ]
+        }
+      },
+      "query_language": "graphql"
+    },
+    "request": {
+      "document": "\n        {\n          reference_occurrence(\n            filter: { name: \"AlphaService\" }\n            limit: 1\n          ) {\n            name\n            path\n          }\n        }\n        ",
+      "query_language": "graphql"
+    }
+  },
+  "sql": {
+    "payload": {
+      "payload": {
+        "batches": [
+          {
+            "columns": [
+              {
+                "dataType": "Utf8View",
+                "name": "name",
+                "nullable": false
+              },
+              {
+                "dataType": "Utf8View",
+                "name": "path",
+                "nullable": false
+              }
+            ],
+            "rowCount": 1,
+            "rows": [
+              {
+                "name": "AlphaService",
+                "path": "src/lib.rs"
+              }
+            ]
+          }
+        ],
+        "metadata": {
+          "catalogTableName": "wendao_sql_tables",
+          "columnCatalogTableName": "wendao_sql_columns",
+          "registeredColumnCount": 33,
+          "registeredTableCount": 4,
+          "registeredTables": [
+            "reference_occurrence",
+            "wendao_sql_columns",
+            "wendao_sql_tables",
+            "wendao_sql_view_sources"
+          ],
+          "registeredViewCount": 0,
+          "registeredViewSourceCount": 0,
+          "resultBatchCount": 1,
+          "resultRowCount": 1,
+          "supportsInformationSchema": true,
+          "viewSourceCatalogTableName": "wendao_sql_view_sources"
+        }
+      },
+      "query_language": "sql"
+    },
+    "request": {
+      "query": "SELECT name, path FROM reference_occurrence ORDER BY name LIMIT 1",
+      "query_language": "sql"
+    }
+  }
+}

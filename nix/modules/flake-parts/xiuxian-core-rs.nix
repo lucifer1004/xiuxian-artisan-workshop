@@ -46,23 +46,28 @@
 
       # configure crates
       nci.crates = {
-        "xiuxian-llm" = {
+        # "xiuxian-llm" = {
+        #   depsDrvConfig = {
+        #     mkDerivation.nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+        #       apple-metal-toolchain
+        #       pkgs.xcbuild
+        #     ];
+        #     mkDerivation.buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+        #       apple-sdk
+        #     ];
+        #     env = lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+        #       MISTRALRS_METAL_PRECOMPILE = "1";
+        #       # Point DEVELOPER_DIR to the combined symlink forest
+        #       DEVELOPER_DIR = "${xcode-combined}";
+        #       # Point SDKROOT to the macOS SDK within that forest
+        #       SDKROOT = "${xcode-combined}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
+        #     };
+        #   };
+        # };
+        "xiuxian-wendao" = {
           depsDrvConfig = {
-            mkDerivation.nativeBuildInputs =
-              lib.optionals pkgs.stdenv.hostPlatform.isDarwin
-                [
-                  apple-metal-toolchain
-                  pkgs.xcbuild
-                ];
-            mkDerivation.buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-              apple-sdk
-            ];
-            env = lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-              MISTRALRS_METAL_PRECOMPILE = "1";
-              # Point DEVELOPER_DIR to the combined symlink forest
-              DEVELOPER_DIR = "${xcode-combined}";
-              # Point SDKROOT to the macOS SDK within that forest
-              SDKROOT = "${xcode-combined}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
+            env = {
+              protoc = "${pkgs.protobuf}/bin/protoc";
             };
           };
         };

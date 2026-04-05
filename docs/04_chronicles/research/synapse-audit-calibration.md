@@ -8,7 +8,7 @@ metadata:
 
 - **ID:** `20260222-SYNAPSE-CALIBRATION`
 - **Tags:** #research #algorithm #calibration #codebase-agent
-- **Source:** [Synapse-Audit 2025](../../../.data/research/papers/synapse_audit_2025.txt)
+- **Source:** Synapse-Audit 2025 research note.
 - **Saliency:** 9.5 (Foundational)
 
 ---

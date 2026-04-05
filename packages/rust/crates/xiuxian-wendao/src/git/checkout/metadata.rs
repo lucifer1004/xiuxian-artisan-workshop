@@ -241,12 +241,24 @@ mod tests {
         record_managed_remote_probe_state,
     };
 
+    fn tempdir_or_panic() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"))
+    }
+
+    fn discover_state_or_panic(mirror_root: &std::path::Path) -> super::ManagedRemoteProbeState {
+        let Some(state) = discover_managed_remote_probe_state(mirror_root) else {
+            panic!("expected managed remote probe state");
+        };
+        state
+    }
+
     #[test]
     fn managed_remote_probe_state_round_trips() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        record_managed_remote_probe_state(temp.path(), Some("rev-1")).expect("record probe state");
+        let temp = tempdir_or_panic();
+        record_managed_remote_probe_state(temp.path(), Some("rev-1"))
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
 
-        let state = discover_managed_remote_probe_state(temp.path()).expect("discover probe state");
+        let state = discover_state_or_panic(temp.path());
         assert!(chrono::DateTime::parse_from_rfc3339(state.checked_at.as_str()).is_ok());
         assert_eq!(state.status, ManagedRemoteProbeStatus::Success);
         assert_eq!(state.target_revision.as_deref(), Some("rev-1"));
@@ -260,11 +272,11 @@ mod tests {
 
     #[test]
     fn managed_remote_probe_failure_round_trips() {
-        let temp = tempfile::tempdir().expect("tempdir");
+        let temp = tempdir_or_panic();
         record_managed_remote_probe_failure(temp.path(), "operation timed out", true)
-            .expect("record probe failure");
+            .unwrap_or_else(|error| panic!("record probe failure: {error}"));
 
-        let state = discover_managed_remote_probe_state(temp.path()).expect("discover probe state");
+        let state = discover_state_or_panic(temp.path());
         assert!(chrono::DateTime::parse_from_rfc3339(state.checked_at.as_str()).is_ok());
         assert_eq!(state.status, ManagedRemoteProbeStatus::RetryableFailure);
         assert_eq!(state.target_revision, None);
@@ -275,15 +287,15 @@ mod tests {
 
     #[test]
     fn managed_remote_probe_failure_preserves_last_success_marker() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        record_managed_remote_probe_state(temp.path(), Some("rev-1")).expect("record probe state");
-        let success_state =
-            discover_managed_remote_probe_state(temp.path()).expect("discover success state");
+        let temp = tempdir_or_panic();
+        record_managed_remote_probe_state(temp.path(), Some("rev-1"))
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
+        let success_state = discover_state_or_panic(temp.path());
 
         record_managed_remote_probe_failure(temp.path(), "operation timed out", true)
-            .expect("record probe failure");
+            .unwrap_or_else(|error| panic!("record probe failure: {error}"));
 
-        let state = discover_managed_remote_probe_state(temp.path()).expect("discover probe state");
+        let state = discover_state_or_panic(temp.path());
         assert_eq!(state.status, ManagedRemoteProbeStatus::RetryableFailure);
         assert_eq!(
             state.last_success_checked_at.as_deref(),
@@ -294,9 +306,11 @@ mod tests {
 
     #[test]
     fn clear_managed_remote_probe_state_removes_sidecar() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        record_managed_remote_probe_state(temp.path(), Some("rev-1")).expect("record probe state");
-        clear_managed_remote_probe_state(temp.path()).expect("clear probe state");
+        let temp = tempdir_or_panic();
+        record_managed_remote_probe_state(temp.path(), Some("rev-1"))
+            .unwrap_or_else(|error| panic!("record probe state: {error}"));
+        clear_managed_remote_probe_state(temp.path())
+            .unwrap_or_else(|error| panic!("clear probe state: {error}"));
 
         assert_eq!(discover_managed_remote_probe_state(temp.path()), None);
     }

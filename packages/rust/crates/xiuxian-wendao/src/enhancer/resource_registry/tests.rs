@@ -34,7 +34,7 @@ fn registry_helpers_lift_skill_reference_targets() {
 #[test]
 fn embedded_registry_builds_from_fixture() {
     let registry = WendaoResourceRegistry::build_from_embedded(embedded_fixture())
-        .expect("embedded registry should build");
+        .unwrap_or_else(|error| panic!("embedded registry should build: {error}"));
     assert!(registry.files_len() > 0);
     assert!(
         registry

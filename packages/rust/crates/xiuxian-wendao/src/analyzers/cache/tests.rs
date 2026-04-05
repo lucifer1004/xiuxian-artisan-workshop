@@ -131,11 +131,11 @@ fn repository_search_query_cache_isolated_by_endpoint_and_filter() {
     );
 
     ok_or_panic(
-        store_cached_repository_search_result(module_key.clone(), &vec!["module"]),
+        store_cached_repository_search_result(&module_key, &vec!["module"]),
         "query cache store should succeed",
     );
     ok_or_panic(
-        store_cached_repository_search_result(projected_key.clone(), &vec!["projected"]),
+        store_cached_repository_search_result(&projected_key, &vec!["projected"]),
         "query cache store should succeed",
     );
 

@@ -41,7 +41,7 @@ impl RepoSyncFlightRouteProvider for StudioRepoSyncFlightRouteProvider {
             parse_repo_sync_mode(mode)?,
         )
         .await
-        .map_err(map_studio_api_error)?;
+        .map_err(|error| map_studio_api_error(&error))?;
         let batch = build_repo_sync_flight_batch(&response)?;
         let metadata = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
         Ok(AnalysisFlightRouteResponse::new(batch).with_app_metadata(metadata))
@@ -123,7 +123,7 @@ where
         .ok_or_else(|| "repo sync enum metadata must serialize as string".to_string())
 }
 
-fn map_studio_api_error(error: crate::gateway::studio::router::StudioApiError) -> String {
+fn map_studio_api_error(error: &crate::gateway::studio::router::StudioApiError) -> String {
     error
         .error
         .details
@@ -190,31 +190,35 @@ mod tests {
     #[test]
     fn repo_sync_flight_batch_preserves_summary_fields() {
         let batch = build_repo_sync_flight_batch(&sample_sync_result())
-            .expect("repo sync batch should build");
+            .unwrap_or_else(|error| panic!("repo sync batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let mode = batch
-            .column_by_name("mode")
-            .expect("mode column")
-            .as_any()
-            .downcast_ref::<LanceStringArray>()
-            .expect("mode should be utf8");
+        let Some(mode_column) = batch.column_by_name("mode") else {
+            panic!("mode column");
+        };
+        let Some(mode) = mode_column.as_any().downcast_ref::<LanceStringArray>() else {
+            panic!("mode should be utf8");
+        };
         assert_eq!(mode.value(0), "status");
 
-        let health_state = batch
-            .column_by_name("healthState")
-            .expect("healthState column")
+        let Some(health_state_column) = batch.column_by_name("healthState") else {
+            panic!("healthState column");
+        };
+        let Some(health_state) = health_state_column
             .as_any()
             .downcast_ref::<LanceStringArray>()
-            .expect("healthState should be utf8");
+        else {
+            panic!("healthState should be utf8");
+        };
         assert_eq!(health_state.value(0), "healthy");
     }
 
     #[test]
     fn repo_sync_flight_metadata_preserves_full_payload() {
-        let metadata = serde_json::to_vec(&sample_sync_result()).expect("metadata should encode");
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let metadata = serde_json::to_vec(&sample_sync_result())
+            .unwrap_or_else(|error| panic!("metadata should encode: {error}"));
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["repo_id"], "gateway-sync");
         assert_eq!(payload["mode"], "status");
         assert_eq!(payload["health_state"], "healthy");

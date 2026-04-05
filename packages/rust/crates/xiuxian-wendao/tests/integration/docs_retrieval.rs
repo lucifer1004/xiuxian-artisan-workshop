@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing mixed projected retrieval.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 

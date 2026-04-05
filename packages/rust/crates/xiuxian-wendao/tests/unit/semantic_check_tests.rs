@@ -158,6 +158,10 @@ fn test_issue_type_to_code() {
         "ERR_DOC_IDENTITY_PROTOCOL"
     );
     assert_eq!(
+        issue_type_to_code("canonical_doc_hidden_path_link"),
+        "WARN_CANONICAL_DOC_HIDDEN_PATH_LINK"
+    );
+    assert_eq!(
         issue_type_to_code("missing_package_docs_tree"),
         "WARN_MISSING_PACKAGE_DOCS_TREE"
     );

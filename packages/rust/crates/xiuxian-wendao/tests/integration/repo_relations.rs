@@ -1,10 +1,12 @@
 //! Integration tests for Repo Intelligence relation graph output.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
-    write_repo_config,
+    assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
 };
 use serde_json::json;
 use xiuxian_wendao::analyzers::analyze_repository_from_config;

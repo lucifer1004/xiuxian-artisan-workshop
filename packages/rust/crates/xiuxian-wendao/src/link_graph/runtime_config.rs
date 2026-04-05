@@ -1,3 +1,5 @@
+#[path = "runtime_config/artifacts.rs"]
+mod artifacts;
 #[path = "runtime_config/constants.rs"]
 mod constants;
 #[path = "runtime_config/models/mod.rs"]
@@ -7,15 +9,13 @@ pub mod resolve;
 #[path = "runtime_config/settings/mod.rs"]
 mod settings;
 
-#[cfg(test)]
-use crate::link_graph::plugin_runtime::{
-    render_plugin_artifact_toml_for_selector, resolve_plugin_artifact_for_selector,
+pub use artifacts::{
+    render_link_graph_plugin_artifact_toml_for_selector,
+    resolve_link_graph_plugin_artifact_for_selector,
 };
 pub(crate) use constants::DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX;
 pub(crate) use models::LinkGraphCacheRuntimeConfig;
-#[cfg(test)]
-pub(crate) use models::retrieval::LinkGraphCompatDeploymentArtifact;
-pub use models::{LinkGraphIndexRuntimeConfig, julia_deployment_artifact_selector};
+pub use models::LinkGraphIndexRuntimeConfig;
 pub use resolve::resolve_link_graph_index_runtime;
 pub use resolve::{
     resolve_link_graph_agentic_runtime, resolve_link_graph_cache_runtime,
@@ -46,30 +46,46 @@ pub fn resolve_link_graph_rerank_binding() -> Option<PluginCapabilityBinding> {
 /// retrieval policy settings.
 #[must_use]
 pub fn resolve_link_graph_rerank_score_weights() -> Option<RerankScoreWeights> {
-    let runtime = resolve_link_graph_retrieval_policy_runtime();
-    let defaults = RerankScoreWeights::default();
-    let vector_weight = runtime.julia_rerank.vector_weight;
-    let similarity_weight = runtime.julia_rerank.similarity_weight;
+    #[cfg(feature = "julia")]
+    {
+        let runtime = resolve_link_graph_retrieval_policy_runtime();
+        let defaults = RerankScoreWeights::default();
+        let vector_weight = runtime.julia_rerank.vector_weight;
+        let similarity_weight = runtime.julia_rerank.similarity_weight;
 
-    if vector_weight.is_none() && similarity_weight.is_none() {
-        return None;
+        if vector_weight.is_none() && similarity_weight.is_none() {
+            return None;
+        }
+
+        RerankScoreWeights::new(
+            vector_weight.unwrap_or(defaults.vector_weight),
+            similarity_weight.unwrap_or(defaults.semantic_weight),
+        )
+        .ok()
     }
 
-    RerankScoreWeights::new(
-        vector_weight.unwrap_or(defaults.vector_weight),
-        similarity_weight.unwrap_or(defaults.semantic_weight),
-    )
-    .ok()
+    #[cfg(not(feature = "julia"))]
+    {
+        None
+    }
 }
 
 /// Resolve the current rerank-side schema version from Wendao retrieval
 /// policy settings.
 #[must_use]
 pub fn resolve_link_graph_rerank_schema_version() -> Option<String> {
-    resolve_link_graph_retrieval_policy_runtime()
-        .julia_rerank
-        .schema_version
-        .filter(|value| !value.trim().is_empty())
+    #[cfg(feature = "julia")]
+    {
+        resolve_link_graph_retrieval_policy_runtime()
+            .julia_rerank
+            .schema_version
+            .filter(|value| !value.trim().is_empty())
+    }
+
+    #[cfg(not(feature = "julia"))]
+    {
+        None
+    }
 }
 
 /// Resolve the current file-backed Flight rerank host settings from Wendao
@@ -80,29 +96,6 @@ pub fn resolve_link_graph_rerank_flight_runtime_settings() -> LinkGraphRerankFli
         schema_version: resolve_link_graph_rerank_schema_version(),
         score_weights: resolve_link_graph_rerank_score_weights(),
     }
-}
-
-/// Resolve the current compatibility deployment artifact from Wendao runtime configuration.
-#[must_use]
-#[cfg(test)]
-pub fn resolve_link_graph_compat_deployment_artifact() -> LinkGraphCompatDeploymentArtifact {
-    resolve_plugin_artifact_for_selector(&julia_deployment_artifact_selector())
-        .expect("compatibility deployment artifact should resolve")
-        .into()
-}
-
-/// Resolve the current compatibility deployment artifact and render it as TOML.
-///
-/// # Errors
-///
-/// Returns an error when the resolved deployment artifact cannot be serialized
-/// into TOML.
-#[cfg(test)]
-pub fn export_link_graph_compat_deployment_artifact_toml() -> Result<String, toml::ser::Error> {
-    Ok(
-        render_plugin_artifact_toml_for_selector(&julia_deployment_artifact_selector())?
-            .expect("compatibility deployment artifact should render"),
-    )
 }
 
 #[cfg(test)]

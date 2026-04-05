@@ -1,0 +1,38 @@
+mod analysis;
+mod ast;
+mod attachments;
+mod autocomplete;
+mod contracts;
+mod definition;
+mod fixtures;
+mod graph;
+mod headers;
+mod helpers;
+mod provider;
+mod search;
+mod vfs;
+
+use super::{
+    StudioSearchFlightRouteProvider, build_studio_search_flight_service_with_repo_provider,
+};
+use fixtures::{
+    build_service, make_gateway_state_with_attachments, make_gateway_state_with_docs,
+    make_gateway_state_with_repo, make_gateway_state_with_search_routes,
+};
+use headers::{
+    populate_attachment_headers, populate_autocomplete_headers, populate_definition_headers,
+    populate_graph_neighbors_headers, populate_markdown_analysis_headers,
+    populate_repo_index_headers, populate_repo_index_status_headers, populate_repo_sync_headers,
+    populate_search_headers, populate_topology_3d_headers, populate_vfs_content_headers,
+    populate_vfs_resolve_headers, populate_vfs_scan_headers,
+};
+#[cfg(feature = "julia")]
+use headers::{
+    populate_code_ast_analysis_headers, populate_refine_doc_headers,
+    populate_repo_doc_coverage_headers, populate_repo_overview_headers,
+    populate_repo_projected_page_index_tree_headers,
+};
+use helpers::{
+    assert_route_ticket, assert_studio_flight_snapshot, fetch_flight_info, first_string,
+    first_ticket,
+};

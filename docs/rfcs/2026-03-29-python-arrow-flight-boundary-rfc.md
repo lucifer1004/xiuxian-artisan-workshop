@@ -42,9 +42,12 @@ transport use case requires it to remain.
 
 This RFC is governed by:
 
-1. [wendao_arrow_plugin_core_runtime_migration.md](../../.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md)
-2. [2026-03-27-wendao-arrow-plugin-flight-rfc.md](./2026-03-27-wendao-arrow-plugin-flight-rfc.md)
-3. [2026-03-27-wendao-core-runtime-plugin-migration-rfc.md](./2026-03-27-wendao-core-runtime-plugin-migration-rfc.md)
+1. [2026-03-27-wendao-arrow-plugin-flight-rfc.md](./2026-03-27-wendao-arrow-plugin-flight-rfc.md)
+2. [2026-03-27-wendao-core-runtime-plugin-migration-rfc.md](./2026-03-27-wendao-core-runtime-plugin-migration-rfc.md)
+
+The paired execution tracking also follows the active core/runtime/plugin
+migration blueprint, but canonical RFCs do not link hidden workspace paths
+directly.
 
 The blueprint already fixes the architectural center:
 

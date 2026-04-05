@@ -118,7 +118,8 @@ in
   enterTest = "";
 
   # https://devenv.sh/pre-commit-hooks/
-  # git-hooks.hooks.shellcheck.enable = true;
+  git-hooks.hooks.oxlint.enable = true;
+  git-hooks.hooks.oxfmt.enable = true;
   # git-hooks.hooks.nixfmt.enable = true;
   # See full reference at https://devenv.sh/reference/options/
 }

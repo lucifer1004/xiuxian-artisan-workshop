@@ -1,4 +1,14 @@
-//! xiuxian-wendao - High-performance knowledge management library.
+//! xiuxian-wendao - Wendao business domain crate.
+//!
+//! Package split rule:
+//! - `xiuxian-wendao-core` owns stable shared contracts
+//! - `xiuxian-wendao-runtime` owns generic host behavior
+//! - `xiuxian-wendao` owns Wendao graph, retrieval, storage, analyzers, and
+//!   business-domain services
+//!
+//! Some host-facing seams still live here during the migration, but new stable
+//! contract records should move toward `core`, and new deployment-dependent
+//! helpers should move toward `runtime`.
 //!
 //! Module layout (by domain):
 //! - `types` / `knowledge_py`: Knowledge entries and categories

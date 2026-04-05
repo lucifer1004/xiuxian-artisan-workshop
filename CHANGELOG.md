@@ -5,19 +5,26 @@ metadata:
 ---
 
 # Changelog
+
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-- - -
+---
+
 ## [v0.5.0-dev] - 2026-03-15
+
 #### Architectural Breakthroughs
+
 - (**qianji**) Implement **Audit Scenario V3.0** with native LinkGraph Triple Loop [UNATTENDED]
 - (**zhenfa**) Establish **Zhenfa Contract System** using XSD (`qianji_plan.xsd`) for strict agent output validation
 - (**zhenfa**) Integrate **ncl-driven Sandbox Profiles** (`strict`) for physical agent isolation
 - (**engineering**) Codify **High-Standard Rust Include Pattern** for hyper-modularity in kernel crates
 - (**research**) Blueprint the **Unified Streaming Parser** (Claude Code/Gemini CLI/Codex) for Zhenfa Event Transmutation
 - (**architecture**) Deconstruct hardcoded Rust loops in favor of **Native Graph Patterns** in Qianji
+
 ## [v0.4.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/d733fd3bf66f357c1f32f3d88143ff2ab090157d..v0.4.0) - 2026-01-25
+
 #### Features
+
 - Add modern engineering workflows SOP and cleanup terminology
 - (**agent**) Migrate Meta-Agent to Factory Extension with microkernel architecture - ([4cb1571](https://github.com/tao3k/xiuxian-artisan-workshop/commit/4cb1571c98a6733f67a6f0b795a423eed23813e8)) - guangtao
 - (**agent**) fix MCP stdio transport and skill discovery - ([0d3d48a](https://github.com/tao3k/xiuxian-artisan-workshop/commit/0d3d48a66122005bd6c7f4895a42ec24df980dca)) - guangtao
@@ -35,16 +42,24 @@ All notable changes to this project will be documented in this file. See [conven
 - (**rust-core**) implement Rust core with type unification and Iron Lung
 - Neural Bridge - Type Unification and Benchmark
 - establish ODF-REP Rust Engineering Protocol - ([7f669ef](https://github.com/tao3k/xiuxian-artisan-workshop/commit/7f669efc03ef07dd9f591d347c093ead3d9e0871)) - guangtao
+
 #### Bug Fixes
+
 - (**agent**) Fix test imports to use new skill_runtime API - ([eeba2a3](https://github.com/tao3k/xiuxian-artisan-workshop/commit/eeba2a3d74167cec5eebd874d3e08e83e13b26d3)) - guangtao
 - (**core**) use test keys in tests to avoid GitHub secret scanning false positives - ([e455e5d](https://github.com/tao3k/xiuxian-artisan-workshop/commit/e455e5d4f98bb9f86fc19165ae87df8e15cd2625)) - guangtao
 - (**git-workflow**) stage all modified files before commit to capture lefthook reformatting - ([7390df8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/7390df892a79202998cd8c2a575f1e5fd4e6b8f6)) - guangtao
 - (**scanner**) fix @skill_script ast-grep pattern using $$$ Sequence Wildcard - ([90b9362](https://github.com/tao3k/xiuxian-artisan-workshop/commit/90b936209d47ab3c4bc58ecc8947f9b19295e15e)) - guangtao
+
 #### Documentation
+
 - add documentation for sync, reindex, and reactive indexing
+
 #### Tests
+
 - dynamic loading works - ([b18921e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/b18921e7b37c1e3a47c4f6ef6675e39349a7e425)) - guangtao
+
 #### Refactoring
+
 - (**agent**) add intent-driven tool discovery and VectorStore tests - ([38ae322](https://github.com/tao3k/xiuxian-artisan-workshop/commit/38ae3229cf59c082b3298c25b8581c96507a738d)) - guangtao
 - (**agent**) Python 3.12+ Modernization - 10 units completed - ([4d319a5](https://github.com/tao3k/xiuxian-artisan-workshop/commit/4d319a5843b615e66e08f2c9f36b7d203d9416f5)) - guangtao
 - (**agent**) fix GitPython import shadowing and hot reload API - ([a06c865](https://github.com/tao3k/xiuxian-artisan-workshop/commit/a06c8650a2e39674bd548f02ff51934cd9939471)) - guangtao
@@ -59,50 +74,70 @@ All notable changes to this project will be documented in this file. See [conven
 - Skills architecture consolidation and Agent core modularization - ([98aad4e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/98aad4eeb57e24459fbc8c89fcb967e2e2f2afd5)) - guangtao
 - Cleanup and consolidation of design history files - ([eb9091f](https://github.com/tao3k/xiuxian-artisan-workshop/commit/eb9091fed0232c30da674e0f82095701fd6661c4)) - guangtao
 - Implement PRJ_SPEC directory standard and fix hardcoded paths - ([1a3ded8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1a3ded8263059b9a82acde7cbfde327437ff833f)) - guangtao
+
 #### Miscellaneous Chores
+
 - (**ci**) add secretspec, fix xiuxian-core-rs build, and reorganize project - ([bd1f258](https://github.com/tao3k/xiuxian-artisan-workshop/commit/bd1f2583379161f82fe460fc8150858c301a6d15)) - guangtao
 - sync with release - ([d733fd3](https://github.com/tao3k/xiuxian-artisan-workshop/commit/d733fd3bf66f357c1f32f3d88143ff2ab090157d)) - guangtao
 
-- - -
+---
 
 ## [v0.3.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/2156b92cfb35018cf690bf3d40bc1512de70a30a..v0.3.0) - 2026-01-10
+
 #### Features
+
 - (**agent**) Implement Subprocess/Shim Architecture
 - (**agent**) Implement Safe Ingestion / Immune System
 - (**core**) Cognitive System Enhancements
 - (**core**) implement JIT Skill Acquisition and Safe Ingestion
 - (**core**) implement Skill Network with Git installer
+
 #### Documentation
+
 - (**agent**) skill testing framework updates
 - (**version**) Add monorepo versioning documentation - ([6504513](https://github.com/tao3k/xiuxian-artisan-workshop/commit/65045136900500bca96d17c4aa98357c197d8395)) - guangtao
+
 #### Tests
+
 - (**agent**) Remove migrated skill tests from old test files - ([c17adcb](https://github.com/tao3k/xiuxian-artisan-workshop/commit/c17adcb19546f98552817d935992328919e6c767)) - guangtao
 - (**agent**) Add skill loading regression tests - ([a963802](https://github.com/tao3k/xiuxian-artisan-workshop/commit/a963802780b907365237424268a944bdf766dc46)) - guangtao
+
 #### Refactoring
+
 - (**agent**) Sidecar Execution Pattern with CLI modularization - ([9fff6fd](https://github.com/tao3k/xiuxian-artisan-workshop/commit/9fff6fd4b344dd229a934e99e71868d368628575)) - guangtao
-- (**agent**) Hot reload support for scripts/*
+- (**agent**) Hot reload support for scripts/\*
 - (**agent**) rename test files from phase-based to feature-based naming
 - (**git-ops**) Unified skill.command naming convention
 - (**mcp**) Modularize mcp_core with performance optimizations - ([0b221c4](https://github.com/tao3k/xiuxian-artisan-workshop/commit/0b221c4e8f983f96df86ca00e06bce2d0fa504bd)) - guangtao
 - (**mcp**) Implement One Tool Architecture - Remove @mcp.tool decorators - ([e3ab459](https://github.com/tao3k/xiuxian-artisan-workshop/commit/e3ab4598d05c2bc02e22733c5fcee6791d91b45a)) - guangtao
 - (**orchestrator**) Refactor into atomic module structure - ([ad489e8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/ad489e834889717f0985a1e7532d5307319dddb8)) - guangtao
+
 #### Miscellaneous Chores
+
 - sync with release - ([2156b92](https://github.com/tao3k/xiuxian-artisan-workshop/commit/2156b92cfb35018cf690bf3d40bc1512de70a30a)) - guangtao
 
-- - -
+---
 
 ## [v0.2.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/1c9c93cb0409380bf4e75a8ba32704ebc9b1b267..v0.2.0) - 2026-01-06
+
 #### Documentation
+
 - Update documentation
+
 #### Tests
+
 - (**core**) Remove dynamic git commands from syntax variations test - ([dc59a44](https://github.com/tao3k/xiuxian-artisan-workshop/commit/dc59a44eaad82175c05e01b42d5143fa223271e3)) - guangtao
+
 #### Miscellaneous Chores
+
 - sync with release - ([1c9c93c](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1c9c93cb0409380bf4e75a8ba32704ebc9b1b267)) - guangtao
 
-- - -
+---
 
 ## [v0.1.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/5215ac951e138bb1d52350beedb0ff1381da9ed1..v0.1.0) - 2026-01-06
+
 #### Features
+
 - (**docs**) add documentation workflow with check_doc_sync enhancement - ([271d710](https://github.com/tao3k/xiuxian-artisan-workshop/commit/271d710f71139085fd3c3760ad9737ff53fdf6c2)) - guangtao
 - (**docs**) docs: add design philosophy and memory loading patterns - ([2942599](https://github.com/tao3k/xiuxian-artisan-workshop/commit/294259957c085b27baed5cfc9b160315e8d1506c)) - guangtao
 - (**docs**) add modular stress test framework specification - ([6ebc5ec](https://github.com/tao3k/xiuxian-artisan-workshop/commit/6ebc5ec3d4197a9b0077007d259528c18b1ee91f)) - guangtao
@@ -147,11 +182,13 @@ All notable changes to this project will be documented in this file. See [conven
 - allow orchestrator env from json file - ([1127ab1](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1127ab1ea1151f02b4d8f67f08e8eb4dc9debce5)) - GuangTao Zhang
 - rename repo to omni-devenv-fusion with MiniMax integration - ([df30d83](https://github.com/tao3k/xiuxian-artisan-workshop/commit/df30d83cbc158dc40e1cdac8e91c5d3b703e5be9)) - guangtao
 - change claude to MINIMAX_2.0 - ([3e78889](https://github.com/tao3k/xiuxian-artisan-workshop/commit/3e78889942de8fc57f7b26be95f12c73695967bf)) - guangtao
-- add justfile  workflow - ([59a0f5f](https://github.com/tao3k/xiuxian-artisan-workshop/commit/59a0f5f3e8a5e1c2f67302db97b87d3d614c4371)) - guangtao
+- add justfile workflow - ([59a0f5f](https://github.com/tao3k/xiuxian-artisan-workshop/commit/59a0f5f3e8a5e1c2f67302db97b87d3d614c4371)) - guangtao
 - add cog - ([b5fa13e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/b5fa13e35a3e6aab44954ccf37548ba41f69b9a2)) - guangtao
 - add cog - ([e0b793f](https://github.com/tao3k/xiuxian-artisan-workshop/commit/e0b793f7194c76301592017260806355b685b8b3)) - guangtao
 - test lefthook - ([4cec8c0](https://github.com/tao3k/xiuxian-artisan-workshop/commit/4cec8c0c8dd0e395732bb60d4cc473dce1f1a30b)) - guangtao
+
 #### Bug Fixes
+
 - (**git-ops**) fix: ensure hot reload works by clearing sys.modules before reload - ([d5e9fe5](https://github.com/tao3k/xiuxian-artisan-workshop/commit/d5e9fe58f856ca685211cc52cc0a6e76f38795b1)) - guangtao
 - (**mcp**) remove duplicate top-level import of polish_text - ([74dd8cd](https://github.com/tao3k/xiuxian-artisan-workshop/commit/74dd8cd07e23feca15a9f881d1234fc66fb98dd6)) - guangtao
 - (**mcp**) fix spinner name and tokenizers parallelism - ([b5a59d5](https://github.com/tao3k/xiuxian-artisan-workshop/commit/b5a59d5193ead0977f202b69ae9ddd1d2838a167)) - guangtao
@@ -163,7 +200,9 @@ All notable changes to this project will be documented in this file. See [conven
 - remove unsupported --no-pager flag from cog commands - ([282068e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/282068e2747a3cec31a70796b8482b1f6509428e)) - guangtao
 - stage all files before commit to capture hook changes - ([162336b](https://github.com/tao3k/xiuxian-artisan-workshop/commit/162336b95828cba17532a197ab5a8f34df6e8840)) - guangtao
 - make the cog.toml to copy mode - ([65257d4](https://github.com/tao3k/xiuxian-artisan-workshop/commit/65257d4e1c2f67c7feb74ec15cb766ace1d04a09)) - guangtao
+
 #### Documentation
+
 - (**claude**) CLAUDE.md: add documentation classification and authorization rules - ([cd6b7f9](https://github.com/tao3k/xiuxian-artisan-workshop/commit/cd6b7f957b22b7a1f5ba3f1d01ef8ccfac37318c)) - guangtao
 - (**cli**) add local developer memory section to project instructions - ([89ee35a](https://github.com/tao3k/xiuxian-artisan-workshop/commit/89ee35a6742feaad348a985807e84723c0312663)) - guangtao
 - (**docs**) add rag usage guide and documentation standards - ([0a7f389](https://github.com/tao3k/xiuxian-artisan-workshop/commit/0a7f389651e9306075876b1b9abd07ebcdabdc6d)) - guangtao
@@ -204,10 +243,14 @@ All notable changes to this project will be documented in this file. See [conven
 - update module structure documentation - ([3f802a2](https://github.com/tao3k/xiuxian-artisan-workshop/commit/3f802a2f64439c8ea61926f917950553381de48e)) - guangtao
 - add secretspec setup documentation with 1Password integration - ([b43ae98](https://github.com/tao3k/xiuxian-artisan-workshop/commit/b43ae98ea5e985fd5bf83c7b5da3f6b6707b67f7)) - guangtao
 - init README - ([46fbf20](https://github.com/tao3k/xiuxian-artisan-workshop/commit/46fbf2078b13692d4056f74e7f5a32a0fc90e019)) - guangtao
+
 #### Tests
+
 - (**mcp**) add comprehensive test suite for all MCP tools - ([afd8f9e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/afd8f9e9e7320ff95f4799d0251ded2f6cf15685)) - guangtao
 - add claude test - ([9fabcea](https://github.com/tao3k/xiuxian-artisan-workshop/commit/9fabceaa79dfb90022233cf03748d5cf161ac082)) - guangtao
+
 #### Refactoring
+
 - (**cli**) use settings.yaml for config paths instead of hardcoded - ([eed450a](https://github.com/tao3k/xiuxian-artisan-workshop/commit/eed450adca27118ae8e11c1f3c9ff94771059070)) - guangtao
 - (**git-ops**) One Tool Architecture completion
 - (**git-ops**) continue One Tool Architecture
@@ -232,7 +275,9 @@ All notable changes to this project will be documented in this file. See [conven
 - reorganize docs/ to follow four-category standard - ([57ead99](https://github.com/tao3k/xiuxian-artisan-workshop/commit/57ead99037aed572a77f580034932b360cb0fd4c)) - guangtao
 - clean up Tri-MCP architecture and fix docs paths - ([1d60d4a](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1d60d4a029e1fa15a232fc5b9bfc198c4f010536)) - guangtao
 - reorganize nix modules into modules/ directory - ([202b1d6](https://github.com/tao3k/xiuxian-artisan-workshop/commit/202b1d693aa16c33dd812d3fc7a37899755de496)) - guangtao
+
 #### Miscellaneous Chores
+
 - (**claude**) add claude.md - ([7f44dcc](https://github.com/tao3k/xiuxian-artisan-workshop/commit/7f44dcc5bd4f69cbada700a79424756a9cc1a05a)) - guangtao
 - (**cli**) fix scopes - ([03fb2ae](https://github.com/tao3k/xiuxian-artisan-workshop/commit/03fb2ae8f5460145be20a946ee8e0a46948be450)) - guangtao
 - (**docs**) update documentation for Spec-Driven Development and pytest testing - ([d9d7a7e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/d9d7a7e4fd9ab880c5c7c2f349351225bc601be5)) - guangtao
@@ -282,22 +327,30 @@ All notable changes to this project will be documented in this file. See [conven
 - formalize agent workflow with SRE health checks - ([048fc0b](https://github.com/tao3k/xiuxian-artisan-workshop/commit/048fc0bdddeccbd0ea43333cf65d70c3a66ec480)) - guangtao
 - sync with release - ([70cf5f4](https://github.com/tao3k/xiuxian-artisan-workshop/commit/70cf5f40388772e0a145ccaa3f2dac50287fff15)) - guangtao
 - init - ([5215ac9](https://github.com/tao3k/xiuxian-artisan-workshop/commit/5215ac951e138bb1d52350beedb0ff1381da9ed1)) - guangtao
+
 #### Style
+
 - (**cli**) format all files with prettier and nixfmt - ([32b4df5](https://github.com/tao3k/xiuxian-artisan-workshop/commit/32b4df50cb5ec7714b5ba8cf12f99162a6bbaf59)) - guangtao
 - format documentation-workflow.md - ([4ff2a43](https://github.com/tao3k/xiuxian-artisan-workshop/commit/4ff2a434453561440566280401d7d4d544bccb55)) - guangtao
 - format mcp-server/README.md - ([4885c28](https://github.com/tao3k/xiuxian-artisan-workshop/commit/4885c2860f985dc7c053637d57d915d9b3d48b42)) - guangtao
 - format docs with prettier (start_spec updates) - ([2c4e069](https://github.com/tao3k/xiuxian-artisan-workshop/commit/2c4e069ef9b7ca95d07ef9be7b39f68247bf68fb)) - guangtao
 
-- - -
+---
 
 ## [v2.2.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/3144cdf78c17c872a33161a5ff848709b8e5b522..v2.2.0) - 2026-01-04
+
 #### Features
+
 - (**git-ops**) add security guidelines for path safety - ([630b989](https://github.com/tao3k/xiuxian-artisan-workshop/commit/630b989502d18c07518d07f89d337ba49f419d3b)) - guangtao
 - (**mcp**) add knowledge skill for structural knowledge injection - ([a069e7a](https://github.com/tao3k/xiuxian-artisan-workshop/commit/a069e7a1a07a76aed7608cc040518b8b9326ed69)) - guangtao
 - (**mcp**) implement Harvester and Skill-First Reformation
+
 #### Bug Fixes
+
 - (**git-ops**) fix: ensure hot reload works by clearing sys.modules before reload - ([6cb7099](https://github.com/tao3k/xiuxian-artisan-workshop/commit/6cb70997caa6121b3f6b0470e30022d66ad1b2a3)) - guangtao
+
 #### Refactoring
+
 - (**cli**) use settings.yaml for config paths instead of hardcoded - ([2a36bbb](https://github.com/tao3k/xiuxian-artisan-workshop/commit/2a36bbbec31b07ded8e09704aee19f0e992f4161)) - guangtao
 - (**git-ops**) clean up guide.md, remove duplicate authorization template - ([1c5506b](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1c5506ba42088f07f12d938682ceba5c1776a40f)) - guangtao
 - (**git-ops**) consolidate to git_commit only - ([0b26ea7](https://github.com/tao3k/xiuxian-artisan-workshop/commit/0b26ea7a2b973f6b24df5b5caf7b67502113eabf)) - guangtao
@@ -306,7 +359,9 @@ All notable changes to this project will be documented in this file. See [conven
 - (**mcp**) consolidate skills - move writer/knowledge logic to skill modules - ([69d7177](https://github.com/tao3k/xiuxian-artisan-workshop/commit/69d71773276d3b2e1af7792025c659d21c8ace1d)) - guangtao
 - (**mcp**) unify shell execution in terminal skill - ([20d0573](https://github.com/tao3k/xiuxian-artisan-workshop/commit/20d0573086455fe7024db810eb187837b6cbdd6d)) - guangtao
 - migrate src/ to packages/python/ architecture - ([16868f4](https://github.com/tao3k/xiuxian-artisan-workshop/commit/16868f4841458a46c1c284b98bacc3fce22fff50)) - guangtao
+
 #### Miscellaneous Chores
+
 - (**git-ops**) refactor output.py to English-only documentation - ([5853132](https://github.com/tao3k/xiuxian-artisan-workshop/commit/58531321e576010999024b9bda7733f4b1d8e5f1)) - guangtao
 - (**git-ops**) clean up output.py registration - ([a8357b3](https://github.com/tao3k/xiuxian-artisan-workshop/commit/a8357b3646fd571db6e31963aad89405a6546740)) - guangtao
 - (**git-ops**) clean up parent.parent.parent patterns - ([57c3b19](https://github.com/tao3k/xiuxian-artisan-workshop/commit/57c3b1924b734c0b0efe075ce8afc732a8c510df)) - guangtao
@@ -316,25 +371,33 @@ All notable changes to this project will be documented in this file. See [conven
 - (**mcp**) chore: remove unused output.py and add MCP dependency tests - ([cb2d551](https://github.com/tao3k/xiuxian-artisan-workshop/commit/cb2d55197579f87da61a609fa61760444b5d9b79)) - guangtao
 - sync with release - ([3144cdf](https://github.com/tao3k/xiuxian-artisan-workshop/commit/3144cdf78c17c872a33161a5ff848709b8e5b522)) - guangtao
 
-- - -
+---
 
 ## [v2.1.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/519ca61209ba79baff7840a95beabfaaaf928c1e..v2.1.0) - 2026-01-03
+
 #### Features
+
 - (**mcp-core**) add rich terminal output utilities for beautiful MCP server startup - ([055ecb5](https://github.com/tao3k/xiuxian-artisan-workshop/commit/055ecb5b1f5bf985656cc4e3217b55fa9206a5d3)) - guangtao
 - (**mcp-server**) add test scenario loading from MD files for smart_commit - ([223bc64](https://github.com/tao3k/xiuxian-artisan-workshop/commit/223bc64cac5cb38b460dec5c4e251d12a215bed0)) - guangtao
 - (**orchestrator**) increase timeout and add API key config fallback - ([a022d29](https://github.com/tao3k/xiuxian-artisan-workshop/commit/a022d29808b27c409a9538122fd5cbd7f0805183)) - guangtao
+
 #### Documentation
+
 - (**docs**) add rag usage guide and documentation standards - ([8b9ae1d](https://github.com/tao3k/xiuxian-artisan-workshop/commit/8b9ae1dcc301557345612a05a2e2c4d2ba2b4ee9)) - guangtao
 - (**docs**) docs: rewrite README with Tri-MCP architecture and SDLC workflow - ([49daf7c](https://github.com/tao3k/xiuxian-artisan-workshop/commit/49daf7c13e0ee3305782cf85ac18bfb456f23470)) - guangtao
+
 #### Miscellaneous Chores
+
 - (**git-ops**) add git commit rule warning to claude.md - ([19e9cf3](https://github.com/tao3k/xiuxian-artisan-workshop/commit/19e9cf3dbe797f961e439ca14ab728ec59f613ac)) - guangtao
 - migrate to GitOps + Authorization Flow
 - sync with release - ([519ca61](https://github.com/tao3k/xiuxian-artisan-workshop/commit/519ca61209ba79baff7840a95beabfaaaf928c1e)) - guangtao
 
-- - -
+---
 
 ## [v2.0.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/e5782f7f9e3fc3dd11615b87d7432a83295735d0..v2.0.0) - 2026-01-02
+
 #### Features
+
 - (**docs**) add documentation workflow with check_doc_sync enhancement - ([938ce63](https://github.com/tao3k/xiuxian-artisan-workshop/commit/938ce633b4b8e94b0e3f2d76df926fa4ec1de8ef)) - guangtao
 - (**docs**) docs: add design philosophy and memory loading patterns - ([771cc78](https://github.com/tao3k/xiuxian-artisan-workshop/commit/771cc7875b7ea14aadf52e32852c9cf2a468990f)) - guangtao
 - (**git-ops**) add GitWorkflowCache auto-load and workflow protocol in responses - ([1b60ce3](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1b60ce32809efd7e7c2bc7b69cb7d03f81f4e594)) - guangtao
@@ -343,10 +406,14 @@ All notable changes to this project will be documented in this file. See [conven
 - (**mcp**) add Actions Over Apologies principle with auto-loaded problem-solving.md - ([a5212ce](https://github.com/tao3k/xiuxian-artisan-workshop/commit/a5212ce96354016f2da4c3b8ee5106d69955cda2)) - guangtao
 - (**orchestrator**) upgrade Hive to v3 Antifragile Edition with auto-healing - ([bfd29a8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/bfd29a8f59bed1494b553c315f65f076023788ca)) - guangtao
 - (**orchestrator**) add hive architecture for distributed multi-process execution - ([5d91418](https://github.com/tao3k/xiuxian-artisan-workshop/commit/5d9141888bbb7dccf37eae2cfc7db67d09611965)) - guangtao
+
 #### Bug Fixes
+
 - (**mcp-server**) remove duplicate polish_text tool definition - ([58c1a5e](https://github.com/tao3k/xiuxian-artisan-workshop/commit/58c1a5e6bce7430fda5ece97957f5ecd0f82c504)) - guangtao
 - (**orchestrator**) convert test functions to use assert instead of return - ([73728ee](https://github.com/tao3k/xiuxian-artisan-workshop/commit/73728ee5839b5c181730d0345f2daa5e4527d894)) - guangtao
+
 #### Documentation
+
 - (**claude**) CLAUDE.md: add documentation classification and authorization rules - ([aa32423](https://github.com/tao3k/xiuxian-artisan-workshop/commit/aa324237aa455e1da4177363aa3873300b29a454)) - guangtao
 - (**docs**) add vision and key differentiators to README - ([9e005c8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/9e005c860ad56d3b7265f1d21b40a5bc30a477b3)) - guangtao
 - (**git-workflow**) add legal binding protocol rules for authorization - ([668d10b](https://github.com/tao3k/xiuxian-artisan-workshop/commit/668d10b165d0394a2639bde7a7ca8538a29f8651)) - guangtao
@@ -356,23 +423,29 @@ All notable changes to this project will be documented in this file. See [conven
 - (**orchestrator**) mark milestone complete with Antifragile Edition
 - document Tri-MCP architecture and deprecate delegate_to_coder - ([ce7b017](https://github.com/tao3k/xiuxian-artisan-workshop/commit/ce7b0173e112254c309d559379f3780aad391664)) - guangtao
 - add release process guideline - ([059cefd](https://github.com/tao3k/xiuxian-artisan-workshop/commit/059cefdc9ca0824b77ece4271ec9c4e190c32412)) - guangtao
+
 #### Refactoring
+
 - (**orchestrator**) split into Dual-MCP (Brain + Hands) - ([55d76ed](https://github.com/tao3k/xiuxian-artisan-workshop/commit/55d76ed53b5ad5a81714bd4049052d246be16bd0)) - guangtao
 - migrate from omni-devenv-fusion to xiuxian-artisan-workshop - ([5401aca](https://github.com/tao3k/xiuxian-artisan-workshop/commit/5401aca4a0259628fa0589e8dbf4cca2bbdcb5bc)) - guangtao
 - reorganize docs/ to follow four-category standard - ([1d5cb11](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1d5cb114be0cf51ce11090812e38c10d97cec31c)) - guangtao
 - clean up Tri-MCP architecture and fix docs paths - ([279b751](https://github.com/tao3k/xiuxian-artisan-workshop/commit/279b751730cd462fb4f4b4126e0cf88cbc8f1310)) - guangtao
+
 #### Miscellaneous Chores
+
 - (**nix**) add legacy mcp-server scope for old commits - ([88357ea](https://github.com/tao3k/xiuxian-artisan-workshop/commit/88357eaccc94ce219cf8aca898afe81a97b15d36)) - guangtao
 - (**version**) start v1.4.0 development - ([4ed6b60](https://github.com/tao3k/xiuxian-artisan-workshop/commit/4ed6b606ff3c7011941f2f36b48f6234b7c33799)) - guangtao
 - sync claude.nix with .mcp.json - ([11f7208](https://github.com/tao3k/xiuxian-artisan-workshop/commit/11f72082992657fceec3d093a5d065f5c58089a6)) - guangtao
 - update files - ([2b15bae](https://github.com/tao3k/xiuxian-artisan-workshop/commit/2b15bae26bb5e7171766484a78ddb00d8bf9ea54)) - guangtao
 - merge v1.3.0 release - ([e5782f7](https://github.com/tao3k/xiuxian-artisan-workshop/commit/e5782f7f9e3fc3dd11615b87d7432a83295735d0)) - guangtao
+
 #### Style
+
 - (**cli**) format all files with prettier and nixfmt - ([23029ec](https://github.com/tao3k/xiuxian-artisan-workshop/commit/23029eca7ba9c703d6b2c2a619b7700bd7a304d5)) - guangtao
 - format documentation-workflow.md - ([bf3f8d8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/bf3f8d873f95f4143696219d6499a850d324243a)) - guangtao
 - format mcp-server/README.md - ([ed6b1ed](https://github.com/tao3k/xiuxian-artisan-workshop/commit/ed6b1ed60bd38307b60e4513de1acd669a74b7e2)) - guangtao
 - format docs with prettier (start_spec updates) - ([dcede49](https://github.com/tao3k/xiuxian-artisan-workshop/commit/dcede495e5da1aa75b25fabce9d63fdea1e4a27f)) - guangtao
 
-- - -
+---
 
 Changelog generated by [cocogitto](https://github.com/cocogitto/cocogitto).

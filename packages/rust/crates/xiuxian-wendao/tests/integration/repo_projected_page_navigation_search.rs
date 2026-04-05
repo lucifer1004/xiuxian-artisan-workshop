@@ -1,13 +1,17 @@
 //! Integration tests for deterministic projected page navigation search.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 
+#[cfg(feature = "modelica")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
+#[cfg(feature = "modelica")]
+use xiuxian_wendao::analyzers::repo_projected_page_navigation_search_from_config;
 use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageNavigationSearchQuery,
-    build_repo_projected_page_navigation_search, repo_projected_page_navigation_search_from_config,
+    build_repo_projected_page_navigation_search,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;

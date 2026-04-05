@@ -89,7 +89,9 @@ fn builds_projected_page_index_trees_from_stage_one_records() {
         diagnostics: Vec::new(),
     };
 
-    let trees = build_projected_page_index_trees(&analysis).expect("projected trees build");
+    let Ok(trees) = build_projected_page_index_trees(&analysis) else {
+        panic!("projected trees build");
+    };
 
     insta::with_settings!({
         snapshot_path => "../snapshots",

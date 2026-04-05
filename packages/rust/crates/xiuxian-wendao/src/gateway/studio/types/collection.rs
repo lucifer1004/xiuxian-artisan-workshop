@@ -20,7 +20,7 @@ mod tests {
         let exported = Typescript::new()
             .bigint(BigIntExportBehavior::Number)
             .export(&studio_type_collection())
-            .expect("export studio typescript bindings");
+            .unwrap_or_else(|error| panic!("export studio typescript bindings: {error}"));
 
         assert!(exported.contains("UiPluginArtifact"));
         assert!(exported.contains("UiPluginLaunchSpec"));

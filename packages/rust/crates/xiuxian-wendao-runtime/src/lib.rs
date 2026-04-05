@@ -1,4 +1,13 @@
-//! Runtime-owned host behavior for the Wendao core/runtime split.
+//! Generic host behavior for the Wendao package split.
+//!
+//! Ownership rule:
+//! - put runtime config resolution, settings merge, transport negotiation,
+//!   client/server construction, and runtime artifact helpers here
+//! - do not put stable contract ownership or Wendao business-domain logic here
+//!
+//! This crate sits between `xiuxian-wendao-core` and `xiuxian-wendao`: it owns
+//! deployment-dependent host behavior, while the main Wendao crate owns graph,
+//! retrieval, storage, and other product semantics.
 
 /// Runtime-owned artifact render helpers.
 pub mod artifacts;

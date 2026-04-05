@@ -27,7 +27,7 @@ pub(crate) fn make_prewarm_task(
         table_name: table_name.to_string(),
         projected_columns: projected_columns
             .iter()
-            .map(|column| column.to_string())
+            .map(std::string::ToString::to_string)
             .collect(),
     })
 }

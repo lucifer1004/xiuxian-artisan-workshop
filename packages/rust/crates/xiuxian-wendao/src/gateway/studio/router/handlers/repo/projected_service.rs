@@ -276,7 +276,7 @@ pub(crate) async fn run_repo_projected_page_search(
                 &cached.analysis,
                 artifacts.as_ref(),
             );
-            store_cached_repository_search_result(cache_key, &result)?;
+            store_cached_repository_search_result(&cache_key, &result)?;
             Ok::<_, RepoIntelligenceError>(result)
         },
     )

@@ -12,7 +12,8 @@ pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::co
 pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::collection::collect_stale_index_footer_standards;
 pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::derive_opaque_doc_id;
 pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::{
-    DOC_IDENTITY_PROTOCOL_ISSUE_TYPE, INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE,
+    CANONICAL_DOC_HIDDEN_PATH_LINK_ISSUE_TYPE, DOC_IDENTITY_PROTOCOL_ISSUE_TYPE,
+    INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE,
     MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE, MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE,
     MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE,
     MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE,

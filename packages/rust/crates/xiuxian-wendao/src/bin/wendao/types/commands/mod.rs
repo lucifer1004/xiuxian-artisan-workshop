@@ -7,6 +7,8 @@ mod fix;
 mod gateway;
 mod graph;
 mod hmas;
+#[cfg(feature = "zhenfa-router")]
+mod query;
 mod repo;
 mod saliency;
 mod search;
@@ -21,6 +23,8 @@ pub(crate) use fix::FixArgs;
 pub(crate) use gateway::{GatewayArgs, GatewayCommand, GatewayStartArgs};
 pub(crate) use graph::{MetadataArgs, NeighborsArgs, RelatedArgs, ResolveArgs, TocArgs};
 pub(crate) use hmas::HmasCommand;
+#[cfg(feature = "zhenfa-router")]
+pub(crate) use query::{GraphqlQueryArgs, QueryCommand, RestQueryArgs, SqlQueryArgs};
 pub(crate) use repo::{RepoCommand, RepoSyncModeArg};
 pub(crate) use saliency::SaliencyCommand;
 pub(crate) use search::SearchArgs;

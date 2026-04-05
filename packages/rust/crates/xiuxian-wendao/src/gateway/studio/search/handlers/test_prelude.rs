@@ -7,8 +7,8 @@ pub(crate) use crate::gateway::studio::search::handlers::code_search::{
         path_matches_language_filters, truncate_content_search_snippet,
     },
     helpers::repo_navigation_target,
-    query::parse_repo_code_search_query,
 };
 pub(crate) use crate::gateway::studio::search::handlers::queries::{
     AstSearchQuery, AttachmentSearchQuery, ReferenceSearchQuery, SearchQuery, SymbolSearchQuery,
 };
+pub(crate) use crate::search::repo_search::parse_repo_code_search_query;

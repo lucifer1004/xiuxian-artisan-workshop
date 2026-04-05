@@ -41,5 +41,5 @@ To prevent reasoning degradation, the "searched context" is pruned using a **Gra
 
 :RELATIONS:
 :LINKS: [[06_roadmap/401_project_sentinel]], [[01_core/101_triple_a_protocol]]
-:ASSETS: [[.data/research/papers/2025_orcaloca_agentic_search.pdf]]
+:ASSETS: OrcaLoca 2025 paper
 :END:

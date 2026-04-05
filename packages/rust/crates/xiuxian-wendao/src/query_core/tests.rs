@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashSet};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -30,6 +31,14 @@ use crate::query_core::{
     WendaoRelation, explain_events_summary,
 };
 use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
+
+fn tempdir_or_panic(context: &str) -> tempfile::TempDir {
+    tempdir().unwrap_or_else(|error| panic!("{context}: {error}"))
+}
+
+fn write_fixture(path: &Path, contents: &str, context: &str) {
+    std::fs::write(path, contents).unwrap_or_else(|error| panic!("{context}: {error}"));
+}
 
 fn repo_document(
     path: &str,
@@ -104,7 +113,7 @@ fn snapshot_retrieval_rows(relation: &WendaoRelation) -> Vec<serde_json::Value> 
         .iter()
         .flat_map(|batch| {
             xiuxian_vector::retrieval_rows_from_record_batch(batch)
-                .expect("decode retrieval rows")
+                .unwrap_or_else(|error| panic!("decode retrieval rows: {error}"))
                 .into_iter()
                 .map(|row| {
                     serde_json::json!({
@@ -205,7 +214,7 @@ impl RetrievalBackend for StubPayloadRetrievalBackend {
             .collect::<Result<Vec<_>, _>>()?;
         let schema = batches
             .first()
-            .map(|batch| batch.schema())
+            .map(xiuxian_vector::EngineRecordBatch::schema)
             .ok_or_else(|| WendaoQueryCoreError::InvalidRelation("missing payload batch".into()))?;
         Ok(WendaoRelation::new(schema, batches))
     }
@@ -213,7 +222,7 @@ impl RetrievalBackend for StubPayloadRetrievalBackend {
 
 #[tokio::test]
 async fn vector_search_routes_through_search_plane_adapter_and_returns_relation() {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let temp_dir = tempdir_or_panic("tempdir");
     let service = Arc::new(SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
@@ -227,7 +236,7 @@ async fn vector_search_routes_through_search_plane_adapter_and_returns_relation(
             Some("rev-1"),
         )
         .await
-        .expect("publish repo content");
+        .unwrap_or_else(|error| panic!("publish repo content: {error}"));
 
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
     let ctx = WendaoExecutionContext::default()
@@ -247,7 +256,7 @@ async fn vector_search_routes_through_search_plane_adapter_and_returns_relation(
         },
     )
     .await
-    .expect("execute vector search");
+    .unwrap_or_else(|error| panic!("execute vector search: {error}"));
 
     assert_eq!(relation.row_count(), 1);
     let events = telemetry.events();
@@ -279,7 +288,7 @@ async fn graph_neighbors_routes_through_link_graph_adapter_and_returns_relation(
                 as arrow::array::ArrayRef,
         ],
     )
-    .expect("graph batch");
+    .unwrap_or_else(|error| panic!("graph batch: {error}"));
     let relation = WendaoRelation::new(batch.schema(), vec![batch]);
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
     let ctx = WendaoExecutionContext::default()
@@ -296,7 +305,7 @@ async fn graph_neighbors_routes_through_link_graph_adapter_and_returns_relation(
         },
     )
     .await
-    .expect("graph neighbors");
+    .unwrap_or_else(|error| panic!("graph neighbors: {error}"));
 
     assert!(relation.row_count() >= 2);
     let events = telemetry.events();
@@ -306,7 +315,7 @@ async fn graph_neighbors_routes_through_link_graph_adapter_and_returns_relation(
 
 #[tokio::test]
 async fn column_mask_filters_before_payload_fetch_and_emits_phase_counts() {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let temp_dir = tempdir_or_panic("tempdir");
     let service = Arc::new(SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
@@ -323,7 +332,7 @@ async fn column_mask_filters_before_payload_fetch_and_emits_phase_counts() {
             Some("rev-1"),
         )
         .await
-        .expect("publish repo content");
+        .unwrap_or_else(|error| panic!("publish repo content: {error}"));
 
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
     let ctx = WendaoExecutionContext::default()
@@ -343,7 +352,7 @@ async fn column_mask_filters_before_payload_fetch_and_emits_phase_counts() {
         },
     )
     .await
-    .expect("execute vector search");
+    .unwrap_or_else(|error| panic!("execute vector search: {error}"));
 
     let masked = execute_column_mask(
         &ctx,
@@ -353,7 +362,7 @@ async fn column_mask_filters_before_payload_fetch_and_emits_phase_counts() {
             limit: Some(1),
         },
     )
-    .expect("column mask");
+    .unwrap_or_else(|error| panic!("column mask: {error}"));
     assert_eq!(masked.row_count(), 1);
 
     let fetched = execute_payload_fetch(
@@ -365,7 +374,7 @@ async fn column_mask_filters_before_payload_fetch_and_emits_phase_counts() {
         },
     )
     .await
-    .expect("payload fetch");
+    .unwrap_or_else(|error| panic!("payload fetch: {error}"));
     assert_eq!(fetched.row_count(), 0);
 
     let events = telemetry.events();
@@ -392,7 +401,7 @@ async fn payload_fetch_projects_requested_columns() {
         language: Some("rust".to_string()),
         line: Some(3),
     }])
-    .expect("build retrieval batch");
+    .unwrap_or_else(|error| panic!("build retrieval batch: {error}"));
     let relation = crate::query_core::WendaoRelation::new(batch.schema(), vec![batch]);
     let backend = Arc::new(StubPayloadRetrievalBackend);
     let ctx = ctx.with_retrieval_backend(backend);
@@ -406,7 +415,7 @@ async fn payload_fetch_projects_requested_columns() {
         },
     )
     .await
-    .expect("payload fetch");
+    .unwrap_or_else(|error| panic!("payload fetch: {error}"));
     let field_names = fetched
         .schema()
         .fields()
@@ -418,7 +427,7 @@ async fn payload_fetch_projects_requested_columns() {
 
 #[tokio::test]
 async fn query_repo_code_relation_prefers_repo_entity_corpus() {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let temp_dir = tempdir_or_panic("tempdir");
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
@@ -433,7 +442,7 @@ async fn query_repo_code_relation_prefers_repo_entity_corpus() {
             Some("rev-1"),
         )
         .await
-        .expect("publish repo entities");
+        .unwrap_or_else(|error| panic!("publish repo entities: {error}"));
     service
         .publish_repo_content_chunks_with_revision(
             "alpha/repo",
@@ -441,7 +450,7 @@ async fn query_repo_code_relation_prefers_repo_entity_corpus() {
             Some("rev-1"),
         )
         .await
-        .expect("publish repo content");
+        .unwrap_or_else(|error| panic!("publish repo content: {error}"));
 
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
     let query = RepoCodeQueryRequest::new(
@@ -455,7 +464,7 @@ async fn query_repo_code_relation_prefers_repo_entity_corpus() {
     );
     let result = query_repo_code_relation(&service, &query, Some(telemetry.clone()))
         .await
-        .expect("query repo code relation");
+        .unwrap_or_else(|error| panic!("query repo code relation: {error}"));
 
     assert_eq!(result.corpus, RetrievalCorpus::RepoEntity);
     assert!(result.relation.row_count() > 0);
@@ -475,7 +484,7 @@ async fn query_repo_code_relation_prefers_repo_entity_corpus() {
 
 #[tokio::test]
 async fn query_repo_code_relation_falls_back_to_repo_content_when_entity_lane_is_disabled() {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let temp_dir = tempdir_or_panic("tempdir");
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
@@ -497,7 +506,7 @@ async fn query_repo_code_relation_falls_back_to_repo_content_when_entity_lane_is
             Some("rev-1"),
         )
         .await
-        .expect("publish repo content");
+        .unwrap_or_else(|error| panic!("publish repo content: {error}"));
 
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
     let query = RepoCodeQueryRequest::new(
@@ -511,12 +520,12 @@ async fn query_repo_code_relation_falls_back_to_repo_content_when_entity_lane_is
     );
     let result = query_repo_code_relation(&service, &query, Some(telemetry.clone()))
         .await
-        .expect("query repo code relation");
+        .unwrap_or_else(|error| panic!("query repo code relation: {error}"));
 
     assert_eq!(result.corpus, RetrievalCorpus::RepoContent);
     assert_eq!(result.relation.row_count(), 1);
     let rows = xiuxian_vector::retrieval_rows_from_record_batch(&result.relation.batches()[0])
-        .expect("decode retrieval rows");
+        .unwrap_or_else(|error| panic!("decode retrieval rows: {error}"));
     assert_eq!(rows[0].path, "src/BaseModelica.jl");
     assert_wendao_json_snapshot(
         "query_core_repo_code_relation_falls_back_to_repo_content",
@@ -532,12 +541,22 @@ async fn query_repo_code_relation_falls_back_to_repo_content_when_entity_lane_is
 
 #[tokio::test]
 async fn query_graph_neighbors_projection_returns_nodes_and_links() {
-    let root = tempdir().expect("tempdir");
-    std::fs::write(root.path().join("alpha.md"), "# Alpha\n\nSee [[beta]].\n")
-        .expect("write alpha");
-    std::fs::write(root.path().join("beta.md"), "# Beta\n\nBody.\n").expect("write beta");
+    let root = tempdir_or_panic("tempdir");
+    write_fixture(
+        &root.path().join("alpha.md"),
+        "# Alpha\n\nSee [[beta]].\n",
+        "write alpha",
+    );
+    write_fixture(
+        &root.path().join("beta.md"),
+        "# Beta\n\nBody.\n",
+        "write beta",
+    );
 
-    let index = Arc::new(LinkGraphIndex::build(root.path()).expect("build link graph"));
+    let index = Arc::new(
+        LinkGraphIndex::build(root.path())
+            .unwrap_or_else(|error| panic!("build link graph: {error}")),
+    );
     let projection = query_graph_neighbors_projection(
         Arc::clone(&index),
         "alpha",
@@ -547,7 +566,7 @@ async fn query_graph_neighbors_projection_returns_nodes_and_links() {
         None,
     )
     .await
-    .expect("query graph neighbors projection");
+    .unwrap_or_else(|error| panic!("query graph neighbors projection: {error}"));
 
     assert_eq!(projection.center.path, "alpha.md");
     assert!(projection.nodes.iter().any(|node| node.path == "beta.md"));
@@ -562,11 +581,19 @@ async fn query_graph_neighbors_projection_returns_nodes_and_links() {
 
 #[test]
 fn graph_projection_from_relation_extracts_unique_paths_by_distance() {
-    let root = tempdir().expect("tempdir");
-    std::fs::write(root.path().join("alpha.md"), "# Alpha\n\nSee [[beta]].\n")
-        .expect("write alpha");
-    std::fs::write(root.path().join("beta.md"), "# Beta\n\nBody.\n").expect("write beta");
-    let index = LinkGraphIndex::build(root.path()).expect("build link graph");
+    let root = tempdir_or_panic("tempdir");
+    write_fixture(
+        &root.path().join("alpha.md"),
+        "# Alpha\n\nSee [[beta]].\n",
+        "write alpha",
+    );
+    write_fixture(
+        &root.path().join("beta.md"),
+        "# Beta\n\nBody.\n",
+        "write beta",
+    );
+    let index = LinkGraphIndex::build(root.path())
+        .unwrap_or_else(|error| panic!("build link graph: {error}"));
 
     let batch = arrow::record_batch::RecordBatch::try_new(
         Arc::new(arrow::datatypes::Schema::new(vec![
@@ -594,9 +621,10 @@ fn graph_projection_from_relation_extracts_unique_paths_by_distance() {
             ])) as arrow::array::ArrayRef,
         ],
     )
-    .expect("graph batch");
+    .unwrap_or_else(|error| panic!("graph batch: {error}"));
     let relation = WendaoRelation::new(batch.schema(), vec![batch]);
-    let projection = graph_projection_from_relation(&index, &relation).expect("graph projection");
+    let projection = graph_projection_from_relation(&index, &relation)
+        .unwrap_or_else(|error| panic!("graph projection: {error}"));
 
     assert_eq!(projection.nodes.len(), 2);
     assert_eq!(

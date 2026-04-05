@@ -9,9 +9,7 @@ use xiuxian_vector::{
 use xiuxian_wendao_runtime::transport::{VfsScanFlightRouteProvider, VfsScanFlightRouteResponse};
 
 use crate::gateway::studio::router::StudioState;
-#[cfg(test)]
-use crate::gateway::studio::types::VfsScanEntry;
-use crate::gateway::studio::types::{VfsCategory, VfsScanResult};
+use crate::gateway::studio::types::{VfsCategory, VfsScanEntry, VfsScanResult};
 
 use super::scan::scan_roots;
 
@@ -53,124 +51,24 @@ pub(crate) fn load_vfs_scan_flight_response(
 }
 
 pub(crate) fn vfs_scan_result_batch(response: &VfsScanResult) -> Result<LanceRecordBatch, String> {
-    let project_dirs_json = response
-        .entries
-        .iter()
-        .map(|entry| {
-            entry
-                .project_dirs
-                .as_ref()
-                .map(|project_dirs| encode_project_dirs_json(project_dirs.as_slice()))
-                .transpose()
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let entries = response.entries.as_slice();
+    let project_dirs_json = project_dirs_json_values(entries)?;
     LanceRecordBatch::try_new(
-        Arc::new(LanceSchema::new(vec![
-            LanceField::new("path", LanceDataType::Utf8, false),
-            LanceField::new("name", LanceDataType::Utf8, false),
-            LanceField::new("isDir", LanceDataType::Boolean, false),
-            LanceField::new("category", LanceDataType::Utf8, false),
-            LanceField::new("size", LanceDataType::UInt64, false),
-            LanceField::new("modified", LanceDataType::UInt64, false),
-            LanceField::new("contentType", LanceDataType::Utf8, true),
-            LanceField::new("hasFrontmatter", LanceDataType::Boolean, false),
-            LanceField::new("wendaoId", LanceDataType::Utf8, true),
-            LanceField::new("projectName", LanceDataType::Utf8, true),
-            LanceField::new("rootLabel", LanceDataType::Utf8, true),
-            LanceField::new("projectRoot", LanceDataType::Utf8, true),
-            LanceField::new("projectDirsJson", LanceDataType::Utf8, true),
-        ])),
+        vfs_scan_batch_schema(),
         vec![
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.path.as_str())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.name.as_str())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceBooleanArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.is_dir)
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| vfs_category_as_str(entry.category))
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceUInt64Array::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.size)
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceUInt64Array::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.modified)
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.content_type.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceBooleanArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.has_frontmatter)
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.wendao_id.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.project_name.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.root_label.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                response
-                    .entries
-                    .iter()
-                    .map(|entry| entry.project_root.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                project_dirs_json
-                    .iter()
-                    .map(|value: &Option<String>| value.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
+            required_utf8_column(entries, |entry| entry.path.as_str()),
+            required_utf8_column(entries, |entry| entry.name.as_str()),
+            boolean_column(entries, |entry| entry.is_dir),
+            required_utf8_column(entries, |entry| vfs_category_as_str(entry.category)),
+            u64_column(entries, |entry| entry.size),
+            u64_column(entries, |entry| entry.modified),
+            optional_utf8_column(entries, |entry| entry.content_type.as_deref()),
+            boolean_column(entries, |entry| entry.has_frontmatter),
+            optional_utf8_column(entries, |entry| entry.wendao_id.as_deref()),
+            optional_utf8_column(entries, |entry| entry.project_name.as_deref()),
+            optional_utf8_column(entries, |entry| entry.root_label.as_deref()),
+            optional_utf8_column(entries, |entry| entry.project_root.as_deref()),
+            optional_string_column(project_dirs_json.as_slice()),
         ],
     )
     .map_err(|error| format!("failed to build VFS scan Flight batch: {error}"))
@@ -190,6 +88,82 @@ pub(crate) fn vfs_scan_result_flight_app_metadata(
 fn encode_project_dirs_json(project_dirs: &[String]) -> Result<String, String> {
     serde_json::to_string(project_dirs)
         .map_err(|error| format!("failed to encode VFS scan project dirs: {error}"))
+}
+
+fn project_dirs_json_values(entries: &[VfsScanEntry]) -> Result<Vec<Option<String>>, String> {
+    entries
+        .iter()
+        .map(|entry| {
+            entry
+                .project_dirs
+                .as_ref()
+                .map(|project_dirs| encode_project_dirs_json(project_dirs.as_slice()))
+                .transpose()
+        })
+        .collect()
+}
+
+fn vfs_scan_batch_schema() -> Arc<LanceSchema> {
+    Arc::new(LanceSchema::new(vec![
+        LanceField::new("path", LanceDataType::Utf8, false),
+        LanceField::new("name", LanceDataType::Utf8, false),
+        LanceField::new("isDir", LanceDataType::Boolean, false),
+        LanceField::new("category", LanceDataType::Utf8, false),
+        LanceField::new("size", LanceDataType::UInt64, false),
+        LanceField::new("modified", LanceDataType::UInt64, false),
+        LanceField::new("contentType", LanceDataType::Utf8, true),
+        LanceField::new("hasFrontmatter", LanceDataType::Boolean, false),
+        LanceField::new("wendaoId", LanceDataType::Utf8, true),
+        LanceField::new("projectName", LanceDataType::Utf8, true),
+        LanceField::new("rootLabel", LanceDataType::Utf8, true),
+        LanceField::new("projectRoot", LanceDataType::Utf8, true),
+        LanceField::new("projectDirsJson", LanceDataType::Utf8, true),
+    ]))
+}
+
+fn required_utf8_column<'a>(
+    entries: &'a [VfsScanEntry],
+    select: impl Fn(&'a VfsScanEntry) -> &'a str,
+) -> Arc<LanceStringArray> {
+    Arc::new(LanceStringArray::from(
+        entries.iter().map(select).collect::<Vec<_>>(),
+    ))
+}
+
+fn optional_utf8_column<'a>(
+    entries: &'a [VfsScanEntry],
+    select: impl Fn(&'a VfsScanEntry) -> Option<&'a str>,
+) -> Arc<LanceStringArray> {
+    Arc::new(LanceStringArray::from(
+        entries.iter().map(select).collect::<Vec<_>>(),
+    ))
+}
+
+fn optional_string_column(values: &[Option<String>]) -> Arc<LanceStringArray> {
+    Arc::new(LanceStringArray::from(
+        values
+            .iter()
+            .map(|value| value.as_deref())
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn boolean_column(
+    entries: &[VfsScanEntry],
+    select: impl Fn(&VfsScanEntry) -> bool,
+) -> Arc<LanceBooleanArray> {
+    Arc::new(LanceBooleanArray::from(
+        entries.iter().map(select).collect::<Vec<_>>(),
+    ))
+}
+
+fn u64_column(
+    entries: &[VfsScanEntry],
+    select: impl Fn(&VfsScanEntry) -> u64,
+) -> Arc<LanceUInt64Array> {
+    Arc::new(LanceUInt64Array::from(
+        entries.iter().map(select).collect::<Vec<_>>(),
+    ))
 }
 
 fn vfs_category_as_str(category: VfsCategory) -> &'static str {
@@ -234,15 +208,18 @@ mod tests {
             dir_count: 0,
             scan_duration_ms: 7,
         })
-        .expect("build VFS scan batch");
+        .unwrap_or_else(|error| panic!("build VFS scan batch: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let project_dirs = batch
-            .column_by_name("projectDirsJson")
-            .expect("projectDirsJson column")
+        let Some(project_dirs_column) = batch.column_by_name("projectDirsJson") else {
+            panic!("projectDirsJson column");
+        };
+        let Some(project_dirs) = project_dirs_column
             .as_any()
             .downcast_ref::<LanceStringArray>()
-            .expect("projectDirsJson column type");
+        else {
+            panic!("projectDirsJson column type");
+        };
         assert_eq!(project_dirs.value(0), "[\"docs\"]");
     }
 
@@ -254,10 +231,10 @@ mod tests {
             dir_count: 0,
             scan_duration_ms: 7,
         })
-        .expect("encode VFS scan metadata");
+        .unwrap_or_else(|error| panic!("encode VFS scan metadata: {error}"));
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["fileCount"], 1);
         assert_eq!(payload["dirCount"], 0);
         assert_eq!(payload["scanDurationMs"], 7);

@@ -35,6 +35,12 @@ pub fn load_bundled_wendao_gateway_openapi_document() -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
+    #[cfg(feature = "julia")]
+    use xiuxian_wendao_julia::compatibility::link_graph::{
+        julia_deployment_artifact_openapi_json_example,
+        julia_deployment_artifact_openapi_toml_example, julia_plugin_artifact_openapi_json_example,
+        julia_plugin_artifact_openapi_toml_example,
+    };
 
     use super::{
         bundled_wendao_gateway_openapi_document, bundled_wendao_gateway_openapi_path,
@@ -177,44 +183,42 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "julia")]
     #[test]
     fn bundled_gateway_openapi_document_declares_rerank_plugin_artifact_examples() {
         let document = load_bundled_wendao_gateway_openapi_document()
             .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
         let get = &document["paths"]["/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}"]["get"];
+        let expected_toml = julia_plugin_artifact_openapi_toml_example();
 
         assert_eq!(
-            get["responses"]["200"]["content"]["application/json"]["example"]["route"].as_str(),
-            Some("/rerank")
+            get["responses"]["200"]["content"]["application/json"]["example"],
+            julia_plugin_artifact_openapi_json_example()
         );
         assert_eq!(
             get["responses"]["200"]["content"]["text/plain"]["example"].as_str(),
-            Some(
-                "plugin_id = \"xiuxian-wendao-julia\"\nartifact_id = \"deployment\"\nschema_version = \"v1\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/rerank\"\n"
-            )
+            Some(expected_toml.as_str())
         );
     }
 
+    #[cfg(feature = "julia")]
     #[test]
     fn bundled_gateway_openapi_document_declares_rerank_julia_deployment_artifact_examples() {
         let document = load_bundled_wendao_gateway_openapi_document()
             .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
         let get = &document["paths"]["/api/ui/julia-deployment-artifact"]["get"];
+        let expected_toml =
+            julia_deployment_artifact_openapi_toml_example().unwrap_or_else(|error| {
+                panic!("render Julia deployment artifact OpenAPI example: {error}")
+            });
 
         assert_eq!(
-            get["responses"]["200"]["content"]["application/json"]["example"]["route"].as_str(),
-            Some("/rerank")
-        );
-        assert_eq!(
-            get["responses"]["200"]["content"]["application/json"]["example"]["healthRoute"]
-                .as_str(),
-            Some("/healthz")
+            get["responses"]["200"]["content"]["application/json"]["example"],
+            julia_deployment_artifact_openapi_json_example()
         );
         assert_eq!(
             get["responses"]["200"]["content"]["text/plain"]["example"].as_str(),
-            Some(
-                "artifact_schema_version = \"v1\"\ngenerated_at = \"2026-03-27T16:00:00+00:00\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/rerank\"\nhealth_route = \"/healthz\"\nschema_version = \"v1\"\ntimeout_secs = 30\n\n[launch]\nlauncher_path = \".data/WendaoAnalyzer/scripts/run_analyzer_service.sh\"\nargs = [\"--service-mode\", \"stream\", \"--analyzer-strategy\", \"linear_blend\"]\n"
-            )
+            Some(expected_toml.as_str())
         );
     }
 

@@ -268,6 +268,8 @@ pub(super) fn issue_type_to_code(issue_type: &str) -> &'static str {
         docs_governance::DOC_IDENTITY_PROTOCOL_ISSUE_TYPE | "doc_identity_protocol" => {
             "ERR_DOC_IDENTITY_PROTOCOL"
         }
+        docs_governance::CANONICAL_DOC_HIDDEN_PATH_LINK_ISSUE_TYPE
+        | "canonical_doc_hidden_path_link" => "WARN_CANONICAL_DOC_HIDDEN_PATH_LINK",
         docs_governance::MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE | "missing_package_docs_tree" => {
             "WARN_MISSING_PACKAGE_DOCS_TREE"
         }

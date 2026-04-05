@@ -10,7 +10,9 @@ metadata:
 
 ## 1. Overview
 
-Agentic Retrieval evolves Wendao from a passive retriever into an autonomous search engine. It implements the principles of **[[.data/research/papers/AgentG_2501.pdf|Agent-G (2025)]]**, allowing the engine to "think" before execution by generating dynamic expansion plans.
+Agentic Retrieval evolves Wendao from a passive retriever into an autonomous
+search engine. It implements the principles of **Agent-G (2025)**, allowing
+the engine to "think" before execution by generating dynamic expansion plans.
 
 ## 2. Core Mechanisms
 

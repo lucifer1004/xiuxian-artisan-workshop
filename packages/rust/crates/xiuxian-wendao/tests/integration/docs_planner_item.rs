@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing deep-wiki planner item reopening.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 

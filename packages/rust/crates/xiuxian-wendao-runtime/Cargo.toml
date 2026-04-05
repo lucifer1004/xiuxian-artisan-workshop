@@ -9,7 +9,7 @@ publish = false
 
 [features]
 default = []
-julia = [
+transport = [
     "dep:arrow-array",
     "dep:arrow-flight",
     "dep:arrow-schema",

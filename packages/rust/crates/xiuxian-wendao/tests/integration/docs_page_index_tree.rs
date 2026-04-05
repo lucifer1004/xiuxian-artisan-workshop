@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page-index tree lookup.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 
@@ -37,12 +38,14 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page_id = trees
+    let Some(page_id) = trees
         .trees
         .iter()
         .find(|tree| tree.title == "Projectionica.Controllers.PI")
         .map(|tree| tree.page_id.clone())
-        .expect("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
+    else {
+        panic!("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
+    };
 
     let result = docs_page_index_tree_from_config(
         &DocsPageIndexTreeQuery {

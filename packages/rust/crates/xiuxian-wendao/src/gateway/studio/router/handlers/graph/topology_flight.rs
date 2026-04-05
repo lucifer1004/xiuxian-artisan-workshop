@@ -293,7 +293,7 @@ mod tests {
                 color: "#abcdef".to_string(),
             }],
         })
-        .expect("build topology batch");
+        .unwrap_or_else(|error| panic!("build topology batch: {error}"));
 
         assert_eq!(batch.num_rows(), 3);
     }

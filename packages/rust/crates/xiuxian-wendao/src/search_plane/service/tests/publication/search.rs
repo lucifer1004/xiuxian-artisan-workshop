@@ -134,3 +134,119 @@ async fn search_repo_content_chunks_waits_for_repo_read_permit() {
     assert_eq!(hits.len(), 2);
     assert_eq!(hits[0].match_reason.as_deref(), Some("repo_content_search"));
 }
+
+#[tokio::test]
+async fn search_repo_content_chunks_with_filters_applies_sql_native_repo_filters() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+
+    ok_or_panic(
+        service
+            .publish_repo_content_chunks_with_revision("alpha/repo", &sample_repo_documents(), None)
+            .await,
+        "publish repo content chunks",
+    );
+
+    let hits = ok_or_panic(
+        service
+            .search_repo_content_chunks_with_filters(
+                "alpha/repo",
+                "reexport",
+                &HashSet::new(),
+                &RepoContentChunkSearchFilters {
+                    path_prefixes: HashSet::from(["src/".to_string()]),
+                    filename_filters: HashSet::from(["BaseModelica.jl".to_string()]),
+                    ..RepoContentChunkSearchFilters::default()
+                },
+                5,
+            )
+            .await,
+        "query repo content with sql-native filters",
+    );
+
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].path, "src/BaseModelica.jl");
+    assert_eq!(hits[0].title.as_deref(), Some("src/BaseModelica.jl"));
+}
+
+#[tokio::test]
+async fn search_repo_content_chunks_with_filters_applies_title_filters() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+
+    ok_or_panic(
+        service
+            .publish_repo_content_chunks_with_revision("alpha/repo", &sample_repo_documents(), None)
+            .await,
+        "publish repo content chunks",
+    );
+
+    let hits = ok_or_panic(
+        service
+            .search_repo_content_chunks_with_filters(
+                "alpha/repo",
+                "reexport",
+                &HashSet::new(),
+                &RepoContentChunkSearchFilters {
+                    title_filters: HashSet::from(["basemodelica".to_string()]),
+                    ..RepoContentChunkSearchFilters::default()
+                },
+                5,
+            )
+            .await,
+        "query repo content with title filters",
+    );
+
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].path, "src/BaseModelica.jl");
+}
+
+#[tokio::test]
+async fn search_repo_content_chunks_with_filters_applies_tag_filters() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+
+    ok_or_panic(
+        service
+            .publish_repo_content_chunks_with_revision("alpha/repo", &sample_repo_documents(), None)
+            .await,
+        "publish repo content chunks",
+    );
+
+    let hits = ok_or_panic(
+        service
+            .search_repo_content_chunks_with_filters(
+                "alpha/repo",
+                "reexport",
+                &HashSet::new(),
+                &RepoContentChunkSearchFilters {
+                    tag_filters: HashSet::from(["lang:julia".to_string()]),
+                    ..RepoContentChunkSearchFilters::default()
+                },
+                5,
+            )
+            .await,
+        "query repo content with tag filters",
+    );
+
+    assert_eq!(hits.len(), 2);
+    assert!(
+        hits.iter()
+            .all(|hit| hit.tags.iter().any(|tag| tag == "lang:julia"))
+    );
+}

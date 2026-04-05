@@ -1,14 +1,19 @@
 //! Integration tests for deterministic projected-page lookup.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 
-use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_modelica_repo, sample_projection_analysis,
-};
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
+use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     RepoProjectedPageQuery, RepoProjectedPagesQuery, build_repo_projected_page,
-    build_repo_projected_pages, repo_projected_page_from_config, repo_projected_pages_from_config,
+    build_repo_projected_pages,
+};
+#[cfg(feature = "modelica")]
+use xiuxian_wendao::analyzers::{
+    repo_projected_page_from_config, repo_projected_pages_from_config,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -24,12 +29,14 @@ fn projected_page_lookup_resolves_one_stable_page() -> TestResult {
         &analysis,
     );
 
-    let page_id = pages
+    let Some(page_id) = pages
         .pages
         .iter()
         .find(|page| page.title == "solve")
         .map(|page| page.page_id.clone())
-        .expect("expected a projected page titled `solve`");
+    else {
+        panic!("expected a projected page titled `solve`");
+    };
 
     let result = build_repo_projected_page(
         &RepoProjectedPageQuery {
@@ -67,14 +74,16 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page_id = pages
+    let Some(page_id) = pages
         .pages
         .iter()
         .find(|page| {
             page.page_id.contains(":symbol:") && page.title == "Projectionica.Controllers.PI"
         })
         .map(|page| page.page_id.clone())
-        .expect("expected a projected page for Projectionica.Controllers.PI");
+    else {
+        panic!("expected a projected page for Projectionica.Controllers.PI");
+    };
 
     let result = repo_projected_page_from_config(
         &RepoProjectedPageQuery {

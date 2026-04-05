@@ -1,10 +1,20 @@
 //! Parsing utilities for docs governance.
 
 use std::path::{Component, Path};
+use std::sync::OnceLock;
 
 use sha1::{Digest, Sha1};
 
 use super::types::{FooterBlock, IdLine, LineSlice, LinksLine, TopPropertiesDrawer};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HiddenPathLink {
+    pub line: usize,
+    pub start_offset: usize,
+    pub end_offset: usize,
+    pub link_markup: String,
+    pub target: String,
+}
 
 /// Derives an opaque document ID from a doc path.
 #[must_use]
@@ -49,6 +59,43 @@ pub fn is_package_local_crate_doc(doc_path: &str) -> bool {
     components
         .windows(5)
         .any(|window| matches!(window, [a, b, c, _, d] if a == "packages" && b == "rust" && c == "crates" && d == "docs"))
+}
+
+/// Checks if a doc path belongs to the canonical documentation surface.
+#[must_use]
+pub fn is_canonical_repo_doc(doc_path: &str) -> bool {
+    let path = Path::new(doc_path);
+    if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        return false;
+    }
+
+    let components = path_components(path);
+    if components
+        .iter()
+        .any(|component| is_hidden_workspace_dir(component))
+    {
+        return false;
+    }
+
+    if is_package_local_crate_doc(doc_path) {
+        return true;
+    }
+
+    if has_component_prefix(&components, &["docs"]) {
+        return !has_component_prefix(&components, &["docs", "GTD"]);
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    match file_name {
+        "AGENTS.md" | "CLAUDE.md" | "CHANGELOG.md" | "README.md" => true,
+        "SKILL.md" => components
+            .iter()
+            .any(|component| component == "skills" || component == "internal_skills"),
+        _ => false,
+    }
 }
 
 /// Collects line slices from content.
@@ -245,4 +292,134 @@ pub fn collect_index_body_links(lines: &[LineSlice<'_>]) -> Vec<String> {
         }
     }
     body_links
+}
+
+/// Extract hidden workspace-path links from content.
+#[must_use]
+pub(crate) fn extract_hidden_path_links(content: &str) -> Vec<HiddenPathLink> {
+    let lines = collect_lines(content);
+    let mut hidden_links = Vec::new();
+
+    for line in lines {
+        collect_hidden_wikilinks_from_line(&line, &mut hidden_links);
+        collect_hidden_markdown_links_from_line(&line, &mut hidden_links);
+    }
+
+    hidden_links
+}
+
+fn collect_hidden_wikilinks_from_line(line: &LineSlice<'_>, links: &mut Vec<HiddenPathLink>) {
+    let mut cursor = 0usize;
+    let text = line.without_newline;
+
+    while let Some(start_rel) = text[cursor..].find("[[") {
+        let start = cursor + start_rel;
+        let after_start = &text[start + 2..];
+        let Some(end_rel) = after_start.find("]]") else {
+            break;
+        };
+        let end = start + 2 + end_rel + 2;
+        let raw_target = &text[start + 2..start + 2 + end_rel];
+        if let Some(target) = normalize_hidden_path_target(
+            raw_target
+                .split_once('|')
+                .map_or(raw_target, |(target, _)| target),
+        ) {
+            links.push(HiddenPathLink {
+                line: line.line_number,
+                start_offset: line.start_offset + start,
+                end_offset: line.start_offset + end,
+                link_markup: text[start..end].to_string(),
+                target,
+            });
+        }
+        cursor = end;
+    }
+}
+
+fn collect_hidden_markdown_links_from_line(line: &LineSlice<'_>, links: &mut Vec<HiddenPathLink>) {
+    static RE_MARKDOWN_LINK: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    let Some(re_markdown_link) = RE_MARKDOWN_LINK
+        .get_or_init(|| regex::Regex::new(r"!?\[[^\]]*\]\(([^)]+)\)").ok())
+        .as_ref()
+    else {
+        return;
+    };
+
+    let text = line.without_newline;
+
+    for captures in re_markdown_link.captures_iter(text) {
+        let Some(link_match) = captures.get(0) else {
+            continue;
+        };
+        let Some(target_match) = captures.get(1) else {
+            continue;
+        };
+        let raw_target = normalize_markdown_target(target_match.as_str());
+        if let Some(target) = normalize_hidden_path_target(raw_target) {
+            links.push(HiddenPathLink {
+                line: line.line_number,
+                start_offset: line.start_offset + link_match.start(),
+                end_offset: line.start_offset + link_match.end(),
+                link_markup: link_match.as_str().to_string(),
+                target,
+            });
+        }
+    }
+}
+
+fn normalize_markdown_target(target: &str) -> &str {
+    let trimmed = target.trim();
+    let trimmed = trimmed
+        .strip_prefix('<')
+        .and_then(|inner| inner.strip_suffix('>'))
+        .unwrap_or(trimmed);
+    trimmed.split_whitespace().next().unwrap_or(trimmed)
+}
+
+fn normalize_hidden_path_target(target: &str) -> Option<String> {
+    let trimmed = target.trim();
+    if trimmed.is_empty()
+        || trimmed.starts_with('#')
+        || trimmed.contains("://")
+        || trimmed.starts_with("mailto:")
+        || trimmed.starts_with("javascript:")
+    {
+        return None;
+    }
+
+    let candidate = trimmed.split_once('#').map_or(trimmed, |(path, _)| path);
+    let candidate = candidate
+        .split_once('?')
+        .map_or(candidate, |(path, _)| path)
+        .replace('\\', "/");
+
+    if candidate.split('/').any(is_hidden_path_component) {
+        return Some(candidate);
+    }
+
+    None
+}
+
+fn path_components(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn has_component_prefix(components: &[String], prefix: &[&str]) -> bool {
+    components
+        .windows(prefix.len())
+        .any(|window| window.iter().map(String::as_str).eq(prefix.iter().copied()))
+}
+
+fn is_hidden_path_component(component: &str) -> bool {
+    component.starts_with('.') && component != "." && component != ".."
+}
+
+fn is_hidden_workspace_dir(component: &str) -> bool {
+    matches!(component, ".data" | ".cache" | ".run" | ".agent" | ".git")
 }

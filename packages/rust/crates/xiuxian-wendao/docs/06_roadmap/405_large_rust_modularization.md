@@ -14,7 +14,6 @@ This roadmap note tracks a lossless modularization pass over oversized Rust sour
 Active migration references:
 
 - `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
-- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
 - `[[06_roadmap/409_core_runtime_plugin_surface_inventory]]`
 
 This modularization lane is now part of the active `core` / `runtime` / plugin-package migration discipline. It should no longer be treated as optional cleanup work that can lag behind boundary extraction.
@@ -27,7 +26,8 @@ Inventory scope:
 - threshold: files larger than 400 lines
 - current count: 35 files
 
-The canonical per-file execution plan lives in `[[.cache/codex/execplans/wendao-large-rust-modularization.md]]`.
+The canonical per-file execution plan is maintained in the active tracking
+record rather than linked from this persistent roadmap note.
 
 ## Why This Slice Exists
 
@@ -152,11 +152,13 @@ Priority override:
 ## Local Constraints
 
 - The governing execution-plan policy lives at `.agent/PLANS.md`.
-- The workspace does not currently contain `.data/blueprints/project_anchor_semantic_addressing.md`.
-- Because the active blueprint file is absent, this roadmap treats current code topology and public API paths as the operative contract for the refactor.
+- The workspace now contains the semantic-addressing blueprint again.
+- The refactor should therefore follow that blueprint together with the
+  current code topology and stable public API paths, while the exact
+  hidden-path reference stays in the active tracking record.
 
 :RELATIONS:
-:LINKS: [[index]], [[06_roadmap/402_repo_intelligence_mvp]], [[06_roadmap/403_document_projection_and_retrieval_enhancement]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]], [[.cache/codex/execplans/wendao-large-rust-modularization.md]]
+:LINKS: [[index]], [[06_roadmap/402_repo_intelligence_mvp]], [[06_roadmap/403_document_projection_and_retrieval_enhancement]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]]
 :END:
 
 ---

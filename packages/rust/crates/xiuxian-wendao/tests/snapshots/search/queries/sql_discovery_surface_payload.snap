@@ -1,0 +1,902 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/search/queries/tests/snapshots.rs
+expression: value
+---
+{
+  "columns_catalog": {
+    "query": "SELECT sql_table_name, column_name, source_column_name, data_type, sql_object_kind, column_origin_kind FROM wendao_sql_columns WHERE sql_table_name IN ('reference_occurrence', 'local_symbol', 'repo_content_chunk', 'repo_entity') ORDER BY sql_table_name, ordinal_position",
+    "response": {
+      "app_metadata": {
+        "catalogTableName": "wendao_sql_tables",
+        "columnCatalogTableName": "wendao_sql_columns",
+        "registeredColumnCount": 139,
+        "registeredTableCount": 10,
+        "registeredTables": [
+          "local_symbol",
+          "local_symbol_epoch_1_part_manual",
+          "reference_occurrence",
+          "repo_content_chunk",
+          "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "repo_entity",
+          "repo_entity_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "wendao_sql_columns",
+          "wendao_sql_tables",
+          "wendao_sql_view_sources"
+        ],
+        "registeredViewCount": 3,
+        "registeredViewSourceCount": 3,
+        "resultBatchCount": 1,
+        "resultRowCount": 65,
+        "supportsInformationSchema": true,
+        "viewSourceCatalogTableName": "wendao_sql_view_sources"
+      },
+      "batches": [
+        {
+          "columns": [
+            {
+              "data_type": "Utf8",
+              "name": "sql_table_name",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "column_name",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "source_column_name",
+              "nullable": true
+            },
+            {
+              "data_type": "Utf8",
+              "name": "data_type",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "sql_object_kind",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "column_origin_kind",
+              "nullable": false
+            }
+          ],
+          "row_count": 65,
+          "rows": [
+            {
+              "column_name": "id",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "id",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "name",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "name",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "name_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "name_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "language",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "language",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "node_kind",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "node_kind",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "signature",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "signature",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "owner_title",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "owner_title",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "path",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "path",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "line_start",
+              "column_origin_kind": "projected",
+              "data_type": "UInt64",
+              "source_column_name": "line_start",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "search_text",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "search_text",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "hit_json",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "hit_json",
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "column_name": "id",
+              "column_origin_kind": "stored",
+              "data_type": "Utf8",
+              "source_column_name": "id",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "name",
+              "column_origin_kind": "stored",
+              "data_type": "Utf8",
+              "source_column_name": "name",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "name_folded",
+              "column_origin_kind": "stored",
+              "data_type": "Utf8",
+              "source_column_name": "name_folded",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "path",
+              "column_origin_kind": "stored",
+              "data_type": "Utf8",
+              "source_column_name": "path",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "line",
+              "column_origin_kind": "stored",
+              "data_type": "UInt64",
+              "source_column_name": "line",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "column",
+              "column_origin_kind": "stored",
+              "data_type": "UInt64",
+              "source_column_name": "column",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "line_text",
+              "column_origin_kind": "stored",
+              "data_type": "Utf8",
+              "source_column_name": "line_text",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "hit_json",
+              "column_origin_kind": "stored",
+              "data_type": "Utf8",
+              "source_column_name": "hit_json",
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "column_name": "repo_id",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "title",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "doc_type",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "code_tag",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "file_tag",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "kind_tag",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "language_tag",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "id",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "id",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "path",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "path",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "path_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "path_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "language",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "language",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "line_number",
+              "column_origin_kind": "projected",
+              "data_type": "UInt64",
+              "source_column_name": "line_number",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "line_text",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "line_text",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "line_text_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "line_text_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "search_text",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "search_text",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "column_name": "repo_id",
+              "column_origin_kind": "synthetic",
+              "data_type": "Utf8",
+              "source_column_name": null,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "id",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "id",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "entity_kind",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "entity_kind",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "name",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "name",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "name_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "name_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "qualified_name",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "qualified_name",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "qualified_name_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "qualified_name_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "path",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "path",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "path_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "path_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "language",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "language",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "symbol_kind",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "symbol_kind",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "module_id",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "module_id",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "signature",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "signature",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "signature_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "signature_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "summary",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "summary",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "summary_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "summary_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "related_symbols_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "related_symbols_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "related_modules_folded",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "related_modules_folded",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "line_start",
+              "column_origin_kind": "projected",
+              "data_type": "UInt32",
+              "source_column_name": "line_start",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "line_end",
+              "column_origin_kind": "projected",
+              "data_type": "UInt32",
+              "source_column_name": "line_end",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "audit_status",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "audit_status",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "verification_state",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "verification_state",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "attributes_json",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "attributes_json",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "hierarchical_uri",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "hierarchical_uri",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "hierarchy",
+              "column_origin_kind": "projected",
+              "data_type": "List(Utf8)",
+              "source_column_name": "hierarchy",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "implicit_backlinks",
+              "column_origin_kind": "projected",
+              "data_type": "List(Utf8)",
+              "source_column_name": "implicit_backlinks",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "implicit_backlink_items_json",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "implicit_backlink_items_json",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "projection_page_ids",
+              "column_origin_kind": "projected",
+              "data_type": "List(Utf8)",
+              "source_column_name": "projection_page_ids",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "saliency_score",
+              "column_origin_kind": "projected",
+              "data_type": "Float64",
+              "source_column_name": "saliency_score",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "search_text",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "search_text",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "column_name": "hit_json",
+              "column_origin_kind": "projected",
+              "data_type": "Utf8",
+              "source_column_name": "hit_json",
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "information_schema_tables": {
+    "query": "SELECT table_name, table_type FROM information_schema.tables WHERE table_name IN ('reference_occurrence', 'local_symbol', 'repo_content_chunk', 'repo_entity', 'wendao_sql_tables', 'wendao_sql_columns', 'wendao_sql_view_sources') ORDER BY table_name",
+    "response": {
+      "app_metadata": {
+        "catalogTableName": "wendao_sql_tables",
+        "columnCatalogTableName": "wendao_sql_columns",
+        "registeredColumnCount": 139,
+        "registeredTableCount": 10,
+        "registeredTables": [
+          "local_symbol",
+          "local_symbol_epoch_1_part_manual",
+          "reference_occurrence",
+          "repo_content_chunk",
+          "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "repo_entity",
+          "repo_entity_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "wendao_sql_columns",
+          "wendao_sql_tables",
+          "wendao_sql_view_sources"
+        ],
+        "registeredViewCount": 3,
+        "registeredViewSourceCount": 3,
+        "resultBatchCount": 1,
+        "resultRowCount": 7,
+        "supportsInformationSchema": true,
+        "viewSourceCatalogTableName": "wendao_sql_view_sources"
+      },
+      "batches": [
+        {
+          "columns": [
+            {
+              "data_type": "Utf8",
+              "name": "table_name",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "table_type",
+              "nullable": false
+            }
+          ],
+          "row_count": 7,
+          "rows": [
+            {
+              "table_name": "local_symbol",
+              "table_type": "VIEW"
+            },
+            {
+              "table_name": "reference_occurrence",
+              "table_type": "BASE TABLE"
+            },
+            {
+              "table_name": "repo_content_chunk",
+              "table_type": "VIEW"
+            },
+            {
+              "table_name": "repo_entity",
+              "table_type": "VIEW"
+            },
+            {
+              "table_name": "wendao_sql_columns",
+              "table_type": "BASE TABLE"
+            },
+            {
+              "table_name": "wendao_sql_tables",
+              "table_type": "BASE TABLE"
+            },
+            {
+              "table_name": "wendao_sql_view_sources",
+              "table_type": "BASE TABLE"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tables_catalog": {
+    "query": "SELECT sql_table_name, corpus, scope, sql_object_kind, source_count, repo_id FROM wendao_sql_tables ORDER BY sql_table_name, COALESCE(repo_id, '')",
+    "response": {
+      "app_metadata": {
+        "catalogTableName": "wendao_sql_tables",
+        "columnCatalogTableName": "wendao_sql_columns",
+        "registeredColumnCount": 139,
+        "registeredTableCount": 10,
+        "registeredTables": [
+          "local_symbol",
+          "local_symbol_epoch_1_part_manual",
+          "reference_occurrence",
+          "repo_content_chunk",
+          "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "repo_entity",
+          "repo_entity_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "wendao_sql_columns",
+          "wendao_sql_tables",
+          "wendao_sql_view_sources"
+        ],
+        "registeredViewCount": 3,
+        "registeredViewSourceCount": 3,
+        "resultBatchCount": 1,
+        "resultRowCount": 10,
+        "supportsInformationSchema": true,
+        "viewSourceCatalogTableName": "wendao_sql_view_sources"
+      },
+      "batches": [
+        {
+          "columns": [
+            {
+              "data_type": "Utf8",
+              "name": "sql_table_name",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "corpus",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "scope",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "sql_object_kind",
+              "nullable": false
+            },
+            {
+              "data_type": "UInt64",
+              "name": "source_count",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "repo_id",
+              "nullable": true
+            }
+          ],
+          "row_count": 10,
+          "rows": [
+            {
+              "corpus": "local_symbol",
+              "repo_id": null,
+              "scope": "local_logical",
+              "source_count": 1,
+              "sql_object_kind": "view",
+              "sql_table_name": "local_symbol"
+            },
+            {
+              "corpus": "local_symbol",
+              "repo_id": null,
+              "scope": "local",
+              "source_count": 0,
+              "sql_object_kind": "table",
+              "sql_table_name": "local_symbol_epoch_1_part_manual"
+            },
+            {
+              "corpus": "reference_occurrence",
+              "repo_id": null,
+              "scope": "local",
+              "source_count": 0,
+              "sql_object_kind": "table",
+              "sql_table_name": "reference_occurrence"
+            },
+            {
+              "corpus": "repo_content_chunk",
+              "repo_id": null,
+              "scope": "repo_logical",
+              "source_count": 1,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_content_chunk"
+            },
+            {
+              "corpus": "repo_content_chunk",
+              "repo_id": "alpha/repo",
+              "scope": "repo",
+              "source_count": 0,
+              "sql_object_kind": "table",
+              "sql_table_name": "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931"
+            },
+            {
+              "corpus": "repo_entity",
+              "repo_id": null,
+              "scope": "repo_logical",
+              "source_count": 1,
+              "sql_object_kind": "view",
+              "sql_table_name": "repo_entity"
+            },
+            {
+              "corpus": "repo_entity",
+              "repo_id": "alpha/repo",
+              "scope": "repo",
+              "source_count": 0,
+              "sql_object_kind": "table",
+              "sql_table_name": "repo_entity_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931"
+            },
+            {
+              "corpus": "system",
+              "repo_id": null,
+              "scope": "system",
+              "source_count": 0,
+              "sql_object_kind": "system",
+              "sql_table_name": "wendao_sql_columns"
+            },
+            {
+              "corpus": "system",
+              "repo_id": null,
+              "scope": "system",
+              "source_count": 0,
+              "sql_object_kind": "system",
+              "sql_table_name": "wendao_sql_tables"
+            },
+            {
+              "corpus": "system",
+              "repo_id": null,
+              "scope": "system",
+              "source_count": 0,
+              "sql_object_kind": "system",
+              "sql_table_name": "wendao_sql_view_sources"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "view_sources_catalog": {
+    "query": "SELECT sql_view_name, source_sql_table_name, corpus, repo_id, source_ordinal FROM wendao_sql_view_sources ORDER BY sql_view_name, source_ordinal, COALESCE(repo_id, '')",
+    "response": {
+      "app_metadata": {
+        "catalogTableName": "wendao_sql_tables",
+        "columnCatalogTableName": "wendao_sql_columns",
+        "registeredColumnCount": 139,
+        "registeredTableCount": 10,
+        "registeredTables": [
+          "local_symbol",
+          "local_symbol_epoch_1_part_manual",
+          "reference_occurrence",
+          "repo_content_chunk",
+          "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "repo_entity",
+          "repo_entity_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "wendao_sql_columns",
+          "wendao_sql_tables",
+          "wendao_sql_view_sources"
+        ],
+        "registeredViewCount": 3,
+        "registeredViewSourceCount": 3,
+        "resultBatchCount": 1,
+        "resultRowCount": 3,
+        "supportsInformationSchema": true,
+        "viewSourceCatalogTableName": "wendao_sql_view_sources"
+      },
+      "batches": [
+        {
+          "columns": [
+            {
+              "data_type": "Utf8",
+              "name": "sql_view_name",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "source_sql_table_name",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "corpus",
+              "nullable": false
+            },
+            {
+              "data_type": "Utf8",
+              "name": "repo_id",
+              "nullable": true
+            },
+            {
+              "data_type": "UInt64",
+              "name": "source_ordinal",
+              "nullable": false
+            }
+          ],
+          "row_count": 3,
+          "rows": [
+            {
+              "corpus": "local_symbol",
+              "repo_id": null,
+              "source_ordinal": 1,
+              "source_sql_table_name": "local_symbol_epoch_1_part_manual",
+              "sql_view_name": "local_symbol"
+            },
+            {
+              "corpus": "repo_content_chunk",
+              "repo_id": "alpha/repo",
+              "source_ordinal": 1,
+              "source_sql_table_name": "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+              "sql_view_name": "repo_content_chunk"
+            },
+            {
+              "corpus": "repo_entity",
+              "repo_id": "alpha/repo",
+              "source_ordinal": 1,
+              "source_sql_table_name": "repo_entity_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+              "sql_view_name": "repo_entity"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

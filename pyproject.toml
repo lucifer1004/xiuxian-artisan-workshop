@@ -5,34 +5,34 @@ readme = "README.md"
 requires-python = ">=3.13"
 dynamic = ["version"]
 dependencies = [
-    "docling>=2.72.0",
-    "pdfminer-six>=20260107",
-    "pymupdf>=1.25.0",
-    "raganything",
-    "structlog>=25.5.0",
+  "docling>=2.72.0",
+  "pdfminer-six>=20260107",
+  "pymupdf>=1.25.0",
+  "raganything",
+  "structlog>=25.5.0",
 ]
 
 
 [dependency-groups]
 dev = [
-    "xiuxian-wendao-py",
-    "xiuxian-foundation",
-    "xiuxian-core",
-    "polyfactory>=3.2.0",
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0,<2.0",
-    "pytest-randomly>=4.0.1",
-    "pytest-xdist>=3.6.1",
-    "pytest-timeout>=2.3.0",
-    "pytest-cov>=6.0.0",
-    "pytest-benchmark>=4.0.0",
-    "dirty-equals>=0.11",
-    "ruff>=0.14.10",
-    "vulture>=2.14",
-    "pytest-json-report>=1.5.0",
-    "pytest-rerunfailures>=14.0",
-    "maturin>=1.11.5",
-    "huggingface-hub>=0.35.0",
+  "xiuxian-wendao-py",
+  "xiuxian-foundation",
+  "xiuxian-core",
+  "polyfactory>=3.2.0",
+  "pytest>=9.0.2",
+  "pytest-asyncio>=1.3.0,<2.0",
+  "pytest-randomly>=4.0.1",
+  "pytest-xdist>=3.6.1",
+  "pytest-timeout>=2.3.0",
+  "pytest-cov>=6.0.0",
+  "pytest-benchmark>=4.0.0",
+  "dirty-equals>=0.11",
+  "ruff>=0.14.10",
+  "vulture>=2.14",
+  "pytest-json-report>=1.5.0",
+  "pytest-rerunfailures>=14.0",
+  "maturin>=1.11.5",
+  "huggingface-hub>=0.35.0",
 ]
 
 
@@ -54,9 +54,9 @@ raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 
 [tool.uv.workspace]
 members = [
-    "packages/python/core",
-    "packages/python/foundation",
-    "packages/python/xiuxian-wendao-py",
+  "packages/python/core",
+  "packages/python/foundation",
+  "packages/python/xiuxian-wendao-py",
 ]
 
 
@@ -68,23 +68,23 @@ bypass-selection = true
 target-version = "py313"
 line-length = 100
 src = [
-    "packages/python/core/src",
-    "packages/python/foundation/src",
-    "packages/python/xiuxian-wendao-py/src",
+  "packages/python/core/src",
+  "packages/python/foundation/src",
+  "packages/python/xiuxian-wendao-py/src",
 ]
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "B",      # flake8-bugbear
-    "UP",     # pyupgrade (Python 3.13+ modernization)
-    "ASYNC",  # flake8-async (TaskGroup over gather)
-    "SIM",    # flake8-simplify
-    "TCH",    # flake8-type-checking
-    "RUF",    # Ruff-specific rules
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "F", # pyflakes
+  "I", # isort
+  "B", # flake8-bugbear
+  "UP", # pyupgrade (Python 3.13+ modernization)
+  "ASYNC", # flake8-async (TaskGroup over gather)
+  "SIM", # flake8-simplify
+  "TCH", # flake8-type-checking
+  "RUF", # Ruff-specific rules
 ]
 ignore = ["E501"]
 
@@ -93,11 +93,11 @@ keep-runtime-typing = true
 
 [tool.ruff.lint.isort]
 known-first-party = [
-    "xiuxian_core",
-    "xiuxian_foundation",
-    "xiuxian_rag",
-    "xiuxian_tracer",
-    "xiuxian_wendao_py",
+  "xiuxian_core",
+  "xiuxian_foundation",
+  "xiuxian_rag",
+  "xiuxian_tracer",
+  "xiuxian_wendao_py",
 ]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
@@ -114,83 +114,80 @@ disallow_untyped_defs = false
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = [
-    "packages/python/core/src",
-    "packages/python/foundation/src",
-    "packages/python/xiuxian-wendao-py/src",
+  "packages/python/core/src",
+  "packages/python/foundation/src",
+  "packages/python/xiuxian-wendao-py/src",
 ]
 
 # Native TOML config for pytest 9.0+ (supports list, bool, dict types)
 [tool.pytest]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-strict = true  # Enable strict_config, strict_markers, strict_parametrization_ids, strict_xfail
-timeout = 300  # Default timeout in seconds (5 minutes)
+strict = true # Enable strict_config, strict_markers, strict_parametrization_ids, strict_xfail
+timeout = 300 # Default timeout in seconds (5 minutes)
 addopts = [
-    "--timeout=300",
-    "-n", "1",  # Single process to prevent 4×10GB=40GB OOM; use OMNIDEV_TEST_WORKERS=4 for parallel
-    "-p", "no:randomly",  # Disable random order for consistent output
-    "-p", "no:benchmark", # Disable benchmark to avoid xdist warnings
+  "--timeout=300",
+  "-n",
+  "1", # Single process to prevent 4×10GB=40GB OOM; use OMNIDEV_TEST_WORKERS=4 for parallel
+  "-p",
+  "no:randomly", # Disable random order for consistent output
+  "-p",
+  "no:benchmark", # Disable benchmark to avoid xdist warnings
 ]
 testpaths = [
-    "packages/python/core/tests",
-    "packages/python/foundation/tests",
-    "packages/python/xiuxian-wendao-py/tests",
-    "scripts/channel",
-    "scripts/tests",
-    "assets/skills",
+  "packages/python/core/tests",
+  "packages/python/foundation/tests",
+  "packages/python/xiuxian-wendao-py/tests",
+  "scripts/channel",
+  "scripts/tests",
+  "assets/skills",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 filterwarnings = [
-    "ignore::pytest.PytestReturnNotNoneWarning",
-    # websockets library deprecation warnings (from starlette dependency)
-    "ignore::DeprecationWarning:websockets",
-    "ignore::DeprecationWarning:starlette",
-    # aiohttp + Python 3.13 compatibility warning (upstream, non-actionable in repo code)
-    "ignore:enable_cleanup_closed ignored because .* is fixed in Python version.*:DeprecationWarning:aiohttp.connector",
-    # Ignore benchmark disabled warning when running in parallel (xdist)
-    "ignore:Benchmarks are automatically disabled:pytest_benchmark.logger.PytestBenchmarkWarning",
+  "ignore::pytest.PytestReturnNotNoneWarning",
+  # websockets library deprecation warnings (from starlette dependency)
+  "ignore::DeprecationWarning:websockets",
+  "ignore::DeprecationWarning:starlette",
+  # aiohttp + Python 3.13 compatibility warning (upstream, non-actionable in repo code)
+  "ignore:enable_cleanup_closed ignored because .* is fixed in Python version.*:DeprecationWarning:aiohttp.connector",
+  # Ignore benchmark disabled warning when running in parallel (xdist)
+  "ignore:Benchmarks are automatically disabled:pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
 norecursedirs = ["stress_tests"]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "architecture: marks architecture guardrail tests",
-    "unit: marks fast isolated tests",
-    "integration: marks tests with multiple real components",
-    "cloud: marks tests requiring external services",
-    "benchmark: marks tests as performance benchmarks (requires pytest-benchmark)",
-    "stress: marks long-running or resource-intensive tests",
-    "e2e: marks end-to-end workflow tests",
-    "project_skill: mark tests for a specific retained project skill",
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "architecture: marks architecture guardrail tests",
+  "unit: marks fast isolated tests",
+  "integration: marks tests with multiple real components",
+  "cloud: marks tests requiring external services",
+  "benchmark: marks tests as performance benchmarks (requires pytest-benchmark)",
+  "stress: marks long-running or resource-intensive tests",
+  "e2e: marks end-to-end workflow tests",
+  "project_skill: mark tests for a specific retained project skill",
 ]
 
 # Coverage configuration for package sources
 [tool.coverage.run]
 source = [
-    "xiuxian_core",
-    "xiuxian_foundation",
-    "xiuxian_rag",
-    "xiuxian_tracer",
-    "xiuxian_wendao_py",
+  "xiuxian_core",
+  "xiuxian_foundation",
+  "xiuxian_rag",
+  "xiuxian_tracer",
+  "xiuxian_wendao_py",
 ]
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/.venv/*",
-    "*/venv/*",
-    "*/site-packages/*",
-]
+omit = ["*/tests/*", "*/__pycache__/*", "*/.venv/*", "*/venv/*", "*/site-packages/*"]
 branch = true
 parallel = true
 
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING:",
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
 ]
 precision = 1
 show_missing = true

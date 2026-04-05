@@ -1,4 +1,12 @@
-//! Stable plugin contract records for the Wendao core/runtime split.
+//! Stable shared contracts for the Wendao package split.
+//!
+//! Ownership rule:
+//! - put stable identifiers, descriptors, traits, and payload records here
+//! - do not put runtime config resolution, transport negotiation, host
+//!   lifecycle, or Wendao business logic here
+//!
+//! `xiuxian-wendao-core` is intended to be consumable by runtime helpers and
+//! plugin crates without pulling in deployment-dependent behavior.
 
 /// Stable artifact payload and launch-spec records.
 pub mod artifacts;

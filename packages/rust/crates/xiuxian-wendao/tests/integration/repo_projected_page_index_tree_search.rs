@@ -7,10 +7,8 @@ use xiuxian_wendao::analyzers::{
     build_repo_projected_page_index_tree_search,
 };
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
 #[test]
-fn projected_page_index_tree_search_matches_section_hits() -> TestResult {
+fn projected_page_index_tree_search_matches_section_hits() {
     let analysis = sample_projection_analysis("projection-sample");
 
     let result = build_repo_projected_page_index_tree_search(
@@ -27,5 +25,4 @@ fn projected_page_index_tree_search_matches_section_hits() -> TestResult {
         "repo_projected_page_index_tree_search_result",
         json!(result),
     );
-    Ok(())
 }

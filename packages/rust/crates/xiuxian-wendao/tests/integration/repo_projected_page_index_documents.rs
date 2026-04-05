@@ -11,7 +11,29 @@ use xiuxian_wendao::analyzers::{
 
 #[test]
 fn builds_projected_page_index_documents_from_stage_one_records() {
-    let analysis = RepositoryAnalysisOutput {
+    let markdown = render_projected_markdown_documents(&sample_projection_analysis_output());
+    let Ok(parsed) = build_projected_page_index_documents(&sample_projection_analysis_output())
+    else {
+        panic!("projected docs parse");
+    };
+    let payload = json!({
+        "markdown": markdown,
+        "parsed": parsed,
+    });
+
+    insta::with_settings!({
+        snapshot_path => "../snapshots",
+        prepend_module_to_snapshot => false,
+    }, {
+        assert_json_snapshot!(
+            "repo_projected_page_index_documents__repo_projected_page_index_documents",
+            payload
+        );
+    });
+}
+
+fn sample_projection_analysis_output() -> RepositoryAnalysisOutput {
+    RepositoryAnalysisOutput {
         repository: Some(RepositoryRecord {
             repo_id: "demo".to_string(),
             name: "Demo".to_string(),
@@ -106,22 +128,5 @@ fn builds_projected_page_index_documents_from_stage_one_records() {
             },
         ],
         diagnostics: Vec::new(),
-    };
-
-    let markdown = render_projected_markdown_documents(&analysis);
-    let parsed = build_projected_page_index_documents(&analysis).expect("projected docs parse");
-    let payload = json!({
-        "markdown": markdown,
-        "parsed": parsed,
-    });
-
-    insta::with_settings!({
-        snapshot_path => "../snapshots",
-        prepend_module_to_snapshot => false,
-    }, {
-        assert_json_snapshot!(
-            "repo_projected_page_index_documents__repo_projected_page_index_documents",
-            payload
-        );
-    });
+    }
 }

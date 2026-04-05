@@ -159,28 +159,31 @@ mod tests {
             repo_id: "gateway-sync".to_string(),
             tree: Some(demo_tree()),
         })
-        .expect("batch should build");
+        .unwrap_or_else(|error| panic!("batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let page_ids = batch
-            .column_by_name("pageId")
-            .expect("pageId column")
-            .as_any()
-            .downcast_ref::<LanceStringArray>()
-            .expect("pageId column type");
+        let Some(page_id_column) = batch.column_by_name("pageId") else {
+            panic!("pageId column");
+        };
+        let Some(page_ids) = page_id_column.as_any().downcast_ref::<LanceStringArray>() else {
+            panic!("pageId column type");
+        };
         assert_eq!(
             page_ids.value(0),
             "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md"
         );
 
-        let roots_json = batch
-            .column_by_name("rootsJson")
-            .expect("rootsJson column")
+        let Some(roots_json_column) = batch.column_by_name("rootsJson") else {
+            panic!("rootsJson column");
+        };
+        let Some(roots_json) = roots_json_column
             .as_any()
             .downcast_ref::<LanceStringArray>()
-            .expect("rootsJson column type");
-        let roots: Vec<ProjectedPageIndexNode> =
-            serde_json::from_str(roots_json.value(0)).expect("rootsJson should decode");
+        else {
+            panic!("rootsJson column type");
+        };
+        let roots: Vec<ProjectedPageIndexNode> = serde_json::from_str(roots_json.value(0))
+            .unwrap_or_else(|error| panic!("rootsJson should decode: {error}"));
         assert_eq!(roots.len(), 1);
         assert_eq!(roots[0].title, "solve");
     }
@@ -191,10 +194,10 @@ mod tests {
             repo_id: "gateway-sync".to_string(),
             tree: Some(demo_tree()),
         })
-        .expect("metadata should encode");
+        .unwrap_or_else(|error| panic!("metadata should encode: {error}"));
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["repoId"], "gateway-sync");
         assert_eq!(payload["path"], "docs/solve.md");
         assert_eq!(payload["rootCount"], 1);

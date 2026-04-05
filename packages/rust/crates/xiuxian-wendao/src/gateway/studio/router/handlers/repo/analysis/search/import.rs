@@ -47,7 +47,7 @@ mod tests {
             studio: Arc::new(StudioState::new()),
         });
 
-        let error = super::import_search(
+        let Err(error) = super::import_search(
             Query(RepoImportSearchApiQuery {
                 repo: None,
                 package: Some("SciMLBase".to_string()),
@@ -57,7 +57,9 @@ mod tests {
             State(state),
         )
         .await
-        .expect_err("missing repo should fail before repository execution");
+        else {
+            panic!("missing repo should fail before repository execution");
+        };
 
         assert_eq!(error.code(), "MISSING_REPO");
     }
@@ -70,7 +72,7 @@ mod tests {
             studio: Arc::new(StudioState::new()),
         });
 
-        let error = super::import_search(
+        let Err(error) = super::import_search(
             Query(RepoImportSearchApiQuery {
                 repo: Some("alpha/repo".to_string()),
                 package: None,
@@ -80,7 +82,9 @@ mod tests {
             State(state),
         )
         .await
-        .expect_err("missing import filters should fail before repository execution");
+        else {
+            panic!("missing import filters should fail before repository execution");
+        };
 
         assert_eq!(error.code(), "MISSING_IMPORT_FILTER");
     }

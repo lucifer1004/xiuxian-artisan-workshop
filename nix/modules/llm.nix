@@ -11,7 +11,7 @@ let
 in
 {
   packages = [
-    inputs.worktrunk.packages.${system}.worktrunk
+    # inputs.worktrunk.packages.${system}.worktrunk
     __inputs__.packages.mcp-inspector
     __inputs__.packages.backmark
     __inputs__.packages.mpatch

@@ -1,12 +1,1 @@
-{
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "mkhl.direnv"
-      ]
-    }
-  },
-  "image": "ghcr.io/cachix/devenv/devcontainer:latest",
-  "overrideCommand": false,
-  "updateContentCommand": "devenv test"
-}
+/nix/store/ykmbc19gi43bcckpgi5j7z2866y1jhkf-devcontainer.json

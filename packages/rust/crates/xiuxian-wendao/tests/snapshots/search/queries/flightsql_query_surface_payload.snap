@@ -1,0 +1,128 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/search/queries/tests/snapshots.rs
+expression: value
+---
+{
+  "catalogs": [
+    {
+      "rows": [
+        {
+          "catalog_name": "wendao"
+        }
+      ],
+      "schema": [
+        {
+          "data_type": "Utf8",
+          "name": "catalog_name"
+        }
+      ]
+    }
+  ],
+  "sql_info": [
+    {
+      "rows": [
+        {
+          "info_name": "0",
+          "value": "{string_value=Wendao FlightSQL Server}"
+        },
+        {
+          "info_name": "1",
+          "value": "{string_value=0.1.1}"
+        }
+      ],
+      "schema": [
+        {
+          "data_type": "UInt32",
+          "name": "info_name"
+        },
+        {
+          "data_type": "Union(Dense, 0: (\"string_value\": non-null Utf8), 1: (\"bool_value\": non-null Boolean), 2: (\"bigint_value\": non-null Int64), 3: (\"int32_bitmask\": non-null Int32), 4: (\"string_list\": List(Utf8)), 5: (\"int32_to_int32_list_map\": Map(\"entries\": non-null Struct(\"keys\": non-null Int32, \"values\": List(Int32)), unsorted)))",
+          "name": "value"
+        }
+      ]
+    }
+  ],
+  "statement": {
+    "batches": [
+      {
+        "rows": [
+          {
+            "name": "AlphaService",
+            "path": "src/alpha.rs"
+          }
+        ],
+        "schema": [
+          {
+            "data_type": "Utf8View",
+            "name": "name"
+          },
+          {
+            "data_type": "Utf8View",
+            "name": "path"
+          }
+        ]
+      }
+    ],
+    "query": "SELECT name, path FROM reference_occurrence ORDER BY name"
+  },
+  "tables": [
+    {
+      "rows": [
+        {
+          "catalog_name": "wendao",
+          "db_schema_name": "local",
+          "table_name": "reference_occurrence",
+          "table_type": "TABLE"
+        },
+        {
+          "catalog_name": "wendao",
+          "db_schema_name": "repo",
+          "table_name": "repo_content_chunk",
+          "table_type": "VIEW"
+        },
+        {
+          "catalog_name": "wendao",
+          "db_schema_name": "repo",
+          "table_name": "repo_content_chunk_repo_8e0edb783a67604f0c35b726d2c4103f23b75ea4f5d166c23174e93f236b7931",
+          "table_type": "TABLE"
+        },
+        {
+          "catalog_name": "wendao",
+          "db_schema_name": "system",
+          "table_name": "wendao_sql_columns",
+          "table_type": "SYSTEM TABLE"
+        },
+        {
+          "catalog_name": "wendao",
+          "db_schema_name": "system",
+          "table_name": "wendao_sql_tables",
+          "table_type": "SYSTEM TABLE"
+        },
+        {
+          "catalog_name": "wendao",
+          "db_schema_name": "system",
+          "table_name": "wendao_sql_view_sources",
+          "table_type": "SYSTEM TABLE"
+        }
+      ],
+      "schema": [
+        {
+          "data_type": "Utf8",
+          "name": "catalog_name"
+        },
+        {
+          "data_type": "Utf8",
+          "name": "db_schema_name"
+        },
+        {
+          "data_type": "Utf8",
+          "name": "table_name"
+        },
+        {
+          "data_type": "Utf8",
+          "name": "table_type"
+        }
+      ]
+    }
+  ]
+}

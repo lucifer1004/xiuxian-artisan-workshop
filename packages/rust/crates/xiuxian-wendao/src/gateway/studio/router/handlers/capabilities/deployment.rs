@@ -9,8 +9,9 @@ use axum::{
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::types::config::UiPluginArtifact;
-use crate::link_graph::plugin_runtime::{
-    render_plugin_artifact_toml_for_selector, resolve_plugin_artifact_for_selector,
+use crate::link_graph::runtime_config::{
+    render_link_graph_plugin_artifact_toml_for_selector,
+    resolve_link_graph_plugin_artifact_for_selector,
 };
 use crate::zhenfa_router::native::WendaoPluginArtifactOutputFormat;
 use xiuxian_wendao_core::artifacts::PluginArtifactSelector;
@@ -22,7 +23,7 @@ use crate::gateway::studio::router::handlers::capabilities::types::{
 fn render_plugin_artifact_json_response(
     selector: &PluginArtifactSelector,
 ) -> Result<Response, StudioApiError> {
-    let artifact = resolve_plugin_artifact_for_selector(selector).ok_or_else(|| {
+    let artifact = resolve_link_graph_plugin_artifact_for_selector(selector).ok_or_else(|| {
         StudioApiError::internal(
             "PLUGIN_ARTIFACT_RESOLVE_FAILED",
             "Failed to resolve plugin artifact",
@@ -36,7 +37,7 @@ fn render_plugin_artifact_json_response(
 fn render_plugin_artifact_toml_response(
     selector: &PluginArtifactSelector,
 ) -> Result<Response, StudioApiError> {
-    let body = render_plugin_artifact_toml_for_selector(selector)
+    let body = render_link_graph_plugin_artifact_toml_for_selector(selector)
         .map_err(|error| {
             StudioApiError::internal(
                 "PLUGIN_ARTIFACT_EXPORT_FAILED",
@@ -84,7 +85,7 @@ pub async fn get_plugin_artifact(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "julia"))]
 mod tests {
     use crate::gateway::studio::router::handlers::capabilities::types::{
         PluginArtifactPath, PluginArtifactQuery,
@@ -98,20 +99,20 @@ mod tests {
     use serial_test::serial;
     use std::fs;
     use std::sync::Arc;
+    use xiuxian_wendao_julia::integration_support::{
+        julia_gateway_artifact_path, julia_gateway_artifact_runtime_config_toml,
+        julia_gateway_artifact_schema_version,
+    };
 
     #[tokio::test]
     #[serial]
     async fn generic_plugin_artifact_handler_returns_plugin_artifact() {
         let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let config_path = temp.path().join("wendao.toml");
+        let (plugin_id, artifact_id) = julia_gateway_artifact_path();
         fs::write(
             &config_path,
-            r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-"#,
+            julia_gateway_artifact_runtime_config_toml(None),
         )
         .unwrap_or_else(|error| panic!("write config: {error}"));
         let config_path_string = config_path.to_string_lossy().to_string();
@@ -126,8 +127,8 @@ service_mode = "stream"
         let response = super::get_plugin_artifact(
             State(Arc::clone(&state)),
             Path(PluginArtifactPath {
-                plugin_id: "xiuxian-wendao-julia".to_string(),
-                artifact_id: "deployment".to_string(),
+                plugin_id: plugin_id.clone(),
+                artifact_id: artifact_id.clone(),
             }),
             Query(PluginArtifactQuery {
                 format: Some(WendaoPluginArtifactOutputFormat::Json),
@@ -144,9 +145,12 @@ service_mode = "stream"
         let artifact: UiPluginArtifact = serde_json::from_slice(&body)
             .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
 
-        assert_eq!(artifact.plugin_id, "xiuxian-wendao-julia");
-        assert_eq!(artifact.artifact_id, "deployment");
-        assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
+        assert_eq!(artifact.plugin_id, plugin_id);
+        assert_eq!(artifact.artifact_id, artifact_id);
+        assert_eq!(
+            artifact.schema_version.as_deref(),
+            Some(julia_gateway_artifact_schema_version())
+        );
         assert_eq!(artifact.route.as_deref(), Some("/rerank"));
     }
 }

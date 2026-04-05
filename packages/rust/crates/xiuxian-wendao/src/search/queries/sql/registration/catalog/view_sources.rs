@@ -1,0 +1,92 @@
+use std::sync::Arc;
+
+use arrow::array::{StringArray, UInt64Array};
+use arrow::datatypes::{DataType, Field, Schema};
+use arrow::record_batch::RecordBatch;
+use datafusion::datasource::MemTable;
+use xiuxian_vector::SearchEngineContext;
+
+use super::super::{RegisteredSqlViewSource, STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME};
+
+pub(crate) fn view_sources_catalog_schema() -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("sql_view_name", DataType::Utf8, false),
+        Field::new("source_sql_table_name", DataType::Utf8, false),
+        Field::new("source_engine_table_name", DataType::Utf8, false),
+        Field::new("corpus", DataType::Utf8, false),
+        Field::new("repo_id", DataType::Utf8, true),
+        Field::new("source_ordinal", DataType::UInt64, false),
+    ]))
+}
+
+pub(crate) fn register_view_sources_catalog_table(
+    query_engine: &SearchEngineContext,
+    view_sources: &[RegisteredSqlViewSource],
+) -> Result<(), String> {
+    let schema = view_sources_catalog_schema();
+    let batch = RecordBatch::try_new(
+        Arc::clone(&schema),
+        vec![
+            Arc::new(StringArray::from(
+                view_sources
+                    .iter()
+                    .map(|view_source| Some(view_source.sql_view_name.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(StringArray::from(
+                view_sources
+                    .iter()
+                    .map(|view_source| Some(view_source.source_sql_table_name.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(StringArray::from(
+                view_sources
+                    .iter()
+                    .map(|view_source| Some(view_source.source_engine_table_name.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(StringArray::from(
+                view_sources
+                    .iter()
+                    .map(|view_source| Some(view_source.corpus.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(StringArray::from(
+                view_sources
+                    .iter()
+                    .map(|view_source| view_source.repo_id.as_deref())
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(UInt64Array::from(
+                view_sources
+                    .iter()
+                    .map(|view_source| Some(view_source.source_ordinal))
+                    .collect::<Vec<_>>(),
+            )),
+        ],
+    )
+    .map_err(|error| {
+        format!("studio SQL Flight provider failed to build SQL view-source catalog batch: {error}")
+    })?;
+    let mem_table = MemTable::try_new(schema, vec![vec![batch]]).map_err(|error| {
+        format!("studio SQL Flight provider failed to build SQL view-source catalog: {error}")
+    })?;
+    query_engine
+        .session()
+        .deregister_table(STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME)
+        .map_err(|error| {
+            format!("studio SQL Flight provider failed to reset SQL view-source catalog: {error}")
+        })?;
+    query_engine
+        .session()
+        .register_table(
+            STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME,
+            Arc::new(mem_table),
+        )
+        .map_err(|error| {
+            format!(
+                "studio SQL Flight provider failed to register SQL view-source catalog: {error}"
+            )
+        })?;
+    Ok(())
+}

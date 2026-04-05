@@ -26,6 +26,13 @@ mod vfs;
 pub use router::{GatewayState, StudioState, studio_router, studio_routes};
 #[cfg(all(feature = "zhenfa-router", test))]
 pub(crate) use search::build_ast_index;
+#[cfg(feature = "zhenfa-router")]
+pub use search::handlers::{
+    StudioRepoSearchFlightRouteProvider, bootstrap_sample_repo_search_content,
+    build_repo_search_flight_service, build_repo_search_flight_service_with_weights,
+    build_studio_flight_service, build_studio_flight_service_for_roots,
+    build_studio_flight_service_for_roots_with_weights, build_studio_flight_service_with_weights,
+};
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -35,5 +42,5 @@ pub(crate) mod test_support;
 mod studio_vfs_performance_tests;
 
 #[cfg(all(test, feature = "zhenfa-router"))]
-#[path = "../../../tests/unit/studio_repo_sync_api.rs"]
+#[path = "../../../tests/unit/studio_repo_sync_api/mod.rs"]
 mod studio_repo_sync_api_tests;

@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page family context.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 
@@ -35,11 +36,13 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page = pages
+    let Some(page) = pages
         .pages
         .iter()
         .find(|page| page.kind == ProjectionPageKind::HowTo)
-        .expect("expected a projected how-to page");
+    else {
+        panic!("expected a projected how-to page");
+    };
 
     let result = docs_family_context_from_config(
         &DocsFamilyContextQuery {

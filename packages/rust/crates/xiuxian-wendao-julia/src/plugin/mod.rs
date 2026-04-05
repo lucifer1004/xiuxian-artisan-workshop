@@ -6,6 +6,7 @@ mod graph_structural_projection;
 mod graph_structural_transport;
 mod linking;
 mod project;
+mod rerank_exchange;
 mod sources;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -81,6 +82,12 @@ pub use graph_structural_transport::{
     build_graph_structural_flight_transport_client, process_graph_structural_flight_batches,
     process_graph_structural_flight_batches_for_repository,
     validate_graph_structural_request_batches, validate_graph_structural_response_batches,
+};
+pub use rerank_exchange::{
+    JuliaArrowRequestRow, JuliaArrowScoreRow, PluginArrowRequestRow, PluginArrowScoreRow,
+    build_julia_arrow_request_batch, build_plugin_arrow_request_batch,
+    decode_julia_arrow_score_rows, decode_plugin_arrow_score_rows,
+    fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
 };
 pub use transport::{
     JULIA_ARROW_RESPONSE_SCHEMA_VERSION, build_julia_flight_transport_client,

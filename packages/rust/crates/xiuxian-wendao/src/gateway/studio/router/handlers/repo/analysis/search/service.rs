@@ -236,7 +236,7 @@ where
 
                         let result = fallback(repo_id, search_query, limit, cached.clone())?;
                         crate::analyzers::cache::store_cached_repository_search_result(
-                            cache_key, &result,
+                            &cache_key, &result,
                         )?;
                         Ok(result)
                     },
@@ -342,7 +342,7 @@ where
 
     let artifacts = repository_search_artifacts(&cached.cache_key, &cached.analysis)?;
     let result = build(&cached.analysis, artifacts.as_ref());
-    crate::analyzers::cache::store_cached_repository_search_result(cache_key, &result)?;
+    crate::analyzers::cache::store_cached_repository_search_result(&cache_key, &result)?;
     Ok(result)
 }
 

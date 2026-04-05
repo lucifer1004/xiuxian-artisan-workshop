@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected deep-wiki gap reporting.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 

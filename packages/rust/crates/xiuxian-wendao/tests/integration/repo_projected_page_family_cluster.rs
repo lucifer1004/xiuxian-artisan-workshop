@@ -3,6 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "modelica")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_projection_support::{assert_repo_json_snapshot, write_repo_config};
 use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
@@ -77,15 +78,13 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page = pages
-        .pages
-        .iter()
-        .find(|page| {
-            page.kind == ProjectionPageKind::Reference && page.title == "Projectionica.Controllers"
-        })
-        .expect(
-            "expected a module-backed projected reference page titled `Projectionica.Controllers`",
+    let Some(page) = pages.pages.iter().find(|page| {
+        page.kind == ProjectionPageKind::Reference && page.title == "Projectionica.Controllers"
+    }) else {
+        panic!(
+            "expected a module-backed projected reference page titled `Projectionica.Controllers`"
         );
+    };
 
     let result = repo_projected_page_family_cluster_from_config(
         &RepoProjectedPageFamilyClusterQuery {

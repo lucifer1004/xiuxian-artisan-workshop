@@ -381,7 +381,7 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
     .unwrap_or_else(|error| panic!("write project: {error}"));
     std::fs::write(
         repo_root.join("src").join("ProjectionPkg.jl"),
-        r#"module ProjectionPkg
+        r"module ProjectionPkg
 
 using Reexport
 @reexport using SciMLBase
@@ -391,7 +391,7 @@ export solve
 solve(problem) = problem
 
 end
-"#,
+",
     )
     .unwrap_or_else(|error| panic!("write source: {error}"));
     std::fs::write(
@@ -420,7 +420,7 @@ end
             plugins: vec!["julia".to_string()],
         }],
     });
-    prime_import_analysis_cache(&studio, registry);
+    prime_import_analysis_cache(&studio, registry.as_ref());
 
     ImportGatewayFixture {
         _temp_dir: temp_dir,
@@ -432,16 +432,13 @@ end
     }
 }
 
-fn prime_import_analysis_cache(
-    studio: &StudioState,
-    registry: Arc<crate::analyzers::PluginRegistry>,
-) {
+fn prime_import_analysis_cache(studio: &StudioState, registry: &crate::analyzers::PluginRegistry) {
     let repository = configured_repository(studio, "sciml/imports")
         .unwrap_or_else(|error| panic!("resolve configured repository: {error:?}"));
     let analysis = analyze_registered_repository_with_registry(
         &repository,
         studio.project_root.as_path(),
-        &registry,
+        registry,
     )
     .unwrap_or_else(|error| panic!("analyze import fixture repository: {error:?}"));
     let repository_source = resolve_repository_source(

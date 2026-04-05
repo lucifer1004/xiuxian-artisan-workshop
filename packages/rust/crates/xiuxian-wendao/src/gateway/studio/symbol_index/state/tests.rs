@@ -49,90 +49,85 @@ impl SymbolIndexCoordinator {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[test]
+fn sync_projects_resets_to_idle_when_projects_are_empty() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let coordinator = Arc::new(SymbolIndexCoordinator::new(
+        temp.path().to_path_buf(),
+        temp.path().to_path_buf(),
+    ));
+    let index_cache = Arc::new(RwLock::new(Some(Arc::new(UnifiedSymbolIndex::new()))));
 
-    #[test]
-    fn sync_projects_resets_to_idle_when_projects_are_empty() {
-        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-        let coordinator = Arc::new(SymbolIndexCoordinator::new(
-            temp.path().to_path_buf(),
-            temp.path().to_path_buf(),
-        ));
-        let index_cache = Arc::new(RwLock::new(Some(Arc::new(UnifiedSymbolIndex::new()))));
+    coordinator.sync_projects(Vec::new(), Arc::clone(&index_cache));
 
-        coordinator.sync_projects(Vec::new(), Arc::clone(&index_cache));
+    assert!(
+        index_cache
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_none()
+    );
+    assert_eq!(coordinator.status().phase, SymbolIndexPhase::Idle);
+}
 
-        assert!(
-            index_cache
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_none()
-        );
-        assert_eq!(coordinator.status().phase, SymbolIndexPhase::Idle);
-    }
+#[tokio::test]
+async fn ensure_started_marks_non_idle_for_configured_projects() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    std::fs::create_dir_all(temp.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    std::fs::write(
+        temp.path().join("src").join("lib.rs"),
+        "pub struct BackgroundSymbolIndex;\n",
+    )
+    .unwrap_or_else(|error| panic!("write source: {error}"));
+    let coordinator = Arc::new(SymbolIndexCoordinator::new(
+        temp.path().to_path_buf(),
+        temp.path().to_path_buf(),
+    ));
+    let index_cache = Arc::new(RwLock::new(None));
 
-    #[tokio::test]
-    async fn ensure_started_marks_non_idle_for_configured_projects() {
-        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-        std::fs::create_dir_all(temp.path().join("src"))
-            .unwrap_or_else(|error| panic!("create src: {error}"));
-        std::fs::write(
-            temp.path().join("src").join("lib.rs"),
-            "pub struct BackgroundSymbolIndex;\n",
-        )
-        .unwrap_or_else(|error| panic!("write source: {error}"));
-        let coordinator = Arc::new(SymbolIndexCoordinator::new(
-            temp.path().to_path_buf(),
-            temp.path().to_path_buf(),
-        ));
-        let index_cache = Arc::new(RwLock::new(None));
+    coordinator.ensure_started(
+        vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["src".to_string()],
+        }],
+        Arc::clone(&index_cache),
+    );
 
-        coordinator.ensure_started(
-            vec![UiProjectConfig {
-                name: "kernel".to_string(),
-                root: ".".to_string(),
-                dirs: vec!["src".to_string()],
-            }],
-            Arc::clone(&index_cache),
-        );
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    assert!(matches!(
+        coordinator.status().phase,
+        SymbolIndexPhase::Indexing | SymbolIndexPhase::Ready
+    ));
+}
 
-        assert!(matches!(
-            coordinator.status().phase,
-            SymbolIndexPhase::Indexing | SymbolIndexPhase::Ready
-        ));
-    }
+#[tokio::test]
+async fn stop_resets_status_to_idle_after_starting_build() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    std::fs::create_dir_all(temp.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    std::fs::write(
+        temp.path().join("src").join("lib.rs"),
+        "pub struct BackgroundSymbolIndex;\n",
+    )
+    .unwrap_or_else(|error| panic!("write source: {error}"));
+    let coordinator = Arc::new(SymbolIndexCoordinator::new(
+        temp.path().to_path_buf(),
+        temp.path().to_path_buf(),
+    ));
+    let index_cache = Arc::new(RwLock::new(None));
 
-    #[tokio::test]
-    async fn stop_resets_status_to_idle_after_starting_build() {
-        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-        std::fs::create_dir_all(temp.path().join("src"))
-            .unwrap_or_else(|error| panic!("create src: {error}"));
-        std::fs::write(
-            temp.path().join("src").join("lib.rs"),
-            "pub struct BackgroundSymbolIndex;\n",
-        )
-        .unwrap_or_else(|error| panic!("write source: {error}"));
-        let coordinator = Arc::new(SymbolIndexCoordinator::new(
-            temp.path().to_path_buf(),
-            temp.path().to_path_buf(),
-        ));
-        let index_cache = Arc::new(RwLock::new(None));
+    coordinator.ensure_started(
+        vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["src".to_string()],
+        }],
+        Arc::clone(&index_cache),
+    );
+    coordinator.stop();
+    tokio::task::yield_now().await;
 
-        coordinator.ensure_started(
-            vec![UiProjectConfig {
-                name: "kernel".to_string(),
-                root: ".".to_string(),
-                dirs: vec!["src".to_string()],
-            }],
-            Arc::clone(&index_cache),
-        );
-        coordinator.stop();
-        tokio::task::yield_now().await;
-
-        assert_eq!(coordinator.status().phase, SymbolIndexPhase::Idle);
-    }
+    assert_eq!(coordinator.status().phase, SymbolIndexPhase::Idle);
 }

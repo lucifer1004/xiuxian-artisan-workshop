@@ -4,11 +4,15 @@ This repository uses ExecPlans for work that is large, uncertain, or cross cutti
 
 ## Blueprint Adherence (Mandatory)
 
-If a task falls under the scope of an existing strategic blueprint (located in `.data/blueprints/`), the ExecPlan MUST:
+If a task falls under the scope of an existing strategic blueprint (located in `$PRJ_CACHE_HOME/agent/blueprints/`, repo-relative default `.cache/agent/blueprints/`), the ExecPlan MUST:
+
+A blueprint is the durable architectural contract for a workstream. The ExecPlan is the task-local execution record for one bounded implementation slice under that contract.
 
 1.  **Reference the Blueprint**: Explicitly link to the relevant blueprint file.
 2.  **Strict Adherence**: The plan's architectural decisions, data models, and protocols must be derived directly from the blueprint.
 3.  **Audit Alignment**: The `Reflection and Quality Audit` section must explicitly state how the implementation complies with the blueprint's mandates.
+4.  **No-Blueprint Case**: If no blueprint applies, state that explicitly in the plan and record why the task is outside blueprint governance.
+5.  **Archive Discipline**: Keep active blueprints under `$PRJ_CACHE_HOME/agent/blueprints/` and move them to `$PRJ_CACHE_HOME/agent/blueprints/archives/` only when the governed workstream is complete. Keep active ExecPlans under `$PRJ_CACHE_HOME/agent/execplans/` and move them to `$PRJ_CACHE_HOME/agent/execplans/archives/` once the slice is DONE and validated.
 
 Deviations from a blueprint are only allowed if explicitly requested by the Sovereign or if the blueprint itself is updated first.
 
@@ -41,7 +45,8 @@ Small, isolated fixes do not require a full ExecPlan.
 
 1. Policy file: `.agent/PLANS.md` (this file).
 2. Template file: `.agent/execplans/_template.md`.
-3. Active plans: `$PRJ_CACHE_HOME/codex/execplans/<slug>.md`.
+3. Active plans: `$PRJ_CACHE_HOME/agent/execplans/<slug>.md`.
+4. Archived DONE plans: `$PRJ_CACHE_HOME/agent/execplans/archives/<slug>.md`.
 
 ## Required Plan Structure
 

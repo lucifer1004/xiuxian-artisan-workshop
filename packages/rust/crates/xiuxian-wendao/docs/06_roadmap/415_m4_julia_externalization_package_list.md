@@ -22,7 +22,9 @@ Primary references:
 - `[[06_roadmap/414_m3_runtime_extraction_package_list]]`
 - `[[06_roadmap/409_core_runtime_plugin_surface_inventory]]`
 - `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
-- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
+
+The active task-scoped blueprint for this migration remains recorded in the
+paired ExecPlan rather than this persistent package-list note.
 
 ## M4 Goal
 
@@ -388,7 +390,7 @@ After this note lands, the next program move should be:
    artifact surfaces become canonical
 
 :RELATIONS:
-:LINKS: [[index]], [[06_roadmap/412_core_runtime_plugin_program]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
+:LINKS: [[index]], [[06_roadmap/412_core_runtime_plugin_program]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
 :END:
 
 ---

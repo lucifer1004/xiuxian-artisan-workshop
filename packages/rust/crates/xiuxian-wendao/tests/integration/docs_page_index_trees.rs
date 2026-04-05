@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page-index trees.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 

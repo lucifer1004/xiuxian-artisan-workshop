@@ -361,14 +361,18 @@ mod tests {
             .unwrap_or_else(|error| panic!("intent-search Flight batch: {error}"));
         let batch = response.batch;
 
-        let paths = batch
+        let Some(paths) = batch
             .column_by_name("path")
             .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-            .expect("path should decode as Utf8");
-        let doc_types = batch
+        else {
+            panic!("path should decode as Utf8");
+        };
+        let Some(doc_types) = batch
             .column_by_name("docType")
             .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-            .expect("docType should decode as Utf8");
+        else {
+            panic!("docType should decode as Utf8");
+        };
 
         assert!(batch.num_rows() >= 1);
         assert_eq!(paths.value(0), "src/ValidPkg.jl");
@@ -379,10 +383,12 @@ mod tests {
     async fn studio_intent_flight_provider_rejects_non_intent_routes() {
         let provider = StudioIntentSearchFlightRouteProvider::new(Arc::new(test_studio_state()));
 
-        let error = provider
+        let Err(error) = provider
             .search_batch("/search/symbols", "anything", 5, None, None)
             .await
-            .expect_err("non-intent route should fail");
+        else {
+            panic!("non-intent route should fail");
+        };
 
         assert_eq!(
             error,

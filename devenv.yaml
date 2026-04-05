@@ -1,4 +1,9 @@
 inputs:
+  git-hooks:
+    url: github:cachix/git-hooks.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs-latest
   llm-agents:
     url: github:numtide/llm-agents.nix
   nixpkgs:
@@ -12,9 +17,6 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs-latest
-  worktrunk:
-    url: github:max-sixty/worktrunk/main
-
 allowUnfree: true
 secretspec:
   enable: true

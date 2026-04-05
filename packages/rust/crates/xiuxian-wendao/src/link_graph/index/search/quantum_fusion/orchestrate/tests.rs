@@ -18,7 +18,8 @@ fn build_quantum_context_batch_uses_expected_schema() {
         topology_score: 0.4,
     }];
 
-    let batch = build_quantum_context_batch(&candidates).expect("batch should build");
+    let batch = build_quantum_context_batch(&candidates)
+        .unwrap_or_else(|error| panic!("batch should build: {error}"));
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.schema().field(0).name(), "anchor_id");
     assert_eq!(batch.schema().field(0).data_type(), &DataType::Utf8);
@@ -34,10 +35,12 @@ fn extract_saliency_scores_reads_expected_values() {
         false,
     )]));
     let values: ArrayRef = Arc::new(Float64Array::from(vec![0.1, 0.7]));
-    let batch = RecordBatch::try_new(schema, vec![values]).expect("batch should build");
+    let batch = RecordBatch::try_new(schema, vec![values])
+        .unwrap_or_else(|error| panic!("batch should build: {error}"));
 
     assert_eq!(
-        extract_saliency_scores(&batch).expect("scores should extract"),
+        extract_saliency_scores(&batch)
+            .unwrap_or_else(|error| panic!("scores should extract: {error}")),
         vec![0.1, 0.7]
     );
 }

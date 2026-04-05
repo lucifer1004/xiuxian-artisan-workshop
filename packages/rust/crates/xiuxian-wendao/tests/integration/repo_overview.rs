@@ -8,15 +8,19 @@ use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
 use xiuxian_config_core::resolve_data_home;
 use xiuxian_wendao::analyzers::{
-    ExampleSearchQuery, ModuleSearchQuery, RepoIntelligenceError, RepoOverviewQuery,
-    RepositoryRefreshPolicy, analyze_repository_from_config, bootstrap_builtin_registry,
-    example_search_from_config, load_repo_intelligence_config, module_search_from_config,
+    RepoIntelligenceError, RepoOverviewQuery, RepositoryRefreshPolicy,
+    analyze_repository_from_config, bootstrap_builtin_registry, load_repo_intelligence_config,
     repo_overview_from_config,
 };
 
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
-    write_repo_config,
+    assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
+};
+#[cfg(feature = "modelica")]
+use xiuxian_wendao::analyzers::{
+    ExampleSearchQuery, ModuleSearchQuery, example_search_from_config, module_search_from_config,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -266,8 +270,12 @@ fn managed_checkout_fetches_branch_updates() -> TestResult {
     )?;
     let second = analyze_repository_from_config("managed-fetch", Some(&config_path), temp.path())?;
 
-    let first_repository = first.repository.expect("repository record");
-    let second_repository = second.repository.expect("repository record");
+    let Some(first_repository) = first.repository else {
+        panic!("repository record");
+    };
+    let Some(second_repository) = second.repository else {
+        panic!("repository record");
+    };
     assert_ne!(first_repository.revision, second_repository.revision);
     assert_eq!(first.docs.len() + 1, second.docs.len());
     Ok(())
@@ -295,8 +303,12 @@ fn managed_checkout_respects_manual_refresh_policy() -> TestResult {
     )?;
     let second = analyze_repository_from_config("managed-manual", Some(&config_path), temp.path())?;
 
-    let first_repository = first.repository.expect("repository record");
-    let second_repository = second.repository.expect("repository record");
+    let Some(first_repository) = first.repository else {
+        panic!("repository record");
+    };
+    let Some(second_repository) = second.repository else {
+        panic!("repository record");
+    };
     assert_eq!(first_repository.revision, second_repository.revision);
     assert_eq!(first.docs.len(), second.docs.len());
     Ok(())
@@ -309,8 +321,11 @@ fn repo_analysis_rejects_non_git_directories() -> TestResult {
     fs::create_dir_all(&repo_dir)?;
 
     let config_path = write_repo_config(temp.path(), &repo_dir, "not-a-checkout")?;
-    let error = analyze_repository_from_config("not-a-checkout", Some(&config_path), temp.path())
-        .expect_err("non-git directories should be rejected");
+    let Err(error) =
+        analyze_repository_from_config("not-a-checkout", Some(&config_path), temp.path())
+    else {
+        panic!("non-git directories should be rejected");
+    };
 
     match error {
         RepoIntelligenceError::InvalidRepositoryPath {
@@ -428,10 +443,10 @@ fn append_repo_file_and_commit(
 }
 
 fn repo_cache_root(cwd: &Path) -> std::path::PathBuf {
-    resolve_data_home(Some(cwd))
-        .expect("data home should resolve for repo overview tests")
-        .join("xiuxian-wendao")
-        .join("repo-intelligence")
+    let Some(data_home) = resolve_data_home(Some(cwd)) else {
+        panic!("data home should resolve for repo overview tests");
+    };
+    data_home.join("xiuxian-wendao").join("repo-intelligence")
 }
 
 fn managed_mirror_root(cwd: &Path, repo_id: &str) -> std::path::PathBuf {

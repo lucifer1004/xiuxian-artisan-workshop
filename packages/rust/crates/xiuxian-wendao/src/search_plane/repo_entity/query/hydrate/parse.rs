@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::analyzers::query::RepoBacklinkItem;
 use crate::analyzers::{ImportKind, RepoSymbolKind};
-use crate::search_plane::repo_entity::query::types::RepoEntitySearchError;
+use crate::search_plane::repo_entity::query::search::RepoEntitySearchError;
 
 pub(crate) fn non_empty_vec(values: Vec<String>) -> Option<Vec<String>> {
     (!values.is_empty()).then_some(values)

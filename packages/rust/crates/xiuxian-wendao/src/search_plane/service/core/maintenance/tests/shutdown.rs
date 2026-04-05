@@ -69,7 +69,7 @@ async fn prewarm_repo_table_rejects_new_tasks_after_shutdown() {
 
     service.stop_repo_maintenance();
 
-    let error = service
+    let Err(error) = service
         .prewarm_repo_table(
             SearchCorpusKind::RepoEntity,
             "alpha/repo",
@@ -77,7 +77,9 @@ async fn prewarm_repo_table_rejects_new_tasks_after_shutdown() {
             &["path"],
         )
         .await
-        .expect_err("shutdown should reject repo maintenance prewarm");
+    else {
+        panic!("shutdown should reject repo maintenance prewarm");
+    };
     assert!(matches!(
         error,
         VectorStoreError::General(message) if message == REPO_MAINTENANCE_SHUTDOWN_MESSAGE

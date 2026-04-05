@@ -19,6 +19,9 @@ mod gateway;
 mod graph;
 #[path = "execute/hmas.rs"]
 mod hmas;
+#[cfg(feature = "zhenfa-router")]
+#[path = "execute/query/mod.rs"]
+mod query;
 #[path = "execute/repo.rs"]
 mod repo;
 #[path = "execute/saliency.rs"]
@@ -52,6 +55,8 @@ pub(crate) async fn execute(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result
         Command::Hmas { .. } => hmas::handle(cli),
         Command::Agentic { .. } => agentic::handle(cli, index),
         Command::Repo { .. } => repo::handle(cli),
+        #[cfg(feature = "zhenfa-router")]
+        Command::Query { .. } => query::handle(cli).await,
         Command::Fix(args) => fix::handle(cli, args, index),
         #[cfg(feature = "zhenfa-router")]
         Command::Gateway(args) => gateway::handle(cli, args, index).await,

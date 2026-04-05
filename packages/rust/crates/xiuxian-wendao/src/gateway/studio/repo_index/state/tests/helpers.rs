@@ -41,19 +41,26 @@ pub(crate) fn new_coordinator(
 }
 
 pub(crate) fn init_test_repository(root: &std::path::Path) {
-    let repository = Repository::init(root).expect("init repository");
+    let repository =
+        Repository::init(root).unwrap_or_else(|error| panic!("init repository: {error}"));
     fs::write(root.join("Project.toml"), "name = \"RepoIndexWarmStart\"\n")
-        .expect("write project file");
+        .unwrap_or_else(|error| panic!("write project file: {error}"));
 
-    let mut index = repository.index().expect("open index");
+    let mut index = repository
+        .index()
+        .unwrap_or_else(|error| panic!("open index: {error}"));
     index
         .add_path(std::path::Path::new("Project.toml"))
-        .expect("stage project file");
-    let tree_id = index.write_tree().expect("write tree");
-    let tree = repository.find_tree(tree_id).expect("find tree");
-    let signature =
-        Signature::now("repo-index-test", "repo-index-test@example.com").expect("signature");
+        .unwrap_or_else(|error| panic!("stage project file: {error}"));
+    let tree_id = index
+        .write_tree()
+        .unwrap_or_else(|error| panic!("write tree: {error}"));
+    let tree = repository
+        .find_tree(tree_id)
+        .unwrap_or_else(|error| panic!("find tree: {error}"));
+    let signature = Signature::now("repo-index-test", "repo-index-test@example.com")
+        .unwrap_or_else(|error| panic!("signature: {error}"));
     repository
         .commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
-        .expect("commit");
+        .unwrap_or_else(|error| panic!("commit: {error}"));
 }

@@ -51,10 +51,12 @@ async fn prewarm_epoch_table_rejects_after_local_maintenance_shutdown() {
 
     service.stop_local_maintenance();
 
-    let error = service
+    let Err(error) = service
         .prewarm_epoch_table(SearchCorpusKind::LocalSymbol, 1, &["path"])
         .await
-        .expect_err("shutdown should reject local prewarm");
+    else {
+        panic!("shutdown should reject local prewarm");
+    };
     assert!(matches!(
         error,
         xiuxian_vector::VectorStoreError::General(message)
@@ -110,7 +112,7 @@ async fn service_derives_stable_roots_and_opens_vector_store() {
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
-        manifest_keyspace.clone(),
+        manifest_keyspace,
         SearchMaintenancePolicy::default(),
     );
 

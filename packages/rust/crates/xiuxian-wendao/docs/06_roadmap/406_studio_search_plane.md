@@ -19,7 +19,10 @@ Replace Studio request-path search hot spots with a background-built search plan
 - search-plane Valkey manifests and query-cache semantics stay owned by
   `xiuxian-wendao`; `xiuxian-vector` remains the Lance/Arrow/vector kernel
   rather than the root owner of Valkey-backed search state
-- the strategic blueprint referenced by repository policy is absent from this checkout, so this roadmap item records the gap explicitly
+- the strategic semantic-addressing blueprint referenced by repository policy
+  is present in this checkout and should be treated as the active guide for
+  this roadmap item, while the exact hidden-path reference stays in the active
+  tracking record
 
 ## Current Slice
 
@@ -267,8 +270,10 @@ Replace Studio request-path search hot spots with a background-built search plan
 - that budget-failure wrapper now also covers the other formal gateway warm-cache gates. Repo/module/symbol/example/projected-page/code-search perf misses now append the request URI plus compact `/api/search/index/status` and `/api/repo/index/status` pressure snapshots instead of failing with only the raw perf report
 - the same compact diagnostics now also persist on successful formal gateway samples. Saved perf JSON reports carry `gateway_uri`, compact search-index pressure, compact repo-index pressure, and any case-specific extras such as `statusGatePressure`, so offline perf triage no longer depends on reproducing the failure path
 - that same success-path metadata now also covers the ignored real-workspace samples. Large-workspace `repo_index_status` and `code_search` reports persist the same compact pressure digests plus sample-specific extras such as `minRepos` and `workspaceQuery`
-- the next architecture track is now formalized in `.cache/codex/execplans/wendao-local-corpus-partitioned-search-plane.md`. That plan narrows the future refactor to local corpora only, keeps repo-backed corpora on their existing per-repo publication model, and makes a unified multi-table scan primitive in `xiuxian-vector` the prerequisite before any local dataset partition flip
-- the plan also records two hard constraints from the current checkout: `.data/blueprints/project_anchor_semantic_addressing.md` is absent despite being referenced by repository policy, and the inspected Lance `3.0.1` dependency surface did not expose a usable `replace_where(...)` primitive for a first-step migration
+- the next architecture track is now formalized in the active local-corpus partitioned search-plane ExecPlan. That tracked plan narrows the future refactor to local corpora only, keeps repo-backed corpora on their existing per-repo publication model, and makes a unified multi-table scan primitive in `xiuxian-vector` the prerequisite before any local dataset partition flip
+- the plan also records one remaining hard constraint from the current
+  checkout: the inspected Lance `3.0.1` dependency surface did not expose a
+  usable `replace_where(...)` primitive for a first-step migration
 - the intended local partition boundary is therefore `project_id` or `package_id`, not `path_hash`, because the missing capability is logical fanout-and-rerank across multiple local datasets rather than one more predicate column inside the existing single-table epoch layout
 - that prerequisite read abstraction is now partially landed. `xiuxian-vector::VectorStore` exposes multi-table batch scans for sync and async consumers, and the first implementation keeps one shared global limit budget while preserving table-order fanout
 - `local_symbol` is now the first Wendao consumer of that abstraction. Runtime behavior is intentionally unchanged for now because it still supplies a singleton table list derived from the published active epoch, but the query and autocomplete paths are no longer hard-wired to one `table_name` parameter internally
@@ -316,7 +321,7 @@ Replace Studio request-path search hot spots with a background-built search plan
   Flight snapshot now locks `/graph/neighbors` alongside `/vfs/resolve`, and
   `.data/wendao-frontend` now resolves graph-neighbor payloads through
   same-origin Flight in `src/api/flightGraphTransport.ts`
-- the next bounded repo-search pressure slice is now formalized in `.cache/codex/execplans/wendao_repo_content_query_pressure_hardening.md`. It stays intentionally narrow: repo-content query filtering, read-side backpressure, and FTS eligibility only
+- the next bounded repo-search pressure slice is now formalized in the active repo-content query-pressure hardening ExecPlan. It stays intentionally narrow: repo-content query filtering, read-side backpressure, and FTS eligibility only
 - `xiuxian-vector` now exports `string_contains_mask(...)`, a reusable Arrow-backed substring mask helper built on `arrow-string`, so search-plane consumers can prefilter UTF-8 batches with one boolean mask instead of open-coding row-by-row folded-string probes
 - `repo_content_chunk` query filtering now uses that helper against `line_text_folded`, which preserves the exact-match boost logic but only evaluates `line_text.contains(raw_needle)` for rows that already matched the folded batch mask
 - repo-content request-path reads are now also wired to a shared `SearchPlaneService` semaphore with env override `XIUXIAN_WENDAO_REPO_SEARCH_READ_CONCURRENCY`, closing the old gap where concurrent repo code-search scans had no search-plane-owned backpressure surface

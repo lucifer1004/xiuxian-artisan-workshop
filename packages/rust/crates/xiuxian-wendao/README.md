@@ -9,6 +9,35 @@
 
 **Wendao** is a next-generation knowledge management engine. While tools like Obsidian revolutionized human note-taking, **Wendao** is designed for the era of Autonomous Agents, providing a high-performance, programmable substrate for structured reasoning and massive-scale retrieval.
 
+## Package Position In The Split
+
+The Wendao package family now has three ownership layers:
+
+- `xiuxian-wendao-core`: stable shared contracts
+- `xiuxian-wendao-runtime`: generic host behavior
+- `xiuxian-wendao`: Wendao business domain and the remaining migration shell
+
+`xiuxian-wendao` is therefore the product crate, not the place for every new
+shared type or runtime helper.
+
+Use `xiuxian-wendao` for:
+
+- knowledge graph and link-graph behavior
+- search, retrieval, and search-plane business semantics
+- Valkey/Lance-backed storage behavior
+- analyzers, enhancers, and other Wendao domain services
+- business handlers that materialize Wendao-specific responses
+- temporary compatibility seams that have not been extracted yet
+
+Do not place new code here when it is better classified as:
+
+- `xiuxian-wendao-core`: stable plugin/runtime contract records
+- `xiuxian-wendao-runtime`: config resolution, transport negotiation, host
+  assembly, and other deployment-dependent helpers
+
+For the canonical boundary matrix, see
+[`docs/06_roadmap/417_wendao_package_boundary_matrix.md`](docs/06_roadmap/417_wendao_package_boundary_matrix.md).
+
 ---
 
 ## 💎 Why Wendao? (The Obsidian Leap)
@@ -122,6 +151,309 @@ boundary, and a separate `AstSearchFlightRouteProvider` boundary for the
 local symbol-index path. The semantic search contract is now locked by the
 Studio Flight snapshot suite rather than by browser Arrow IPC routes.
 
+The Studio Flight handler itself now follows the same feature-folder rule.
+`src/gateway/studio/search/handlers/flight/mod.rs` is the interface seam,
+while the implementation is split into:
+
+- `flight/provider.rs`: aggregate search provider dispatch
+- `flight/service.rs`: route-provider wiring into `WendaoFlightService`
+- `flight/tests/*`: fixtures, request-header helpers, contract snapshots, and
+  route-family tests
+
+The same query modularization lane also moved the Studio SQL/DataFusion
+provider internals into `queries/sql/mod.rs` and the search query DTOs into
+`handlers/queries/mod.rs`, so the remaining query families no longer share one
+flat handler file or a root `.rs` barrel.
+
+The next search-boundary cleanup is now explicit too: native Flight remains the
+Wendao business protocol surface, while SQL, FlightSQL, GraphQL, REST-style
+query entrypoints, and the future CLI `query` command should all consume one
+shared `queries/` system over the same DataFusion execution core. The canonical
+architecture note is
+[`docs/03_features/210_search_queries_architecture.md`](docs/03_features/210_search_queries_architecture.md).
+
+The first non-Flight consumer under that architecture is now the CLI adapter:
+`src/bin/wendao/.../query.rs` renders results from the shared
+`queries/sql/` execution seam rather than introducing a second planner path or
+calling a Flight-only provider abstraction directly.
+
+The next non-SQL adapter slice is now landed too: GraphQL stays folder-first
+under `search/queries/graphql/` and behaves like a DataFusion-ecosystem
+table-query frontend over the request-scoped SQL surface instead of growing a
+GraphQL-only business DSL. The CLI now exposes the same adapter directly with
+`wendao query graphql --document ...`.
+
+The next protocol adapter slice is landed too: FlightSQL now lives under
+`search/queries/flightsql/` as a dedicated server over the same
+request-scoped SQL/DataFusion execution seam. The first cut is intentionally
+narrow: `CommandStatementQuery`, minimal `CommandGetSqlInfo`, one shared-query
+service builder, and `wendao_search_flightsql_server`, without widening the
+native Wendao business Flight router.
+
+The canonical shared-query implementation owner is now `src/search/queries/`.
+The former gateway-side `src/gateway/studio/search/queries/` shadow tree is
+retired; native Flight now imports the canonical adapters directly instead of
+keeping a second query namespace alive.
+
+The GraphQL and FlightSQL adapter tests now live with their canonical adapter
+implementations under `src/search/queries/{graphql,flightsql}/tests/`.
+Gateway-side `search/queries/graphql/` and `search/queries/flightsql/` are no
+longer long-lived test homes; they should exist only when a real stable bridge
+namespace is still needed.
+
+The same ownership rule now applies to SQL too: the canonical SQL regression
+suite now lives under `src/search/queries/sql/tests/`. The former
+gateway-side `search/queries/` test home is retired, and native Flight wiring
+imports the canonical SQL provider directly.
+
+The shared request-scoped query core is landed too:
+`src/search/queries/core/` now owns the shared request-scoped query core.
+SQL, GraphQL, and FlightSQL open that one canonical
+`SearchEngineContext + SqlQuerySurface` seam instead of each calling the
+low-level SQL surface-registration helper directly.
+
+The next ownership tightening is landed too: canonical adapters and CLI
+entrypoints now consume one `SearchQueryService` above that shared query core
+instead of carrying raw `SearchPlaneService` ownership independently.
+
+The next thin frontend slice is landed too: `search/queries/rest/` now acts
+as a REST-style adapter over that same `SearchQueryService`. The first bounded
+surface stays request/response-only and is currently proven by
+`wendao query rest --payload ...`, so REST still consumes the shared query
+system instead of introducing a new planner path or widening native business
+HTTP routes.
+
+Snapshot-level regression coverage is now mandatory for every canonical
+adapter under `src/search/queries/*`, not just for SQL. GraphQL, FlightSQL,
+and REST now keep adapter-local snapshot suites beside their canonical tests.
+Those shared-query baselines now live under the canonical
+`tests/snapshots/search/queries/` tree, while
+`tests/snapshots/gateway/studio/` stays reserved for gateway-owned route
+contracts and business payloads.
+
+Repeated shared-query test support now lives under `src/search/queries/tests/`,
+while protocol-specific decode helpers remain adapter-local. GraphQL, REST,
+and FlightSQL now reuse one canonical corpus-fixture seam instead of each
+keeping a private copy of the same search-plane setup.
+
+The next gateway-downpressure slice is landed too: repo-content business
+search execution now lives under `src/search/repo_search/`, so both native
+Flight repo-search and code-search consume the same shared seam without
+treating a transport provider as the canonical execution owner.
+
+The next bounded downpressure slice is landed too: repo-entity execution and
+relation-to-`SearchHit` shaping now live under the same
+`src/search/repo_search/` feature folder, so gateway code-search no longer
+owns the canonical repo-entity execution flow and the knowledge-intent path
+reuses the same shared seam through the thin gateway wrapper.
+
+The next bounded downpressure slice is landed too: repo dispatch planning
+ownership now lives under `src/search/repo_search/dispatch.rs`. Shared
+`RepoSearchTarget`, target partitioning, and parallelism selection are no
+longer owned by gateway `code_search/query.rs`.
+
+The next bounded downpressure slice is landed too: buffered repo-search queue
+draining, spawn policy, and repo-level query execution now live under
+`src/search/repo_search/`. Gateway `knowledge/merge.rs` and code-search both
+consume the same shared buffered owner, and the old
+`code_search/search/{buffered,task}.rs` modules are retired.
+
+The next bounded downpressure slice is landed too: shared repo response
+orchestration now lives under `src/search/repo_search/orchestration.rs`.
+Publication-state lookup, dispatch telemetry, and repo-search
+partial/pending/skipped state assembly are no longer duplicated across
+`knowledge/merge.rs` and the code-search response path.
+
+The remaining gateway-local boundary is now explicit: Studio config-driven
+repo-id resolution, cache policy, and final response DTO shaping still remain
+under the Studio gateway layer by design.
+
+The next bounded FlightSQL metadata slice is discovery:
+`CommandGetCatalogs`, `CommandGetDbSchemas`, and `CommandGetTables` over one
+stable logical catalog name (`wendao`) and schema names derived from the
+shared SQL registration scope, still without introducing a second catalog or
+planner model.
+
+The SQL handler now follows the same folder-first rule at a finer granularity:
+
+- `sql/provider/mod.rs`: interface seam for the SQL Flight provider
+- `sql/provider/route.rs`: query execution plus Flight batch/materialization
+- `sql/provider/metadata.rs`: SQL app-metadata payload shape
+- `sql/registration/mod.rs`: interface seam for table registration
+- `sql/registration/collector.rs`: request-scoped SQL surface assembly
+- `sql/registration/naming.rs`: stable SQL-facing table naming policy
+- `sql/registration/session.rs`: request-scoped DataFusion session config
+- `sql/registration/table.rs`: registered table/column descriptors
+- `sql/registration/local.rs`: local corpus parquet registration
+- `sql/registration/repo.rs`: repo publication parquet registration
+- `sql/registration/views/{mod,local,repo}.rs`: request-scoped local/repo
+  logical views
+- `sql/registration/catalog/{tables,columns,view_sources}.rs`: stable
+  `wendao_sql_tables`, `wendao_sql_columns`, and
+  `wendao_sql_view_sources` system catalogs
+- `sql/tests/provider.rs`: SQL execution plus app-metadata coverage
+- `sql/tests/catalog.rs`: SQL table/column catalog coverage
+- `sql/tests/information_schema.rs`: standard SQL introspection coverage
+- `sql/tests/local_symbol/mod.rs`: local-symbol logical-view coverage
+- `sql/tests/repo/{mod,content_chunk,entity}.rs`: repo-backed SQL alias,
+  logical-view, and view-source coverage
+- `sql/tests/snapshots.rs`: snapshot baselines for the SQL query surface and
+  discovery catalogs
+
+That SQL lane now also exposes a request-scoped discovery surface instead of
+only opaque engine table names. The SQL provider builds a fresh
+`SearchEngineContext` per request, registers the currently readable search-plane
+tables into that context, then registers two stable system catalogs:
+
+- `wendao_sql_tables`: queryable table inventory for the current request
+  including `sql_object_kind` (`table` / `view` / `system`) and `source_count`
+- `wendao_sql_columns`: column inventory for every queryable table in the
+  current request, including `source_column_name`, `sql_object_kind`, and
+  `column_origin_kind`
+- `wendao_sql_view_sources`: logical-view membership for every request-scoped
+  SQL view that unions repo-backed aliases
+
+The returned SQL app metadata now reports all three catalog table names plus
+the registered table/view/column/view-source counts, so clients can bootstrap
+discovery without guessing from internal engine table naming.
+
+The same request-scoped SQL engine now also enables DataFusion
+`information_schema`, so clients can use standard SQL discovery routes such as
+`information_schema.tables` and `information_schema.columns` in addition to the
+Wendao-specific catalogs. The SQL app metadata exposes
+`supportsInformationSchema = true` to advertise that standard introspection
+surface.
+
+The next internal ownership rule is now explicit too: SQL, GraphQL, and
+FlightSQL should not each assemble the request-scoped query surface on their
+own. That surface belongs to one shared query-core seam under `src/search/`
+so adapter code only handles protocol translation and result shaping.
+
+That naming cleanup is now landed too: now that the canonical
+implementation, tests, and snapshots live under `src/search/queries/`,
+query-owned core, execution, request, response, and payload names now use
+neutral shared-query naming. Explicitly Studio-owned gateway
+transport/provider names remain a separate boundary.
+
+The local corpus side of that SQL surface now also prefers stable SQL-facing
+table aliases over epoch-publication engine names. For example, the current
+reference-occurrence table is queryable as `reference_occurrence`, while the
+catalog still preserves the underlying `engine_table_name` for debugging and
+internal mapping.
+
+The same request-scoped SQL layer now also exposes a stable `local_symbol`
+logical view on top of the currently readable local-symbol tables. This gives
+SQL clients one canonical surface for local symbol search data even when the
+underlying corpus is partitioned into multiple local tables.
+
+The repo-backed side now follows the same rule with stable repo-scoped aliases.
+Instead of exposing publication ids as the primary SQL surface, the provider
+registers repo corpora under stable repo table names such as
+`SearchPlaneService::repo_content_chunk_table_name(repo_id)` and
+`SearchPlaneService::repo_entity_table_name(repo_id)`, while the catalog keeps
+the publication-derived `engine_table_name` for traceability.
+
+The request-scoped repo logical views now also expose their source composition
+through `wendao_sql_view_sources`, ordered by `repo_id`, so clients can
+inspect which stable repo aliases feed a logical SQL view before querying it.
+The same `wendao_sql_tables` catalog now also reports that those objects are
+SQL `view`s and records each logical view's source fan-in directly through
+`source_count`, so clients can inspect view shape without joining the
+view-source catalog first.
+
+The column catalog now mirrors that same discovery goal one level deeper.
+`wendao_sql_columns` distinguishes stored base-table columns from logical-view
+projections and synthetic columns. For example, the injected repo logical-view
+`repo_id` column is marked synthetic with no `source_column_name`, while the
+other logical-view columns stay projected back to their source column names.
+
+That logical-view lane now spans both local and repo-backed corpora. The
+stable view name `local_symbol` aggregates the currently readable local-symbol
+tables, while `repo_content_chunk` and `repo_entity` aggregate the currently
+readable repo aliases and inject a synthetic `repo_id` column, so SQL clients
+can query across partitions or repos without first discovering every physical
+source table.
+
+The SQL lane now also keeps snapshot-level regression coverage through
+`src/search/queries/sql/tests/snapshots.rs`, with canonical baselines under
+`tests/snapshots/search/queries/`. That namespace now belongs to the shared
+query system rather than the legacy gateway snapshot tree.
+
+The SQL docs now also record concrete query expressions instead of only naming
+the exposed tables. The canonical note includes copyable discovery queries for
+`wendao_sql_tables`, `wendao_sql_columns`, and `wendao_sql_view_sources`,
+standard `information_schema` examples, plus stable logical-view queries for
+`local_symbol`, `repo_content_chunk`, and `repo_entity`.
+
+The canonical feature note for this lane now lives at
+[`docs/03_features/209_datafusion_sql_query_surface.md`](docs/03_features/209_datafusion_sql_query_surface.md).
+
+The canonical REST adapter note now lives at
+[`docs/03_features/213_rest_query_surface.md`](docs/03_features/213_rest_query_surface.md).
+
+That lane now extends to the search-family handlers themselves. The old flat
+`ast.rs`, `attachments.rs`, `autocomplete.rs`, `definition.rs`,
+`references.rs`, and `symbols.rs` modules are gone. Each family now owns a
+dedicated folder with an interface-only `mod.rs` seam plus responsibility-split
+leaf modules such as `batch.rs`, `provider.rs`, `response.rs`, `path.rs`,
+`matcher.rs`, or `tests.rs` as required by the family contract.
+
+The same folder-first rule now also covers the large Studio repo gateway
+contract suite. `tests/unit/studio_repo_sync_api/` is the new feature folder,
+with `mod.rs` acting as the seam and query-specific coverage moving into
+`gap_reports.rs` and `planner.rs` instead of keeping those contracts inside one
+flat test file.
+
+The same query-folder pressure inside the search plane is now also reduced for
+local symbol retrieval. `search_plane/local_symbol/query/` no longer keeps
+`autocomplete.rs`, `search.rs`, and one flat `tests.rs` beside each other.
+Instead it is split into:
+
+- `local_symbol/query/autocomplete/mod.rs` and `autocomplete/route.rs`
+- `local_symbol/query/search/mod.rs` and `search/route.rs`
+- `local_symbol/query/shared/readiness.rs` for shared read-table preparation
+- `local_symbol/query/tests/{fixtures,search,autocomplete}.rs`
+
+The same search-plane rule now also covers reference occurrences.
+`search_plane/reference_occurrence/query/` no longer mixes `candidates.rs`,
+`decode.rs`, `search.rs`, and one flat `tests.rs` in the root. It is now split
+into:
+
+- `reference_occurrence/query/search/mod.rs`
+- `reference_occurrence/query/search/{route,candidates,decode,helpers}.rs`
+- `reference_occurrence/query/tests/{fixtures,search}.rs`
+
+The same rule now also covers knowledge sections. The old flat
+`search_plane/knowledge_section/query/{candidates,errors,ranking,search,tests}.rs`
+set is gone. It is now split into:
+
+- `knowledge_section/query/search/mod.rs`
+- `knowledge_section/query/search/{route,candidates,error,helpers}.rs`
+- `knowledge_section/query/tests/ranking.rs`
+
+The same rule now also covers attachments. The old flat
+`search_plane/attachment/query/{scan,scoring,search,types,tests}.rs` set is
+gone. It is now split into:
+
+- `attachment/query/search/mod.rs`
+- `attachment/query/search/{route,scan,scoring,decode,helpers,types}.rs`
+- `attachment/query/tests/{fixtures,ranking,search}.rs`
+
+The same rule now also covers repo entities. The old flat
+`search_plane/repo_entity/query/{execution,prepare,search,types,tests}.rs` set
+is gone. It is now split into:
+
+- `repo_entity/query/search/{mod,execution,prepare,route,types}.rs`
+- `repo_entity/query/results/{mod,module,symbol,example,import,shared}.rs`
+- `repo_entity/query/tests/{fixtures,ranking,results}.rs`
+
+The same rule now also covers repo content chunks. The old flat
+`search_plane/repo_content_chunk/query/{candidates,error,execution,helpers,scan,search,tests}.rs`
+set is gone. It is now split into:
+
+- `repo_content_chunk/query/search/{mod,candidates,error,execution,helpers,route,scan}.rs`
+- `repo_content_chunk/query/tests/ranking.rs`
+
 ---
 
 ## 📚 Theoretical Foundation (2025-2026)
@@ -143,31 +475,16 @@ Wendao is physically grounded in cutting-edge RAG research:
 
 ### Julia Arrow Adapter
 
-`xiuxian-wendao` now exposes a thin Julia-facing service adapter for the
-WendaoArrow transport contract. The core crate keeps the existing synchronous
-repository analyzer trait unchanged, while `analyzers::fetch_julia_flight_score_rows_for_repository`
-provides an explicit async entrypoint for:
+The Julia Arrow rerank exchange is plugin-owned in
+`xiuxian-wendao-julia`. Typed request rows, typed score rows, request-batch
+assembly, response decoding, repository fetch helpers, and graph-structural
+transport helpers now live in the plugin crate instead of under
+`xiuxian-wendao::analyzers`.
 
-- resolving repository-configured Julia Flight transport settings
-- executing the Arrow Flight roundtrip
-- validating the WendaoArrow `v1` response contract
-- materializing `doc_id`, `analyzer_score`, and `final_score` into typed Rust rows
-
-The same boundary now also exposes `analyzers::build_julia_arrow_request_batch`
-and `analyzers::JuliaArrowRequestRow`, so higher-level retrieval code can build
-the canonical WendaoArrow `v1` request payload without duplicating Arrow schema
-construction.
-
-That contract surface now also exports canonical request/response column-name
-constants such as `JULIA_ARROW_DOC_ID_COLUMN`,
-`JULIA_ARROW_VECTOR_SCORE_COLUMN`, `JULIA_ARROW_ANALYZER_SCORE_COLUMN`, and
-`JULIA_ARROW_FINAL_SCORE_COLUMN`, so downstream crates do not need to repeat
-WendaoArrow field-name literals.
-
-The same module now also exposes `julia_arrow_request_schema(...)` and
-`julia_arrow_response_schema(...)`, so request/response fixtures can share one
-typed Arrow schema definition instead of rebuilding the WendaoArrow `v1`
-contract from repeated `Field::new(...)` literals.
+`xiuxian-wendao` still re-exports the common WendaoArrow request or response
+column-name constants and shared Arrow schema builders, but host callers should
+import Julia-specific helper APIs directly from `xiuxian-wendao-julia` rather
+than through `xiuxian-wendao`.
 
 For link-graph semantic retrieval, `VectorStoreSemanticIgnition` now also
 provides `build_julia_rerank_request_batch(...)`, which reuses anchor ids as
@@ -231,8 +548,9 @@ selection fields:
 These fields are additive. They do not change the Arrow transport contract, and
 they are currently validated through main integration coverage against the
 analyzer-owned test server surface. `LinkGraphJuliaRerankRuntimeConfig` now
-comes from the Julia-owned compatibility surface, while `xiuxian-wendao`
-keeps only the re-export seam. That runtime record also exposes
+comes directly from the Julia-owned compatibility surface, and
+`xiuxian-wendao` consumes it without keeping a host re-export shim. That
+runtime record also exposes
 `analyzer_service_descriptor()` so Rust-side code can derive the analyzer-owned
 launch contract without repeating field mapping. The same runtime surface now
 also exposes `analyzer_launch_manifest()`, which resolves the generic analyzer
@@ -265,7 +583,7 @@ The deployment artifact now also carries artifact-level inspection metadata:
 On top of that, the remaining Julia-shaped launch and deployment DTOs are now
 package-owned by `xiuxian-wendao-julia`, so callers that still need the
 legacy Julia compatibility records should import them from the Julia package
-rather than from `xiuxian-wendao` crate-root shims.
+rather than from `xiuxian-wendao` shims or selector re-exports.
 
 For downstream Rust imports:
 

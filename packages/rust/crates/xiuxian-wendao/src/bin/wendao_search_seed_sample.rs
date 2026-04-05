@@ -14,7 +14,7 @@ use std::path::PathBuf;
 #[cfg(feature = "julia")]
 use anyhow::{Result, anyhow};
 #[cfg(feature = "julia")]
-use xiuxian_wendao::link_graph::plugin_runtime::bootstrap_sample_repo_search_content;
+use xiuxian_wendao::gateway::studio::bootstrap_sample_repo_search_content;
 #[cfg(feature = "julia")]
 use xiuxian_wendao::search_plane::SearchPlaneService;
 

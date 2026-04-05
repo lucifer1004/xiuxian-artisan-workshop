@@ -3,18 +3,18 @@ use super::rerank::{
     build_plugin_rerank_telemetry, build_plugin_rerank_transport_client,
     collect_plugin_rerank_trace_ids, plugin_rerank_request_trace_id,
 };
-use crate::analyzers::PluginArrowScoreRow;
 use crate::link_graph::models::QuantumContext;
-use crate::link_graph::plugin_runtime::{
-    NegotiatedTransportSelection, build_rerank_provider_binding,
-};
-use crate::link_graph::runtime_config::models::retrieval::LinkGraphCompatRerankRuntimeConfig;
 use arrow::array::StringArray;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use xiuxian_wendao_core::transport::PluginTransportKind;
+use xiuxian_wendao_julia::PluginArrowScoreRow;
+use xiuxian_wendao_julia::compatibility::link_graph::{
+    LinkGraphJuliaRerankRuntimeConfig, build_rerank_provider_binding,
+};
+use xiuxian_wendao_runtime::transport::NegotiatedTransportSelection;
 
 #[test]
 fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
@@ -74,7 +74,7 @@ fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
 
 #[test]
 fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
-    let binding = build_rerank_provider_binding(&LinkGraphCompatRerankRuntimeConfig {
+    let binding = build_rerank_provider_binding(&LinkGraphJuliaRerankRuntimeConfig {
         base_url: Some("http://127.0.0.1:8090".to_string()),
         route: Some("/custom-rerank".to_string()),
         health_route: Some("/healthz".to_string()),
@@ -87,8 +87,10 @@ fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
         similarity_weight: None,
     });
     let client = build_plugin_rerank_transport_client(&binding)
-        .expect("config should be valid")
-        .expect("base url should enable transport");
+        .unwrap_or_else(|error| panic!("config should be valid: {error}"));
+    let Some(client) = client else {
+        panic!("base url should enable transport");
+    };
 
     assert_eq!(
         client.selection().selected_transport,
@@ -100,7 +102,7 @@ fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
 
 #[test]
 fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
-    let mut binding = build_rerank_provider_binding(&LinkGraphCompatRerankRuntimeConfig {
+    let mut binding = build_rerank_provider_binding(&LinkGraphJuliaRerankRuntimeConfig {
         base_url: Some("http://127.0.0.1:18080".to_string()),
         route: Some("/rerank".to_string()),
         health_route: Some("/healthz".to_string()),
@@ -115,8 +117,10 @@ fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
     binding.transport = PluginTransportKind::ArrowFlight;
 
     let client = build_plugin_rerank_transport_client(&binding)
-        .expect("flight binding should be negotiable")
-        .expect("flight binding should materialize a lazy Flight client");
+        .unwrap_or_else(|error| panic!("flight binding should be negotiable: {error}"));
+    let Some(client) = client else {
+        panic!("flight binding should materialize a lazy Flight client");
+    };
 
     assert_eq!(
         client.selection().selected_transport,
@@ -211,10 +215,10 @@ fn attach_plugin_rerank_request_metadata_sets_schema_metadata() {
         )])),
         vec![Arc::new(StringArray::from(vec!["doc-1"]))],
     )
-    .expect("batch");
+    .unwrap_or_else(|error| panic!("batch: {error}"));
 
-    let traced_batch =
-        attach_plugin_rerank_request_metadata(&batch, "alpha signal", "v1").expect("metadata");
+    let traced_batch = attach_plugin_rerank_request_metadata(&batch, "alpha signal", "v1")
+        .unwrap_or_else(|error| panic!("metadata: {error}"));
 
     assert_eq!(
         traced_batch.schema().metadata().get("trace_id"),

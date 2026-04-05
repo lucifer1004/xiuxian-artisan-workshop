@@ -60,6 +60,8 @@ Project Sentinel has transitioned from a vision to a functional governance kerne
   - the fix pipeline now repairs those stale relation links with a surgical rewrite of the `:LINKS:` value instead of rebuilding the full index page
   - workspace-level docs governance now also reports `stale_package_docs_index_relation_link` when `docs/index.md` still carries extra relation links that no longer exist in the index body
   - the fix pipeline now removes those stale extra relation links with the same surgical rewrite path instead of rebuilding the full index page
+  - canonical-doc governance now also reports `canonical_doc_hidden_path_link` when package docs, RFCs, roadmap notes, READMEs, or other canonical docs link hidden workspace paths such as `.data/*`, `.cache/*`, or `.run/*`
+  - the same canonical-doc rule explicitly leaves GTD, ExecPlans, and similar task-tracking records outside that warning surface so operational continuity notes do not pollute the persistent documentation audit
   - CLI fix flow now routes through `AtomicFixBatch`, resolves doc IDs to physical paths before application, and honors `--issue-type` filtering in the touched path
   - the fix pipeline now also seeds explicit workspace doc targets into `run_audit_core`, so docs-governance issues emitted from workspace scans can still generate surgical fixes when `wendao fix` is aimed at a physical package-local docs file
   - workspace-level docs governance now also recurses through package-local docs trees and emits `doc_identity_protocol` for nested package docs instead of only enforcing opaque `:ID:` values during explicit single-file audits

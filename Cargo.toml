@@ -3,39 +3,39 @@ resolver = "2"
 
 # Include all Rust crates explicitly (no glob to avoid missing crate errors)
 members = [
-    "packages/rust/bindings/python",
-    "packages/rust/crates/xiuxian-config-core",
-    "packages/rust/crates/xiuxian-ast",
-    "packages/rust/crates/xiuxian-edit",
-    "packages/rust/crates/xiuxian-event",
-    "packages/rust/crates/xiuxian-executor",
-    "packages/rust/crates/xiuxian-io",
-    "packages/rust/crates/xiuxian-wendao",
-    "packages/rust/crates/xiuxian-wendao-core",
-    "packages/rust/crates/xiuxian-wendao-runtime",
-    "packages/rust/crates/xiuxian-lance",
-    "packages/rust/crates/xiuxian-macros",
-    "packages/rust/crates/xiuxian-memory-engine",
-    "packages/rust/crates/xiuxian-logging",
-    "packages/rust/crates/xiuxian-skills",
-    "packages/rust/crates/xiuxian-security",
-    "packages/rust/crates/xiuxian-sandbox",
-    "packages/rust/crates/xiuxian-tags",
-    "packages/rust/crates/xiuxian-tokenizer",
-    "packages/rust/crates/xiuxian-tui",
-    "packages/rust/crates/xiuxian-types",
-    "packages/rust/crates/xiuxian-vector",
-    "packages/rust/crates/xiuxian-qianhuan",
-    "packages/rust/crates/xiuxian-llm",
-    "packages/rust/crates/xiuxian-wendao-modelica",
-    "packages/rust/crates/xiuxian-wendao-julia",
-    "packages/rust/crates/xiuxian-window",
-    "packages/rust/crates/xiuxian-daochang",
-    "packages/rust/crates/xiuxian-qianji",
-    "packages/rust/crates/xiuxian-memory",
-    "packages/rust/crates/xiuxian-zhixing",
-    "packages/rust/crates/xiuxian-zhenfa",
-    "packages/rust/crates/xiuxian-testing",
+  "packages/rust/bindings/python",
+  "packages/rust/crates/xiuxian-config-core",
+  "packages/rust/crates/xiuxian-ast",
+  "packages/rust/crates/xiuxian-edit",
+  "packages/rust/crates/xiuxian-event",
+  "packages/rust/crates/xiuxian-executor",
+  "packages/rust/crates/xiuxian-io",
+  "packages/rust/crates/xiuxian-wendao",
+  "packages/rust/crates/xiuxian-wendao-core",
+  "packages/rust/crates/xiuxian-wendao-runtime",
+  "packages/rust/crates/xiuxian-lance",
+  "packages/rust/crates/xiuxian-macros",
+  "packages/rust/crates/xiuxian-memory-engine",
+  "packages/rust/crates/xiuxian-logging",
+  "packages/rust/crates/xiuxian-skills",
+  "packages/rust/crates/xiuxian-security",
+  "packages/rust/crates/xiuxian-sandbox",
+  "packages/rust/crates/xiuxian-tags",
+  "packages/rust/crates/xiuxian-tokenizer",
+  "packages/rust/crates/xiuxian-tui",
+  "packages/rust/crates/xiuxian-types",
+  "packages/rust/crates/xiuxian-vector",
+  "packages/rust/crates/xiuxian-qianhuan",
+  "packages/rust/crates/xiuxian-llm",
+  "packages/rust/crates/xiuxian-wendao-modelica",
+  "packages/rust/crates/xiuxian-wendao-julia",
+  "packages/rust/crates/xiuxian-window",
+  "packages/rust/crates/xiuxian-daochang",
+  "packages/rust/crates/xiuxian-qianji",
+  "packages/rust/crates/xiuxian-memory",
+  "packages/rust/crates/xiuxian-zhixing",
+  "packages/rust/crates/xiuxian-zhenfa",
+  "packages/rust/crates/xiuxian-testing",
 ]
 
 # Workspace package metadata (inherited by all crates)
@@ -127,13 +127,13 @@ rayon = "1.11"
 # Streamable tool runtime client/server transport support
 # Note: rmcp 0.16 still requires the "server" feature for client builds
 rmcp = { version = "0.16", default-features = false, features = [
-    "client",
-    "server",
-    "macros",
-    "schemars",
-    "transport-streamable-http-client-reqwest",
-    "transport-streamable-http-server",
-    "transport-child-process",
+  "client",
+  "server",
+  "macros",
+  "schemars",
+  "transport-streamable-http-client-reqwest",
+  "transport-streamable-http-server",
+  "transport-child-process",
 ] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 litellm-rs = { git = "https://github.com/majiayu000/litellm-rs", tag = "v0.4.2", default-features = false }
@@ -151,18 +151,18 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = true
-panic = "abort"     
+panic = "abort"
 
 [profile.dev]
-debug = 1 
-split-debuginfo = "unpacked" 
+debug = 1
+split-debuginfo = "unpacked"
 
 
 [workspace.lints.rust]
-unsafe_code = "deny"       # Default deny unsafe unless explicitly allowed
-missing_docs = "warn"      # Public APIs must have documentation
+unsafe_code = "deny" # Default deny unsafe unless explicitly allowed
+missing_docs = "warn" # Public APIs must have documentation
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-unwrap_used = "deny"       # Deny unwrap usage in production
-expect_used = "deny"       # Deny expect usage in production
+unwrap_used = "deny" # Deny unwrap usage in production
+expect_used = "deny" # Deny expect usage in production

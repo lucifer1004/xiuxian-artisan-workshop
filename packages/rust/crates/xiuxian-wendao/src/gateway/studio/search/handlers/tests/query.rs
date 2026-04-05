@@ -2,11 +2,12 @@ use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind, SymbolSearchHit};
 use crate::gateway::studio::search::handlers::code_search::{
     helpers::symbol_search_hit_to_search_hit,
     query::{
-        collect_repo_search_targets, infer_repo_hint_from_query, parse_code_search_query,
-        repo_search_parallelism, repo_search_result_limits, repo_wide_code_search_timeout,
+        infer_repo_hint_from_query, parse_code_search_query, repo_search_result_limits,
+        repo_wide_code_search_timeout,
     },
 };
 use crate::gateway::studio::search::handlers::test_prelude::SearchQuery;
+use crate::search::repo_search::{collect_repo_search_targets, repo_search_parallelism};
 use crate::search_plane::{RepoSearchAvailability, RepoSearchPublicationState};
 
 #[test]

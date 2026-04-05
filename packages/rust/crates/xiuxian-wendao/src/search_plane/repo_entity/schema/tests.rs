@@ -61,11 +61,17 @@ fn helper_serialization_uses_optional_metadata_shapes() {
     attributes.insert("kind".to_string(), "function".to_string());
 
     assert_eq!(
-        serialize_symbol_attributes_json(&attributes).unwrap(),
+        ok_or_panic(
+            serialize_symbol_attributes_json(&attributes),
+            "serialize symbol attributes"
+        ),
         Some(r#"{"kind":"function"}"#.to_string())
     );
     assert_eq!(
-        serialize_symbol_attributes_json(&BTreeMap::new()).unwrap(),
+        ok_or_panic(
+            serialize_symbol_attributes_json(&BTreeMap::new()),
+            "serialize empty symbol attributes"
+        ),
         None
     );
 
@@ -77,13 +83,22 @@ fn helper_serialization_uses_optional_metadata_shapes() {
     }];
 
     assert_eq!(
-        serialize_backlink_items_json(Some(&backlink_items)).unwrap(),
+        ok_or_panic(
+            serialize_backlink_items_json(Some(&backlink_items)),
+            "serialize backlink items"
+        ),
         Some(
             r#"[{"id":"backlink:1","title":"Backlink","path":"src/lib.rs","kind":"documents"}]"#
                 .to_string()
         )
     );
-    assert_eq!(serialize_backlink_items_json(None).unwrap(), None);
+    assert_eq!(
+        ok_or_panic(
+            serialize_backlink_items_json(None),
+            "serialize no backlink items"
+        ),
+        None
+    );
 }
 
 #[test]
@@ -110,11 +125,15 @@ fn code_language_and_navigation_helpers_normalize_inputs() {
 
 #[test]
 fn rows_from_analysis_preserve_structured_symbol_payload_fields() {
-    let rows = rows_from_analysis("BaseModelica", &sample_analysis()).unwrap();
-    let symbol_row = rows
-        .iter()
-        .find(|row| row.id == "symbol:BaseModelica.solve")
-        .unwrap();
+    let rows = ok_or_panic(
+        rows_from_analysis("BaseModelica", &sample_analysis()),
+        "rows from analysis",
+    );
+    let symbol_row = some_or_panic(
+        rows.iter()
+            .find(|row| row.id == "symbol:BaseModelica.solve"),
+        "symbol row",
+    );
 
     assert_eq!(symbol_row.entity_kind, "symbol");
     assert_eq!(symbol_row.module_id.as_deref(), Some("module:BaseModelica"));
@@ -138,12 +157,19 @@ fn rows_from_analysis_preserve_structured_symbol_payload_fields() {
 
 #[test]
 fn rows_from_analysis_builds_example_rows_with_projected_hit_payload() {
-    let rows = rows_from_analysis("BaseModelica", &sample_analysis()).unwrap();
-    let example_row = rows
-        .iter()
-        .find(|row| row.id == "example:BaseModelica.solve")
-        .unwrap();
-    let hit: SearchHit = serde_json::from_str(example_row.hit_json.as_str()).unwrap();
+    let rows = ok_or_panic(
+        rows_from_analysis("BaseModelica", &sample_analysis()),
+        "rows from analysis",
+    );
+    let example_row = some_or_panic(
+        rows.iter()
+            .find(|row| row.id == "example:BaseModelica.solve"),
+        "example row",
+    );
+    let hit: SearchHit = ok_or_panic(
+        serde_json::from_str(example_row.hit_json.as_str()),
+        "deserialize example hit payload",
+    );
 
     assert_eq!(example_row.entity_kind, "example");
     assert_eq!(example_row.line_start, Some(1));
@@ -166,13 +192,17 @@ fn rows_from_analysis_builds_example_rows_with_projected_hit_payload() {
 
 #[test]
 fn repo_entity_batches_encode_structured_columns() {
-    let rows = rows_from_analysis("BaseModelica", &sample_analysis()).unwrap();
-    let batches = repo_entity_batches(&rows).unwrap();
+    let rows = ok_or_panic(
+        rows_from_analysis("BaseModelica", &sample_analysis()),
+        "rows from analysis",
+    );
+    let batches = ok_or_panic(repo_entity_batches(&rows), "repo entity batches");
     let batch = &batches[0];
-    let row_index = rows
-        .iter()
-        .position(|row| row.id == "symbol:BaseModelica.solve")
-        .unwrap();
+    let row_index = some_or_panic(
+        rows.iter()
+            .position(|row| row.id == "symbol:BaseModelica.solve"),
+        "symbol row index",
+    );
 
     let module_id = string_column(batch, COLUMN_MODULE_ID);
     let attributes_json = string_column(batch, COLUMN_ATTRIBUTES_JSON);
@@ -187,6 +217,17 @@ fn repo_entity_batches_encode_structured_columns() {
     assert!(projection_page_ids.contains(
         &"repo:BaseModelica:projection:reference:symbol:symbol:BaseModelica.solve".to_string()
     ));
+}
+
+fn ok_or_panic<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
+    result.unwrap_or_else(|error| panic!("{context}: {error}"))
+}
+
+fn some_or_panic<T>(value: Option<T>, context: &str) -> T {
+    let Some(value) = value else {
+        panic!("{context}");
+    };
+    value
 }
 
 fn sample_analysis() -> RepositoryAnalysisOutput {
@@ -260,26 +301,30 @@ fn sample_analysis() -> RepositoryAnalysisOutput {
 }
 
 fn string_column<'a>(batch: &'a LanceRecordBatch, name: &str) -> &'a LanceStringArray {
-    batch
-        .column_by_name(name)
-        .and_then(|array| array.as_any().downcast_ref::<LanceStringArray>())
-        .unwrap()
+    let array = some_or_panic(batch.column_by_name(name), "missing string column");
+    let Some(strings) = array.as_any().downcast_ref::<LanceStringArray>() else {
+        panic!("column should be utf8: {name}");
+    };
+    strings
 }
 
 fn uint32_column<'a>(batch: &'a LanceRecordBatch, name: &str) -> &'a LanceUInt32Array {
-    batch
-        .column_by_name(name)
-        .and_then(|array| array.as_any().downcast_ref::<LanceUInt32Array>())
-        .unwrap()
+    let array = some_or_panic(batch.column_by_name(name), "missing uint32 column");
+    let Some(values) = array.as_any().downcast_ref::<LanceUInt32Array>() else {
+        panic!("column should be uint32: {name}");
+    };
+    values
 }
 
 fn utf8_list_values(batch: &LanceRecordBatch, name: &str, row: usize) -> Vec<String> {
-    let list = batch
-        .column_by_name(name)
-        .and_then(|array| array.as_any().downcast_ref::<LanceListArray>())
-        .unwrap();
+    let array = some_or_panic(batch.column_by_name(name), "missing list column");
+    let Some(list) = array.as_any().downcast_ref::<LanceListArray>() else {
+        panic!("column should be list: {name}");
+    };
     let values = list.value(row);
-    let strings = values.as_any().downcast_ref::<LanceStringArray>().unwrap();
+    let Some(strings) = values.as_any().downcast_ref::<LanceStringArray>() else {
+        panic!("list values should be utf8: {name}");
+    };
     (0..strings.len())
         .map(|index| strings.value(index).to_string())
         .collect()

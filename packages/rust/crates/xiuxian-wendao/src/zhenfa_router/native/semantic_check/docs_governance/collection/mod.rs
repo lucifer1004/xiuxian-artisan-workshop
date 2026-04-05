@@ -1,6 +1,7 @@
 //! Issue collection functions for docs governance.
 
 mod footer;
+mod hidden_links;
 mod package_docs;
 mod relations;
 mod workspace;

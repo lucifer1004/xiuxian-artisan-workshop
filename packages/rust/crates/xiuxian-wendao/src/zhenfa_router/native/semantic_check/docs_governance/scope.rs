@@ -81,6 +81,25 @@ pub(crate) fn scope_matches_doc(
         || normalized_scope.contains(&doc_path)
 }
 
+/// Checks if a scope matches one path.
+pub(crate) fn scope_matches_path(scope: Option<&str>, path: &Path) -> bool {
+    let Some(scope) = scope else {
+        return true;
+    };
+    if scope.is_empty() || scope == "." {
+        return true;
+    }
+
+    if scope_looks_path_like(scope) {
+        return path_scope_matches(scope, path);
+    }
+
+    let normalized_scope = scope.replace('\\', "/").to_lowercase();
+    let path_str = path.to_string_lossy().replace('\\', "/").to_lowercase();
+
+    path_str.contains(&normalized_scope) || normalized_scope.contains(&path_str)
+}
+
 fn scope_looks_path_like(scope: &str) -> bool {
     scope.contains('/')
         || scope.contains('\\')

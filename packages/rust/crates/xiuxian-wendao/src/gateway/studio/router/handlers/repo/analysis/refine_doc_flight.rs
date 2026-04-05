@@ -115,26 +115,30 @@ mod tests {
 
     #[test]
     fn refine_doc_batch_preserves_response_payload() {
-        let batch = refine_doc_batch(&demo_response()).expect("batch should build");
+        let batch = refine_doc_batch(&demo_response())
+            .unwrap_or_else(|error| panic!("batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let entity_ids = batch
-            .column_by_name("entityId")
-            .expect("entityId column")
-            .as_any()
-            .downcast_ref::<LanceStringArray>()
-            .expect("entityId column type");
+        let Some(entity_id_column) = batch.column_by_name("entityId") else {
+            panic!("entityId column");
+        };
+        let Some(entity_ids) = entity_id_column.as_any().downcast_ref::<LanceStringArray>() else {
+            panic!("entityId column type");
+        };
         assert_eq!(
             entity_ids.value(0),
             "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
         );
 
-        let refined_content = batch
-            .column_by_name("refinedContent")
-            .expect("refinedContent column")
+        let Some(refined_content_column) = batch.column_by_name("refinedContent") else {
+            panic!("refinedContent column");
+        };
+        let Some(refined_content) = refined_content_column
             .as_any()
             .downcast_ref::<LanceStringArray>()
-            .expect("refinedContent column type");
+        else {
+            panic!("refinedContent column type");
+        };
         assert_eq!(
             refined_content.value(0),
             "## Refined Explanation\n\nUse `solve()`."
@@ -143,9 +147,10 @@ mod tests {
 
     #[test]
     fn refine_doc_metadata_preserves_summary_fields() {
-        let metadata = refine_doc_metadata(&demo_response()).expect("metadata should encode");
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let metadata = refine_doc_metadata(&demo_response())
+            .unwrap_or_else(|error| panic!("metadata should encode: {error}"));
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["repoId"], "gateway-sync");
         assert_eq!(
             payload["entityId"],

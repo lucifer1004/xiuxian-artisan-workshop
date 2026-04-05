@@ -109,9 +109,7 @@ pub async fn prepare_gateway_perf_fixture() -> Result<GatewayPerfFixture> {
 pub async fn prepare_gateway_real_workspace_perf_fixture() -> Result<GatewayPerfFixture> {
     let root = resolve_real_workspace_root().ok_or_else(|| {
         anyhow!(
-            "real gateway perf workspace root is not available; set {} or create {}",
-            REAL_WORKSPACE_ROOT_ENV,
-            DEFAULT_REAL_WORKSPACE_ROOT
+            "real gateway perf workspace root is not available; set {REAL_WORKSPACE_ROOT_ENV} or create {DEFAULT_REAL_WORKSPACE_ROOT}",
         )
     })?;
     let state = gateway_state_for_project(root.as_path())?;

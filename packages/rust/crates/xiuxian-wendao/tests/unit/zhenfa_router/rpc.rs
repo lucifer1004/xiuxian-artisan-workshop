@@ -7,11 +7,32 @@ use crate::link_graph::{
     LinkGraphConfidenceLevel, LinkGraphJuliaRerankTelemetry, LinkGraphRetrievalMode,
     LinkGraphSemanticIgnitionTelemetry, QuantumContext,
 };
+#[cfg(feature = "julia")]
 use crate::set_link_graph_wendao_config_override;
+#[cfg(feature = "julia")]
 use std::fs;
-use xiuxian_wendao_julia::compatibility::link_graph::{
-    DEFAULT_JULIA_RERANK_FLIGHT_ROUTE, JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID,
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::integration_support::{
+    julia_gateway_artifact_expected_json_fragments, julia_gateway_artifact_expected_toml_fragments,
+    julia_gateway_artifact_rpc_params_fixture, julia_gateway_artifact_runtime_config_toml,
 };
+
+#[cfg(feature = "julia")]
+fn tempdir_or_panic() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"))
+}
+
+#[cfg(feature = "julia")]
+fn write_config_and_set_override(temp: &tempfile::TempDir) {
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        julia_gateway_artifact_runtime_config_toml(None),
+    )
+    .unwrap_or_else(|error| panic!("write config: {error}"));
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+}
 
 #[test]
 fn normalize_limit_clamps_range() {
@@ -97,94 +118,72 @@ fn wendao_search_request_deserializes_query_vector() {
         "query": "alpha signal",
         "query_vector": [1.0, 0.0, 0.0]
     }))
-    .expect("request should deserialize");
+    .unwrap_or_else(|error| panic!("request should deserialize: {error}"));
 
     assert_eq!(request.query, "alpha signal");
     assert_eq!(request.query_vector, Some(vec![1.0, 0.0, 0.0]));
 }
 
+#[cfg(feature = "julia")]
 #[test]
 fn export_plugin_artifact_from_rpc_params_returns_toml() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let config_path = temp.path().join("wendao.toml");
-    fs::write(
-        &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-"#,
-    )
-    .expect("write config");
-    let config_path_string = config_path.to_string_lossy().to_string();
-    set_link_graph_wendao_config_override(&config_path_string);
+    let temp = tempdir_or_panic();
+    write_config_and_set_override(&temp);
 
-    let rendered = export_plugin_artifact_from_rpc_params(serde_json::json!({
-        "plugin_id": JULIA_PLUGIN_ID,
-        "artifact_id": JULIA_DEPLOYMENT_ARTIFACT_ID,
-    }))
-    .expect("export generic toml");
-    assert!(rendered.contains("artifact_schema_version = \"v1\""));
-    assert!(rendered.contains(&format!("route = \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\"")));
+    let rendered = export_plugin_artifact_from_rpc_params(
+        julia_gateway_artifact_rpc_params_fixture(None, None),
+    )
+    .unwrap_or_else(|error| panic!("export generic toml: {error:?}"));
+
+    for fragment in julia_gateway_artifact_expected_toml_fragments() {
+        assert!(
+            rendered.contains(&fragment),
+            "expected rendered TOML to contain `{fragment}`: {rendered}"
+        );
+    }
 }
 
+#[cfg(feature = "julia")]
 #[test]
 fn export_plugin_artifact_from_rpc_params_returns_json() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let config_path = temp.path().join("wendao.toml");
-    fs::write(
-        &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-"#,
-    )
-    .expect("write config");
-    let config_path_string = config_path.to_string_lossy().to_string();
-    set_link_graph_wendao_config_override(&config_path_string);
+    let temp = tempdir_or_panic();
+    write_config_and_set_override(&temp);
 
-    let rendered = export_plugin_artifact_from_rpc_params(serde_json::json!({
-        "plugin_id": JULIA_PLUGIN_ID,
-        "artifact_id": JULIA_DEPLOYMENT_ARTIFACT_ID,
-        "output_format": "json"
-    }))
-    .expect("export generic json");
-    assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
-    assert!(rendered.contains(&format!(
-        "\"route\": \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\""
-    )));
+    let rendered = export_plugin_artifact_from_rpc_params(
+        julia_gateway_artifact_rpc_params_fixture(Some("json"), None),
+    )
+    .unwrap_or_else(|error| panic!("export generic json: {error:?}"));
+
+    for fragment in julia_gateway_artifact_expected_json_fragments() {
+        assert!(
+            rendered.contains(&fragment),
+            "expected rendered JSON to contain `{fragment}`: {rendered}"
+        );
+    }
 }
 
+#[cfg(feature = "julia")]
 #[test]
 fn export_plugin_artifact_from_rpc_params_writes_json_file() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let config_path = temp.path().join("wendao.toml");
-    fs::write(
-        &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-"#,
-    )
-    .expect("write config");
-    let config_path_string = config_path.to_string_lossy().to_string();
-    set_link_graph_wendao_config_override(&config_path_string);
+    let temp = tempdir_or_panic();
+    write_config_and_set_override(&temp);
 
     let output_path = temp.path().join("plugin-artifact.json");
-    let rendered = export_plugin_artifact_from_rpc_params(serde_json::json!({
-        "plugin_id": JULIA_PLUGIN_ID,
-        "artifact_id": JULIA_DEPLOYMENT_ARTIFACT_ID,
-        "output_format": "json",
-        "output_path": output_path.to_string_lossy().to_string()
-    }))
-    .expect("export generic json file");
+    let rendered =
+        export_plugin_artifact_from_rpc_params(julia_gateway_artifact_rpc_params_fixture(
+            Some("json"),
+            Some(output_path.to_string_lossy().as_ref()),
+        ))
+        .unwrap_or_else(|error| panic!("export generic json file: {error:?}"));
 
     assert!(rendered.contains("Wrote plugin artifact"));
-    let written = fs::read_to_string(&output_path).expect("read written json");
-    assert!(written.contains("\"base_url\": \"http://127.0.0.1:18080\""));
+    let written = fs::read_to_string(&output_path)
+        .unwrap_or_else(|error| panic!("read written json: {error}"));
+
+    for fragment in julia_gateway_artifact_expected_json_fragments() {
+        assert!(
+            written.contains(&fragment),
+            "expected written JSON to contain `{fragment}`: {written}"
+        );
+    }
 }

@@ -1,14 +1,14 @@
 use super::semantic_ignition::{QuantumSemanticIgnition, QuantumSemanticIgnitionFuture};
 #[cfg(feature = "julia")]
-use crate::analyzers::{
-    PluginArrowRequestRow, RepoIntelligenceError, build_plugin_arrow_request_batch,
-};
+use crate::analyzers::RepoIntelligenceError;
 use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
 #[cfg(feature = "julia")]
 use arrow::record_batch::RecordBatch;
 #[cfg(feature = "julia")]
 use thiserror::Error;
 use xiuxian_vector::{SearchOptions, VectorStore, VectorStoreError, distance_to_score};
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::{PluginArrowRequestRow, build_plugin_arrow_request_batch};
 
 /// Semantic ignition adapter backed by the Rust vector store.
 #[derive(Clone)]
@@ -181,14 +181,18 @@ impl QuantumSemanticIgnition for VectorStoreSemanticIgnition {
 mod tests {
     use super::*;
 
+    fn tempdir_or_panic() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"))
+    }
+
     #[tokio::test]
     async fn build_plugin_rerank_request_batch_uses_anchor_ids_as_request_doc_ids() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempdir_or_panic();
         let db_path = temp_dir.path().join("vector_ignition_julia");
         let db_path_str = db_path.to_string_lossy();
         let mut store = VectorStore::new(db_path_str.as_ref(), Some(3))
             .await
-            .expect("create vector store");
+            .unwrap_or_else(|error| panic!("create vector store: {error}"));
         store
             .replace_documents(
                 "anchors",
@@ -198,7 +202,7 @@ mod tests {
                 vec!["{}".to_string(), "{}".to_string()],
             )
             .await
-            .expect("seed vector table");
+            .unwrap_or_else(|error| panic!("seed vector table: {error}"));
 
         let ignition = VectorStoreSemanticIgnition::new(store, "anchors");
         let request = QuantumSemanticSearchRequest {
@@ -223,12 +227,14 @@ mod tests {
                 ],
             )
             .await
-            .expect("request batch should build");
+            .unwrap_or_else(|error| panic!("request batch should build: {error}"));
 
-        let doc_ids = batch
+        let Some(doc_ids) = batch
             .column_by_name("doc_id")
             .and_then(|column| column.as_any().downcast_ref::<arrow::array::StringArray>())
-            .expect("doc_id column");
+        else {
+            panic!("doc_id column");
+        };
         assert_eq!(doc_ids.value(0), "doc-1#alpha");
         assert_eq!(doc_ids.value(1), "doc-2#beta");
     }

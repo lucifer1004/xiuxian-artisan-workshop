@@ -1,28 +1,18 @@
 use crate::analyzers::errors::RepoIntelligenceError;
-#[cfg(feature = "julia")]
-use crate::analyzers::languages::register_julia_plugin;
-#[cfg(feature = "modelica")]
-use crate::analyzers::languages::register_modelica_plugin;
 use crate::analyzers::registry::PluginRegistry;
+use xiuxian_wendao_core::repo_intelligence::builtin_plugin_registrars;
 
 /// Register built-in language analyzers into a fresh plugin registry.
 ///
 /// # Errors
 ///
 /// Returns [`RepoIntelligenceError`] if a built-in plugin cannot be registered.
-#[allow(clippy::unnecessary_wraps)]
 pub fn bootstrap_builtin_registry() -> Result<PluginRegistry, RepoIntelligenceError> {
-    #[allow(unused_mut)]
     let mut registry = PluginRegistry::new();
-
-    #[cfg(feature = "julia")]
-    {
-        register_julia_plugin(&mut registry)?;
-    }
-
-    #[cfg(feature = "modelica")]
-    {
-        register_modelica_plugin(&mut registry)?;
+    let mut registrars = builtin_plugin_registrars();
+    registrars.sort_by(|left, right| left.plugin_id().cmp(right.plugin_id()));
+    for registrar in registrars {
+        registrar.register(&mut registry)?;
     }
 
     Ok(registry)

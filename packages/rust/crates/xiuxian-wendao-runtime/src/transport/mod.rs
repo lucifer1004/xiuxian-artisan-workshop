@@ -1,35 +1,35 @@
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 mod client;
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 mod contract;
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 mod flight;
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 mod host_settings;
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 mod negotiation;
 mod query_contract;
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 mod server;
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 pub use contract::{
     DEFAULT_FLIGHT_BASE_URL, DEFAULT_FLIGHT_SCHEMA_VERSION, DEFAULT_FLIGHT_TIMEOUT_SECS,
     FLIGHT_SCHEMA_VERSION_METADATA_KEY, FLIGHT_TRACE_ID_METADATA_KEY, resolve_flight_timeout,
     validate_flight_schema_version, validate_flight_timeout_secs,
 };
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 pub use host_settings::{
     EffectiveRerankFlightHostSettings, ParsedRerankFlightHostOverrides,
     rerank_score_weights_from_env, resolve_effective_rerank_flight_host_settings,
     split_rerank_flight_host_overrides,
 };
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 pub use negotiation::{
     CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedFlightTransportClient,
     NegotiatedTransportSelection, negotiate_flight_transport_client_from_bindings,
 };
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 pub use query_contract::validate_sql_query_request;
 pub use query_contract::{
     ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, ANALYSIS_REFINE_DOC_ROUTE,
@@ -42,14 +42,11 @@ pub use query_contract::{
     REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
     REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
     REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
-    REPO_SEARCH_TITLE_COLUMN, RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
-    RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
-    RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
-    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE,
-    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
-    SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE,
-    TOPOLOGY_3D_ROUTE, VFS_CONTENT_ROUTE, VFS_RESOLVE_ROUTE, VFS_SCAN_ROUTE,
-    WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+    REPO_SEARCH_TITLE_COLUMN, RERANK_ROUTE, SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE,
+    SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE, SEARCH_INTENT_ROUTE,
+    SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, TOPOLOGY_3D_ROUTE,
+    VFS_CONTENT_ROUTE, VFS_RESOLVE_ROUTE, VFS_SCAN_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+    WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
     WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER, WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER,
     WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER, WENDAO_AUTOCOMPLETE_LIMIT_HEADER,
     WENDAO_AUTOCOMPLETE_PREFIX_HEADER, WENDAO_DEFINITION_LINE_HEADER,
@@ -77,14 +74,21 @@ pub use query_contract::{
     validate_repo_projected_page_index_tree_request, validate_repo_search_request,
     validate_repo_sync_request, validate_vfs_content_request, validate_vfs_resolve_request,
 };
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
+pub use query_contract::{
+    RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
+    RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
+    RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
+    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+};
+#[cfg(feature = "transport")]
 pub use query_contract::{
     RerankScoreWeights, RerankScoredCandidate, score_rerank_request_batch,
     score_rerank_request_batch_with_weights, validate_rerank_request_batch,
     validate_rerank_request_schema, validate_rerank_response_batch,
     validate_rerank_response_schema,
 };
-#[cfg(feature = "julia")]
+#[cfg(feature = "transport")]
 pub use server::{
     AnalysisFlightRouteResponse, AstSearchFlightRouteProvider, AttachmentSearchFlightRouteProvider,
     AutocompleteFlightRouteProvider, AutocompleteFlightRouteResponse,
@@ -102,9 +106,9 @@ pub use server::{
     WendaoFlightRouteProviders, WendaoFlightService,
 };
 
-#[cfg(all(feature = "julia", test))]
+#[cfg(all(feature = "transport", test))]
 pub(crate) use query_contract::WENDAO_RERANK_TOP_K_HEADER;
-#[cfg(all(feature = "julia", test))]
+#[cfg(all(feature = "transport", test))]
 pub(crate) use server::{
     is_search_family_route, validate_attachment_search_request_metadata,
     validate_autocomplete_request_metadata, validate_code_ast_analysis_request_metadata,

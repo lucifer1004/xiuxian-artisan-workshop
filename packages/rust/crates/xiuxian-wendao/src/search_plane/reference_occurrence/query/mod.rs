@@ -1,5 +1,3 @@
-mod candidates;
-mod decode;
 mod search;
 #[cfg(test)]
 mod tests;

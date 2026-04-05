@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing deep-wiki planner queue shaping.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 

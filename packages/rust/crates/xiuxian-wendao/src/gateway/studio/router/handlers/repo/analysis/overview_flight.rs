@@ -135,23 +135,26 @@ mod tests {
             hierarchical_uri: Some("repo://gateway-sync".to_string()),
             hierarchy: Some(vec!["repo".to_string(), "gateway-sync".to_string()]),
         })
-        .expect("repo overview batch should build");
+        .unwrap_or_else(|error| panic!("repo overview batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
-        let display_name = batch
-            .column_by_name("displayName")
-            .expect("displayName column")
+        let Some(display_name_column) = batch.column_by_name("displayName") else {
+            panic!("displayName column");
+        };
+        let Some(display_name) = display_name_column
             .as_any()
             .downcast_ref::<LanceStringArray>()
-            .expect("displayName should be utf8");
+        else {
+            panic!("displayName should be utf8");
+        };
         assert_eq!(display_name.value(0), "Gateway Sync");
 
-        let doc_count = batch
-            .column_by_name("docCount")
-            .expect("docCount column")
-            .as_any()
-            .downcast_ref::<LanceInt32Array>()
-            .expect("docCount should be int32");
+        let Some(doc_count_column) = batch.column_by_name("docCount") else {
+            panic!("docCount column");
+        };
+        let Some(doc_count) = doc_count_column.as_any().downcast_ref::<LanceInt32Array>() else {
+            panic!("docCount should be int32");
+        };
         assert_eq!(doc_count.value(0), 5);
     }
 
@@ -168,10 +171,10 @@ mod tests {
             hierarchical_uri: Some("repo://gateway-sync".to_string()),
             hierarchy: Some(vec!["repo".to_string(), "gateway-sync".to_string()]),
         })
-        .expect("repo overview metadata should encode");
+        .unwrap_or_else(|error| panic!("repo overview metadata should encode: {error}"));
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&metadata).expect("metadata should decode");
+        let payload: serde_json::Value = serde_json::from_slice(&metadata)
+            .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
         assert_eq!(payload["repoId"], "gateway-sync");
         assert_eq!(payload["displayName"], "Gateway Sync");
         assert_eq!(payload["revision"], "rev:123");

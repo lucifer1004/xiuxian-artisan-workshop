@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
 use axum::Json;
+#[cfg(feature = "julia")]
 use axum::body::to_bytes;
-use axum::extract::{Path, Query, State};
+use axum::extract::State;
+#[cfg(feature = "julia")]
+use axum::extract::{Path, Query};
 
 use crate::analyzers::bootstrap_builtin_registry;
 use crate::analyzers::registry::PluginRegistry;
@@ -10,15 +13,26 @@ use crate::gateway::studio::repo_index::RepoIndexPhase;
 use crate::gateway::studio::router::tests::repo_project;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
-use crate::gateway::studio::types::{UiConfig, UiPluginArtifact, UiProjectConfig, VfsScanResult};
+#[cfg(feature = "julia")]
+use crate::gateway::studio::types::UiPluginArtifact;
+use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
 use crate::search_plane::SearchPlaneService;
+#[cfg(feature = "julia")]
 use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
 use chrono::DateTime;
+#[cfg(feature = "julia")]
 use serial_test::serial;
 use std::fs;
+#[cfg(feature = "julia")]
 use xiuxian_wendao_julia::compatibility::link_graph::{
     DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
+};
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::integration_support::{
+    julia_gateway_artifact_base_url, julia_gateway_artifact_expected_toml_fragments,
+    julia_gateway_artifact_path, julia_gateway_artifact_runtime_config_toml,
+    julia_gateway_artifact_schema_version, julia_gateway_artifact_selected_transport,
 };
 
 #[test]
@@ -289,20 +303,16 @@ async fn symbol_index_status_records_first_deferred_bootstrap_activation() {
     );
 }
 
+#[cfg(feature = "julia")]
 #[tokio::test]
 #[serial]
 async fn plugin_artifact_handler_returns_resolved_artifact() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
+    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
     fs::write(
         &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-analyzer_strategy = "similarity_only"
-"#,
+        julia_gateway_artifact_runtime_config_toml(Some("similarity_only")),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -318,8 +328,8 @@ analyzer_strategy = "similarity_only"
         State(Arc::clone(&state)),
         Path(
             crate::gateway::studio::router::handlers::capabilities::PluginArtifactPath {
-                plugin_id: "xiuxian-wendao-julia".to_string(),
-                artifact_id: "deployment".to_string(),
+                plugin_id: plugin_id.clone(),
+                artifact_id: artifact_id.clone(),
             },
         ),
         Query(
@@ -337,17 +347,26 @@ analyzer_strategy = "similarity_only"
     let artifact: UiPluginArtifact = serde_json::from_slice(&body)
         .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
 
-    assert_eq!(artifact.plugin_id, "xiuxian-wendao-julia");
-    assert_eq!(artifact.artifact_id, "deployment");
-    assert_eq!(artifact.artifact_schema_version, "v1");
+    assert_eq!(artifact.plugin_id, plugin_id);
+    assert_eq!(artifact.artifact_id, artifact_id);
+    assert_eq!(
+        artifact.artifact_schema_version,
+        julia_gateway_artifact_schema_version()
+    );
     DateTime::parse_from_rfc3339(&artifact.generated_at)
         .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
-    assert_eq!(artifact.base_url.as_deref(), Some("http://127.0.0.1:18080"));
+    assert_eq!(
+        artifact.base_url.as_deref(),
+        Some(julia_gateway_artifact_base_url())
+    );
     assert_eq!(
         artifact.route.as_deref(),
         Some(DEFAULT_JULIA_RERANK_FLIGHT_ROUTE)
     );
-    assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
+    assert_eq!(
+        artifact.schema_version.as_deref(),
+        Some(julia_gateway_artifact_schema_version())
+    );
     assert_eq!(
         artifact.selected_transport,
         Some(crate::gateway::studio::types::config::UiPluginTransportKind::ArrowFlight)
@@ -363,19 +382,16 @@ analyzer_strategy = "similarity_only"
     );
 }
 
+#[cfg(feature = "julia")]
 #[tokio::test]
 #[serial]
 async fn plugin_artifact_handler_returns_canonical_json_shape() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
+    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
     fs::write(
         &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-"#,
+        julia_gateway_artifact_runtime_config_toml(None),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -391,8 +407,8 @@ service_mode = "stream"
         State(Arc::clone(&state)),
         Path(
             crate::gateway::studio::router::handlers::capabilities::PluginArtifactPath {
-                plugin_id: "xiuxian-wendao-julia".to_string(),
-                artifact_id: "deployment".to_string(),
+                plugin_id: plugin_id.clone(),
+                artifact_id: artifact_id.clone(),
             },
         ),
         Query(
@@ -410,28 +426,28 @@ service_mode = "stream"
     let artifact: serde_json::Value = serde_json::from_slice(&body)
         .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
 
-    assert_eq!(artifact["pluginId"], "xiuxian-wendao-julia");
-    assert_eq!(artifact["artifactId"], "deployment");
-    assert_eq!(artifact["selectedTransport"], "arrow_flight");
+    assert_eq!(artifact["pluginId"], plugin_id);
+    assert_eq!(artifact["artifactId"], artifact_id);
+    assert_eq!(
+        artifact["selectedTransport"],
+        julia_gateway_artifact_selected_transport()
+    );
     assert_eq!(
         artifact["launch"]["launcherPath"],
         DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
     );
 }
 
+#[cfg(feature = "julia")]
 #[tokio::test]
 #[serial]
 async fn plugin_artifact_handler_returns_toml_when_requested() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
+    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
     fs::write(
         &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:18080"
-route = "/rerank"
-schema_version = "v1"
-service_mode = "stream"
-"#,
+        julia_gateway_artifact_runtime_config_toml(None),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -447,8 +463,8 @@ service_mode = "stream"
         State(Arc::clone(&state)),
         Path(
             crate::gateway::studio::router::handlers::capabilities::PluginArtifactPath {
-                plugin_id: "xiuxian-wendao-julia".to_string(),
-                artifact_id: "deployment".to_string(),
+                plugin_id,
+                artifact_id,
             },
         ),
         Query(
@@ -473,7 +489,10 @@ service_mode = "stream"
         String::from_utf8(body.to_vec()).unwrap_or_else(|error| panic!("utf8 toml body: {error}"));
 
     assert_eq!(content_type, "text/plain; charset=utf-8");
-    assert!(body_text.contains("base_url = \"http://127.0.0.1:18080\""));
-    assert!(body_text.contains("route = \"/rerank\""));
-    assert!(body_text.contains("selected_transport = \"arrow_flight\""));
+    for expected_fragment in julia_gateway_artifact_expected_toml_fragments() {
+        assert!(
+            body_text.contains(&expected_fragment),
+            "expected rendered TOML to contain `{expected_fragment}`"
+        );
+    }
 }

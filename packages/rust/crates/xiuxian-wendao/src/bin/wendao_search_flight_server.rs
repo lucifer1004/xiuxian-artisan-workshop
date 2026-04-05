@@ -1,54 +1,52 @@
 //! Runtime-backed Wendao Flight server binary that reads repo-search data from
 //! the active search-plane store.
 
-#[cfg(not(feature = "julia"))]
+#[cfg(not(feature = "zhenfa-router"))]
 fn main() {
-    eprintln!("wendao_search_flight_server requires the `julia` feature");
+    eprintln!("wendao_search_flight_server requires the `zhenfa-router` feature");
     std::process::exit(1);
 }
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use std::env;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use std::net::SocketAddr;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use std::path::PathBuf;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use std::sync::Arc;
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use anyhow::{Result, anyhow};
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use arrow_flight::flight_service_server::FlightServiceServer;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use tokio::net::TcpListener;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use tokio_stream::wrappers::TcpListenerStream;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use tonic::transport::Server;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use tonic_web::GrpcWebLayer;
-#[cfg(feature = "julia")]
-use xiuxian_wendao::gateway::studio::router::resolve_studio_config_root;
-#[cfg(feature = "julia")]
-use xiuxian_wendao::link_graph::plugin_runtime::{
-    bootstrap_sample_repo_search_content,
-    build_search_plane_studio_flight_service_for_roots_with_weights,
+#[cfg(feature = "zhenfa-router")]
+use xiuxian_wendao::gateway::studio::{
+    bootstrap_sample_repo_search_content, build_studio_flight_service_for_roots_with_weights,
+    router::resolve_studio_config_root,
 };
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::link_graph::resolve_link_graph_rerank_flight_runtime_settings;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::search_plane::SearchPlaneService;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::set_link_graph_wendao_config_override;
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao_runtime::transport::{
     EffectiveRerankFlightHostSettings, rerank_score_weights_from_env,
     resolve_effective_rerank_flight_host_settings as resolve_runtime_effective_rerank_flight_host_settings,
     split_rerank_flight_host_overrides,
 };
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut args = env::args().skip(1);
@@ -78,10 +76,10 @@ async fn main() -> Result<()> {
         .transpose()?
         .unwrap_or(3);
 
-    if let Some(config_path) = resolve_runtime_config_path(project_root.as_path()) {
-        if let Some(path_str) = config_path.to_str() {
-            set_link_graph_wendao_config_override(path_str);
-        }
+    if let Some(config_path) = resolve_runtime_config_path(project_root.as_path())
+        && let Some(path_str) = config_path.to_str()
+    {
+        set_link_graph_wendao_config_override(path_str);
     }
     let effective_settings = resolve_effective_search_host_settings(
         parsed_overrides.schema_version_override,
@@ -95,9 +93,8 @@ async fn main() -> Result<()> {
             .await
             .map_err(|error| anyhow!(error))?;
     }
-    let flight_service = build_search_plane_studio_flight_service_for_roots_with_weights(
+    let flight_service = build_studio_flight_service_for_roots_with_weights(
         search_plane,
-        repo_id,
         project_root.clone(),
         resolve_search_host_studio_config_root(project_root.as_path()),
         effective_settings.expected_schema_version,
@@ -125,7 +122,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 fn resolve_runtime_config_path(project_root: &std::path::Path) -> Option<PathBuf> {
     let local_config = std::path::Path::new("wendao.toml");
     if local_config.exists() {
@@ -138,7 +135,7 @@ fn resolve_runtime_config_path(project_root: &std::path::Path) -> Option<PathBuf
     project_config.exists().then_some(project_config)
 }
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 fn resolve_effective_search_host_settings(
     schema_version_override: Option<String>,
     rerank_dimension_override: Option<usize>,
@@ -155,7 +152,7 @@ fn resolve_effective_search_host_settings(
     ))
 }
 
-#[cfg(feature = "julia")]
+#[cfg(feature = "zhenfa-router")]
 fn resolve_search_host_studio_config_root(project_root: &std::path::Path) -> PathBuf {
     resolve_runtime_config_path(project_root)
         .and_then(|path| path.parent().map(std::path::Path::to_path_buf))

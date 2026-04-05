@@ -467,14 +467,22 @@ version = "58.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "302b2e036335f3f04d65dad3f74ff1f2aae6dc671d6aa04dc6b61193761e16fb"
 dependencies = [
+ "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
  "arrow-cast 58.1.0",
+ "arrow-data 58.1.0",
  "arrow-ipc 58.1.0",
+ "arrow-ord 58.1.0",
+ "arrow-row 58.1.0",
  "arrow-schema 58.1.0",
+ "arrow-select 58.1.0",
+ "arrow-string 58.1.0",
  "base64 0.22.1",
  "bytes",
  "futures",
+ "once_cell",
+ "paste",
  "prost",
  "prost-types",
  "tonic",
@@ -4236,6 +4244,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql-parser"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a818c0d883d7c0801df27be910917750932be279c7bc82dc541b8769425f409"
+dependencies = [
+ "combine",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4993,6 +5011,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f0c30c76f2f4ccee3fe55a2435f691ca00c0e4bd87abe4f4a851b1d4dac39b"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]
@@ -12808,15 +12835,18 @@ dependencies = [
  "comrak",
  "criterion",
  "dashmap 7.0.0-rc2",
+ "datafusion 53.0.0",
  "dirs 5.0.1",
  "git2",
  "globset",
+ "graphql-parser",
  "include_dir",
  "insta",
  "log",
  "notify 8.2.0",
  "notify-debouncer-full",
  "petgraph 0.7.1",
+ "prost",
  "pyo3",
  "rayon",
  "redis 1.0.3",
@@ -12866,6 +12896,7 @@ name = "xiuxian-wendao-core"
 version = "0.1.1"
 dependencies = [
  "arrow 58.1.0",
+ "inventory",
  "schemars",
  "serde",
  "serde_json",
@@ -12880,9 +12911,11 @@ dependencies = [
  "arrow 58.1.0",
  "chrono",
  "insta",
+ "inventory",
  "regex",
  "serde",
  "serde_json",
+ "serde_yaml",
  "tempfile",
  "tokio",
  "toml 0.8.23",
@@ -12899,6 +12932,7 @@ version = "0.1.1"
 dependencies = [
  "git2",
  "insta",
+ "inventory",
  "serde_json",
  "tempfile",
  "walkdir",

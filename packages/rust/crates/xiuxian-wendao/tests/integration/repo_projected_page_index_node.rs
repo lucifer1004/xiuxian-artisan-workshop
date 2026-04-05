@@ -1,14 +1,18 @@
 //! Integration tests for deterministic projected page-index node lookup.
 
+#[cfg(feature = "modelica")]
 use std::fs;
 
-use crate::support::repo_intelligence::{
-    assert_repo_json_snapshot, create_sample_modelica_repo, sample_projection_analysis,
-};
+#[cfg(feature = "modelica")]
+use crate::support::repo_intelligence::create_sample_modelica_repo;
+use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, RepoProjectedPageIndexNodeQuery, RepoProjectedPageIndexTreesQuery,
     build_repo_projected_page_index_node, build_repo_projected_page_index_trees,
+};
+#[cfg(feature = "modelica")]
+use xiuxian_wendao::analyzers::{
     repo_projected_page_index_node_from_config, repo_projected_page_index_trees_from_config,
 };
 
@@ -25,13 +29,12 @@ fn projected_page_index_node_lookup_resolves_one_stable_node() -> TestResult {
         &analysis,
     )?;
 
-    let tree = trees
-        .trees
-        .iter()
-        .find(|tree| tree.title == "solve")
-        .expect("expected a projected page-index tree titled `solve`");
-    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+    let Some(tree) = trees.trees.iter().find(|tree| tree.title == "solve") else {
+        panic!("expected a projected page-index tree titled `solve`");
+    };
+    let Some(node_id) = find_node_id(tree.roots.as_slice(), "Anchors") else {
+        panic!("expected a projected page-index node titled `Anchors`");
+    };
 
     let result = build_repo_projected_page_index_node(
         &RepoProjectedPageIndexNodeQuery {
@@ -73,13 +76,16 @@ plugins = ["modelica"]
         temp.path(),
     )?;
 
-    let tree = trees
+    let Some(tree) = trees
         .trees
         .iter()
         .find(|tree| tree.title == "Projectionica.Controllers.PI")
-        .expect("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
-    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+    else {
+        panic!("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
+    };
+    let Some(node_id) = find_node_id(tree.roots.as_slice(), "Anchors") else {
+        panic!("expected a projected page-index node titled `Anchors`");
+    };
 
     let result = repo_projected_page_index_node_from_config(
         &RepoProjectedPageIndexNodeQuery {

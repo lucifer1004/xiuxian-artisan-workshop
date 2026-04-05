@@ -253,7 +253,10 @@ async fn sync_repositories_warm_starts_stale_fetch_policy_remote_when_recent_pro
         Some(revision.as_str())
     );
 
-    fs::remove_dir_all(second.mirror_root.as_ref().expect("mirror root"))
+    let Some(mirror_root) = second.mirror_root.as_ref() else {
+        panic!("mirror root");
+    };
+    fs::remove_dir_all(mirror_root)
         .unwrap_or_else(|error| panic!("cleanup managed mirror: {error}"));
     fs::remove_dir_all(&second.checkout_root)
         .unwrap_or_else(|error| panic!("cleanup managed checkout: {error}"));
@@ -355,7 +358,10 @@ async fn sync_repositories_warm_starts_stale_fetch_policy_remote_when_recent_ret
         Some(revision.as_str())
     );
 
-    fs::remove_dir_all(second.mirror_root.as_ref().expect("mirror root"))
+    let Some(mirror_root) = second.mirror_root.as_ref() else {
+        panic!("mirror root");
+    };
+    fs::remove_dir_all(mirror_root)
         .unwrap_or_else(|error| panic!("cleanup managed mirror: {error}"));
     fs::remove_dir_all(&second.checkout_root)
         .unwrap_or_else(|error| panic!("cleanup managed checkout: {error}"));
@@ -464,7 +470,10 @@ async fn sync_repositories_warm_starts_stale_fetch_policy_remote_when_retryable_
         Some(revision.as_str())
     );
 
-    fs::remove_dir_all(second.mirror_root.as_ref().expect("mirror root"))
+    let Some(mirror_root) = second.mirror_root.as_ref() else {
+        panic!("mirror root");
+    };
+    fs::remove_dir_all(mirror_root)
         .unwrap_or_else(|error| panic!("cleanup managed mirror: {error}"));
     fs::remove_dir_all(&second.checkout_root)
         .unwrap_or_else(|error| panic!("cleanup managed checkout: {error}"));

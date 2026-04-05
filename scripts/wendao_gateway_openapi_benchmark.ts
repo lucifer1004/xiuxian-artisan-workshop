@@ -250,10 +250,7 @@ const DEFAULT_RETRY_COUNT = 2;
 const FAILURE_SAMPLE_LIMIT = 50;
 const SMOKE_CONCURRENCY_LIMIT = 4;
 const SMOKE_LIMIT_CAP = 5;
-const DEFAULT_STRESS_SUITE_NAMES = [
-  "stress_code_search",
-  "stress_mixed_user_hotset",
-] as const;
+const DEFAULT_STRESS_SUITE_NAMES = ["stress_code_search", "stress_mixed_user_hotset"] as const;
 
 export const DEFAULT_GATEWAY_URL = "http://127.0.0.1:9517";
 export const DEFAULT_OPENAPI_PATH =
@@ -276,15 +273,11 @@ function asString(value: unknown): string | undefined {
 }
 
 function asNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function truncateString(value: string, maxLength: number): string {
-  return value.length <= maxLength
-    ? value
-    : `${value.slice(0, maxLength - 1)}...`;
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}...`;
 }
 
 function sleep(delayMs: number): Promise<void> {
@@ -296,18 +289,11 @@ function stripDocAnchor(path: string): string {
   return hashIndex >= 0 ? path.slice(0, hashIndex) : path;
 }
 
-function replacePathParameter(
-  pathTemplate: string,
-  parameter: string,
-  value: string,
-): string {
+function replacePathParameter(pathTemplate: string, parameter: string, value: string): string {
   return pathTemplate.replace(`{${parameter}}`, encodeURIComponent(value));
 }
 
-function appendSearchParams(
-  url: URL,
-  params: Record<string, string | number | undefined>,
-): URL {
+function appendSearchParams(url: URL, params: Record<string, string | number | undefined>): URL {
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) {
       url.searchParams.set(key, String(value));
@@ -337,10 +323,7 @@ function inferHitCount(payload: unknown): number | undefined {
   return undefined;
 }
 
-function inferErrorMessage(
-  payload: unknown,
-  rawBody: string,
-): string | undefined {
+function inferErrorMessage(payload: unknown, rawBody: string): string | undefined {
   if (payload === null || payload === undefined) {
     return rawBody.length > 0 ? truncateString(rawBody, 400) : undefined;
   }
@@ -359,9 +342,7 @@ function isRetryableStatus(status: number): boolean {
 }
 
 function isRetryableErrorMessage(message: string): boolean {
-  return /aborted|EADDRNOTAVAIL|ECONNRESET|ECONNREFUSED|ETIMEDOUT|fetch failed/i.test(
-    message,
-  );
+  return /aborted|EADDRNOTAVAIL|ECONNRESET|ECONNREFUSED|ETIMEDOUT|fetch failed/i.test(message);
 }
 
 function operationPathSortKey(operation: OpenApiOperation): string {
@@ -460,22 +441,13 @@ export function parseArgs(argv: string[]): CliOptions {
   if (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0) {
     throw new Error("--timeout-ms must be a positive integer");
   }
-  if (
-    !Number.isInteger(options.stressConcurrency) ||
-    options.stressConcurrency <= 0
-  ) {
+  if (!Number.isInteger(options.stressConcurrency) || options.stressConcurrency <= 0) {
     throw new Error("--stress-concurrency must be a positive integer");
   }
-  if (
-    !Number.isInteger(options.stressDurationMs) ||
-    options.stressDurationMs <= 0
-  ) {
+  if (!Number.isInteger(options.stressDurationMs) || options.stressDurationMs <= 0) {
     throw new Error("--stress-duration-ms must be a positive integer");
   }
-  if (
-    !Number.isInteger(options.stressMaxRequests) ||
-    options.stressMaxRequests <= 0
-  ) {
+  if (!Number.isInteger(options.stressMaxRequests) || options.stressMaxRequests <= 0) {
     throw new Error("--stress-max-requests must be a positive integer");
   }
   if (
@@ -548,15 +520,11 @@ export function requireOpenApiOperation(
 ): void {
   const pathItem = document.paths?.[path];
   if (!pathItem || !(method in pathItem)) {
-    throw new Error(
-      `OpenAPI contract is missing ${method.toUpperCase()} ${path}`,
-    );
+    throw new Error(`OpenAPI contract is missing ${method.toUpperCase()} ${path}`);
   }
 }
 
-export function extractOpenApiOperations(
-  document: OpenApiDocument,
-): OpenApiOperation[] {
+export function extractOpenApiOperations(document: OpenApiDocument): OpenApiOperation[] {
   const operations: OpenApiOperation[] = [];
   for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
     for (const [methodKey, operationValue] of Object.entries(pathItem ?? {})) {
@@ -569,9 +537,7 @@ export function extractOpenApiOperations(
       operations.push({
         method: method as HttpMethod,
         path,
-        operationId:
-          asString(operationRecord.operationId) ??
-          `${method.toUpperCase()} ${path}`,
+        operationId: asString(operationRecord.operationId) ?? `${method.toUpperCase()} ${path}`,
         parameterNames: parameters
           .map((parameter) => asRecord(parameter))
           .flatMap((parameter) => {
@@ -586,9 +552,7 @@ export function extractOpenApiOperations(
   );
 }
 
-export function determineCoverageMode(
-  operation: OpenApiOperation,
-): CoverageMode {
+export function determineCoverageMode(operation: OpenApiOperation): CoverageMode {
   if (operation.method === "post") {
     return "skip";
   }
@@ -625,9 +589,7 @@ export function extractRepoIds(workspaceConfigText: string): string[] {
   };
 
   for (const line of workspaceConfigText.split(/\r?\n/u)) {
-    const headerMatch = line.match(
-      /^\[link_graph\.projects\.(?:"([^"]+)"|([^\]]+))\]$/u,
-    );
+    const headerMatch = line.match(/^\[link_graph\.projects\.(?:"([^"]+)"|([^\]]+))\]$/u);
     if (headerMatch) {
       flushCurrentRepo();
       currentRepoId = (headerMatch[1] ?? headerMatch[2] ?? "").trim();
@@ -663,15 +625,10 @@ function percentile(values: number[], fraction: number): number {
   return sorted[index];
 }
 
-export function summariseSuite(
-  suite: string,
-  metrics: RequestMetric[],
-): BenchmarkSummary {
+export function summariseSuite(suite: string, metrics: RequestMetric[]): BenchmarkSummary {
   const elapsed = metrics.map((metric) => metric.elapsedMs);
   const ok = metrics.filter((metric) => metric.ok).length;
-  const nonEmptyHitCount = metrics.filter(
-    (metric) => (metric.hitCount ?? 0) > 0,
-  ).length;
+  const nonEmptyHitCount = metrics.filter((metric) => (metric.hitCount ?? 0) > 0).length;
   return {
     suite,
     requests: metrics.length,
@@ -684,9 +641,7 @@ export function summariseSuite(
       elapsed.length === 0
         ? 0
         : elapsed.reduce((total, value) => total + value, 0) / elapsed.length,
-    ...(metrics.some((metric) => metric.hitCount !== undefined)
-      ? { nonEmptyHitCount }
-      : {}),
+    ...(metrics.some((metric) => metric.hitCount !== undefined) ? { nonEmptyHitCount } : {}),
   };
 }
 
@@ -713,8 +668,7 @@ export function summariseStressSuite(
     ok,
     failed,
     successRate: requests === 0 ? 0 : ok / requests,
-    throughputRps:
-      actualDurationMs <= 0 ? 0 : (requests * 1000) / actualDurationMs,
+    throughputRps: actualDurationMs <= 0 ? 0 : (requests * 1000) / actualDurationMs,
     avgMs: benchmarkSummary.avgMs,
     p50Ms: benchmarkSummary.p50Ms,
     p95Ms: benchmarkSummary.p95Ms,
@@ -736,14 +690,8 @@ export function buildBenchmarkPlan(
   cwd: string = process.cwd(),
 ): BenchmarkPlan {
   const projectRoot = resolveProjectRoot(environment, cwd);
-  const openapiPath = resolve(
-    projectRoot,
-    options.openapiPath ?? DEFAULT_OPENAPI_PATH,
-  );
-  const workspaceConfig = resolve(
-    projectRoot,
-    options.workspaceConfig ?? DEFAULT_WORKSPACE_CONFIG,
-  );
+  const openapiPath = resolve(projectRoot, options.openapiPath ?? DEFAULT_OPENAPI_PATH);
+  const workspaceConfig = resolve(projectRoot, options.workspaceConfig ?? DEFAULT_WORKSPACE_CONFIG);
   const document = loadOpenApiDocument(openapiPath);
 
   requireOpenApiOperation(document, "/api/repo/index/status", "get");
@@ -751,16 +699,10 @@ export function buildBenchmarkPlan(
   requireOpenApiOperation(document, "/api/search/index/status", "get");
   requireOpenApiOperation(document, "/api/search/intent", "get");
 
-  const gatewayUrl = resolveGatewayUrl(
-    document,
-    options.gatewayUrl,
-    environment,
-  );
+  const gatewayUrl = resolveGatewayUrl(document, options.gatewayUrl, environment);
   const repoIds = extractRepoIds(readFileSync(workspaceConfig, "utf8"));
   const sampledRepoIds =
-    options.repoLimit === undefined
-      ? repoIds
-      : repoIds.slice(0, options.repoLimit);
+    options.repoLimit === undefined ? repoIds : repoIds.slice(0, options.repoLimit);
 
   return {
     projectRoot,
@@ -792,14 +734,12 @@ export function createDryRunReport(
     workspaceConfig: plan.workspaceConfig,
     repoCount: plan.sampledRepoIds.length,
     openapiOperationCount: plan.openApiOperations.length,
-    reportDirectory: dirname(
-      resolveBenchmarkReportPath(resolvedOptions, environment, cwd),
-    ),
+    reportDirectory: dirname(resolveBenchmarkReportPath(resolvedOptions, environment, cwd)),
     repoStatusPath: "/api/repo/index/status",
     searchStatusPath: "/api/search/index/status",
     codeSearchPath: "/api/search/intent",
-    benchmarkOperationPaths: [...BENCHMARK_OPERATION_PATHS].sort(
-      (left, right) => left.localeCompare(right),
+    benchmarkOperationPaths: [...BENCHMARK_OPERATION_PATHS].sort((left, right) =>
+      left.localeCompare(right),
     ),
     coverageModes: summariseCoverageModes(plan.openApiOperations),
     stressSettings: {
@@ -813,10 +753,7 @@ export function createDryRunReport(
 }
 
 function escapeTomlString(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n");
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
 
 function formatTomlString(key: string, value: string): string {
@@ -831,17 +768,11 @@ function formatTomlBoolean(key: string, value: boolean): string {
   return `${key} = ${value ? "true" : "false"}`;
 }
 
-function formatOptionalTomlString(
-  key: string,
-  value: string | undefined,
-): string | undefined {
+function formatOptionalTomlString(key: string, value: string | undefined): string | undefined {
   return value === undefined ? undefined : formatTomlString(key, value);
 }
 
-function formatOptionalTomlNumber(
-  key: string,
-  value: number | undefined,
-): string | undefined {
+function formatOptionalTomlNumber(key: string, value: number | undefined): string | undefined {
   return value === undefined ? undefined : formatTomlNumber(key, value);
 }
 
@@ -896,9 +827,7 @@ function renderSummaryToml(summary: BenchmarkSummary): string[] {
     formatTomlNumber("max_ms", summary.maxMs),
   ];
   if (summary.nonEmptyHitCount !== undefined) {
-    lines.push(
-      formatTomlNumber("non_empty_hit_count", summary.nonEmptyHitCount),
-    );
+    lines.push(formatTomlNumber("non_empty_hit_count", summary.nonEmptyHitCount));
   }
   return lines;
 }
@@ -924,9 +853,7 @@ function renderStressSummaryToml(summary: StressSummary): string[] {
     formatTomlBoolean("capped", summary.capped),
   ];
   if (summary.nonEmptyHitCount !== undefined) {
-    lines.push(
-      formatTomlNumber("non_empty_hit_count", summary.nonEmptyHitCount),
-    );
+    lines.push(formatTomlNumber("non_empty_hit_count", summary.nonEmptyHitCount));
   }
   return lines;
 }
@@ -941,14 +868,8 @@ function renderMetricToml(tableName: string, metric: RequestMetric): string[] {
     formatTomlBoolean("ok", metric.ok),
     formatTomlNumber("status", metric.status),
   ];
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("attempts", metric.attempts),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("hit_count", metric.hitCount),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("attempts", metric.attempts));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("hit_count", metric.hitCount));
   pushOptionalTomlLine(lines, formatOptionalTomlNumber("total", metric.total));
   pushOptionalTomlLine(lines, formatOptionalTomlNumber("ready", metric.ready));
   pushOptionalTomlLine(lines, formatOptionalTomlString("error", metric.error));
@@ -957,89 +878,36 @@ function renderMetricToml(tableName: string, metric: RequestMetric): string[] {
 
 function renderRepoIndexSnapshotToml(snapshot: RepoIndexSnapshot): string[] {
   const lines = ["[repo_index_snapshot]"];
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("total", snapshot.total),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("active", snapshot.active),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("queued", snapshot.queued),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("checking", snapshot.checking),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("syncing", snapshot.syncing),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("indexing", snapshot.indexing),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("ready", snapshot.ready),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("unsupported", snapshot.unsupported),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("failed", snapshot.failed),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("total", snapshot.total));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("active", snapshot.active));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("queued", snapshot.queued));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("checking", snapshot.checking));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("syncing", snapshot.syncing));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("indexing", snapshot.indexing));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("ready", snapshot.ready));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("unsupported", snapshot.unsupported));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("failed", snapshot.failed));
   pushOptionalTomlLine(
     lines,
     formatOptionalTomlNumber("target_concurrency", snapshot.targetConcurrency),
   );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("max_concurrency", snapshot.maxConcurrency));
   pushOptionalTomlLine(
     lines,
-    formatOptionalTomlNumber("max_concurrency", snapshot.maxConcurrency),
+    formatOptionalTomlNumber("sync_concurrency_limit", snapshot.syncConcurrencyLimit),
   );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber(
-      "sync_concurrency_limit",
-      snapshot.syncConcurrencyLimit,
-    ),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("current_repo_id", snapshot.currentRepoId),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlString("current_repo_id", snapshot.currentRepoId));
   return lines;
 }
 
-function renderSearchIndexSnapshotToml(
-  snapshot: SearchIndexSnapshot,
-): string[] {
+function renderSearchIndexSnapshotToml(snapshot: SearchIndexSnapshot): string[] {
   const lines = ["[search_index_snapshot]"];
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("total", snapshot.total),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("total", snapshot.total));
   pushOptionalTomlLine(lines, formatOptionalTomlNumber("idle", snapshot.idle));
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("indexing", snapshot.indexing),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("ready", snapshot.ready),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("degraded", snapshot.degraded),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("failed", snapshot.failed),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("indexing", snapshot.indexing));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("ready", snapshot.ready));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("degraded", snapshot.degraded));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("failed", snapshot.failed));
   pushOptionalTomlLine(
     lines,
     formatOptionalTomlNumber("compaction_pending", snapshot.compactionPending),
@@ -1050,96 +918,48 @@ function renderSearchIndexSnapshotToml(
   );
   pushOptionalTomlLine(
     lines,
-    formatOptionalTomlString(
-      "status_reason_severity",
-      snapshot.statusReasonSeverity,
-    ),
+    formatOptionalTomlString("status_reason_severity", snapshot.statusReasonSeverity),
   );
   pushOptionalTomlLine(
     lines,
-    formatOptionalTomlString(
-      "status_reason_action",
-      snapshot.statusReasonAction,
-    ),
+    formatOptionalTomlString("status_reason_action", snapshot.statusReasonAction),
   );
   pushOptionalTomlLine(
     lines,
-    formatOptionalTomlNumber(
-      "affected_corpus_count",
-      snapshot.affectedCorpusCount,
-    ),
+    formatOptionalTomlNumber("affected_corpus_count", snapshot.affectedCorpusCount),
   );
   pushOptionalTomlLine(
     lines,
-    formatOptionalTomlNumber(
-      "readable_corpus_count",
-      snapshot.readableCorpusCount,
-    ),
+    formatOptionalTomlNumber("readable_corpus_count", snapshot.readableCorpusCount),
   );
   pushOptionalTomlLine(
     lines,
-    formatOptionalTomlNumber(
-      "blocking_corpus_count",
-      snapshot.blockingCorpusCount,
-    ),
+    formatOptionalTomlNumber("blocking_corpus_count", snapshot.blockingCorpusCount),
   );
   return lines;
 }
 
 function renderDiscoveryToml(discovery: DiscoveryContext): string[] {
   const lines = ["[discovery]"];
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("ready_repo_id", discovery.readyRepoId),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("repo_query", discovery.repoQuery),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlString("ready_repo_id", discovery.readyRepoId));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("repo_query", discovery.repoQuery));
   pushOptionalTomlLine(
     lines,
     formatOptionalTomlString("definition_query", discovery.definitionQuery),
   );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("repo_file_path", discovery.repoFilePath),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlString("repo_file_path", discovery.repoFilePath));
   pushOptionalTomlLine(
     lines,
     formatOptionalTomlString("markdown_file_path", discovery.markdownFilePath),
   );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("vfs_root_path", discovery.vfsRootPath),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("vfs_file_path", discovery.vfsFilePath),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("page_id", discovery.pageId),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("node_id", discovery.nodeId),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("gap_id", discovery.gapId),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("gap_kind", discovery.gapKind),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("page_kind", discovery.pageKind),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("family_kind", discovery.familyKind),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlString("vfs_root_path", discovery.vfsRootPath));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("vfs_file_path", discovery.vfsFilePath));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("page_id", discovery.pageId));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("node_id", discovery.nodeId));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("gap_id", discovery.gapId));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("gap_kind", discovery.gapKind));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("page_kind", discovery.pageKind));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("family_kind", discovery.familyKind));
   pushOptionalTomlLine(
     lines,
     formatOptionalTomlString("topology_node_id", discovery.topologyNodeId),
@@ -1171,22 +991,10 @@ function renderOperationCoverageToml(entry: OperationCoverage): string[] {
   pushOptionalTomlLine(lines, formatOptionalTomlString("suite", entry.suite));
   pushOptionalTomlLine(lines, formatOptionalTomlString("label", entry.label));
   pushOptionalTomlLine(lines, formatOptionalTomlString("url", entry.url));
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("elapsed_ms", entry.elapsedMs),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("http_status", entry.httpStatus),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("attempts", entry.attempts),
-  );
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlString("skip_reason", entry.skipReason),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("elapsed_ms", entry.elapsedMs));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("http_status", entry.httpStatus));
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("attempts", entry.attempts));
+  pushOptionalTomlLine(lines, formatOptionalTomlString("skip_reason", entry.skipReason));
   pushOptionalTomlLine(lines, formatOptionalTomlString("error", entry.error));
   return lines;
 }
@@ -1201,10 +1009,7 @@ function renderFailureToml(metric: RequestMetric): string[] {
     formatTomlBoolean("ok", metric.ok),
     formatTomlNumber("status", metric.status),
   ];
-  pushOptionalTomlLine(
-    lines,
-    formatOptionalTomlNumber("attempts", metric.attempts),
-  );
+  pushOptionalTomlLine(lines, formatOptionalTomlNumber("attempts", metric.attempts));
   pushOptionalTomlLine(lines, formatOptionalTomlString("error", metric.error));
   return lines;
 }
@@ -1241,26 +1046,17 @@ export function renderBenchmarkReportToml(
     "",
     ...renderDiscoveryToml(report.discovery),
     "",
-    ...renderMetricToml(
-      "aggregate_repo_index_status",
-      report.aggregateRepoIndexStatus,
-    ),
+    ...renderMetricToml("aggregate_repo_index_status", report.aggregateRepoIndexStatus),
   );
   if (report.repoIndexSnapshot) {
     lines.push("", ...renderRepoIndexSnapshotToml(report.repoIndexSnapshot));
   }
   lines.push(
     "",
-    ...renderMetricToml(
-      "aggregate_search_index_status",
-      report.aggregateSearchIndexStatus,
-    ),
+    ...renderMetricToml("aggregate_search_index_status", report.aggregateSearchIndexStatus),
   );
   if (report.searchIndexSnapshot) {
-    lines.push(
-      "",
-      ...renderSearchIndexSnapshotToml(report.searchIndexSnapshot),
-    );
+    lines.push("", ...renderSearchIndexSnapshotToml(report.searchIndexSnapshot));
   }
   lines.push("");
   for (const summary of report.summaries) {
@@ -1293,18 +1089,11 @@ export function persistBenchmarkReportToml(
   return { path: reportPath, toml, generatedAt };
 }
 
-export function requestJsonTransport(
-  url: URL,
-  timeoutMs: number,
-): Promise<TransportResponse> {
+export function requestJsonTransport(url: URL, timeoutMs: number): Promise<TransportResponse> {
   return new Promise((resolvePromise, rejectPromise) => {
     const requestImpl = url.protocol === "https:" ? httpsRequest : httpRequest;
     const localAddress =
-      url.hostname === "127.0.0.1"
-        ? "127.0.0.1"
-        : url.hostname === "::1"
-          ? "::1"
-          : undefined;
+      url.hostname === "127.0.0.1" ? "127.0.0.1" : url.hostname === "::1" ? "::1" : undefined;
     const request = requestImpl(
       url,
       {
@@ -1371,11 +1160,7 @@ async function timedJsonRequest(
         ready: asNumber(asRecord(payload)?.ready),
         error: response.ok ? undefined : inferErrorMessage(payload, rawBody),
       };
-      if (
-        response.ok ||
-        attempt > retryCount ||
-        !isRetryableStatus(response.status)
-      ) {
+      if (response.ok || attempt > retryCount || !isRetryableStatus(response.status)) {
         return { metric, payload };
       }
     } catch (error) {
@@ -1417,11 +1202,7 @@ async function runWithConcurrency<T, R>(
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, () =>
-      consume(),
-    ),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => consume()));
   return results;
 }
 
@@ -1436,15 +1217,7 @@ async function runSustainedLoad(
   if (cases.length === 0) {
     return {
       metrics: [],
-      summary: summariseStressSuite(
-        suite,
-        [],
-        durationMs,
-        0,
-        concurrency,
-        maxRequests,
-        false,
-      ),
+      summary: summariseStressSuite(suite, [], durationMs, 0, concurrency, maxRequests, false),
     };
   }
 
@@ -1470,19 +1243,12 @@ async function runSustainedLoad(
       const caseIndex = caseCursor % cases.length;
       caseCursor += 1;
       const requestCase = cases[caseIndex];
-      const result = await timedJsonRequest(
-        suite,
-        requestCase.label,
-        requestCase.url,
-        timeoutMs,
-      );
+      const result = await timedJsonRequest(suite, requestCase.label, requestCase.url, timeoutMs);
       metrics.push(result.metric);
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, maxRequests) }, () => worker()),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, maxRequests) }, () => worker()));
   const actualDurationMs = performance.now() - started;
   return {
     metrics,
@@ -1498,9 +1264,7 @@ async function runSustainedLoad(
   };
 }
 
-function buildRepoIndexSnapshot(
-  payload: unknown,
-): RepoIndexSnapshot | undefined {
+function buildRepoIndexSnapshot(payload: unknown): RepoIndexSnapshot | undefined {
   const record = asRecord(payload);
   if (!record) {
     return undefined;
@@ -1522,9 +1286,7 @@ function buildRepoIndexSnapshot(
   };
 }
 
-function buildSearchIndexSnapshot(
-  payload: unknown,
-): SearchIndexSnapshot | undefined {
+function buildSearchIndexSnapshot(payload: unknown): SearchIndexSnapshot | undefined {
   const record = asRecord(payload);
   if (!record) {
     return undefined;
@@ -1559,10 +1321,7 @@ function extractReadyRepoIds(payload: unknown): string[] {
   return readyIds;
 }
 
-function selectReadyRepoId(
-  payload: unknown,
-  sampledRepoIds: string[],
-): string | undefined {
+function selectReadyRepoId(payload: unknown, sampledRepoIds: string[]): string | undefined {
   const readyRepoIds = extractReadyRepoIds(payload);
   const readyRepoSet = new Set(readyRepoIds);
   for (const repoId of sampledRepoIds) {
@@ -1610,9 +1369,7 @@ function selectMarkdownFilePath(payload: unknown): string | undefined {
   return undefined;
 }
 
-function selectWorkspaceMarkdownFilePath(
-  projectRoot: string,
-): string | undefined {
+function selectWorkspaceMarkdownFilePath(projectRoot: string): string | undefined {
   const directCandidates = ["README.md", "CLAUDE.md", "AGENTS.md"];
   for (const candidate of directCandidates) {
     try {
@@ -1623,13 +1380,7 @@ function selectWorkspaceMarkdownFilePath(
     }
   }
 
-  const ignoredDirectories = new Set([
-    ".git",
-    ".cache",
-    ".run",
-    "node_modules",
-    "target",
-  ]);
+  const ignoredDirectories = new Set([".git", ".cache", ".run", "node_modules", "target"]);
   const searchQueue = ["docs", "packages", ".data"];
 
   while (searchQueue.length > 0) {
@@ -1657,10 +1408,7 @@ function selectWorkspaceMarkdownFilePath(
         }
         continue;
       }
-      if (
-        entry.isFile() &&
-        (entry.name.endsWith(".md") || entry.name.endsWith(".markdown"))
-      ) {
+      if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".markdown"))) {
         return relativePath;
       }
     }
@@ -1772,9 +1520,7 @@ async function discoverGatewayContext(
       return path === readyRepoId;
     });
   discovery.vfsRootPath =
-    asString(matchingVfsRoot?.path) ??
-    asString(asRecord(vfsRootEntries[0])?.path) ??
-    readyRepoId;
+    asString(matchingVfsRoot?.path) ?? asString(asRecord(vfsRootEntries[0])?.path) ?? readyRepoId;
 
   if (!readyRepoId) {
     const topologyResponse = await timedJsonRequest(
@@ -1787,10 +1533,9 @@ async function discoverGatewayContext(
     return discovery;
   }
 
-  const docCoverageUrl = appendSearchParams(
-    new URL("/api/repo/doc-coverage", baseUrl),
-    { repo: readyRepoId },
-  );
+  const docCoverageUrl = appendSearchParams(new URL("/api/repo/doc-coverage", baseUrl), {
+    repo: readyRepoId,
+  });
   const docCoverageResponse = await timedJsonRequest(
     "discovery",
     "repo_doc_coverage",
@@ -1799,16 +1544,14 @@ async function discoverGatewayContext(
   );
   discovery.repoFilePath = selectRepoFilePath(docCoverageResponse.payload);
   discovery.markdownFilePath =
-    discovery.markdownFilePath ??
-    selectMarkdownFilePath(docCoverageResponse.payload);
+    discovery.markdownFilePath ?? selectMarkdownFilePath(docCoverageResponse.payload);
   if (discovery.vfsRootPath && discovery.repoFilePath) {
     discovery.vfsFilePath = `${discovery.vfsRootPath}/${discovery.repoFilePath}`;
   }
 
-  const projectedPagesUrl = appendSearchParams(
-    new URL("/api/repo/projected-pages", baseUrl),
-    { repo: readyRepoId },
-  );
+  const projectedPagesUrl = appendSearchParams(new URL("/api/repo/projected-pages", baseUrl), {
+    repo: readyRepoId,
+  });
   const projectedPagesResponse = await timedJsonRequest(
     "discovery",
     "repo_projected_pages",
@@ -1820,10 +1563,10 @@ async function discoverGatewayContext(
   discovery.pageKind = pageInfo.pageKind ?? "explanation";
 
   if (discovery.pageId) {
-    const treeUrl = appendSearchParams(
-      new URL("/api/repo/projected-page-index-tree", baseUrl),
-      { repo: readyRepoId, page_id: discovery.pageId },
-    );
+    const treeUrl = appendSearchParams(new URL("/api/repo/projected-page-index-tree", baseUrl), {
+      repo: readyRepoId,
+      page_id: discovery.pageId,
+    });
     const treeResponse = await timedJsonRequest(
       "discovery",
       "repo_projected_page_index_tree",
@@ -1833,10 +1576,9 @@ async function discoverGatewayContext(
     discovery.nodeId = selectNodeId(treeResponse.payload);
   }
 
-  const gapReportUrl = appendSearchParams(
-    new URL("/api/repo/projected-gap-report", baseUrl),
-    { repo: readyRepoId },
-  );
+  const gapReportUrl = appendSearchParams(new URL("/api/repo/projected-gap-report", baseUrl), {
+    repo: readyRepoId,
+  });
   const gapReportResponse = await timedJsonRequest(
     "discovery",
     "repo_projected_gap_report",
@@ -1845,8 +1587,7 @@ async function discoverGatewayContext(
   );
   const gapInfo = selectGapInfo(gapReportResponse.payload);
   discovery.gapId = gapInfo.gapId;
-  discovery.gapKind =
-    gapInfo.gapKind ?? "symbol_reference_without_documentation";
+  discovery.gapKind = gapInfo.gapKind ?? "symbol_reference_without_documentation";
   discovery.familyKind = gapInfo.pageKind ?? discovery.pageKind ?? "reference";
 
   const topologyResponse = await timedJsonRequest(
@@ -1978,13 +1719,9 @@ function benchmarkMetricToCoverage(
   };
 }
 
-function missingSeeds(
-  entries: Array<[string, string | undefined]>,
-): string | undefined {
+function missingSeeds(entries: Array<[string, string | undefined]>): string | undefined {
   const missing = entries.filter(([, value]) => !value).map(([label]) => label);
-  return missing.length === 0
-    ? undefined
-    : `missing discovery seed: ${missing.join(", ")}`;
+  return missing.length === 0 ? undefined : `missing discovery seed: ${missing.join(", ")}`;
 }
 
 export function buildSmokeRequestPlan(
@@ -2059,10 +1796,7 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: new URL(
-          replacePathParameter("/api/vfs/{path}", "path", vfsFilePath!),
-          baseUrl,
-        ),
+        url: new URL(replacePathParameter("/api/vfs/{path}", "path", vfsFilePath!), baseUrl),
       };
     }
     case "/api/neighbors/{id}":
@@ -2268,10 +2002,7 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/docs/projected-gap-report", baseUrl),
-          { repo },
-        ),
+        url: appendSearchParams(new URL("/api/docs/projected-gap-report", baseUrl), { repo }),
       };
     case "/api/docs/planner-item": {
       const skipReason = missingSeeds([
@@ -2394,15 +2125,12 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/docs/retrieval-context", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            node_id: nodeId,
-            related_limit: limit,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/docs/retrieval-context", baseUrl), {
+          repo,
+          page_id: pageId,
+          node_id: nodeId,
+          related_limit: limit,
+        }),
       };
     }
     case "/api/docs/retrieval-hit": {
@@ -2521,18 +2249,15 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/docs/navigation-search", baseUrl),
-          {
-            repo,
-            query,
-            kind: pageKind,
-            family_kind: familyKind,
-            limit,
-            related_limit: limit,
-            family_limit: 3,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/docs/navigation-search", baseUrl), {
+          repo,
+          query,
+          kind: pageKind,
+          family_kind: familyKind,
+          limit,
+          related_limit: limit,
+          family_limit: 3,
+        }),
       };
     case "/api/repo/projected-gap-report":
       if (!repo) {
@@ -2541,12 +2266,9 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-gap-report", baseUrl),
-          {
-            repo,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-gap-report", baseUrl), {
+          repo,
+        }),
       };
     case "/api/repo/projected-page": {
       const skipReason = missingSeeds([
@@ -2577,14 +2299,11 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-index-node", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            node_id: nodeId,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-index-node", baseUrl), {
+          repo,
+          page_id: pageId,
+          node_id: nodeId,
+        }),
       };
     }
     case "/api/repo/projected-retrieval-hit": {
@@ -2599,14 +2318,11 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-retrieval-hit", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            node_id: nodeId,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-retrieval-hit", baseUrl), {
+          repo,
+          page_id: pageId,
+          node_id: nodeId,
+        }),
       };
     }
     case "/api/repo/projected-retrieval-context": {
@@ -2621,15 +2337,12 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-retrieval-context", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            node_id: nodeId,
-            related_limit: limit,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-retrieval-context", baseUrl), {
+          repo,
+          page_id: pageId,
+          node_id: nodeId,
+          related_limit: limit,
+        }),
       };
     }
     case "/api/repo/projected-page-family-context": {
@@ -2643,14 +2356,11 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-family-context", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            per_kind_limit: 3,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-family-context", baseUrl), {
+          repo,
+          page_id: pageId,
+          per_kind_limit: 3,
+        }),
       };
     }
     case "/api/repo/projected-page-family-search":
@@ -2660,16 +2370,13 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-family-search", baseUrl),
-          {
-            repo,
-            query,
-            kind: pageKind,
-            limit,
-            per_kind_limit: 3,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-family-search", baseUrl), {
+          repo,
+          query,
+          kind: pageKind,
+          limit,
+          per_kind_limit: 3,
+        }),
       };
     case "/api/repo/projected-page-family-cluster": {
       const skipReason = missingSeeds([
@@ -2682,15 +2389,12 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-family-cluster", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            kind: pageKind,
-            limit,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-family-cluster", baseUrl), {
+          repo,
+          page_id: pageId,
+          kind: pageKind,
+          limit,
+        }),
       };
     }
     case "/api/repo/projected-page-navigation": {
@@ -2704,17 +2408,14 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-navigation", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-            node_id: nodeId,
-            family_kind: familyKind,
-            related_limit: limit,
-            family_limit: 3,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-navigation", baseUrl), {
+          repo,
+          page_id: pageId,
+          node_id: nodeId,
+          family_kind: familyKind,
+          related_limit: limit,
+          family_limit: 3,
+        }),
       };
     }
     case "/api/repo/projected-page-navigation-search":
@@ -2724,18 +2425,15 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-navigation-search", baseUrl),
-          {
-            repo,
-            query,
-            kind: pageKind,
-            family_kind: familyKind,
-            limit,
-            related_limit: limit,
-            family_limit: 3,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-navigation-search", baseUrl), {
+          repo,
+          query,
+          kind: pageKind,
+          family_kind: familyKind,
+          limit,
+          related_limit: limit,
+          family_limit: 3,
+        }),
       };
     case "/api/repo/projected-page-index-tree": {
       const skipReason = missingSeeds([
@@ -2748,13 +2446,10 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-index-tree", baseUrl),
-          {
-            repo,
-            page_id: pageId,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-index-tree", baseUrl), {
+          repo,
+          page_id: pageId,
+        }),
       };
     }
     case "/api/repo/projected-page-index-tree-search":
@@ -2764,15 +2459,12 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-index-tree-search", baseUrl),
-          {
-            repo,
-            query,
-            kind: pageKind,
-            limit,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-index-tree-search", baseUrl), {
+          repo,
+          query,
+          kind: pageKind,
+          limit,
+        }),
       };
     case "/api/repo/projected-page-search":
       if (!repo) {
@@ -2781,15 +2473,12 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-search", baseUrl),
-          {
-            repo,
-            query,
-            kind: pageKind,
-            limit,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-search", baseUrl), {
+          repo,
+          query,
+          kind: pageKind,
+          limit,
+        }),
       };
     case "/api/repo/projected-retrieval":
       if (!repo) {
@@ -2798,15 +2487,12 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-retrieval", baseUrl),
-          {
-            repo,
-            query,
-            kind: pageKind,
-            limit,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-retrieval", baseUrl), {
+          repo,
+          query,
+          kind: pageKind,
+          limit,
+        }),
       };
     case "/api/repo/projected-page-index-trees":
       if (!repo) {
@@ -2815,12 +2501,9 @@ export function buildSmokeRequestPlan(
       return {
         operation,
         label: operation.operationId,
-        url: appendSearchParams(
-          new URL("/api/repo/projected-page-index-trees", baseUrl),
-          {
-            repo,
-          },
-        ),
+        url: appendSearchParams(new URL("/api/repo/projected-page-index-trees", baseUrl), {
+          repo,
+        }),
       };
     default:
       return {
@@ -2863,9 +2546,7 @@ export async function runBenchmark(
   options: CliOptions,
   plan: BenchmarkPlan,
 ): Promise<{ report: BenchmarkReport; failures: RequestMetric[] }> {
-  const baseUrl = new URL(
-    plan.gatewayUrl.endsWith("/") ? plan.gatewayUrl : `${plan.gatewayUrl}/`,
-  );
+  const baseUrl = new URL(plan.gatewayUrl.endsWith("/") ? plan.gatewayUrl : `${plan.gatewayUrl}/`);
   const smokeLimit = Math.min(options.limit, SMOKE_LIMIT_CAP);
   const stressLimit = Math.min(options.limit, 10);
 
@@ -2908,18 +2589,8 @@ export async function runBenchmark(
     plan.sampledRepoIds,
     options.concurrency,
     async (repoId) => {
-      const url = appendSearchParams(
-        new URL("/api/repo/index/status", baseUrl),
-        { repo: repoId },
-      );
-      return (
-        await timedJsonRequest(
-          "repo_index_status",
-          repoId,
-          url,
-          options.timeoutMs,
-        )
-      ).metric;
+      const url = appendSearchParams(new URL("/api/repo/index/status", baseUrl), { repo: repoId });
+      return (await timedJsonRequest("repo_index_status", repoId, url, options.timeoutMs)).metric;
     },
   );
 
@@ -2931,14 +2602,7 @@ export async function runBenchmark(
         repo: repoId,
         mode: "status",
       });
-      return (
-        await timedJsonRequest(
-          "repo_sync_status",
-          repoId,
-          url,
-          options.timeoutMs,
-        )
-      ).metric;
+      return (await timedJsonRequest("repo_sync_status", repoId, url, options.timeoutMs)).metric;
     },
   );
 
@@ -2951,9 +2615,7 @@ export async function runBenchmark(
         q: query,
         limit: options.limit,
       });
-      return (
-        await timedJsonRequest("code_search", repoId, url, options.timeoutMs)
-      ).metric;
+      return (await timedJsonRequest("code_search", repoId, url, options.timeoutMs)).metric;
     },
   );
 
@@ -2963,9 +2625,9 @@ export async function runBenchmark(
     plan,
     repoStatusAggregateResult.payload,
   );
-  const readyRepoIds = extractReadyRepoIds(
-    repoStatusAggregateResult.payload,
-  ).filter((repoId) => plan.sampledRepoIds.includes(repoId));
+  const readyRepoIds = extractReadyRepoIds(repoStatusAggregateResult.payload).filter((repoId) =>
+    plan.sampledRepoIds.includes(repoId),
+  );
 
   const smokeCoverageEntries: OperationCoverage[] = [];
   const smokePlans: SmokeRequestPlan[] = [];
@@ -2978,18 +2640,12 @@ export async function runBenchmark(
         operationId: operation.operationId,
         mode,
         status: "skipped",
-        skipReason:
-          "mutating OpenAPI operation is intentionally skipped in live benchmark",
+        skipReason: "mutating OpenAPI operation is intentionally skipped in live benchmark",
       });
       continue;
     }
     if (mode === "smoke") {
-      const smokePlan = buildSmokeRequestPlan(
-        operation,
-        discovery,
-        baseUrl,
-        smokeLimit,
-      );
+      const smokePlan = buildSmokeRequestPlan(operation, discovery, baseUrl, smokeLimit);
       if ("skipReason" in smokePlan) {
         smokeCoverageEntries.push({
           method: operation.method,
@@ -3030,21 +2686,13 @@ export async function runBenchmark(
   );
   const stressMixedHotset = await runSustainedLoad(
     "stress_mixed_user_hotset",
-    buildStressMixedHotsetCases(
-      baseUrl,
-      readyRepoIds,
-      plan.plannedSearchCases,
-      stressLimit,
-    ),
+    buildStressMixedHotsetCases(baseUrl, readyRepoIds, plan.plannedSearchCases, stressLimit),
     options.stressConcurrency,
     options.stressDurationMs,
     options.stressMaxRequests,
     options.timeoutMs,
   );
-  const stressMetrics = [
-    ...stressCodeSearch.metrics,
-    ...stressMixedHotset.metrics,
-  ];
+  const stressMetrics = [...stressCodeSearch.metrics, ...stressMixedHotset.metrics];
   const stressSummaries = [stressCodeSearch.summary, stressMixedHotset.summary];
   const operationCoverage: OperationCoverage[] = [];
   for (const operation of plan.openApiOperations) {
@@ -3065,8 +2713,7 @@ export async function runBenchmark(
       continue;
     }
     const smokeCoverageEntry = smokeCoverageEntries.find(
-      (entry) =>
-        entry.path === operation.path && entry.method === operation.method,
+      (entry) => entry.path === operation.path && entry.method === operation.method,
     );
     if (smokeCoverageEntry) {
       operationCoverage.push(smokeCoverageEntry);
@@ -3074,8 +2721,7 @@ export async function runBenchmark(
     }
     const smokeResult = smokeResults.find(
       ({ operation: smokeOperation }) =>
-        smokeOperation.path === operation.path &&
-        smokeOperation.method === operation.method,
+        smokeOperation.path === operation.path && smokeOperation.method === operation.method,
     );
     if (!smokeResult) {
       operationCoverage.push({
@@ -3100,9 +2746,7 @@ export async function runBenchmark(
       elapsedMs: smokeResult.result.metric.elapsedMs,
       httpStatus: smokeResult.result.metric.status,
       attempts: smokeResult.result.metric.attempts,
-      error: smokeResult.result.metric.ok
-        ? undefined
-        : smokeResult.result.metric.error,
+      error: smokeResult.result.metric.ok ? undefined : smokeResult.result.metric.error,
     });
   }
 
@@ -3136,12 +2780,8 @@ export async function runBenchmark(
     stressSummaries,
     aggregateRepoIndexStatus: repoStatusAggregateResult.metric,
     aggregateSearchIndexStatus: searchStatusAggregateResult.metric,
-    repoIndexSnapshot: buildRepoIndexSnapshot(
-      repoStatusAggregateResult.payload,
-    ),
-    searchIndexSnapshot: buildSearchIndexSnapshot(
-      searchStatusAggregateResult.payload,
-    ),
+    repoIndexSnapshot: buildRepoIndexSnapshot(repoStatusAggregateResult.payload),
+    searchIndexSnapshot: buildSearchIndexSnapshot(searchStatusAggregateResult.payload),
     discovery,
     coverageSummary: buildCoverageSummary(operationCoverage),
     operationCoverage,
@@ -3169,9 +2809,7 @@ export function formatHumanSummary(report: BenchmarkReport): string {
       )}ms max=${summary.maxMs.toFixed(2)}ms`,
     );
     if (summary.nonEmptyHitCount !== undefined) {
-      lines.push(
-        `${summary.suite}: non-empty responses=${summary.nonEmptyHitCount}`,
-      );
+      lines.push(`${summary.suite}: non-empty responses=${summary.nonEmptyHitCount}`);
     }
   }
   if (report.stressSummaries.length > 0) {
@@ -3189,18 +2827,14 @@ export function formatHumanSummary(report: BenchmarkReport): string {
         )}ms p99=${summary.p99Ms.toFixed(2)}ms max=${summary.maxMs.toFixed(2)}ms capped=${summary.capped}`,
       );
       if (summary.nonEmptyHitCount !== undefined) {
-        lines.push(
-          `${summary.suite}: non-empty responses=${summary.nonEmptyHitCount}`,
-        );
+        lines.push(`${summary.suite}: non-empty responses=${summary.nonEmptyHitCount}`);
       }
     }
   }
   lines.push("");
   lines.push(
     `Aggregate repo-index status: total=${report.repoIndexSnapshot?.total ?? report.aggregateRepoIndexStatus.total ?? 0} ready=${
-      report.repoIndexSnapshot?.ready ??
-      report.aggregateRepoIndexStatus.ready ??
-      0
+      report.repoIndexSnapshot?.ready ?? report.aggregateRepoIndexStatus.ready ?? 0
     } queued=${report.repoIndexSnapshot?.queued ?? 0} failed=${report.repoIndexSnapshot?.failed ?? 0} unsupported=${report.repoIndexSnapshot?.unsupported ?? 0}`,
   );
   lines.push(
@@ -3232,23 +2866,12 @@ export async function runCli(
 
     const plan = buildBenchmarkPlan(options, environment, cwd);
     if (options.dryRun) {
-      io.log(
-        JSON.stringify(
-          createDryRunReport(plan, options, environment, cwd),
-          null,
-          2,
-        ),
-      );
+      io.log(JSON.stringify(createDryRunReport(plan, options, environment, cwd), null, 2));
       return 0;
     }
 
     const { report, failures } = await runBenchmark(options, plan);
-    const persisted = persistBenchmarkReportToml(
-      report,
-      options,
-      environment,
-      cwd,
-    );
+    const persisted = persistBenchmarkReportToml(report, options, environment, cwd);
     if (options.json) {
       io.log(
         JSON.stringify(
@@ -3265,10 +2888,7 @@ export async function runCli(
       io.log(formatHumanSummary(report));
       io.log(`Report TOML: ${persisted.path}`);
     }
-    return failures.length === 0 &&
-      report.coverageSummary.failedOperations === 0
-      ? 0
-      : 1;
+    return failures.length === 0 && report.coverageSummary.failedOperations === 0 ? 0 : 1;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     io.error(`ERROR: ${message}`);

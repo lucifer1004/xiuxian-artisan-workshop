@@ -16,7 +16,9 @@ Primary references:
 - `[[06_roadmap/410_p1_generic_plugin_contract_staging]]`
 - `[[06_roadmap/409_core_runtime_plugin_surface_inventory]]`
 - `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
-- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
+
+The active task-scoped blueprint for this migration remains recorded in the
+paired ExecPlan rather than this persistent code-slice note.
 
 The scope of this slice is intentionally narrow:
 
@@ -542,7 +544,7 @@ This first code slice is complete when:
 5. no crate splitting has been attempted yet
 
 :RELATIONS:
-:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
 :END:
 
 ---

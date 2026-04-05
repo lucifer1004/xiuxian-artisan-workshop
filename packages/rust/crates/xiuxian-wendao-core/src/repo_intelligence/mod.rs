@@ -1,4 +1,5 @@
 mod arrow_transport;
+mod builtin;
 mod config;
 mod errors;
 mod plugin;
@@ -12,6 +13,7 @@ pub use arrow_transport::{
     JULIA_ARROW_TRACE_ID_COLUMN, JULIA_ARROW_VECTOR_SCORE_COLUMN, julia_arrow_request_schema,
     julia_arrow_response_schema,
 };
+pub use builtin::{BuiltinPluginRegistrar, builtin_plugin_registrars};
 pub use config::{
     RegisteredRepository, RepoIntelligenceConfig, RepositoryPluginConfig, RepositoryRef,
     RepositoryRefreshPolicy,

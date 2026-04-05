@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected-page lookup.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 
@@ -34,14 +35,16 @@ plugins = ["modelica"]
         Some(&config_path),
         temp.path(),
     )?;
-    let page_id = pages
+    let Some(page_id) = pages
         .pages
         .iter()
         .find(|page| {
             page.page_id.contains(":symbol:") && page.title == "Projectionica.Controllers.PI"
         })
         .map(|page| page.page_id.clone())
-        .expect("expected a projected page for Projectionica.Controllers.PI");
+    else {
+        panic!("expected a projected page for Projectionica.Controllers.PI");
+    };
 
     let result = docs_page_from_config(
         &DocsPageQuery {

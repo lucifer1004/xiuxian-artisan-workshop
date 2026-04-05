@@ -83,8 +83,7 @@ fn ui_repo_project_from_registered_repository(
             .plugins
             .into_iter()
             .map(|plugin| match plugin {
-                RepositoryPluginConfig::Id(id) => id,
-                RepositoryPluginConfig::Config { id, .. } => id,
+                RepositoryPluginConfig::Id(id) | RepositoryPluginConfig::Config { id, .. } => id,
             })
             .collect(),
     }

@@ -5,13 +5,13 @@ use crate::gateway::studio::router::{
     map_repo_intelligence_error,
 };
 use crate::gateway::studio::types::SearchResponse;
+use crate::search::repo_search::search_repo_code_outcome;
 use crate::search_plane::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
 
 use crate::gateway::studio::search::handlers::code_search::query::{
-    collect_repo_search_targets, infer_repo_hint_from_query, parse_code_search_query,
-    repo_search_parallelism, repo_search_result_limits, repo_wide_code_search_timeout,
+    infer_repo_hint_from_query, parse_code_search_query, repo_search_result_limits,
+    repo_wide_code_search_timeout,
 };
-use crate::gateway::studio::search::handlers::code_search::search::buffered::search_repo_code_hits_buffered;
 
 /// Build one code-search response from the Studio search plane.
 ///
@@ -102,29 +102,25 @@ pub(crate) async fn build_code_search_response_with_budget(
     {
         return Ok(cached);
     }
-    let mut hits = Vec::new();
-    let publication_states = studio
-        .search_plane
-        .repo_search_publication_states(repo_ids.as_slice())
-        .await;
-    let dispatch = collect_repo_search_targets(repo_ids, &publication_states);
-    studio.search_plane.record_repo_search_dispatch(
-        dispatch.pending.len() + dispatch.skipped.len() + dispatch.searchable.len(),
-        dispatch.searchable.len(),
-        repo_search_parallelism(&studio.search_plane, dispatch.searchable.len()),
-    );
-    let pending_repos = dispatch.pending;
-    let skipped_repos = dispatch.skipped;
-    let buffered = search_repo_code_hits_buffered(
-        studio.search_plane.clone(),
-        dispatch.searchable,
+    let outcome = search_repo_code_outcome(
+        &studio.search_plane,
+        repo_ids,
         raw_query.as_str(),
         repo_search_result_limits(effective_repo_hint, limit),
         effective_repo_wide_budget,
     )
-    .await?;
-    let partial_timeout = buffered.partial_timeout;
-    hits.extend(buffered.hits);
+    .await
+    .map_err(|error| {
+        StudioApiError::internal(
+            "REPO_CODE_SEARCH_FAILED",
+            "Failed to execute shared repo code-search buffering",
+            Some(error),
+        )
+    })?;
+    let mut hits = outcome.hits;
+    let partial_timeout = outcome.partial_timeout;
+    let pending_repos = outcome.pending_repos;
+    let skipped_repos = outcome.skipped_repos;
 
     hits.sort_by(|left, right| {
         right

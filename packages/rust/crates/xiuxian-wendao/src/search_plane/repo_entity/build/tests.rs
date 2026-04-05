@@ -14,7 +14,7 @@ use crate::search_plane::repo_entity::schema::rows_from_analysis;
 use crate::search_plane::repo_staging::versioned_repo_table_name;
 use crate::search_plane::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
-    SearchRepoPublicationInput, SearchRepoPublicationRecord,
+    SearchRepoCorpusRecord, SearchRepoPublicationInput, SearchRepoPublicationRecord,
 };
 
 fn repo_document(
@@ -30,6 +30,93 @@ fn repo_document(
         size_bytes,
         modified_unix_ms,
     }
+}
+
+fn temp_dir_or_panic() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"))
+}
+
+fn repo_entity_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
+    SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        SearchManifestKeyspace::new("xiuxian:test:repo-entity-build"),
+        SearchMaintenancePolicy::default(),
+    )
+}
+
+fn repo_entity_record_or_panic(
+    record: Option<SearchRepoCorpusRecord>,
+    context: &str,
+) -> SearchRepoCorpusRecord {
+    let Some(record) = record else {
+        panic!("{context}");
+    };
+    record
+}
+
+fn repo_entity_publication_or_panic<'a>(
+    record: &'a SearchRepoCorpusRecord,
+    context: &str,
+) -> &'a SearchRepoPublicationRecord {
+    let Some(publication) = record.publication.as_ref() else {
+        panic!("{context}");
+    };
+    publication
+}
+
+fn assert_repo_entity_prewarmed(record: &SearchRepoCorpusRecord) {
+    assert!(
+        record
+            .maintenance
+            .as_ref()
+            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
+            .is_some()
+    );
+}
+
+fn assert_no_repo_entity_lance_table(
+    service: &SearchPlaneService,
+    table_name: &str,
+    context: &str,
+) {
+    assert!(
+        !service
+            .corpus_root(SearchCorpusKind::RepoEntity)
+            .join(format!("{table_name}.lance"))
+            .exists(),
+        "{context}"
+    );
+}
+
+async fn assert_repo_entity_hit_stems(
+    service: &SearchPlaneService,
+    search_term: &str,
+    language_filters: &HashSet<String>,
+    kind_filters: &HashSet<String>,
+    expected_stems: &[&str],
+) {
+    let hits = service
+        .search_repo_entities("alpha/repo", search_term, language_filters, kind_filters, 5)
+        .await
+        .unwrap_or_else(|error| panic!("query {search_term}: {error}"));
+    let actual_stems = hits.iter().map(|hit| hit.stem.as_str()).collect::<Vec<_>>();
+    assert_eq!(actual_stems, expected_stems);
+}
+
+async fn assert_repo_entity_hit_paths(
+    service: &SearchPlaneService,
+    search_term: &str,
+    language_filters: &HashSet<String>,
+    kind_filters: &HashSet<String>,
+    expected_paths: &[&str],
+) {
+    let hits = service
+        .search_repo_entities("alpha/repo", search_term, language_filters, kind_filters, 5)
+        .await
+        .unwrap_or_else(|error| panic!("query {search_term}: {error}"));
+    let actual_paths = hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>();
+    assert_eq!(actual_paths, expected_paths);
 }
 
 fn sample_analysis(
@@ -198,13 +285,8 @@ fn plan_repo_entity_build_reuses_table_for_revision_only_refresh() {
 
 #[tokio::test]
 async fn repo_entity_incremental_refresh_reuses_unchanged_rows() {
-    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
-    let service = SearchPlaneService::with_paths(
-        PathBuf::from("/tmp/project"),
-        temp_dir.path().join("search_plane"),
-        SearchManifestKeyspace::new("xiuxian:test:repo-entity-build"),
-        SearchMaintenancePolicy::default(),
-    );
+    let temp_dir = temp_dir_or_panic();
+    let service = repo_entity_service(&temp_dir);
     let first_analysis = sample_analysis("alpha/repo", "reexport", "Shows reexport");
     let first_documents = sample_documents("reexport", 10);
     publish_repo_entities(
@@ -217,30 +299,21 @@ async fn repo_entity_incremental_refresh_reuses_unchanged_rows() {
     .await
     .unwrap_or_else(|error| panic!("first publish: {error}"));
 
-    let first_record = service
-        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
-        .await
-        .unwrap_or_else(|| panic!("first repo entity record"));
-    let first_table_name = first_record
-        .publication
-        .as_ref()
-        .unwrap_or_else(|| panic!("first publication"))
+    let first_record = repo_entity_record_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
+            .await,
+        "first repo entity record",
+    );
+    let first_table_name = repo_entity_publication_or_panic(&first_record, "first publication")
         .table_name
         .clone();
-    assert!(
-        !service
-            .corpus_root(SearchCorpusKind::RepoEntity)
-            .join(format!("{first_table_name}.lance"))
-            .exists(),
-        "repo entity publication should no longer create a Lance table"
+    assert_no_repo_entity_lance_table(
+        &service,
+        first_table_name.as_str(),
+        "repo entity publication should no longer create a Lance table",
     );
-    assert!(
-        first_record
-            .maintenance
-            .as_ref()
-            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
-            .is_some()
-    );
+    assert_repo_entity_prewarmed(&first_record);
 
     let second_analysis = sample_analysis("alpha/repo", "solve", "Shows reexport");
     let second_documents = sample_documents("solve", 20);
@@ -254,63 +327,42 @@ async fn repo_entity_incremental_refresh_reuses_unchanged_rows() {
     .await
     .unwrap_or_else(|error| panic!("second publish: {error}"));
 
-    let second_record = service
-        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
-        .await
-        .unwrap_or_else(|| panic!("second repo entity record"));
-    let second_publication = second_record
-        .publication
-        .as_ref()
-        .unwrap_or_else(|| panic!("second publication"));
+    let second_record = repo_entity_record_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
+            .await,
+        "second repo entity record",
+    );
+    let second_publication = repo_entity_publication_or_panic(&second_record, "second publication");
     assert_ne!(second_publication.table_name, first_table_name);
-    assert!(
-        !service
-            .corpus_root(SearchCorpusKind::RepoEntity)
-            .join(format!("{}.lance", second_publication.table_name))
-            .exists(),
-        "repo entity incremental publication should stay parquet-only"
+    assert_no_repo_entity_lance_table(
+        &service,
+        second_publication.table_name.as_str(),
+        "repo entity incremental publication should stay parquet-only",
     );
     assert_eq!(second_publication.source_revision.as_deref(), Some("rev-2"));
-    assert!(
-        second_record
-            .maintenance
-            .as_ref()
-            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
-            .is_some()
-    );
+    assert_repo_entity_prewarmed(&second_record);
 
     let kind_filters = HashSet::from_iter([String::from("function")]);
-    let solve_hits = service
-        .search_repo_entities("alpha/repo", "solve", &Default::default(), &kind_filters, 5)
-        .await
-        .unwrap_or_else(|error| panic!("query solve: {error}"));
-    assert_eq!(solve_hits.len(), 1);
-    assert_eq!(solve_hits[0].stem, "solve");
-
-    let reexport_hits = service
-        .search_repo_entities(
-            "alpha/repo",
-            "reexport",
-            &Default::default(),
-            &kind_filters,
-            5,
-        )
-        .await
-        .unwrap_or_else(|error| panic!("query reexport: {error}"));
-    assert!(reexport_hits.is_empty());
-
-    let example_hits = service
-        .search_repo_entities(
-            "alpha/repo",
-            "example",
-            &Default::default(),
-            &Default::default(),
-            5,
-        )
-        .await
-        .unwrap_or_else(|error| panic!("query example: {error}"));
-    assert_eq!(example_hits.len(), 1);
-    assert_eq!(example_hits[0].path, "examples/reexport.jl");
+    let language_filters = HashSet::default();
+    let empty_kind_filters = HashSet::default();
+    assert_repo_entity_hit_stems(
+        &service,
+        "solve",
+        &language_filters,
+        &kind_filters,
+        &["solve"],
+    )
+    .await;
+    assert_repo_entity_hit_stems(&service, "reexport", &language_filters, &kind_filters, &[]).await;
+    assert_repo_entity_hit_paths(
+        &service,
+        "example",
+        &language_filters,
+        &empty_kind_filters,
+        &["examples/reexport.jl"],
+    )
+    .await;
 
     let fingerprints = service
         .repo_corpus_file_fingerprints(SearchCorpusKind::RepoEntity, "alpha/repo")

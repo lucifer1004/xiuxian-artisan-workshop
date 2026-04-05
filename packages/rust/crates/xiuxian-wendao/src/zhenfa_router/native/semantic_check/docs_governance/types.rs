@@ -41,6 +41,9 @@ pub const MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE: &str =
 /// Issue type for missing package docs tree.
 pub const MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE: &str = "MISSING_PACKAGE_DOCS_TREE";
 
+/// Issue type for hidden workspace-path links inside canonical docs.
+pub const CANONICAL_DOC_HIDDEN_PATH_LINK_ISSUE_TYPE: &str = "CANONICAL_DOC_HIDDEN_PATH_LINK";
+
 /// A slice of a line in a document.
 #[derive(Debug, Clone, Copy)]
 pub struct LineSlice<'a> {

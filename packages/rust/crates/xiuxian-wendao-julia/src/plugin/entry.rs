@@ -38,6 +38,13 @@ pub fn register_into(
     registry.register(JuliaRepoIntelligencePlugin)
 }
 
+inventory::submit! {
+    xiuxian_wendao_core::repo_intelligence::BuiltinPluginRegistrar::new(
+        JULIA_PLUGIN_ID,
+        register_into,
+    )
+}
+
 impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
     fn id(&self) -> &'static str {
         JULIA_PLUGIN_ID

@@ -113,6 +113,7 @@ end
     Ok(repo_dir)
 }
 
+#[cfg(feature = "modelica")]
 pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResultPath {
     let repo_dir = base.join(package_name.to_ascii_lowercase());
     fs::create_dir_all(repo_dir.join("Controllers").join("Examples"))?;

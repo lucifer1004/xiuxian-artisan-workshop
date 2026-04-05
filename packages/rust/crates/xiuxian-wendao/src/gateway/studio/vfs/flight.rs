@@ -170,8 +170,9 @@ mod tests {
 
     #[tokio::test]
     async fn build_vfs_resolve_response_rejects_blank_path() {
-        let error = build_vfs_resolve_response(&StudioState::new(), "   ")
-            .expect_err("blank path should fail");
+        let Err(error) = build_vfs_resolve_response(&StudioState::new(), "   ") else {
+            panic!("blank path should fail");
+        };
         assert_eq!(error.error.code, "MISSING_PATH");
     }
 

@@ -102,14 +102,17 @@ When writing complex features or refactors, use an ExecPlan (`.agent/PLANS.md`).
 
 Tasks under an active strategic blueprint MUST strictly adhere to its architectural mandates.
 
-- **Active Reference**: `[[.data/blueprints/project_anchor_semantic_addressing.md]]` (Project AnchoR: Wendao Semantic Addressing Kernel).
+- **Relationship**: the blueprint sets durable architecture rules; the ExecPlan is the task-scoped execution record that cites that blueprint and proves slice-level alignment.
+- **Active Reference**: the task-scoped Project AnchoR semantic-addressing blueprint recorded in the active ExecPlan or other tracking record, not by a direct hidden-path link in canonical docs.
+- **Lifecycle**: active blueprints and ExecPlans stay under `$PRJ_CACHE_HOME/agent/{blueprints,execplans}/`; once a plan is DONE it moves to `archives/`, and a blueprint moves to `archives/` only when its full governed workstream is complete.
 
 ### Holistic Evolution Workflow (Triple-Sync Protocol)
 
 1. **Blueprint Check**: Check if task falls under a strategic blueprint.
 2. **GTD Synchronization**: Update today's GTD (`docs/GTD/DAILY_YYYY_MM_DD.md`).
-3. **ExecPlan Creation**: Create a formal plan (`.cache/codex/execplans/<slug>.md`) referencing the blueprint.
+3. **ExecPlan Creation**: Create a formal plan (`$PRJ_CACHE_HOME/agent/execplans/<slug>.md`) referencing the blueprint.
 4. **Implementation**: Execute per the plan.
+   Completed plans move to `$PRJ_CACHE_HOME/agent/execplans/archives/`; completed blueprints move to `$PRJ_CACHE_HOME/agent/blueprints/archives/` only after the full governed workstream closes.
 
 ## Project Structure & Sovereignty
 

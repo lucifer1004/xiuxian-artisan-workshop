@@ -1,0 +1,291 @@
+# Search Queries Architecture
+
+:PROPERTIES:
+:ID: feat-search-queries-architecture
+:PARENT: [[index]]
+:TAGS: feature, search, flight, datafusion, graphql, sql
+:STATUS: ACTIVE
+:VERSION: 1.0
+:END:
+
+## Overview
+
+The Studio search gateway must distinguish between two different concerns:
+
+1. native Wendao business protocols
+2. a shared query system
+
+Native Flight routes remain the primary business protocol surface. They expose
+Wendao-specific capabilities such as semantic search, graph navigation, VFS
+resolution, and analysis routes. These routes are not just query translation.
+
+The shared `queries/` system, by contrast, exists to translate a request
+language into a DataFusion plan over the Wendao search plane. SQL is the first
+fully landed query adapter. FlightSQL, GraphQL, REST-style query APIs, and a
+CLI `query` subcommand belong to the same architectural family even when they
+are introduced later.
+
+## Target Layering
+
+The intended layering is:
+
+- native Flight business routes: Wendao capability surfaces
+- shared queries system: one semantic query boundary inside `xiuxian-wendao`
+- query adapters: SQL, FlightSQL, GraphQL, REST, CLI
+- DataFusion planning and execution: one execution core inside
+  `xiuxian-wendao`
+- Arrow result encoding: returned through Flight or another adapter surface
+
+This means Flight is not a replacement for DataFusion. Flight is a transport
+or business-protocol surface. DataFusion remains the query planning and
+execution engine for the shared queries system.
+
+## Native Flight
+
+Native Flight should continue to own Wendao-specific capabilities that are not
+well modeled as plain relational queries, including:
+
+- semantic search routes
+- definition and reference resolution
+- graph-neighbor and topology routes
+- VFS content and navigation
+- analysis routes
+
+These routes may internally depend on search-plane corpora, but they are still
+business capabilities, not just query-language translation.
+
+## Shared Queries System
+
+The shared `queries/` system is the family boundary that should compile every
+query language down to the same DataFusion execution core:
+
+- SQL
+- FlightSQL
+- GraphQL
+- REST-style query APIs
+- CLI `query`
+
+The contract for the shared system is:
+
+1. validate the request language payload
+2. open one request-scoped query core over the visible Wendao search-plane data
+3. translate request shape into a DataFusion-readable query or plan
+4. execute against that request-scoped query core
+5. return Arrow-native batches plus adapter-specific metadata or rendering
+
+## First Physical Slice
+
+The first physical modularization slice is to stop treating SQL as a business
+handler under `handlers/sql/` and instead make it explicit as a shared query
+adapter under `queries/sql/`.
+
+That first slice is intentionally bounded:
+
+- it does not add FlightSQL execution yet
+- it does not add GraphQL execution yet
+- it does not add the CLI `query` command yet
+- it does not change native Flight route behavior
+- it only makes the architecture explicit in code layout
+
+That first slice is now complete. The next bounded slice is also landed:
+`wendao query sql --query ...` now reuses the same `queries/sql/` execution
+seam instead of creating a second planner path under `src/bin/wendao/`.
+
+## Current Shared SQL Boundary
+
+`queries/sql/` now has two responsibilities:
+
+1. adapter-specific request decoding or response metadata for SQL-over-Flight
+2. a transport-neutral request-scoped SQL execution path that other adapters
+   can reuse
+
+The shared execution rule is now enforced in code:
+
+- Flight provider code may wrap SQL execution results
+- CLI `query` code may render SQL execution results
+- neither adapter may own a private copy of the request-scoped DataFusion
+  assembly or execution flow
+
+## Planned Namespace Shape
+
+The intended long-term search tree is:
+
+- `src/search/mod.rs`: canonical shared-search namespace
+- `search/handlers/flight/`: native Flight business capabilities
+- `search/queries/mod.rs`: shared query system seam
+- `search/queries/sql/`: SQL adapter
+- `search/queries/flightsql/`: FlightSQL adapter
+- `search/queries/graphql/`: GraphQL adapter
+- `search/queries/rest/`: REST-style query adapter when needed
+- `src/bin/wendao/.../query.rs`: CLI adapter into the same query system
+
+The currently landed shared-query adapters are:
+
+- `search/queries/sql/`: request-scoped SQL execution plus Flight wrapping
+- `search/queries/flightsql/`: FlightSQL statement-query plus `sql_info`
+  adapter over the same request-scoped SQL surface
+- `search/queries/graphql/`: GraphQL table-query adapter over the same
+  request-scoped SQL surface
+- `search/queries/rest/`: REST-style request/response adapter over the same
+  shared query service
+- `src/bin/wendao/execute/query/`: CLI adapters over the same shared query
+  system
+
+The current ownership rule is explicit:
+
+- `src/search/queries/` is the canonical implementation tree
+- adapter-local tests should live with the canonical adapter under
+  `src/search/queries/*/tests/` unless a gateway-facing namespace is itself
+  the behavior under test
+- adapter-local SQL, GraphQL, and FlightSQL tests now follow that rule under
+  `src/search/queries/{sql,graphql,flightsql}/tests/`
+- the old `gateway/studio/search/queries/` tree is retired entirely; native
+  Flight and CLI callers import the canonical adapters directly
+
+The first landed FlightSQL cut is intentionally narrow:
+
+- one dedicated FlightSQL server builder and binary
+- `CommandStatementQuery` routed into the shared request-scoped SQL surface
+- minimal `CommandGetSqlInfo` coverage
+- no prepared statements, ingest/update, or broad JDBC/XDBC metadata yet
+- no merger with the native Wendao business Flight router
+
+The next bounded FlightSQL discovery slice should add:
+
+- `CommandGetCatalogs`
+- `CommandGetDbSchemas`
+- `CommandGetTables`
+- one stable logical catalog over the shared request-scoped SQL surface
+- schema names derived from registered SQL scope instead of a second planner
+  layer or sidecar registry
+
+The first landed GraphQL cut is intentionally narrow:
+
+- one table-query frontend over the request-scoped SQL surface
+- ROAPI-style query operators such as `filter`, `sort`, `limit`, and `page`
+- no full HTTP GraphQL server yet
+- no custom GraphQL business root fields
+- no attempt to flatten all Wendao business semantics into one GraphQL release
+
+Today the same adapter is reachable through:
+
+- native shared-query internals under `search/queries/graphql/`
+- `wendao query graphql --document ...` on the CLI
+
+Within `search/queries/`, adapter-neutral execution now lives above the
+protocol-specific wrapper modules so CLI, FlightSQL, GraphQL, and REST
+adapters can all reuse the same request-scoped query surface.
+
+That reuse is now physical in code too: `search/queries/core/` assembles the
+shared request-scoped query core once, and SQL, GraphQL, and FlightSQL consume
+that seam instead of calling the low-level surface-registration function
+directly.
+
+The next tightening above that core is landed too: canonical adapters and CLI
+entrypoints now share one `SearchQueryService` seam over the landed query core
+instead of each holding raw `SearchPlaneService` ownership independently.
+
+The naming-convergence cleanup is now landed too. Query-owned names under
+`src/search/queries/` now use neutral shared-query naming instead of reading
+like legacy Studio gateway wrappers. That cleanup does not apply to
+explicitly Studio-owned gateway transport/provider names.
+
+The first landed REST cut is intentionally narrow:
+
+- one thin request/response adapter under `search/queries/rest/`
+- request variants limited to SQL and GraphQL delegation
+- one CLI proof through `wendao query rest --payload ...`
+- no native HTTP route rollout yet
+- no REST-owned planner or request-scoped surface assembly
+
+Snapshot-level regression coverage is now mandatory for every canonical
+adapter under `src/search/queries/*`. SQL, GraphQL, FlightSQL, and REST all
+keep adapter-local snapshot suites under their canonical `tests/` folders, and
+the source-tree enforcement test under `search/queries/tests/` keeps that
+contract from drifting back into a convention.
+
+These baselines now live under a canonical `tests/snapshots/search/queries/`
+tree rather than the legacy `gateway/studio` snapshot namespace, because
+gateway and CLI consume one canonical query system under `src/search/queries/`.
+
+The next ownership tightening for tests is landed too: repeated shared-query
+fixture support now lives under `search/queries/tests/`, while
+transport-specific decode helpers stay inside the adapter-local test folders.
+
+The next bounded gateway-downpressure slice is now landed too:
+repo-content business-search execution now lives under
+`src/search/repo_search/`, and both native Flight repo-search and code-search
+consume that shared seam. The Flight provider remains a transport adapter, but
+it is no longer the canonical execution owner for repo-content business search.
+
+The next bounded slice in the same lane is now landed too: repo-entity
+execution and relation-to-`SearchHit` shaping now live under
+`src/search/repo_search/`. Code-search delegates to that shared seam
+directly, while the knowledge-intent path reuses the same execution owner
+through the thin gateway wrapper instead of keeping a gateway-only repo-entity
+execution core alive.
+
+The next bounded slice in the same lane is landed too: shared repo-search
+target partitioning and parallelism selection now live under
+`src/search/repo_search/dispatch.rs`, so gateway `code_search/query.rs` no
+longer owns dispatch planning for the same repo-search workstream.
+
+The next bounded slice in the same lane is now landed too: buffered
+repo-search queue-draining, spawn policy, and repo-level query execution now
+live under `src/search/repo_search/`. Knowledge-intent merge and code-search
+callers consume the same shared buffered seam, and the old
+gateway-local `code_search/search/{buffered,task}.rs` owners are retired.
+
+The next bounded slice in the same lane is now landed too: shared
+repo-search publication-state lookup, dispatch telemetry, and
+pending/skipped/partial state assembly now live under
+`src/search/repo_search/orchestration.rs`. Knowledge-intent merge and
+code-search response callers now adapt that same shared owner instead of
+recomputing dispatch state locally.
+
+The remaining gateway-local boundary in this lane is now explicit:
+Studio-config repo resolution, cache policy, and final response DTO shaping
+still remain in the Studio gateway layer by design. Any later move past this
+point would be a DTO-boundary review, not another pure execution downpressure
+slice.
+
+Within `search/queries/graphql/`, document parsing should stay adapter-local,
+while execution should delegate into the existing shared SQL/DataFusion
+surface:
+
+- table and view lookup through request-scoped SQL registration
+- DataFusion dataframe operators compiled from the GraphQL query shape
+- no direct graph-native business traversal unless the graph data is first
+  materialized as SQL-visible tables or views
+
+Future query adapters should follow the same feature-folder rule:
+
+- one folder per adapter
+- one interface seam in `mod.rs`
+- request parsing, translation, metadata, and tests split by responsibility
+- shared query semantics should stay above adapter-specific request parsing
+
+## Contributor Rules
+
+- Do not place new query-language translation logic inside business handlers.
+- Do not widen the native Flight gateway with query-adapter planning logic.
+- Keep shared query semantics in `xiuxian-wendao`, because DataFusion query
+  semantics belong there rather than in `runtime`.
+- Keep request-scoped surface assembly behind one shared query-core seam rather
+  than letting SQL, GraphQL, and FlightSQL each call the low-level assembly
+  helper directly.
+- Keep the canonical adapter implementation under `src/search/queries/`.
+- Do not reintroduce a `gateway/studio/search/queries/` shadow implementation
+  tree.
+- Keep GraphQL and FlightSQL adapter tests in the canonical
+  `src/search/queries/*/tests/` tree.
+- Keep SQL adapter tests under `src/search/queries/sql/tests/`; do not
+  reintroduce a gateway-owned SQL test tree.
+- Keep snapshot-level regression coverage mandatory for canonical adapters
+  under `src/search/queries/*`.
+- Make CLI, backend, and future frontend adapters consume the same shared
+  query system rather than each owning their own planner path.
+- Do not make the CLI depend on Flight-specific provider traits when a shared
+  query execution seam is the correct owner.
+- Keep execution request-scoped so visible corpora and catalogs reflect the
+  current request, not a shared global SQL session.

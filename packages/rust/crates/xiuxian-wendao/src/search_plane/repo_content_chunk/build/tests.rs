@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -12,7 +12,8 @@ use crate::search_plane::repo_content_chunk::build::types::{
 };
 use crate::search_plane::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
-    SearchPublicationStorageFormat, SearchRepoPublicationInput, SearchRepoPublicationRecord,
+    SearchPublicationStorageFormat, SearchRepoCorpusRecord, SearchRepoPublicationInput,
+    SearchRepoPublicationRecord,
 };
 
 fn repo_document(
@@ -28,6 +29,73 @@ fn repo_document(
         size_bytes,
         modified_unix_ms,
     }
+}
+
+fn temp_dir_or_panic() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"))
+}
+
+fn repo_content_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
+    SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        SearchManifestKeyspace::new("xiuxian:test:repo-content-build"),
+        SearchMaintenancePolicy::default(),
+    )
+}
+
+fn repo_content_record_or_panic(
+    record: Option<SearchRepoCorpusRecord>,
+    context: &str,
+) -> SearchRepoCorpusRecord {
+    let Some(record) = record else {
+        panic!("{context}");
+    };
+    record
+}
+
+fn repo_content_publication_or_panic<'a>(
+    record: &'a SearchRepoCorpusRecord,
+    context: &str,
+) -> &'a SearchRepoPublicationRecord {
+    let Some(publication) = record.publication.as_ref() else {
+        panic!("{context}");
+    };
+    publication
+}
+
+fn assert_repo_content_prewarmed(record: &SearchRepoCorpusRecord) {
+    assert!(
+        record
+            .maintenance
+            .as_ref()
+            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
+            .is_some()
+    );
+}
+
+fn assert_no_lance_table(service: &SearchPlaneService, table_name: &str, context: &str) {
+    assert!(
+        !service
+            .corpus_root(SearchCorpusKind::RepoContentChunk)
+            .join(format!("{table_name}.lance"))
+            .exists(),
+        "{context}"
+    );
+}
+
+async fn assert_repo_content_hit_paths(
+    service: &SearchPlaneService,
+    search_term: &str,
+    language_filters: &HashSet<String>,
+    expected_paths: &[&str],
+) {
+    let hits = service
+        .search_repo_content_chunks("alpha/repo", search_term, language_filters, 5)
+        .await
+        .unwrap_or_else(|error| panic!("query {search_term}: {error}"));
+    let actual_paths = hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>();
+    assert_eq!(actual_paths, expected_paths);
 }
 
 #[test]
@@ -155,13 +223,8 @@ fn plan_repo_content_chunk_build_reuses_table_for_revision_only_refresh() {
 
 #[tokio::test]
 async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
-    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
-    let service = SearchPlaneService::with_paths(
-        PathBuf::from("/tmp/project"),
-        temp_dir.path().join("search_plane"),
-        SearchManifestKeyspace::new("xiuxian:test:repo-content-build"),
-        SearchMaintenancePolicy::default(),
-    );
+    let temp_dir = temp_dir_or_panic();
+    let service = repo_content_service(&temp_dir);
     let first_documents = vec![
         repo_document("src/lib.rs", "fn alpha() {}\n", 14, 10),
         repo_document("src/util.rs", "fn beta() {}\n", 13, 10),
@@ -170,30 +233,21 @@ async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
         .await
         .unwrap_or_else(|error| panic!("first publish: {error}"));
 
-    let first_record = service
-        .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, "alpha/repo")
-        .await
-        .unwrap_or_else(|| panic!("first repo content record"));
-    let first_table_name = first_record
-        .publication
-        .as_ref()
-        .unwrap_or_else(|| panic!("first publication"))
+    let first_record = repo_content_record_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, "alpha/repo")
+            .await,
+        "first repo content record",
+    );
+    let first_table_name = repo_content_publication_or_panic(&first_record, "first publication")
         .table_name
         .clone();
-    assert!(
-        !service
-            .corpus_root(SearchCorpusKind::RepoContentChunk)
-            .join(format!("{first_table_name}.lance"))
-            .exists(),
-        "repo content publication should no longer create a Lance table"
+    assert_no_lance_table(
+        &service,
+        first_table_name.as_str(),
+        "repo content publication should no longer create a Lance table",
     );
-    assert!(
-        first_record
-            .maintenance
-            .as_ref()
-            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
-            .is_some()
-    );
+    assert_repo_content_prewarmed(&first_record);
 
     let second_documents = vec![
         repo_document("src/lib.rs", "fn gamma() {}\n", 14, 20),
@@ -203,59 +257,36 @@ async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
         .await
         .unwrap_or_else(|error| panic!("second publish: {error}"));
 
-    let second_record = service
-        .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, "alpha/repo")
-        .await
-        .unwrap_or_else(|| panic!("second repo content record"));
-    let second_publication = second_record
-        .publication
-        .as_ref()
-        .unwrap_or_else(|| panic!("second publication"));
+    let second_record = repo_content_record_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, "alpha/repo")
+            .await,
+        "second repo content record",
+    );
+    let second_publication =
+        repo_content_publication_or_panic(&second_record, "second publication");
     assert_ne!(second_publication.table_name, first_table_name);
-    assert!(
-        !service
-            .corpus_root(SearchCorpusKind::RepoContentChunk)
-            .join(format!("{}.lance", second_publication.table_name))
-            .exists(),
-        "repo content incremental publication should stay parquet-only"
+    assert_no_lance_table(
+        &service,
+        second_publication.table_name.as_str(),
+        "repo content incremental publication should stay parquet-only",
     );
     assert_eq!(second_publication.source_revision.as_deref(), Some("rev-2"));
     assert_eq!(
         second_publication.storage_format,
         SearchPublicationStorageFormat::Parquet
     );
-    assert!(
-        second_record
-            .maintenance
-            .as_ref()
-            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
-            .is_some()
-    );
+    assert_repo_content_prewarmed(&second_record);
     let parquet_path = service.repo_publication_parquet_path(
         SearchCorpusKind::RepoContentChunk,
         second_publication.table_name.as_str(),
     );
     assert!(parquet_path.exists(), "missing repo content parquet export");
 
-    let beta_hits = service
-        .search_repo_content_chunks("alpha/repo", "beta", &Default::default(), 5)
-        .await
-        .unwrap_or_else(|error| panic!("query beta: {error}"));
-    assert_eq!(beta_hits.len(), 1);
-    assert_eq!(beta_hits[0].path, "src/util.rs");
-
-    let gamma_hits = service
-        .search_repo_content_chunks("alpha/repo", "gamma", &Default::default(), 5)
-        .await
-        .unwrap_or_else(|error| panic!("query gamma: {error}"));
-    assert_eq!(gamma_hits.len(), 1);
-    assert_eq!(gamma_hits[0].path, "src/lib.rs");
-
-    let alpha_hits = service
-        .search_repo_content_chunks("alpha/repo", "alpha", &Default::default(), 5)
-        .await
-        .unwrap_or_else(|error| panic!("query alpha: {error}"));
-    assert!(alpha_hits.is_empty());
+    let language_filters = HashSet::default();
+    assert_repo_content_hit_paths(&service, "beta", &language_filters, &["src/util.rs"]).await;
+    assert_repo_content_hit_paths(&service, "gamma", &language_filters, &["src/lib.rs"]).await;
+    assert_repo_content_hit_paths(&service, "alpha", &language_filters, &[]).await;
 
     let fingerprints = service
         .repo_corpus_file_fingerprints(SearchCorpusKind::RepoContentChunk, "alpha/repo")

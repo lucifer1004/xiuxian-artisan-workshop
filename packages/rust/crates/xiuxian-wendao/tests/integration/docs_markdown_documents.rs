@@ -1,4 +1,5 @@
 //! Integration tests for deterministic docs-facing projected markdown documents.
+#![cfg(feature = "modelica")]
 
 use std::fs;
 

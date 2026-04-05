@@ -364,15 +364,17 @@ pub(crate) fn describe_search_index_status_payload(payload: &Value) -> String {
     let query_summary = payload
         .get("queryTelemetrySummary")
         .filter(|value| !value.is_null())
-        .map(|summary| {
-            format!(
-                "corpora={}, scanned={}, scopes={}",
-                summary["corpusCount"].as_u64().unwrap_or_default(),
-                summary["totalRowsScanned"].as_u64().unwrap_or_default(),
-                summary["scopes"].as_array().map_or(0, std::vec::Vec::len)
-            )
-        })
-        .unwrap_or_else(|| "none".to_string());
+        .map_or_else(
+            || "none".to_string(),
+            |summary| {
+                format!(
+                    "corpora={}, scanned={}, scopes={}",
+                    summary["corpusCount"].as_u64().unwrap_or_default(),
+                    summary["totalRowsScanned"].as_u64().unwrap_or_default(),
+                    summary["scopes"].as_array().map_or(0, std::vec::Vec::len)
+                )
+            },
+        );
     format!(
         "total={} idle={} indexing={} ready={} degraded={} failed={} compactionPending={} statusReason={} maintenance={} repoRead={} queryTelemetry={}",
         payload["total"].as_u64().unwrap_or_default(),
@@ -499,11 +501,11 @@ pub(crate) fn assert_gateway_perf_budget_with_diagnostics(
     let Err(payload) = panic_result else {
         return;
     };
-    let message = panic_message(payload);
+    let message = panic_message(payload.as_ref());
     panic!("{message}\ndiagnostics: {diagnostics}");
 }
 
-fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(msg) = payload.downcast_ref::<String>() {
         return msg.clone();
     }
@@ -817,13 +819,13 @@ fn assert_gateway_perf_budget_with_diagnostics_appends_context() {
             &report,
             &budget,
             "maintenance=none; scopes=[gateway-sync(corpora=1, scanned=10, matched=3, results=2)]",
-        )
+        );
     }));
     let payload = match panic_result {
         Ok(()) => panic!("expected budget assertion to fail"),
         Err(payload) => payload,
     };
-    let message = panic_message(payload);
+    let message = panic_message(payload.as_ref());
     assert!(message.contains("performance budget gate failed"));
     assert!(message.contains("diagnostics: maintenance=none; scopes=[gateway-sync"));
 }

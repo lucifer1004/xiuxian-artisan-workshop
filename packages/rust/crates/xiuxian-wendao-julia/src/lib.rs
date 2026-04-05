@@ -2,6 +2,8 @@
 
 /// Legacy compatibility surfaces exported by the standalone Julia plugin crate.
 pub mod compatibility;
+/// Bounded integration-test helpers for Julia-owned official example services.
+pub mod integration_support;
 mod plugin;
 
 #[cfg(test)]
@@ -31,7 +33,8 @@ pub use plugin::{
     GraphStructuralPairCandidateInputs, GraphStructuralQueryAnchor, GraphStructuralQueryContext,
     GraphStructuralRerankRequestRow, GraphStructuralRerankScoreRow, GraphStructuralRerankSignals,
     GraphStructuralRouteKind, JULIA_ARROW_RESPONSE_SCHEMA_VERSION,
-    JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION, JuliaRepoIntelligencePlugin,
+    JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION, JuliaArrowRequestRow, JuliaArrowScoreRow,
+    JuliaRepoIntelligencePlugin, PluginArrowRequestRow, PluginArrowScoreRow,
     build_graph_structural_filter_request_batch, build_graph_structural_filter_request_row,
     build_graph_structural_flight_transport_client,
     build_graph_structural_keyword_overlap_candidate_inputs,
@@ -53,12 +56,16 @@ pub use plugin::{
     build_graph_structural_pair_candidate_inputs, build_graph_structural_pair_candidate_subgraph,
     build_graph_structural_pair_filter_request_row, build_graph_structural_pair_rerank_request_row,
     build_graph_structural_rerank_request_batch, build_graph_structural_rerank_request_row,
-    build_julia_flight_transport_client, decode_graph_structural_filter_score_rows,
-    decode_graph_structural_rerank_score_rows, fetch_graph_structural_filter_rows_for_repository,
+    build_julia_arrow_request_batch, build_julia_flight_transport_client,
+    build_plugin_arrow_request_batch, decode_graph_structural_filter_score_rows,
+    decode_graph_structural_rerank_score_rows, decode_julia_arrow_score_rows,
+    decode_plugin_arrow_score_rows, fetch_graph_structural_filter_rows_for_repository,
     fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository,
     fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates,
-    fetch_graph_structural_rerank_rows_for_repository, graph_structural_pair_candidate_id,
-    graph_structural_route_kind, graph_structural_shared_tag_anchors, is_graph_structural_route,
+    fetch_graph_structural_rerank_rows_for_repository,
+    fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
+    graph_structural_pair_candidate_id, graph_structural_route_kind,
+    graph_structural_shared_tag_anchors, is_graph_structural_route,
     process_graph_structural_flight_batches,
     process_graph_structural_flight_batches_for_repository, process_julia_flight_batches,
     process_julia_flight_batches_for_repository, register_into,

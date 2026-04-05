@@ -10,7 +10,10 @@ metadata:
 
 ## 1. Overview
 
-ContextSnap provides $O(1)$ state snapshots and zero-cost rollback capabilities for quantum-fusion retrieval contexts. It implements **[[.data/research/papers/ContextSnap_2502.pdf|ContextSnap (2025)]]** principles, allowing Qianji Agents to checkpoint their knowledge state.
+ContextSnap provides $O(1)$ state snapshots and zero-cost rollback
+capabilities for quantum-fusion retrieval contexts. It implements
+**ContextSnap (2025)** principles, allowing Qianji Agents to checkpoint their
+knowledge state.
 
 ## 2. Core Mechanisms
 
