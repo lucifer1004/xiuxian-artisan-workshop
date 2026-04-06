@@ -320,6 +320,7 @@ async fn fetch_graph_structural_filter_rows_for_repository_rejects_missing_trans
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_demo_service()
  {
     let port = reserve_real_service_port();
@@ -401,6 +402,7 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_via_manifest_discovery_against_real_wendaosearch_multi_route_service()
  {
     let port = reserve_real_service_port();
@@ -482,6 +484,7 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_solver_demo_service()
  {
     let port = reserve_real_service_port();
@@ -562,6 +565,7 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
  {
     let port = reserve_real_service_port();
@@ -642,6 +646,7 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_filter_rows_for_repository_against_real_wendaosearch_solver_demo_constraint_filter_service()
  {
     let port = reserve_real_service_port();
@@ -711,6 +716,7 @@ async fn fetch_graph_structural_filter_rows_for_repository_against_real_wendaose
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_filter_rows_for_repository_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
  {
     let port = reserve_real_service_port();

@@ -1,28 +1,52 @@
 {
   "entity_refs": [
     {
-      "entity_type": "knowledge",
       "name": "rules",
-      "original": "[[rules#knowledge]]"
+      "original": "[[rules#Reference]]",
+      "target_address": "#Reference"
     },
     {
-      "entity_type": "qianji-flow",
       "name": "agenda_flow.toml",
-      "original": "[[agenda_flow.toml#qianji-flow]]"
+      "original": "[[agenda_flow.toml#^flow-block]]",
+      "target_address": "#^flow-block"
     }
   ],
   "inferred_relations": [
     {
-      "description": "Snapshot Persona links to rules",
+      "description": "Snapshot Persona links to rules#Reference",
+      "metadata_owner": null,
       "relation_type": null,
       "source": "Snapshot Persona",
-      "target": "rules"
+      "source_address": null,
+      "target": "rules",
+      "target_address": "#Reference"
     },
     {
-      "description": "Snapshot Persona links to agenda_flow.toml",
+      "description": "Snapshot Persona links to agenda_flow.toml#^flow-block",
+      "metadata_owner": null,
       "relation_type": null,
       "source": "Snapshot Persona",
-      "target": "agenda_flow.toml"
+      "source_address": null,
+      "target": "agenda_flow.toml",
+      "target_address": "#^flow-block"
+    },
+    {
+      "description": "Snapshot Persona at #planning RELATED_TO #policy-anchor",
+      "metadata_owner": "RELATED",
+      "relation_type": "RELATED_TO",
+      "source": "Snapshot Persona",
+      "source_address": "#planning",
+      "target": "Snapshot Persona",
+      "target_address": "#policy-anchor"
+    },
+    {
+      "description": "Snapshot Persona at #planning REFERENCES /Appendix",
+      "metadata_owner": "SEE_ALSO",
+      "relation_type": "REFERENCES",
+      "source": "Snapshot Persona",
+      "source_address": "#planning",
+      "target": "Snapshot Persona",
+      "target_address": "/Appendix"
     }
   ]
 }

@@ -15,7 +15,7 @@ pub fn enhance_note(input: &NoteInput) -> EnhancedNote {
         .iter()
         .map(|r| EntityRefData {
             name: r.name.clone(),
-            entity_type: r.entity_type.clone(),
+            target_address: r.target_address.clone(),
             original: r.original.clone(),
         })
         .collect();

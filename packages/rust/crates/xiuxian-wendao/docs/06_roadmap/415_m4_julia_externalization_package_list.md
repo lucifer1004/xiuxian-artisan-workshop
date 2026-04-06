@@ -419,6 +419,24 @@ Current implementation status:
     against the same plan-aware batch fixture before the live solver-demo
     downcall, so the outgoing Arrow batch is proven above one less implicit
     host-to-Julia topology handoff without changing the Julia contract
+42. that same host-through-language-seam live lane now also proves one
+    plan-aware worker-partition generic-topology `constraint_filter` batch
+    above the same raw connected-pair collection seam, and it now validates
+    the staged `constraint_kind` and `required_boundary_size` request columns
+    before reusing that batch against the manifest-discovered
+    `WendaoSearch.jl --mode solver_demo` filter route without changing the
+    Julia contract
+43. the paired Julia-plugin live lane now also proves one multi-candidate
+    generic-topology `constraint_filter` batch against that same manifest-
+    discovered `WendaoSearch.jl --mode solver_demo` multi-route endpoint, and
+    the real Julia service tests are now serialized with a shared file lock so
+    the default Rust graph-structural exchange suite remains stable without
+    changing the Julia contract
+44. the bounded Julia-plugin clippy frontier is now also closed in the active
+    live lane: capability-manifest response validation is split into row-scoped
+    helpers, generic-topology scored-pair normalization no longer uses a
+    precision-loss cast, and the topology-subgraph builder now satisfies the
+    `missing_errors_doc` gate without relaxing `-D warnings`
 
 ## Compatibility Plan
 

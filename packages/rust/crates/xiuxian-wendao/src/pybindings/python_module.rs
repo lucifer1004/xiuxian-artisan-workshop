@@ -45,51 +45,6 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
         py
     )?)?;
 
-    // LinkGraph entity references
-    m.add_class::<super::link_graph_refs_py::PyLinkGraphEntityRef>()?;
-    m.add_class::<super::link_graph_refs_py::PyLinkGraphRefStats>()?;
-    m.add_function(wrap_pyfunction!(
-        super::link_graph_refs_py::link_graph_extract_entity_refs,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::link_graph_refs_py::link_graph_get_ref_stats,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::link_graph_refs_py::link_graph_parse_entity_ref,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::link_graph_refs_py::link_graph_is_valid_ref,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::link_graph_refs_py::link_graph_count_refs,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::link_graph_refs_py::link_graph_find_referencing_notes,
-        py
-    )?)?;
-
-    // Enhancer
-    m.add_class::<super::enhancer_py::PyEnhancedNote>()?;
-    m.add_class::<super::enhancer_py::PyNoteFrontmatter>()?;
-    m.add_class::<super::enhancer_py::PyInferredRelation>()?;
-    m.add_function(wrap_pyfunction!(
-        super::enhancer_py::link_graph_enhance_note,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::enhancer_py::link_graph_enhance_notes_batch,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        super::enhancer_py::link_graph_parse_frontmatter,
-        py
-    )?)?;
-
     // Fusion recall boost (LinkGraph proximity)
     m.add_function(wrap_pyfunction!(
         super::fusion_py::apply_link_graph_proximity_boost_py,

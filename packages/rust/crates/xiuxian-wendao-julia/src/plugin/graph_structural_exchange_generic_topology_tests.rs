@@ -21,6 +21,17 @@ use super::{
     fetch_graph_structural_generic_topology_rerank_rows_for_repository_from_raw_connected_pair_collections,
 };
 
+fn assert_generic_topology_filter_row_accepted(
+    row: &crate::GraphStructuralFilterScoreRow,
+    candidate_id: &str,
+) {
+    assert_eq!(row.candidate_id, candidate_id);
+    assert!(row.accepted);
+    assert!(row.structural_score > 0.0);
+    assert_eq!(row.pin_assignment.len(), 1);
+    assert_eq!(row.rejection_reason, "");
+}
+
 #[tokio::test]
 async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_rejects_missing_transport()
  {
@@ -74,6 +85,7 @@ async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_reje
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_against_real_wendaosearch_solver_demo_service()
  {
     let port = reserve_real_service_port();
@@ -151,6 +163,7 @@ async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_agai
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
  {
     let port = reserve_real_service_port();
@@ -228,6 +241,7 @@ async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_via_
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_with_multiple_candidates_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
  {
     let port = reserve_real_service_port();
@@ -370,6 +384,7 @@ async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_reje
 }
 
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
  {
     let port = reserve_real_service_port();
@@ -448,11 +463,107 @@ async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_via_
     let row = rows.get(&candidate_id).unwrap_or_else(|| {
         panic!("missing candidate `{candidate_id}` in solver-demo generic filter response")
     });
-    assert_eq!(row.candidate_id, candidate_id);
-    assert!(row.accepted);
-    assert!(row.structural_score > 0.0);
+    assert_generic_topology_filter_row_accepted(row, &candidate_id);
     assert_eq!(row.pin_assignment, vec!["node-1".to_string()]);
-    assert_eq!(row.rejection_reason, "");
+
+    service.kill();
+}
+
+#[tokio::test]
+#[serial_test::serial(julia_live)]
+async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_with_multiple_candidates_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
+ {
+    let port = reserve_real_service_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let mut service = spawn_real_wendaosearch_solver_demo_multi_route_service(port);
+    let repository = RegisteredRepository {
+        id: "demo".to_string(),
+        path: None,
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Config {
+            id: "julia".to_string(),
+            options: serde_json::json!({
+                "capability_manifest_transport": {
+                    "base_url": base_url,
+                    "route": "/plugin/capabilities",
+                    "schema_version": "v0-draft"
+                }
+            }),
+        }],
+    };
+
+    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
+        .await
+        .unwrap_or_else(|error| {
+            panic!("wait for real WendaoSearch solver-demo multi-route Flight service: {error}")
+        });
+
+    let query = build_graph_structural_keyword_tag_query_context(
+        "query-live-generic-filter-batch",
+        0,
+        2,
+        vec!["alpha".to_string()],
+        Vec::new(),
+        vec!["depends_on".to_string()],
+    )
+    .expect("generic topology filter query");
+    let constraint =
+        GraphStructuralFilterConstraint::new("pin_assignment", 1).expect("filter constraint");
+    let candidates = [
+        build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_raw_tuples(
+            "candidate-chain-filter-live-a",
+            vec![("node-1", "node-2", 0.6), ("node-2", "node-3", 0.8)],
+            "depends_on",
+            0.6,
+            1.0,
+            0.0,
+        )
+        .expect("raw connected pair collection candidate"),
+        build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_raw_tuples(
+            "candidate-chain-filter-live-b",
+            vec![("node-4", "node-5", 0.55), ("node-5", "node-6", 0.75)],
+            "depends_on",
+            0.5,
+            1.0,
+            0.0,
+        )
+        .expect("raw connected pair collection candidate"),
+    ];
+
+    let request_batch =
+        build_graph_structural_generic_topology_filter_request_batch_from_raw_connected_pair_collections(
+            &query,
+            &constraint,
+            &candidates,
+        )
+        .expect("generic topology multi-candidate filter request batch");
+    assert_eq!(request_batch.num_rows(), 2);
+
+    let rows = fetch_graph_structural_generic_topology_filter_rows_for_repository_from_raw_connected_pair_collections(
+        &repository,
+        &query,
+        &constraint,
+        &candidates,
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!(
+            "manifest-discovered real WendaoSearch solver-demo multi-candidate generic-topology filter should succeed: {error}"
+        )
+    });
+
+    assert_eq!(rows.len(), 2);
+    for candidate_id in [
+        "candidate-chain-filter-live-a",
+        "candidate-chain-filter-live-b",
+    ] {
+        let row = rows.get(candidate_id).unwrap_or_else(|| {
+            panic!("missing candidate `{candidate_id}` in solver-demo generic filter response")
+        });
+        assert_generic_topology_filter_row_accepted(row, candidate_id);
+    }
 
     service.kill();
 }

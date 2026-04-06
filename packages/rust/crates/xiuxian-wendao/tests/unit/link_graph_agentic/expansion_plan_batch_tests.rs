@@ -33,6 +33,7 @@ use super::{TestResult, build_index_fixture, expansion_config};
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for_plan_aware_worker_partition_batches_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let fixture = build_index_fixture(&[
@@ -243,7 +244,8 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
 
 #[cfg(feature = "julia")]
 #[tokio::test]
-async fn test_host_uses_julia_graph_structural_generic_topology_filter_helper_for_plan_aware_worker_partition_batches_via_manifest_discovery_against_solver_demo_multi_route_service()
+#[serial_test::serial(julia_live)]
+async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for_plan_aware_worker_partition_constraint_filter_batches_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let fixture = build_index_fixture(&[
         (

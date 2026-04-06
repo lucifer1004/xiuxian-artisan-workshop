@@ -79,7 +79,11 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `analyzers/service/projection/planner/workset.rs` is now split into `analyzers/service/projection/planner/workset/` with dedicated orchestration, groups, balance, strategy, and math modules, while the public planner workset surface remains unchanged; the next bounded target is `search_plane/repo_entity/query/hydrate.rs`
 - `search_plane/repo_entity/query.rs` is now split into `search_plane/repo_entity/query/` with dedicated execution, hydrate, prepare, search, and types modules, while the public repo-entity query surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/tests/code_search.rs`
 - `search_plane/service/tests/status.rs` is now split into `search_plane/service/tests/status/` with dedicated repo-content, maintenance, and issue tests plus shared helpers, while the status test surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
-- `git/checkout/tests.rs` is now split into `git/checkout/tests/` with dedicated materialization, layout, lock, and retry modules, while the public checkout surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
+- the former `git/checkout/tests/` split is now retired entirely because
+  repo-substrate contract coverage moved into `xiuxian-git-repo`, while
+  `xiuxian-wendao/src/git/checkout/mod.rs` remains only as a thin
+  compatibility facade; the next bounded target is
+  `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - `zhenfa_router/native/semantic_check/checks.rs` is now split into `zhenfa_router/native/semantic_check/checks/` with dedicated contracts, identity, links, observations, and structure modules, while the public semantic-check surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - search-plane Valkey client resolution now uses the Wendao-local thin helper layer, so the first shared transport primitive is centralized without moving cache keyspace or manifest semantics out of the search-plane domain
 - the whole-search-plane DataFusion refactor plan is now tightened around a mandatory two-stage query rule: narrow filter/ranking columns are scanned first, and wide payload columns are hydrated only for bounded Top-K identities

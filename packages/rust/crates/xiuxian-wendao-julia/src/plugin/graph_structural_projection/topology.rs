@@ -237,12 +237,16 @@ pub fn build_graph_structural_generic_topology_candidate_inputs_from_scored_pair
         ));
     }
 
-    let pair_count = pair_candidates.len() as f64;
+    let pair_count = u32::try_from(pair_candidates.len()).map_err(|_error| {
+        graph_structural_projection_error(
+            "generic topology scored pair collection exceeds supported pair count",
+        )
+    })?;
     let semantic_score = pair_candidates
         .iter()
         .map(|pair| pair.semantic_score)
         .sum::<f64>()
-        / pair_count;
+        / f64::from(pair_count);
     let pair_candidates = pair_candidates
         .into_iter()
         .map(|pair| pair.pair_inputs)

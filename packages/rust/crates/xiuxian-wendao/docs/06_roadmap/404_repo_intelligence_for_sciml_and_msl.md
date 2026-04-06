@@ -137,6 +137,34 @@ The common core should absorb everything that is high-performance, repeated, and
 - shared query contracts
 - plugin registration and diagnostics
 
+Update 2026-04-05:
+
+- the repo substrate boundary is now being extracted into the dedicated crate
+  `xiuxian-git-repo`
+- `xiuxian-wendao` keeps compatibility wrappers for the existing repo
+  intelligence callers, but the implementation owner for managed layout,
+  materialization, lock handling, probe-state observation, and sync retry is
+  no longer intended to remain inside the Wendao domain crate
+- `xiuxian-git-repo` has now removed its runtime `git2` dependency and uses
+  `gix` for repository open/probe/revision/drift handling without
+  re-expanding the public API around backend-specific handles
+- `xiuxian-git-repo` now also persists managed mirror and checkout remote
+  alignment through `gix` local-config writes plus repository reload instead
+  of shelling out to `git remote add/set-url`
+- `xiuxian-git-repo` managed remote target probing now also stays inside the
+  backend substrate by using `gix` remote ref-map inspection with explicit
+  HEAD/branch/tag probe refspecs instead of `git ls-remote`
+- annotated tag probe results now align with peeled checkout revisions, so
+  fetch-policy reuse no longer treats tag-pinned repositories as stale when
+  the tag target is unchanged
+- `xiuxian-wendao` itself no longer depends on `git2`; the remaining
+  Wendao-owned repo fixtures now use bounded CLI git helpers, and the
+  repo-intelligence snapshots redact concrete revision hashes so the contract
+  stays backend-neutral
+- the remaining backend-hardening work, if we choose to keep pushing, is to
+  reduce the smaller native-`git` bridge now limited to clone/fetch and
+  detached-checkout parity
+
 Legacy `[[repo_intelligence.repos]]` configuration should not remain part of the active runtime contract. Older files may still carry that table during migration, but the runtime loader now ignores it and derives registrations only from project-scoped entries.
 
 ### Plugin Interface Inside `xiuxian-wendao`

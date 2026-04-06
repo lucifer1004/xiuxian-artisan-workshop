@@ -1,10 +1,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
+use std::process::Command;
 
 pub type TestResult = Result<(), Box<dyn std::error::Error>>;
 pub type TestResultPath = Result<PathBuf, Box<dyn std::error::Error>>;
+
+const TEST_GIT_AUTHOR_NAME: &str = "Xiuxian Test";
+const TEST_GIT_AUTHOR_EMAIL: &str = "test@example.com";
+const TEST_GIT_COMMIT_TIME: &str = "1700000000 +0000";
 
 pub fn create_sample_julia_repo(
     base: &Path,
@@ -192,58 +195,93 @@ pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResul
     Ok(repo_dir)
 }
 
-fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {
-    let repository = Repository::init(repo_dir)?;
-    repository.remote("origin", remote_url)?;
-    let commit = commit_all(&repository, "initial import")?;
-    ensure_branch_main(&repository, commit)?;
+pub fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {
+    let repo_dir_arg = repo_dir.display().to_string();
+    run_git(None, &["init", "--quiet", repo_dir_arg.as_str()])?;
+    run_git(Some(repo_dir), &["remote", "add", "origin", remote_url])?;
+    commit_all(repo_dir, "initial import")?;
+    ensure_branch_main(repo_dir)?;
     Ok(())
 }
 
-fn commit_all(repository: &Repository, message: &str) -> Result<git2::Oid, git2::Error> {
-    let mut index = repository.index()?;
-    index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
-    index.write()?;
+pub fn append_repo_file_and_commit(
+    repo_dir: &Path,
+    relative_path: &str,
+    contents: &str,
+    message: &str,
+) -> TestResult {
+    let target = repo_dir.join(relative_path);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(target, contents)?;
+    commit_all(repo_dir, message)?;
+    Ok(())
+}
 
-    let tree_id = index.write_tree()?;
-    let tree = repository.find_tree(tree_id)?;
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_000, 0),
+pub fn commit_all(repo_dir: &Path, message: &str) -> TestResult {
+    run_git(Some(repo_dir), &["add", "--all"])?;
+    run_git(Some(repo_dir), &["commit", "--quiet", "-m", message])?;
+    Ok(())
+}
+
+pub fn ensure_branch_main(repo_dir: &Path) -> TestResult {
+    run_git(Some(repo_dir), &["branch", "-M", "main"])?;
+    Ok(())
+}
+
+pub fn refresh_remote(repo_dir: &Path, remote_name: &str) -> TestResult {
+    run_git(
+        Some(repo_dir),
+        &[
+            "fetch",
+            remote_name,
+            "+refs/heads/*:refs/heads/*",
+            "+refs/tags/*:refs/tags/*",
+        ],
     )?;
-    let parent_commit = repository
-        .head()
-        .ok()
-        .and_then(|head| head.target())
-        .and_then(|oid| repository.find_commit(oid).ok());
-    let parent_refs = parent_commit.iter().collect::<Vec<_>>();
+    Ok(())
+}
 
-    repository.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        message,
-        &tree,
-        &parent_refs,
+pub fn git_remote_url(
+    repo_dir: &Path,
+    remote_name: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    run_git(
+        Some(repo_dir),
+        &["config", "--get", &format!("remote.{remote_name}.url")],
     )
 }
 
-fn ensure_branch_main(repository: &Repository, commit_id: git2::Oid) -> Result<(), git2::Error> {
-    let commit = repository.find_commit(commit_id)?;
-    match repository.find_branch("main", BranchType::Local) {
-        Ok(local_branch) => {
-            let mut reference = local_branch.into_reference();
-            reference.set_target(commit.id(), "move main to latest test commit")?;
-        }
-        Err(error) if error.code() == git2::ErrorCode::NotFound => {
-            repository.branch("main", &commit, true)?;
-        }
-        Err(error) => return Err(error),
+pub fn git_is_bare_repository(repo_dir: &Path) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(run_git(Some(repo_dir), &["rev-parse", "--is-bare-repository"])? == "true")
+}
+
+fn run_git(cwd: Option<&Path>, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
+    let mut command = Command::new("git");
+    if let Some(cwd) = cwd {
+        command.arg("-C").arg(cwd);
     }
-    repository.set_head("refs/heads/main")?;
-    let mut checkout = CheckoutBuilder::new();
-    checkout.force();
-    repository.checkout_head(Some(&mut checkout))?;
-    Ok(())
+    let output = command
+        .args(args)
+        .env("GIT_AUTHOR_NAME", TEST_GIT_AUTHOR_NAME)
+        .env("GIT_AUTHOR_EMAIL", TEST_GIT_AUTHOR_EMAIL)
+        .env("GIT_COMMITTER_NAME", TEST_GIT_AUTHOR_NAME)
+        .env("GIT_COMMITTER_EMAIL", TEST_GIT_AUTHOR_EMAIL)
+        .env("GIT_AUTHOR_DATE", TEST_GIT_COMMIT_TIME)
+        .env("GIT_COMMITTER_DATE", TEST_GIT_COMMIT_TIME)
+        .output()?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let detail = match (stderr.is_empty(), stdout.is_empty()) {
+        (false, true) => stderr,
+        (true, false) => stdout,
+        (false, false) => format!("{stderr}; stdout: {stdout}"),
+        (true, true) => "unknown git error".to_string(),
+    };
+    Err(format!("git {} failed: {detail}", args.join(" ")).into())
 }

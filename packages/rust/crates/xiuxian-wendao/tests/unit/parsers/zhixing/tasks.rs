@@ -8,7 +8,7 @@ fn parse_task_projection_extracts_task_metadata_comment() {
     let line = format!(
         "- [x] Ship parser lane <!-- id: parser-lane, priority: high, {ATTR_JOURNAL_CARRYOVER}: 2, {ATTR_TIMER_SCHEDULED}: 2026-04-06T09:00:00Z, {ATTR_TIMER_REMINDED}: yes -->"
     );
-    let parsed = parse_task_projection(&line, 7).expect("task should parse");
+    let parsed = parse_task_projection(&line, 7).unwrap_or_else(|| panic!("task should parse"));
 
     assert_eq!(parsed.title, "Ship parser lane");
     assert_eq!(parsed.line_no, 7);
@@ -23,7 +23,7 @@ fn parse_task_projection_extracts_task_metadata_comment() {
 #[test]
 fn parse_task_projection_falls_back_to_inline_carryover_marker() {
     let line = "- [ ] Follow up journal:carryover:3";
-    let parsed = parse_task_projection(line, 2).expect("task should parse");
+    let parsed = parse_task_projection(line, 2).unwrap_or_else(|| panic!("task should parse"));
 
     assert_eq!(parsed.title, "Follow up journal:carryover:3");
     assert_eq!(parsed.carryover, 3);

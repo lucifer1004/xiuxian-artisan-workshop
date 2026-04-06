@@ -4,7 +4,6 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
 use xiuxian_config_core::resolve_data_home;
 use xiuxian_wendao::analyzers::{
@@ -13,6 +12,7 @@ use xiuxian_wendao::analyzers::{
     repo_overview_from_config,
 };
 
+use crate::support::repo_fixture::{git_is_bare_repository, git_remote_url};
 #[cfg(feature = "modelica")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
@@ -85,6 +85,7 @@ fn julia_analyzer_builds_repo_overview_from_local_repo() -> TestResult {
         "overview": overview,
     });
     redact_repo_root(&mut payload);
+    redact_repo_revision(&mut payload);
     assert_repo_json_snapshot("repo_overview_analysis", payload);
     Ok(())
 }
@@ -149,6 +150,7 @@ plugins = ["modelica"]
         "example_search": example_search,
     });
     redact_repo_root(&mut payload);
+    redact_repo_revision(&mut payload);
     assert_repo_json_snapshot("repo_overview_modelica_analysis", payload);
     Ok(())
 }
@@ -171,6 +173,7 @@ fn julia_analyzer_falls_back_when_expected_root_file_is_missing() -> TestResult 
         "diagnostics": analysis.diagnostics,
     });
     redact_repo_root(&mut payload);
+    redact_repo_revision(&mut payload);
     assert_repo_json_snapshot("repo_overview_fallback", payload);
     Ok(())
 }
@@ -194,7 +197,8 @@ fn cli_repo_overview_returns_serialized_result() -> TestResult {
 
     assert!(output.status.success(), "{output:?}");
 
-    let payload: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let mut payload: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    redact_repo_revision(&mut payload);
     assert_repo_json_snapshot("repo_overview_cli_json", payload);
     Ok(())
 }
@@ -222,15 +226,10 @@ fn repo_analysis_clones_managed_checkout_from_url() -> TestResult {
         managed_root.display()
     );
     let canonical_mirror_root = fs::canonicalize(&mirror_root)?;
-    let mirror_repository = Repository::open_bare(&mirror_root)?;
-    let checkout_repository = Repository::open(&managed_root)?;
-    assert!(mirror_repository.is_bare());
+    assert!(git_is_bare_repository(&mirror_root)?);
     assert_eq!(
-        checkout_repository
-            .find_remote("origin")?
-            .url()
-            .map(ToString::to_string),
-        Some(canonical_mirror_root.display().to_string())
+        git_remote_url(&managed_root, "origin")?,
+        canonical_mirror_root.display().to_string()
     );
 
     let mut payload = json!({
@@ -244,6 +243,7 @@ fn repo_analysis_clones_managed_checkout_from_url() -> TestResult {
     });
     redact_repo_root(&mut payload);
     redact_repo_url(&mut payload);
+    redact_repo_revision(&mut payload);
     assert_repo_json_snapshot("repo_overview_managed_clone", payload);
     Ok(())
 }
@@ -364,6 +364,21 @@ fn redact_repo_url(value: &mut serde_json::Value) {
     }
 }
 
+fn redact_repo_revision(value: &mut serde_json::Value) {
+    for pointer in [
+        "/analysis/repository/revision",
+        "/overview/revision",
+        "/repository/revision",
+        "/revision",
+    ] {
+        if let Some(revision) = value.pointer_mut(pointer) {
+            if !revision.is_null() {
+                *revision = serde_json::Value::String("[revision]".to_string());
+            }
+        }
+    }
+}
+
 fn write_repo_url_config(
     base: &Path,
     repo_url: &Path,
@@ -407,39 +422,12 @@ fn append_repo_file_and_commit(
     contents: &str,
     message: &str,
 ) -> TestResult {
-    let target = repo_dir.join(relative_path);
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&target, contents)?;
-
-    let repository = Repository::open(repo_dir)?;
-    let mut index = repository.index()?;
-    index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-
-    let tree_id = index.write_tree()?;
-    let tree = repository.find_tree(tree_id)?;
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_000, 0),
-    )?;
-    let parent_commit = repository
-        .head()
-        .ok()
-        .and_then(|head| head.target())
-        .and_then(|oid| repository.find_commit(oid).ok());
-    let parent_refs = parent_commit.iter().collect::<Vec<_>>();
-    repository.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
+    crate::support::repo_fixture::append_repo_file_and_commit(
+        repo_dir,
+        relative_path,
+        contents,
         message,
-        &tree,
-        &parent_refs,
-    )?;
-    Ok(())
+    )
 }
 
 fn repo_cache_root(cwd: &Path) -> std::path::PathBuf {

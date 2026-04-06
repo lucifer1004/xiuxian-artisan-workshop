@@ -221,10 +221,11 @@ fn test_retrieval_runtime_resolves_julia_rerank_config() -> Result<(), Box<dyn s
         Some(linked_builtin_julia_analyzer_launcher_path())
     );
     assert_eq!(runtime.rerank_schema_version().as_deref(), Some("v1"));
-    assert_eq!(
-        runtime.rerank_score_weights(),
-        Some(RerankScoreWeights::new(0.2, 0.8).expect("valid weight fixture"))
-    );
+    let score_weights = match RerankScoreWeights::new(0.2, 0.8) {
+        Ok(weights) => weights,
+        Err(error) => panic!("valid weight fixture should construct: {error}"),
+    };
+    assert_eq!(runtime.rerank_score_weights(), Some(score_weights));
 
     Ok(())
 }

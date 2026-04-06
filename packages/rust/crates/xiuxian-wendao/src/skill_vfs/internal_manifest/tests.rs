@@ -180,3 +180,48 @@ name = "Beta Tool"
             .ends_with("alpha/references/qianji.toml")
     );
 }
+
+#[test]
+fn resolve_authority_collects_manifest_intents_from_mixed_markdown_references() {
+    let dir = ok_or_panic(
+        Builder::new()
+            .prefix("internal-manifest-wikilinks")
+            .tempdir_in("."),
+        "tempdir",
+    );
+    let root = dir.path();
+    let root_rel = Path::new(some_or_panic(root.file_name(), "tempdir name"));
+
+    let alpha_root = root.join("alpha");
+    write_file(
+        &alpha_root.join("SKILL.md"),
+        r"
+[Manifest](references/qianji.toml#flow)
+[[references/qianji.toml|Manifest]]
+[[references/missing/qianji.toml#draft|Ghost]]
+[[#local-heading]]
+",
+    );
+    write_file(
+        &alpha_root.join("references/qianji.toml"),
+        r#"
+manifest_id = "alpha-manifest"
+name = "Alpha Tool"
+"#,
+    );
+
+    let outcome = ok_or_panic(
+        resolve_internal_skill_authority(root_rel),
+        "authority outcome",
+    );
+
+    assert_eq!(
+        outcome.report.authorized_manifests,
+        vec!["wendao://skills-internal/alpha/references/qianji.toml"]
+    );
+    assert_eq!(
+        outcome.report.ghost_links,
+        vec!["wendao://skills-internal/alpha/references/missing/qianji.toml"]
+    );
+    assert!(outcome.report.unauthorized_manifests.is_empty());
+}

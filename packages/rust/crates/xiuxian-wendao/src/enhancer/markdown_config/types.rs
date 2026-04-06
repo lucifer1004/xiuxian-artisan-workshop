@@ -22,6 +22,6 @@ pub struct MarkdownConfigBlock {
 pub struct MarkdownConfigLinkTarget {
     /// Normalized target path or semantic URI.
     pub target: String,
-    /// Optional type-hint parsed from a wikilink suffix (for example `#persona`).
+    /// Optional explicit reference category from section metadata.
     pub reference_type: Option<String>,
 }

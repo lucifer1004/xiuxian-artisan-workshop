@@ -1,6 +1,21 @@
 use crate::zhenfa_router::native::semantic_check::docs_governance::tests::support::*;
 
 #[test]
+fn relation_line_wikilinks_use_canonical_parser_contract() {
+    let links = extract_wikilinks(
+        ":LINKS: [[01_core/101_demo_core_boundary|Boundary]], [[01_core/102_demo_contracts#Appendix]], ![[ignored/embed]]",
+    );
+
+    assert_eq!(
+        links,
+        vec![
+            "01_core/101_demo_core_boundary|Boundary".to_string(),
+            "01_core/102_demo_contracts#Appendix".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn detects_missing_index_relation_links_for_existing_body_links() {
     let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");

@@ -5,6 +5,8 @@ use std::sync::OnceLock;
 
 use sha1::{Digest, Sha1};
 
+use crate::parsers::markdown::extract_wikilinks as extract_markdown_wikilinks;
+
 use super::types::{FooterBlock, IdLine, LineSlice, LinksLine, TopPropertiesDrawer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,22 +256,10 @@ pub fn parse_footer_block<'a>(lines: &'a [LineSlice<'a>]) -> Option<FooterBlock<
 /// Extracts wikilinks from content.
 #[must_use]
 pub fn extract_wikilinks(content: &str) -> Vec<String> {
-    let mut links = Vec::new();
-    let mut remaining = content;
-
-    while let Some(start) = remaining.find("[[") {
-        let after_start = &remaining[start + 2..];
-        let Some(end) = after_start.find("]]") else {
-            break;
-        };
-        let link = &after_start[..end];
-        if !link.is_empty() {
-            links.push(link.to_string());
-        }
-        remaining = &after_start[end + 2..];
-    }
-
-    links
+    extract_markdown_wikilinks(content)
+        .into_iter()
+        .filter_map(|link| wikilink_inner(link.original.as_str()))
+        .collect()
 }
 
 /// Collects body links from an index document.
@@ -375,6 +365,14 @@ fn normalize_markdown_target(target: &str) -> &str {
         .and_then(|inner| inner.strip_suffix('>'))
         .unwrap_or(trimmed);
     trimmed.split_whitespace().next().unwrap_or(trimmed)
+}
+
+fn wikilink_inner(original: &str) -> Option<String> {
+    original
+        .trim()
+        .strip_prefix("[[")?
+        .strip_suffix("]]")
+        .map(ToString::to_string)
 }
 
 fn normalize_hidden_path_target(target: &str) -> Option<String> {

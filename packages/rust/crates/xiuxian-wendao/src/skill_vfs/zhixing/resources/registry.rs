@@ -40,8 +40,8 @@ pub fn embedded_skill_links_for_id(id: &str) -> Result<Vec<String>> {
 
 /// Resolves linked semantic URIs under `zhixing/skills/agenda-management/SKILL.md` for one reference type.
 ///
-/// Type matching is ASCII case-insensitive and based on wikilink type-hints
-/// such as `#persona`, `#template`, `#knowledge`, and `#qianji-flow`.
+/// Type matching is ASCII case-insensitive and based on explicit reference
+/// categories derived from parser-owned metadata surfaces.
 ///
 /// # Errors
 ///

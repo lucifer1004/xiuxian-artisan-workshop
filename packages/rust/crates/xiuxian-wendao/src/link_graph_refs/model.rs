@@ -3,11 +3,11 @@ use serde::{Deserialize, Serialize};
 /// Represents an entity reference extracted from note content.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LinkGraphEntityRef {
-    /// Entity name (without type hint)
+    /// Entity name or note target without any address fragment.
     pub name: String,
-    /// Optional entity type hint (e.g., "rust", "py", "pattern")
+    /// Optional Obsidian-style heading or block address.
     #[serde(default)]
-    pub entity_type: Option<String>,
+    pub target_address: Option<String>,
     /// Original matched text
     #[serde(skip)]
     pub original: String,
@@ -16,29 +16,30 @@ pub struct LinkGraphEntityRef {
 impl LinkGraphEntityRef {
     /// Create a new entity reference.
     #[must_use]
-    pub fn new(name: String, entity_type: Option<String>, original: String) -> Self {
+    pub fn new(name: String, target_address: Option<String>, original: String) -> Self {
         Self {
             name,
-            entity_type,
+            target_address,
             original,
         }
     }
 
-    /// Get the wikilink format: [[Name]] or [[Name#type]]
+    /// Get the wikilink format: `[[Name]]` or `[[Name#Heading]]`.
     #[must_use]
     pub fn to_wikilink(&self) -> String {
-        match &self.entity_type {
-            Some(value) => format!("[[{}#{}]]", self.name, value),
+        match &self.target_address {
+            Some(value) => format!("[[{}{}]]", self.name, value),
             None => format!("[[{}]]", self.name),
         }
     }
 
-    /// Get the tag format: #entity or #entity-type
+    /// Get a coarse structural tag for this extracted link.
     #[must_use]
     pub fn to_tag(&self) -> String {
-        match &self.entity_type {
-            Some(value) => format!("#entity-{}", value.to_lowercase()),
-            None => "#entity".to_string(),
+        if self.target_address.is_some() {
+            "#entity-addressed".to_string()
+        } else {
+            "#entity".to_string()
         }
     }
 }

@@ -4,12 +4,12 @@ use crate::enhancer::markdown_config::{MarkdownConfigBlock, MarkdownConfigMemory
 use include_dir::Dir;
 use thiserror::Error;
 
-/// One normalized config link target with optional type-hint.
+/// One normalized config link target with optional explicit reference category.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WendaoResourceLinkTarget {
     /// Normalized target path or semantic URI.
     pub target_path: String,
-    /// Optional link type-hint (for example `template`, `persona`).
+    /// Optional explicit reference category (for example `template`, `persona`).
     pub reference_type: Option<String>,
 }
 
@@ -70,13 +70,13 @@ impl WendaoResourceFile {
         &self.links_by_id
     }
 
-    /// Full map of `id -> link targets` with optional type-hints.
+    /// Full map of `id -> link targets` with optional explicit reference categories.
     #[must_use]
     pub fn link_targets_by_id(&self) -> &HashMap<String, Vec<WendaoResourceLinkTarget>> {
         &self.link_targets_by_id
     }
 
-    /// Returns link targets for one config `id` including optional type-hints.
+    /// Returns link targets for one config `id` including optional explicit reference categories.
     #[must_use]
     pub fn link_targets_for_id(&self, id: &str) -> Option<&[WendaoResourceLinkTarget]> {
         self.link_targets_by_id.get(id).map(Vec::as_slice)
@@ -84,8 +84,8 @@ impl WendaoResourceFile {
 
     /// Resolves deduplicated semantic links for one reference type.
     ///
-    /// Type matching is ASCII case-insensitive and uses wikilink suffixes
-    /// such as `#persona`, `#template`, `#knowledge`, or `#qianji-flow`.
+    /// Type matching is ASCII case-insensitive and uses explicit section
+    /// metadata, not body-link suffixes.
     #[must_use]
     pub fn links_for_reference_type(&self, reference_type: &str) -> Vec<String> {
         let normalized_type = reference_type.trim().to_ascii_lowercase();

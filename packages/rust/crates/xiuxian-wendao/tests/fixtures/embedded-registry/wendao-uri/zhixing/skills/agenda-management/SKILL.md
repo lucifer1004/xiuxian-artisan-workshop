@@ -7,7 +7,7 @@ name: agenda-management
 <!-- id: "draft_agenda.j2", type: "template", target: "draft_agenda.j2" -->
 
 Use relative wikilink:
-[[references/draft_agenda.j2#template]]
+[[references/draft_agenda.j2]]
 
 ```jinja2
 <agenda_draft />

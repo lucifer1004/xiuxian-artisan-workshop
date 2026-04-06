@@ -23,9 +23,9 @@ pub fn resolve_builtin_rerank_runtime_projection_with_settings(
 ) -> BuiltinRerankRuntimeProjection {
     #[cfg(feature = "julia")]
     {
-        return project_julia_rerank_runtime(
-            &LinkGraphJuliaRerankRuntimeConfig::resolve_with_settings(settings),
-        );
+        project_julia_rerank_runtime(&LinkGraphJuliaRerankRuntimeConfig::resolve_with_settings(
+            settings,
+        ))
     }
 
     #[cfg(not(feature = "julia"))]

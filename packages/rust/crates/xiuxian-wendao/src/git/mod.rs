@@ -1,4 +1,4 @@
-//! Git infrastructure services for repository materialization and sync.
+//! Thin compatibility facade for repository materialization and sync.
 
-/// Git checkout materialization and synchronization.
+/// Compatibility checkout surface backed by `xiuxian-git-repo`.
 pub mod checkout;

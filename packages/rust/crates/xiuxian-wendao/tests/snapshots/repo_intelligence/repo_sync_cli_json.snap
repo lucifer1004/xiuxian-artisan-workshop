@@ -1,5 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/support/repo_intelligence.rs
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -15,7 +16,7 @@ expression: value
   "mode": "ensure",
   "refresh": "fetch",
   "repo_id": "cli-sync",
-  "revision": "240a40910ec97dff18b1631ff4301ac6214348d6",
+  "revision": "[revision]",
   "source_kind": "local_checkout",
   "staleness_state": "not_applicable",
   "status_summary": {
@@ -36,7 +37,7 @@ expression: value
     },
     "revisions": {
       "aligned_with_mirror": false,
-      "checkout_revision": "240a40910ec97dff18b1631ff4301ac6214348d6",
+      "checkout_revision": "[revision]",
       "mirror_revision": null,
       "tracking_revision": null
     }

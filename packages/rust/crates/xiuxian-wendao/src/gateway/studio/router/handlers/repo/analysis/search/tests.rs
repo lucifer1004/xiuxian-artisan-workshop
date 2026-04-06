@@ -4,8 +4,6 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use git2::{IndexAddOption, Repository, Signature, Time};
-
 use crate::analyzers::analyze_registered_repository_with_registry;
 use crate::analyzers::cache::{
     build_repository_analysis_cache_key, store_cached_repository_analysis,
@@ -20,7 +18,9 @@ use crate::gateway::studio::router::configured_repository;
 use crate::gateway::studio::router::handlers::repo::analysis::search::cache::with_cached_repo_search_result;
 use crate::gateway::studio::router::handlers::repo::analysis::search::service::run_repo_import_search;
 use crate::gateway::studio::router::{GatewayState, StudioState};
-use crate::gateway::studio::test_support::assert_studio_json_snapshot;
+use crate::gateway::studio::test_support::{
+    assert_studio_json_snapshot, commit_all, init_git_repository,
+};
 use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
 use crate::git::checkout::{
     CheckoutSyncMode, discover_checkout_metadata, resolve_repository_source,
@@ -458,37 +458,6 @@ fn prime_import_analysis_cache(studio: &StudioState, registry: &crate::analyzers
 }
 
 fn initialize_git_repository(repo_root: &std::path::Path) {
-    let repository =
-        Repository::init(repo_root).unwrap_or_else(|error| panic!("init git repository: {error}"));
-    let mut index = repository
-        .index()
-        .unwrap_or_else(|error| panic!("open git index: {error}"));
-    index
-        .add_all(["*"], IndexAddOption::DEFAULT, None)
-        .unwrap_or_else(|error| panic!("stage git contents: {error}"));
-    index
-        .write()
-        .unwrap_or_else(|error| panic!("write git index: {error}"));
-    let tree_id = index
-        .write_tree()
-        .unwrap_or_else(|error| panic!("write git tree: {error}"));
-    let tree = repository
-        .find_tree(tree_id)
-        .unwrap_or_else(|error| panic!("find git tree: {error}"));
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_000, 0),
-    )
-    .unwrap_or_else(|error| panic!("create git signature: {error}"));
-    repository
-        .commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            "initial import",
-            &tree,
-            &[],
-        )
-        .unwrap_or_else(|error| panic!("commit git fixture: {error}"));
+    init_git_repository(repo_root);
+    commit_all(repo_root, "initial import");
 }

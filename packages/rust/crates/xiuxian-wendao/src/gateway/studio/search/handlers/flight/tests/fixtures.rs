@@ -2,7 +2,6 @@ use std::fs;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use git2::Repository;
 use tempfile::{TempDir, tempdir};
 use xiuxian_vector::{
     LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
@@ -15,6 +14,7 @@ use super::build_studio_search_flight_service_with_repo_provider;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::search::build_symbol_index;
 use crate::gateway::studio::search::handlers::tests::test_studio_state;
+use crate::gateway::studio::test_support::init_git_repository;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
 
 pub(super) struct GatewayStateFixture {
@@ -175,8 +175,7 @@ pub(super) async fn make_gateway_state_with_search_routes() -> GatewayStateFixtu
 
 pub(super) fn make_gateway_state_with_repo(repo_files: &[(&str, &str)]) -> GatewayStateFixture {
     let temp_dir = tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-    Repository::init(temp_dir.path().join("repo"))
-        .unwrap_or_else(|error| panic!("init repo fixture: {error}"));
+    init_git_repository(temp_dir.path().join("repo"));
     for (path, contents) in repo_files {
         let full_path = temp_dir.path().join("repo").join(path);
         if let Some(parent) = full_path.parent() {

@@ -54,8 +54,8 @@ pub struct EnhancedNote {
 pub struct EntityRefData {
     /// Entity name.
     pub name: String,
-    /// Optional entity type hint (from `[[Name#type]]`).
-    pub entity_type: Option<String>,
+    /// Optional Obsidian-style heading or block address.
+    pub target_address: Option<String>,
     /// Original matched text.
     pub original: String,
 }
@@ -67,6 +67,6 @@ pub struct RefStatsData {
     pub total_refs: usize,
     /// Number of unique entities referenced.
     pub unique_entities: usize,
-    /// Reference counts grouped by entity type.
+    /// Reference counts grouped by structural link shape.
     pub by_type: Vec<(String, usize)>,
 }

@@ -1,0 +1,17 @@
+[
+  {
+    "original": "[[FactoryPattern|FP]]",
+    "target": "FactoryPattern",
+    "target_address": null
+  },
+  {
+    "original": "[[SingletonPattern#Examples]]",
+    "target": "SingletonPattern",
+    "target_address": "#Examples"
+  },
+  {
+    "original": "[[#Implementation]]",
+    "target": null,
+    "target_address": "#Implementation"
+  }
+]

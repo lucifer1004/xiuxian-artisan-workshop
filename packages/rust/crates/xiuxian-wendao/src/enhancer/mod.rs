@@ -2,7 +2,7 @@
 //!
 //! Secondary analysis for `LinkGraph` query results.
 //! - Parse YAML frontmatter into structured metadata
-//! - Infer typed relations from note structure
+//! - Preserve structural body-link relations and explicit scoped property relations
 //! - Batch enhance notes (frontmatter + entities + relations)
 //!
 //! The `LinkGraph` backend remains the primary engine for scanning, building the link

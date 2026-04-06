@@ -309,132 +309,167 @@ pub fn validate_julia_plugin_capability_manifest_response_batches(
     batches: &[RecordBatch],
 ) -> Result<(), RepoIntelligenceError> {
     for batch in batches {
-        let plugin_id = utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_RESPONSE_PLUGIN_ID_COLUMN,
-            "response",
-        )?;
-        let capability_id = utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_CAPABILITY_ID_COLUMN,
-            "response",
-        )?;
-        let _capability_variant = nullable_utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_CAPABILITY_VARIANT_COLUMN,
-            "response",
-        )?;
-        let transport_kind = utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_TRANSPORT_KIND_COLUMN,
-            "response",
-        )?;
-        let base_url = utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_BASE_URL_COLUMN,
-            "response",
-        )?;
-        let route = utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_ROUTE_COLUMN,
-            "response",
-        )?;
-        let health_route = nullable_utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_HEALTH_ROUTE_COLUMN,
-            "response",
-        )?;
-        let schema_version = utf8_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_SCHEMA_VERSION_COLUMN,
-            "response",
-        )?;
-        let timeout_secs = nullable_u64_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_TIMEOUT_SECS_COLUMN,
-            "response",
-        )?;
-        let enabled = bool_column(
-            batch,
-            JULIA_PLUGIN_CAPABILITY_MANIFEST_ENABLED_COLUMN,
-            "response",
-        )?;
-
+        let response_columns = JuliaPluginCapabilityManifestResponseColumns::new(batch)?;
         for row in 0..batch.num_rows() {
-            if plugin_id.is_null(row) || plugin_id.value(row).trim().is_empty() {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`plugin_id` must be non-null and non-blank",
-                ));
-            }
-            if capability_id.is_null(row) || capability_id.value(row).trim().is_empty() {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`capability_id` must be non-null and non-blank",
-                ));
-            }
-            if transport_kind.is_null(row) {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`transport_kind` must be non-null",
-                ));
-            }
-            parse_transport_kind(transport_kind.value(row))?;
-            if base_url.is_null(row) || base_url.value(row).trim().is_empty() {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`base_url` must be non-null and non-blank",
-                ));
-            }
-            if route.is_null(row) || route.value(row).trim().is_empty() {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`route` must be non-null and non-blank",
-                ));
-            }
-            normalize_flight_route(route.value(row).to_string()).map_err(|error| {
-                manifest_contract_error(
-                    "response",
-                    format!("`route` must be a normalized Flight route: {error}"),
-                )
-            })?;
-            if let Some(health_route) = string_value(health_route, row) {
-                normalize_flight_route(health_route.to_string()).map_err(|error| {
-                    manifest_contract_error(
-                        "response",
-                        format!("`health_route` must be a normalized Flight route: {error}"),
-                    )
-                })?;
-            }
-            if schema_version.is_null(row) || schema_version.value(row).trim().is_empty() {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`schema_version` must be non-null and non-blank",
-                ));
-            }
-            validate_flight_schema_version(schema_version.value(row)).map_err(|error| {
-                manifest_contract_error(
-                    "response",
-                    format!("`schema_version` must be valid: {error}"),
-                )
-            })?;
-            if let Some(timeout_secs) = u64_value(timeout_secs, row) {
-                validate_flight_timeout_secs(timeout_secs).map_err(|error| {
-                    manifest_contract_error(
-                        "response",
-                        format!("`timeout_secs` must be valid: {error}"),
-                    )
-                })?;
-            }
-            if enabled.is_null(row) {
-                return Err(manifest_contract_error(
-                    "response",
-                    "`enabled` must be non-null",
-                ));
-            }
+            validate_julia_plugin_capability_manifest_response_row(&response_columns, row)?;
         }
     }
 
+    Ok(())
+}
+
+struct JuliaPluginCapabilityManifestResponseColumns<'a> {
+    plugin_id: &'a StringArray,
+    capability_id: &'a StringArray,
+    capability_variant: &'a StringArray,
+    transport_kind: &'a StringArray,
+    base_url: &'a StringArray,
+    route: &'a StringArray,
+    health_route: &'a StringArray,
+    schema_version: &'a StringArray,
+    timeout_secs: &'a UInt64Array,
+    enabled: &'a BooleanArray,
+}
+
+impl<'a> JuliaPluginCapabilityManifestResponseColumns<'a> {
+    fn new(batch: &'a RecordBatch) -> Result<Self, RepoIntelligenceError> {
+        Ok(Self {
+            plugin_id: utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_RESPONSE_PLUGIN_ID_COLUMN,
+                "response",
+            )?,
+            capability_id: utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_CAPABILITY_ID_COLUMN,
+                "response",
+            )?,
+            capability_variant: nullable_utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_CAPABILITY_VARIANT_COLUMN,
+                "response",
+            )?,
+            transport_kind: utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_TRANSPORT_KIND_COLUMN,
+                "response",
+            )?,
+            base_url: utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_BASE_URL_COLUMN,
+                "response",
+            )?,
+            route: utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_ROUTE_COLUMN,
+                "response",
+            )?,
+            health_route: nullable_utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_HEALTH_ROUTE_COLUMN,
+                "response",
+            )?,
+            schema_version: utf8_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_SCHEMA_VERSION_COLUMN,
+                "response",
+            )?,
+            timeout_secs: nullable_u64_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_TIMEOUT_SECS_COLUMN,
+                "response",
+            )?,
+            enabled: bool_column(
+                batch,
+                JULIA_PLUGIN_CAPABILITY_MANIFEST_ENABLED_COLUMN,
+                "response",
+            )?,
+        })
+    }
+}
+
+fn validate_julia_plugin_capability_manifest_response_row(
+    columns: &JuliaPluginCapabilityManifestResponseColumns<'_>,
+    row: usize,
+) -> Result<(), RepoIntelligenceError> {
+    let _capability_variant = string_value(columns.capability_variant, row);
+    validate_non_blank_manifest_response_value(
+        columns.plugin_id,
+        row,
+        "`plugin_id` must be non-null and non-blank",
+    )?;
+    validate_non_blank_manifest_response_value(
+        columns.capability_id,
+        row,
+        "`capability_id` must be non-null and non-blank",
+    )?;
+    let transport_kind = validate_non_blank_manifest_response_value(
+        columns.transport_kind,
+        row,
+        "`transport_kind` must be non-null and non-blank",
+    )?;
+    parse_transport_kind(transport_kind)?;
+    validate_non_blank_manifest_response_value(
+        columns.base_url,
+        row,
+        "`base_url` must be non-null and non-blank",
+    )?;
+    let route = validate_non_blank_manifest_response_value(
+        columns.route,
+        row,
+        "`route` must be non-null and non-blank",
+    )?;
+    validate_manifest_response_route(route, "`route` must be a normalized Flight route")?;
+    if let Some(health_route) = string_value(columns.health_route, row) {
+        validate_manifest_response_route(
+            health_route,
+            "`health_route` must be a normalized Flight route",
+        )?;
+    }
+    let schema_version = validate_non_blank_manifest_response_value(
+        columns.schema_version,
+        row,
+        "`schema_version` must be non-null and non-blank",
+    )?;
+    validate_flight_schema_version(schema_version).map_err(|error| {
+        manifest_contract_error(
+            "response",
+            format!("`schema_version` must be valid: {error}"),
+        )
+    })?;
+    if let Some(timeout_secs) = u64_value(columns.timeout_secs, row) {
+        validate_flight_timeout_secs(timeout_secs).map_err(|error| {
+            manifest_contract_error("response", format!("`timeout_secs` must be valid: {error}"))
+        })?;
+    }
+    if columns.enabled.is_null(row) {
+        return Err(manifest_contract_error(
+            "response",
+            "`enabled` must be non-null",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_non_blank_manifest_response_value<'a>(
+    array: &'a StringArray,
+    row: usize,
+    error_message: &str,
+) -> Result<&'a str, RepoIntelligenceError> {
+    let value = string_value(array, row)
+        .ok_or_else(|| manifest_contract_error("response", error_message))?;
+    if value.trim().is_empty() {
+        return Err(manifest_contract_error("response", error_message));
+    }
+    Ok(value)
+}
+
+fn validate_manifest_response_route(
+    route: &str,
+    prefix: &str,
+) -> Result<(), RepoIntelligenceError> {
+    normalize_flight_route(route)
+        .map_err(|error| manifest_contract_error("response", format!("{prefix}: {error}")))?;
     Ok(())
 }
 
@@ -1008,7 +1043,7 @@ fn nullable_u64_column<'a>(
         })
 }
 
-fn string_value<'a>(array: &'a StringArray, row: usize) -> Option<&'a str> {
+fn string_value(array: &StringArray, row: usize) -> Option<&str> {
     (!array.is_null(row)).then(|| array.value(row))
 }
 

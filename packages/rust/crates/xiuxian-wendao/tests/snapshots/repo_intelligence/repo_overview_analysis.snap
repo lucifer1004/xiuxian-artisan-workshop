@@ -1,6 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
-assertion_line: 22
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -154,7 +154,7 @@ expression: value
       "name": "SamplePkg",
       "path": "[repo-root]",
       "repo_id": "sample",
-      "revision": "25479c94929b0b30fb2d8f7ff8215f3597a146d1",
+      "revision": "[revision]",
       "url": "https://example.invalid/xiuxian-wendao/samplepkg.git",
       "uuid": "12345678-1234-1234-1234-123456789abc",
       "version": "0.1.0"
@@ -201,7 +201,7 @@ expression: value
     ],
     "module_count": 1,
     "repo_id": "sample",
-    "revision": "25479c94929b0b30fb2d8f7ff8215f3597a146d1",
+    "revision": "[revision]",
     "symbol_count": 2
   }
 }

@@ -70,7 +70,8 @@ fn parse_relation_target_token(token: &str) -> Option<ExplicitRelationTarget> {
 }
 
 fn parse_wiki_target(inner: &str, original: String) -> Option<ExplicitRelationTarget> {
-    if let Some(address) = Address::parse(inner) {
+    if inner.starts_with(['#', '@', '/']) {
+        let address = Address::parse(inner)?;
         return Some(ExplicitRelationTarget {
             note_target: None,
             address: Some(address),

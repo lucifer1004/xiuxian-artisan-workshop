@@ -5,10 +5,10 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
+use crate::support::repo_fixture::refresh_remote;
 use crate::support::repo_intelligence::{
     assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
 };
-use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
 use xiuxian_config_core::resolve_data_home;
 use xiuxian_wendao::analyzers::{
@@ -46,6 +46,7 @@ fn repo_sync_reports_local_checkout_state() -> TestResult {
     let mut payload = json!(result);
     redact_checkout_path(&mut payload);
     redact_sync_timestamps(&mut payload);
+    redact_sync_revisions(&mut payload);
     assert_repo_json_snapshot("repo_sync_local_result", payload);
     Ok(())
 }
@@ -78,6 +79,7 @@ fn repo_sync_reports_managed_remote_state() -> TestResult {
     redact_mirror_path(&mut payload);
     redact_sync_timestamps(&mut payload);
     redact_upstream_url(&mut payload);
+    redact_sync_revisions(&mut payload);
     assert_repo_json_snapshot("repo_sync_managed_result", payload);
     Ok(())
 }
@@ -117,6 +119,7 @@ fn repo_sync_status_reports_missing_managed_assets_without_materializing() -> Te
     redact_mirror_path(&mut payload);
     redact_sync_timestamps(&mut payload);
     redact_upstream_url(&mut payload);
+    redact_sync_revisions(&mut payload);
     assert_repo_json_snapshot("repo_sync_status_missing_managed_result", payload);
     Ok(())
 }
@@ -170,6 +173,7 @@ fn repo_sync_status_reports_ahead_when_managed_checkout_drifts_locally() -> Test
     redact_mirror_path(&mut payload);
     redact_sync_timestamps(&mut payload);
     redact_upstream_url(&mut payload);
+    redact_sync_revisions(&mut payload);
     assert_repo_json_snapshot("repo_sync_status_ahead_managed_result", payload);
     Ok(())
 }
@@ -308,6 +312,7 @@ fn repo_sync_status_reports_stale_when_managed_mirror_fetch_is_old() -> TestResu
     redact_mirror_path(&mut payload);
     redact_sync_timestamps(&mut payload);
     redact_upstream_url(&mut payload);
+    redact_sync_revisions(&mut payload);
     assert_repo_json_snapshot("repo_sync_status_stale_managed_result", payload);
     Ok(())
 }
@@ -334,6 +339,7 @@ fn cli_repo_sync_returns_serialized_result() -> TestResult {
     let mut payload: serde_json::Value = serde_json::from_slice(&output.stdout)?;
     redact_checkout_path(&mut payload);
     redact_sync_timestamps(&mut payload);
+    redact_sync_revisions(&mut payload);
     assert_repo_json_snapshot("repo_sync_cli_json", payload);
     Ok(())
 }
@@ -432,6 +438,23 @@ fn redact_upstream_url(value: &mut serde_json::Value) {
     }
 }
 
+fn redact_sync_revisions(value: &mut serde_json::Value) {
+    for pointer in [
+        "/revision",
+        "/mirror_revision",
+        "/tracking_revision",
+        "/status_summary/revisions/checkout_revision",
+        "/status_summary/revisions/mirror_revision",
+        "/status_summary/revisions/tracking_revision",
+    ] {
+        if let Some(revision) = value.pointer_mut(pointer) {
+            if !revision.is_null() {
+                *revision = serde_json::Value::String("[revision]".to_string());
+            }
+        }
+    }
+}
+
 fn write_repo_url_config(
     base: &Path,
     repo_url: &Path,
@@ -468,35 +491,12 @@ fn append_repo_file_and_commit(
     contents: &str,
     message: &str,
 ) -> TestResult {
-    let target = repo_dir.join(relative_path);
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&target, contents)?;
-
-    let repository = Repository::open(repo_dir)?;
-    let mut index = repository.index()?;
-    index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-
-    let tree_id = index.write_tree()?;
-    let tree = repository.find_tree(tree_id)?;
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_001, 0),
-    )?;
-    let parent = repository.head()?.peel_to_commit()?;
-
-    repository.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
+    crate::support::repo_fixture::append_repo_file_and_commit(
+        repo_dir,
+        relative_path,
+        contents,
         message,
-        &tree,
-        &[&parent],
-    )?;
-    Ok(())
+    )
 }
 
 fn repo_cache_root(cwd: &Path) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
@@ -544,14 +544,7 @@ fn sanitize_repo_id(repo_id: &str) -> String {
 
 fn refresh_managed_mirror_only(cwd: &Path, repo_id: &str) -> TestResult {
     let mirror_root = managed_mirror_root(cwd, repo_id)?;
-    let mirror_repository = Repository::open_bare(&mirror_root)?;
-    let mut remote = mirror_repository.find_remote("origin")?;
-    remote.fetch(
-        &["+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"],
-        None,
-        None,
-    )?;
-    Ok(())
+    refresh_remote(&mirror_root, "origin")
 }
 
 fn set_managed_mirror_fetch_age(cwd: &Path, repo_id: &str, age: Duration) -> TestResult {

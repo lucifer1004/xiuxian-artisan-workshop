@@ -43,6 +43,14 @@
           };
         };
       };
+      nci.projects."xiuxian-wendao" = {
+        path = workspaceRoot;
+        depsDrvConfig = {
+          env = {
+            PROTOC = "${pkgs.protobuf}/bin/protoc";
+          };
+        };
+      };
 
       # configure crates
       nci.crates = {
@@ -64,13 +72,6 @@
         #     };
         #   };
         # };
-        "xiuxian-wendao" = {
-          depsDrvConfig = {
-            env = {
-              PROTOC = "${pkgs.protobuf}/bin/protoc";
-            };
-          };
-        };
       };
 
       packages.xiuxian-core-rs-python-bindings =

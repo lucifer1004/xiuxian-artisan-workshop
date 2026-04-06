@@ -13,7 +13,7 @@ pub struct SkillReferenceSemantics {
     pub reference_type: Option<Arc<str>>,
 }
 
-/// Classify a skill reference link based on its target path and type-hints.
+/// Classify a skill reference link based on its target path and explicit metadata.
 #[must_use]
 pub fn classify_skill_reference(
     explicit_type: Option<&str>,
@@ -21,69 +21,25 @@ pub fn classify_skill_reference(
     entity_path: &str,
 ) -> SkillReferenceSemantics {
     let lower_path = entity_path.trim().to_ascii_lowercase();
-    let explicit_lower = explicit_type.map(str::trim).map(str::to_ascii_lowercase);
-    let config_lower = config_type.map(str::trim).map(str::to_ascii_lowercase);
+    let explicit_reference_type = explicit_type.and_then(normalize_reference_type_label);
+    let config_reference_type = config_type.and_then(normalize_reference_type_label);
 
-    // 1. Explicit type-hint takes precedence (e.g. [[note#template]])
-    if let Some(ref_type) = explicit_lower {
-        match ref_type.as_str() {
-            "template" | "tpl" => {
-                return SkillReferenceSemantics {
-                    entity: EntityType::Other("Template".to_string()),
-                    relation: RelationType::RelatedTo,
-                    reference_type: Some(Arc::from("template")),
-                };
-            }
-            "persona" | "agent" => {
-                return SkillReferenceSemantics {
-                    entity: EntityType::Other("Persona".to_string()),
-                    relation: RelationType::Manifests,
-                    reference_type: Some(Arc::from("persona")),
-                };
-            }
-            "knowledge" | "doc" => {
-                return SkillReferenceSemantics {
-                    entity: EntityType::Document,
-                    relation: RelationType::DocumentedIn,
-                    reference_type: Some(Arc::from("knowledge")),
-                };
-            }
-            "qianji-flow" | "flow" => {
-                return SkillReferenceSemantics {
-                    entity: EntityType::Other("QianjiFlow".to_string()),
-                    relation: RelationType::Governs,
-                    reference_type: Some(Arc::from("qianji-flow")),
-                };
-            }
-            _ => {}
-        }
+    // 1. Explicit metadata categories take precedence.
+    if let Some(reference_type) = explicit_reference_type {
+        return semantics_for_reference_type(reference_type);
     }
 
-    // 2. Config block type fallback
-    if let Some(cfg_type) = config_lower
-        && (cfg_type.contains("prompt") || cfg_type.contains("template"))
-    {
-        return SkillReferenceSemantics {
-            entity: EntityType::Other("Template".to_string()),
-            relation: RelationType::RelatedTo,
-            reference_type: Some(Arc::from("template")),
-        };
+    // 2. Config block type fallback.
+    if let Some(reference_type) = config_reference_type {
+        return semantics_for_reference_type(reference_type);
     }
 
     // 3. Path-based heuristics
     if lower_path.contains("/templates/") || lower_path.contains("/tpl/") {
-        return SkillReferenceSemantics {
-            entity: EntityType::Other("Template".to_string()),
-            relation: RelationType::RelatedTo,
-            reference_type: Some(Arc::from("template")),
-        };
+        return semantics_for_reference_type("template");
     }
     if lower_path.contains("/personas/") {
-        return SkillReferenceSemantics {
-            entity: EntityType::Person,
-            relation: RelationType::Governs,
-            reference_type: Some(Arc::from("persona")),
-        };
+        return semantics_for_reference_type("persona");
     }
 
     // 4. Attachment detection by file extension
@@ -107,5 +63,45 @@ pub fn classify_skill_reference(
         entity: EntityType::Other("Resource".to_string()),
         relation: RelationType::RelatedTo,
         reference_type: None,
+    }
+}
+
+fn normalize_reference_type_label(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "template" | "tpl" | "prompt" => Some("template"),
+        "persona" | "agent" => Some("persona"),
+        "knowledge" | "doc" => Some("knowledge"),
+        "workflow" | "flow" | "qianji-flow" => Some("qianji-flow"),
+        _ => None,
+    }
+}
+
+fn semantics_for_reference_type(reference_type: &str) -> SkillReferenceSemantics {
+    match reference_type {
+        "template" => SkillReferenceSemantics {
+            entity: EntityType::Other("Template".to_string()),
+            relation: RelationType::RelatedTo,
+            reference_type: Some(Arc::from("template")),
+        },
+        "persona" => SkillReferenceSemantics {
+            entity: EntityType::Other("Persona".to_string()),
+            relation: RelationType::Manifests,
+            reference_type: Some(Arc::from("persona")),
+        },
+        "knowledge" => SkillReferenceSemantics {
+            entity: EntityType::Document,
+            relation: RelationType::DocumentedIn,
+            reference_type: Some(Arc::from("knowledge")),
+        },
+        "qianji-flow" => SkillReferenceSemantics {
+            entity: EntityType::Other("QianjiFlow".to_string()),
+            relation: RelationType::Governs,
+            reference_type: Some(Arc::from("qianji-flow")),
+        },
+        _ => SkillReferenceSemantics {
+            entity: EntityType::Other("Resource".to_string()),
+            relation: RelationType::RelatedTo,
+            reference_type: None,
+        },
     }
 }

@@ -49,7 +49,6 @@ impl VectorStoreSemanticIgnition {
 
     #[cfg(feature = "julia")]
     fn validate_plugin_rerank_candidates(
-        &self,
         anchors: &[QuantumAnchorHit],
     ) -> Result<(), VectorStorePluginRerankRequestError> {
         if anchors.is_empty() {
@@ -80,7 +79,7 @@ impl VectorStoreSemanticIgnition {
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
     ) -> Result<RecordBatch, VectorStorePluginRerankRequestError> {
-        self.validate_plugin_rerank_candidates(anchors)?;
+        Self::validate_plugin_rerank_candidates(anchors)?;
         build_plugin_arrow_request_batch_from_vector_store(
             &self.store,
             self.table_name.as_str(),
@@ -109,7 +108,7 @@ impl VectorStoreSemanticIgnition {
         query_text: &str,
         schema_version: &str,
     ) -> Result<RecordBatch, String> {
-        self.validate_plugin_rerank_candidates(anchors)
+        Self::validate_plugin_rerank_candidates(anchors)
             .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))?;
         build_plugin_arrow_request_batch_from_vector_store_with_metadata(
             &self.store,

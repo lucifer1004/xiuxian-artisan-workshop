@@ -132,7 +132,6 @@ impl OpenAiCompatibleSemanticIgnition {
 
     #[cfg(feature = "julia")]
     fn validate_plugin_rerank_anchors(
-        &self,
         anchors: &[QuantumAnchorHit],
     ) -> Result<(), OpenAiCompatiblePluginRerankRequestError> {
         if anchors.is_empty() {
@@ -160,7 +159,7 @@ impl OpenAiCompatibleSemanticIgnition {
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
     ) -> Result<RecordBatch, OpenAiCompatiblePluginRerankRequestError> {
-        self.validate_plugin_rerank_anchors(anchors)?;
+        Self::validate_plugin_rerank_anchors(anchors)?;
         let query_vector = self.resolve_plugin_rerank_query_vector(request).await?;
         build_plugin_arrow_request_batch_from_vector_store(
             &self.store,
@@ -192,7 +191,7 @@ impl OpenAiCompatibleSemanticIgnition {
         query_text: &str,
         schema_version: &str,
     ) -> Result<RecordBatch, String> {
-        self.validate_plugin_rerank_anchors(anchors)
+        Self::validate_plugin_rerank_anchors(anchors)
             .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))?;
         let query_vector = self
             .resolve_plugin_rerank_query_vector(request)

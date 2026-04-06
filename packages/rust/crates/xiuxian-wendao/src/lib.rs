@@ -15,8 +15,8 @@
 //! - `storage` / `storage_py`: Valkey-backed persistence
 //! - `sync` / `sync_py`: Incremental file sync engine
 //! - `entity` / `graph` / `graph_py`: Knowledge graph (entities, relations, search)
-//! - `enhancer` / `enhancer_py`: `LinkGraph` note enhancement
-//! - `link_graph_refs` / `link_graph_refs_py`: `LinkGraph` entity references
+//! - `enhancer`: `LinkGraph` note enhancement
+//! - `link_graph_refs`: `LinkGraph` entity references
 //! - `dependency_indexer` / `dep_indexer_py`: Dependency scanning
 //! - `unified_symbol` / `unified_symbol_py`: Cross-language symbol index
 //! - `parsers`: Canonical Wendao parser families

@@ -1,0 +1,25 @@
+[package]
+name = "xiuxian-git-repo"
+version.workspace = true
+edition.workspace = true
+description = "Reusable repository substrate for materialization, sync, and revision observation"
+authors = ["CyberXiuXian Artisan workshop"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+chrono = { workspace = true, features = ["clock", "serde"] }
+gix = { workspace = true, features = ["blocking-http-transport-reqwest-rust-tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+url = "2.5.7"
+xiuxian-io = { path = "../xiuxian-io" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+uuid = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
+
+[lints]
+workspace = true

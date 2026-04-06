@@ -23,6 +23,8 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 ## 📁 02_parser: Parser Architecture
 
 - [02_parser/index](02_parser/index.md): Canonical parser namespace, parser-family matrix, and parser-vs-helper rules.
+- [02_parser/wikilinks](02_parser/wikilinks.md): Obsidian-aligned ordinary body wikilink parsing, source-span preservation, and `link_graph_refs` consumer boundaries.
+- [02_parser/relation_semantics](02_parser/relation_semantics.md): Scoped relation semantics for `PROPERTIES`, global `[[...]]` topology links, and parser-owned target grammar.
 
 ## 📁 03_features: Functional Ledger
 
@@ -88,5 +90,5 @@ documentation surface.
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-04-04
+:LAST_SYNC: 2026-04-05
 :END:

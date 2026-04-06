@@ -2,8 +2,8 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     DocCoverageQuery, ExampleSearchQuery, ModuleSearchQuery, PluginRegistry, RepoOverviewQuery,
@@ -16,6 +16,10 @@ use xiuxian_wendao::analyzers::{
 use xiuxian_wendao_modelica::register_into;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+const TEST_GIT_AUTHOR_NAME: &str = "Xiuxian Test";
+const TEST_GIT_AUTHOR_EMAIL: &str = "test@example.com";
+const TEST_GIT_COMMIT_TIME: &str = "1700000000 +0000";
 
 #[test]
 #[allow(clippy::too_many_lines)]
@@ -34,7 +38,7 @@ fn modelica_plugin_supports_registry_aware_repo_queries() -> TestResult {
         &registry,
     )?;
 
-    let payload = json!({
+    let mut payload = json!({
         "overview": repo_overview_from_config_with_registry(
             &RepoOverviewQuery {
                 repo_id: "modelica-demo".to_string(),
@@ -133,6 +137,7 @@ fn modelica_plugin_supports_registry_aware_repo_queries() -> TestResult {
         "plugin_ids": registry.plugin_ids(),
     });
 
+    redact_repo_revision(&mut payload);
     insta::assert_json_snapshot!("modelica_plugin_queries", payload);
     Ok(())
 }
@@ -427,27 +432,87 @@ fn create_modelica_repo(base: &Path) -> Result<PathBuf, Box<dyn std::error::Erro
 }
 
 fn initialize_git_repository(repo_dir: &Path) -> TestResult {
-    let repository = Repository::init(repo_dir)?;
-    repository.remote(
-        "origin",
-        "https://example.invalid/xiuxian-wendao/demolib.git",
+    run_git(
+        repo_dir,
+        &["init", "--quiet"],
+        &[("GIT_CONFIG_NOSYSTEM", "1")],
     )?;
-    commit_all(&repository, "initial import")?;
+    run_git(
+        repo_dir,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/xiuxian-wendao/demolib.git",
+        ],
+        &[("GIT_CONFIG_NOSYSTEM", "1")],
+    )?;
+    commit_all(repo_dir, "initial import")?;
     Ok(())
 }
 
-fn commit_all(repository: &Repository, message: &str) -> Result<(), git2::Error> {
-    let mut index = repository.index()?;
-    index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-
-    let tree_id = index.write_tree()?;
-    let tree = repository.find_tree(tree_id)?;
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_000, 0),
+fn commit_all(repo_dir: &Path, message: &str) -> TestResult {
+    run_git(repo_dir, &["add", "--all"], &[("GIT_CONFIG_NOSYSTEM", "1")])?;
+    run_git(
+        repo_dir,
+        &[
+            "-c",
+            "commit.gpgSign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            message,
+        ],
+        &[
+            ("GIT_AUTHOR_NAME", TEST_GIT_AUTHOR_NAME),
+            ("GIT_AUTHOR_EMAIL", TEST_GIT_AUTHOR_EMAIL),
+            ("GIT_AUTHOR_DATE", TEST_GIT_COMMIT_TIME),
+            ("GIT_COMMITTER_NAME", TEST_GIT_AUTHOR_NAME),
+            ("GIT_COMMITTER_EMAIL", TEST_GIT_AUTHOR_EMAIL),
+            ("GIT_COMMITTER_DATE", TEST_GIT_COMMIT_TIME),
+            ("GIT_CONFIG_NOSYSTEM", "1"),
+        ],
     )?;
-    repository.commit(Some("HEAD"), &signature, &signature, message, &tree, &[])?;
     Ok(())
+}
+
+fn redact_repo_revision(value: &mut serde_json::Value) {
+    for pointer in ["/overview/revision", "/overview/repository/revision"] {
+        if let Some(revision) = value.pointer_mut(pointer) {
+            if !revision.is_null() {
+                *revision = serde_json::Value::String("[revision]".to_string());
+            }
+        }
+    }
+}
+
+fn run_git(repo_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> TestResult {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(repo_dir).args(args);
+    command.env_remove("GIT_DIR");
+    command.env_remove("GIT_WORK_TREE");
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+
+    let output = command.output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Err(format!(
+        "git {} failed in {} with status {}: {}{}",
+        args.join(" "),
+        repo_dir.display(),
+        output.status,
+        stderr.trim(),
+        if stdout.trim().is_empty() {
+            String::new()
+        } else {
+            format!(" | stdout: {}", stdout.trim())
+        }
+    )
+    .into())
 }

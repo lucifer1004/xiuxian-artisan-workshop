@@ -60,6 +60,7 @@ xiuxian-skills = { path = "../xiuxian-skills" }
 xiuxian-logging = { path = "../xiuxian-logging" }
 xiuxian-vector = { path = "../xiuxian-vector" }
 xiuxian-io = { path = "../xiuxian-io" }
+xiuxian-git-repo = { path = "../xiuxian-git-repo" }
 xiuxian-llm = { path = "../xiuxian-llm" }
 xiuxian-wendao-builtin = { path = "../xiuxian-wendao-builtin", default-features = false }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
@@ -121,7 +122,6 @@ notify-debouncer-full = "0.7.0"
 
 # HTTP client for webhook notifications (Phase 7 ForwardNotifier)
 reqwest = { workspace = true }
-git2 = { workspace = true }
 tantivy = "0.25"
 graphql-parser = "0.4"
 

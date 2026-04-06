@@ -26,6 +26,7 @@ xiuxian-vector = { path = "../xiuxian-vector" }
 [dev-dependencies]
 tempfile = { workspace = true }
 insta = { workspace = true }
+serial_test = { version = "3", features = ["file_locks"] }
 
 [lints]
 workspace = true

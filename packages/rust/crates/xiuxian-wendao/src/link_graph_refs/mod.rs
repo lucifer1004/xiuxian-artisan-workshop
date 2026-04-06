@@ -1,12 +1,13 @@
 //! `LinkGraph` reference extraction primitives.
 //!
-//! Provides fast regex-based extraction of entity references from `Markdown`
-//! notes.
-//! Pattern: `[[EntityName]]` or `[[EntityName#type]]`
+//! Provides `LinkGraph`-oriented consumers over the canonical Markdown
+//! wikilink parser in `crate::parsers::markdown::wikilinks`.
+//!
+//! Cross-note patterns include `[[EntityName]]`, `[[EntityName#Heading]]`,
+//! and `[[EntityName#^block-id]]`.
 
 mod extract;
 mod model;
-mod regex;
 mod stats;
 
 pub use extract::{
@@ -15,3 +16,7 @@ pub use extract::{
 };
 pub use model::LinkGraphEntityRef;
 pub use stats::{LinkGraphRefStats, get_ref_stats};
+
+#[cfg(test)]
+#[path = "../../tests/unit/link_graph_refs.rs"]
+mod tests;

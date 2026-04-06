@@ -1,9 +1,9 @@
-//! Integration tests for `xiuxian_wendao::dependency_indexer::pyproject`.
+//! Integration tests for `xiuxian_wendao::parsers::languages::python::pyproject`.
 
 use std::io::Write as StdWrite;
 
 use tempfile::NamedTempFile;
-use xiuxian_wendao::dependency_indexer::parse_pyproject_dependencies;
+use xiuxian_wendao::parsers::languages::python::pyproject::dependencies::parse_pyproject_dependencies;
 
 #[tokio::test]
 async fn test_parse_pyproject_dependencies() {

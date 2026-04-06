@@ -1,5 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -13,6 +14,6 @@ expression: value
   ],
   "module_count": 1,
   "repo_id": "cli-sample",
-  "revision": "4a39f5ab536e37978aa383c89fb24e4e62b5be8d",
+  "revision": "[revision]",
   "symbol_count": 2
 }

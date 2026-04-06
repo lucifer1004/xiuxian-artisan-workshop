@@ -11,7 +11,7 @@ pub struct LinkGraphRefStats {
     pub total_refs: usize,
     /// Unique entities referenced
     pub unique_entities: usize,
-    /// References by type
+    /// References grouped by structural link shape.
     pub by_type: Vec<(String, usize)>,
 }
 
@@ -25,11 +25,12 @@ impl LinkGraphRefStats {
 
         for ref_item in refs {
             unique_names.insert(ref_item.name.clone());
-            let type_name = ref_item
-                .entity_type
-                .clone()
-                .unwrap_or_else(|| "none".to_string());
-            *type_counts.entry(type_name).or_insert(0) += 1;
+            let bucket = if ref_item.target_address.is_some() {
+                "addressed".to_string()
+            } else {
+                "note".to_string()
+            };
+            *type_counts.entry(bucket).or_insert(0) += 1;
         }
 
         let mut by_type: Vec<(String, usize)> = type_counts.into_iter().collect();

@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use comrak::{Arena, Options, nodes::NodeValue, parse_document};
 use walkdir::WalkDir;
 
 use super::load::load_internal_skill_manifest_from_path;
@@ -9,7 +8,7 @@ use super::types::{
     INTERNAL_SKILL_URI_PREFIX, InternalSkillAuthorityOutcome, InternalSkillAuthorityReport,
     InternalSkillManifestError,
 };
-use crate::parsers::markdown::parse_frontmatter;
+use crate::parsers::markdown::{extract_references, parse_frontmatter};
 
 /// Resolve internal skill authority by intersecting intent links and physical manifests.
 ///
@@ -176,20 +175,10 @@ fn collect_intent_manifest_uris(
 }
 
 fn extract_markdown_links(markdown: &str) -> Vec<String> {
-    let mut options = Options::default();
-    options.extension.wikilinks_title_before_pipe = true;
-    options.extension.wikilinks_title_after_pipe = true;
-    let arena = Arena::new();
-    let root = parse_document(&arena, markdown, &options);
-    let mut links = Vec::new();
-    for node in root.descendants() {
-        match &node.data.borrow().value {
-            NodeValue::Link(link) => links.push(link.url.clone()),
-            NodeValue::WikiLink(link) => links.push(link.url.clone()),
-            _ => {}
-        }
-    }
-    links
+    extract_references(markdown)
+        .into_iter()
+        .filter_map(|reference| reference.target)
+        .collect()
 }
 
 fn normalize_internal_manifest_uri(raw: &str, fallback_semantic: &str) -> Option<String> {

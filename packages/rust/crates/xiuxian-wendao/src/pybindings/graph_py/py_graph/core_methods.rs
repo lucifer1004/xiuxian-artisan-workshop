@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use serde_json::{Value, json};
 
-use super::super::parsers::parse_relation_type;
+use super::super::parsers::parse_persisted_relation_type;
 use super::super::{PyEntity, PyRelation};
 use super::PyKnowledgeGraph;
 
@@ -48,7 +48,7 @@ pub(super) fn get_relations(
     entity_name: Option<&str>,
     relation_type: Option<&str>,
 ) -> Vec<PyRelation> {
-    let relation_type = relation_type.map(parse_relation_type);
+    let relation_type = relation_type.map(parse_persisted_relation_type);
     graph
         .inner
         .get_relations(entity_name, relation_type)

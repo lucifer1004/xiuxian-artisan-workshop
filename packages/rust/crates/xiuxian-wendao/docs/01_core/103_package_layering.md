@@ -136,7 +136,10 @@ flows, and the link-graph search-query parser now implemented under
 implemented under `src/parsers/search/repo_code_query/`, graph persistence
 dict parsing now implemented under `src/parsers/graph/persistence/`, plus
 Cargo.toml dependency parsing now implemented under
-`src/parsers/cargo/dependencies/`.
+`src/parsers/cargo/dependencies/`. That same parser stack now also owns
+explicit markdown property-drawer relation parsing under
+`src/parsers/markdown/relations/`, where section-scoped relation targets are
+parsed separately from ordinary global wiki links.
 
 Remaining parse-like helpers outside `src/parsers/` stay local by design.
 `search/queries/graphql/document.rs` is adapter-local GraphQL request parsing,
@@ -151,7 +154,26 @@ under [../02_parser/index.md](../02_parser/index.md).
 Within that parser stack, ordinary `[[...]]` links establish graph topology
 first. Typed relation semantics should come from explicit metadata owners such
 as property drawers or subsystem-owned metadata, not from parser-side
-hardcoded string matches on wiki-link text.
+hardcoded string matches on wiki-link text. Property-drawer relation values
+and scalar values are separate contracts: scoped relation fields add explicit
+semantic edges, while numeric or other scalar properties stay local metadata
+unless a subsystem explicitly owns them. See the parser docs under
+[../02_parser/index.md](../02_parser/index.md) and
+[../02_parser/relation_semantics.md](../02_parser/relation_semantics.md).
+
+For ordinary body references, Wendao now follows one shared Markdown reference
+contract: `[label](path)`, `[label](path#Heading)`, `[[note]]`,
+`[[note#Heading]]`, and `[[#Heading]]` are structural targets plus optional
+addresses, not semantic type suffixes. The parser-owned implementation for
+this surface now lives under `src/parsers/markdown/references/`. The narrower
+ordinary-wikilink subset still lives under `src/parsers/markdown/wikilinks/`
+for consumers that only need `[[...]]` topology links. `link_graph_refs` and
+docs-governance consume that wikilink subset instead of owning local scanners,
+while `skill_vfs::internal_manifest::authority` now consumes the shared
+reference parser so `SKILL.md` ordinary Markdown links and ordinary wikilinks
+follow the same parser-owned contract. The parser and enhancer PyO3 wrappers
+for these surfaces were retired so the Rust contract can evolve directly
+without duplicate binding compatibility work.
 
 Only their stable plugin-facing contracts should move to `core`.
 

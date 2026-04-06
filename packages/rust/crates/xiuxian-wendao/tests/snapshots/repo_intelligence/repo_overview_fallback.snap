@@ -1,6 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
-assertion_line: 22
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -161,7 +161,7 @@ expression: value
     "name": "FallbackPkg",
     "path": "[repo-root]",
     "repo_id": "fallback",
-    "revision": "3226b51265d93472bbf6583e7112e7ef8b458a04",
+    "revision": "[revision]",
     "url": "https://example.invalid/xiuxian-wendao/fallbackpkg.git",
     "uuid": "12345678-1234-1234-1234-123456789abc",
     "version": "0.1.0"

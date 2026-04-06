@@ -10,6 +10,7 @@ members = [
   "packages/rust/crates/xiuxian-event",
   "packages/rust/crates/xiuxian-executor",
   "packages/rust/crates/xiuxian-io",
+  "packages/rust/crates/xiuxian-git-repo",
   "packages/rust/crates/xiuxian-wendao",
   "packages/rust/crates/xiuxian-wendao-builtin",
   "packages/rust/crates/xiuxian-wendao-core",
@@ -76,8 +77,8 @@ quick-xml = "0.39.2"
 petgraph = "0.7"
 async-trait = "0.1"
 
-# Git operations (libgit2 for performance)
-git2 = "0.20.3"
+# Git operations
+gix = "0.81.0"
 
 # Python bindings - Python 3.13 support via PyO3 0.27+
 pyo3 = { version = "0.27.2", features = ["extension-module"] }

@@ -1,6 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
-assertion_line: 37
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -172,7 +172,7 @@ expression: value
       "name": "DemoLib",
       "path": "[repo-root]",
       "repo_id": "modelica-demo",
-      "revision": "634360fe424f0bb3f632a10ac40904edac31b2ad",
+      "revision": "[revision]",
       "url": "https://example.invalid/xiuxian-wendao/demolib.git",
       "uuid": null,
       "version": null
@@ -359,7 +359,7 @@ expression: value
     ],
     "module_count": 3,
     "repo_id": "modelica-demo",
-    "revision": "634360fe424f0bb3f632a10ac40904edac31b2ad",
+    "revision": "[revision]",
     "symbol_count": 1
   }
 }

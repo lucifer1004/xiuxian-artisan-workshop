@@ -7,7 +7,7 @@ fn canonical_parser_namespace_parses_workflow_fixture() {
     let path = Path::new("/tmp/workflow-demo/workflow.md");
 
     let canonical = crate::parsers::markdown::parse_note(path, root, workflow_content)
-        .expect("canonical parser should parse workflow fixture");
+        .unwrap_or_else(|| panic!("canonical parser should parse workflow fixture"));
 
     assert_eq!(canonical.doc.id, "workflow");
     assert_eq!(canonical.doc.title, "Task: Refactor Authentication Logic");

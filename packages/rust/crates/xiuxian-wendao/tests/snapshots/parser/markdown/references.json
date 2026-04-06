@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "markdown",
+    "target": "references/qianji.toml",
+    "target_address": "#flow",
+    "original": "[Guide](references/qianji.toml#flow)"
+  },
+  {
+    "kind": "wiki_link",
+    "target": "references/qianji.toml",
+    "target_address": null,
+    "original": "[[references/qianji.toml|Manifest]]"
+  },
+  {
+    "kind": "markdown",
+    "target": null,
+    "target_address": "#local-section",
+    "original": "[Section](#local-section)"
+  },
+  {
+    "kind": "wiki_link",
+    "target": null,
+    "target_address": "#Implementation",
+    "original": "[[#Implementation]]"
+  }
+]

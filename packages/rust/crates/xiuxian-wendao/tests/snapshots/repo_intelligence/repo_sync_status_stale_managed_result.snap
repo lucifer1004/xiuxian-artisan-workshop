@@ -1,5 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/support/repo_intelligence.rs
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -10,12 +11,12 @@ expression: value
   "health_state": "healthy",
   "last_fetched_at": "[last-fetched-at]",
   "mirror_path": "[mirror-path]",
-  "mirror_revision": "4892ccef0a885b38a1ccaae22bf04e7f2e7ab577",
+  "mirror_revision": "[revision]",
   "mirror_state": "observed",
   "mode": "status",
   "refresh": "fetch",
   "repo_id": "managed-stale",
-  "revision": "4892ccef0a885b38a1ccaae22bf04e7f2e7ab577",
+  "revision": "[revision]",
   "source_kind": "managed_remote",
   "staleness_state": "stale",
   "status_summary": {
@@ -36,11 +37,11 @@ expression: value
     },
     "revisions": {
       "aligned_with_mirror": true,
-      "checkout_revision": "4892ccef0a885b38a1ccaae22bf04e7f2e7ab577",
-      "mirror_revision": "4892ccef0a885b38a1ccaae22bf04e7f2e7ab577",
-      "tracking_revision": "4892ccef0a885b38a1ccaae22bf04e7f2e7ab577"
+      "checkout_revision": "[revision]",
+      "mirror_revision": "[revision]",
+      "tracking_revision": "[revision]"
     }
   },
-  "tracking_revision": "4892ccef0a885b38a1ccaae22bf04e7f2e7ab577",
+  "tracking_revision": "[revision]",
   "upstream_url": "[upstream-url]"
 }

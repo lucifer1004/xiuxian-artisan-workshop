@@ -5,6 +5,10 @@ use crate::parsers::markdown::ParsedSection;
 use crate::parsers::markdown::content::parse_frontmatter as parse_raw_frontmatter;
 use crate::parsers::markdown::sections::extract_sections_without_source_context;
 
+/// Parse explicit property-drawer relations from one markdown document.
+///
+/// YAML frontmatter is stripped before section parsing. Only explicit
+/// property-drawer relation fields participate in this contract.
 #[must_use]
 pub fn parse_property_relations(content: &str) -> Vec<ExplicitSectionRelation> {
     let (_frontmatter, body) = parse_raw_frontmatter(content);
@@ -12,6 +16,10 @@ pub fn parse_property_relations(content: &str) -> Vec<ExplicitSectionRelation> {
     extract_property_relations(&sections)
 }
 
+/// Extract explicit property-drawer relations from parsed markdown sections.
+///
+/// Each returned row preserves the owning section scope, the explicit property
+/// key, and the parsed target note plus optional scoped address.
 #[must_use]
 pub fn extract_property_relations(sections: &[ParsedSection]) -> Vec<ExplicitSectionRelation> {
     let mut relations = Vec::new();

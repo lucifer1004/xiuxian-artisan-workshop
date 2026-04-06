@@ -159,6 +159,10 @@ mod docs_page_index_tree_search;
 mod docs_page_index_node;
 
 #[cfg(not(feature = "performance"))]
+#[path = "integration/dependency_indexer_pyproject.rs"]
+mod dependency_indexer_pyproject;
+
+#[cfg(not(feature = "performance"))]
 #[path = "integration/repo_example_search.rs"]
 mod repo_example_search;
 

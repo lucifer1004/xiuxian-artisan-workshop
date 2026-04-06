@@ -342,6 +342,20 @@ That same host live lane now also validates the staged
 against the same plan-aware batch fixture before the live downcall, so the
 outgoing generic-topology Arrow batch is now proven above one less implicit
 host-to-Julia topology handoff.
+That same host live lane now also proves one plan-aware worker-partition
+generic-topology `constraint_filter` batch above the same raw connected-pair
+collection seam, and it now validates the staged `constraint_kind` and
+`required_boundary_size` request columns before reusing that batch against the
+manifest-discovered `WendaoSearch.jl --mode solver_demo` filter route.
+That same plugin-owned live lane now also proves one multi-candidate generic-
+topology `constraint_filter` batch against that same manifest-discovered
+`WendaoSearch.jl --mode solver_demo` multi-route endpoint, and the real Julia
+service tests are now serialized with a shared file lock so default
+`cargo test -p xiuxian-wendao-julia graph_structural_exchange --lib` remains
+stable under the repo's normal parallel Rust harness.
+The capability-manifest response validator and generic-topology scored-pair
+normalization are now also clippy-clean under `-D warnings`, so this live lane
+no longer depends on local lint suppressions or precision-loss casts.
 That bounded host-side proof now also exercises that public fetch helper
 directly and confirms that the missing-transport failure still resolves through
 the Julia-owned structural-rerank route instead of a host-local adapter layer.

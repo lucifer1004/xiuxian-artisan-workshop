@@ -31,7 +31,7 @@ fn test_parse_relation_targets_support_scoped_wiki_links() {
 
 #[test]
 fn test_parse_property_relations_strip_frontmatter_and_ignore_non_link_scalars() {
-    let content = r#"---
+    let content = r"---
 title: Demo
 ---
 ## Heading 1
@@ -40,7 +40,7 @@ title: Demo
 :RELATED: [[file-b#section-2]], [[#local-target]]
 :WEIGHT: 5
 :END:
-"#;
+";
 
     let relations = parse_property_relations(content);
 
@@ -63,14 +63,14 @@ title: Demo
 
 #[test]
 fn test_parse_property_relations_map_explicit_property_keys() {
-    let content = r#"
+    let content = r"
 ## Architecture
 :PROPERTIES:
 :DEPENDS_ON: [[foundation#core]]
 :EXTENDS: [[base-doc]]
 :SEE_ALSO: [[/Appendix]]
 :END:
-"#;
+";
 
     let relations = parse_property_relations(content);
 

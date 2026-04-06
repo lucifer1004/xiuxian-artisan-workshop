@@ -18,14 +18,18 @@ pub fn infer_relations(
     let source_note = note_title;
 
     for entity_ref in entity_refs {
+        let target_display = match &entity_ref.target_address {
+            Some(address) => format!("{}{}", entity_ref.name, address),
+            None => entity_ref.name.clone(),
+        };
         relations.push(InferredRelation {
             source: source_note.to_string(),
             source_address: None,
             target: entity_ref.name.clone(),
-            target_address: None,
+            target_address: entity_ref.target_address.clone(),
             relation_type: None,
             metadata_owner: None,
-            description: format!("{source_note} links to {}", entity_ref.name),
+            description: format!("{source_note} links to {target_display}"),
         });
     }
 

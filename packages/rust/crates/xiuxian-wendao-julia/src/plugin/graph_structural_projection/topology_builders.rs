@@ -19,6 +19,10 @@ use super::topology::{
     build_graph_structural_generic_topology_candidate_inputs_from_raw_connected_pairs,
 };
 
+/// Build one generic explicit-edge topology candidate subgraph from staged
+/// metadata inputs.
+///
+/// # Errors
 ///
 /// Returns [`RepoIntelligenceError`] when the candidate id is blank, the node
 /// list is invalid, or the explicit edge endpoints or edge kinds violate the

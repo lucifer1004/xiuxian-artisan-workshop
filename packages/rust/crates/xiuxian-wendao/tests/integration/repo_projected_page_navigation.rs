@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "modelica")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_projection_support::{assert_repo_json_snapshot, write_repo_config};
-use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, ProjectionPageKind, RepoProjectedPageIndexTreesQuery,
@@ -200,57 +199,5 @@ fn initialize_git_repository(
     repo_dir: &Path,
     remote_url: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let repository = Repository::init(repo_dir)?;
-    repository.remote("origin", remote_url)?;
-    let commit = commit_all(&repository, "initial import")?;
-    ensure_branch_main(&repository, commit)?;
-    Ok(())
-}
-
-fn commit_all(repository: &Repository, message: &str) -> Result<git2::Oid, git2::Error> {
-    let mut index = repository.index()?;
-    index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-
-    let tree_id = index.write_tree()?;
-    let tree = repository.find_tree(tree_id)?;
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_000, 0),
-    )?;
-    let parent_commit = repository
-        .head()
-        .ok()
-        .and_then(|head| head.target())
-        .and_then(|oid| repository.find_commit(oid).ok());
-    let parent_refs = parent_commit.iter().collect::<Vec<_>>();
-
-    repository.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        message,
-        &tree,
-        &parent_refs,
-    )
-}
-
-fn ensure_branch_main(repository: &Repository, commit_id: git2::Oid) -> Result<(), git2::Error> {
-    let commit = repository.find_commit(commit_id)?;
-    match repository.find_branch("main", BranchType::Local) {
-        Ok(local_branch) => {
-            let mut reference = local_branch.into_reference();
-            reference.set_target(commit.id(), "move main to latest test commit")?;
-        }
-        Err(error) if error.code() == git2::ErrorCode::NotFound => {
-            repository.branch("main", &commit, true)?;
-        }
-        Err(error) => return Err(error),
-    }
-    repository.set_head("refs/heads/main")?;
-    let mut checkout = CheckoutBuilder::new();
-    checkout.force();
-    repository.checkout_head(Some(&mut checkout))?;
-    Ok(())
+    crate::support::repo_fixture::initialize_git_repository(repo_dir, remote_url)
 }

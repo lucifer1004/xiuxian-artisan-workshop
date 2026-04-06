@@ -3,9 +3,11 @@ use std::path::{Component, Path, PathBuf};
 
 use super::types::MarkdownConfigLinkTarget;
 
-/// Extracts normalized local/semantic link targets plus optional type-hints.
-///
-/// Type hints are parsed from wikilink shape `[[target#type]]`.
+const CONFIG_TYPE_KEY: &str = "type";
+const DEFAULT_CONFIG_TYPE: &str = "unknown";
+
+/// Extracts normalized local or semantic link targets plus optional explicit
+/// reference categories.
 #[must_use]
 pub fn extract_markdown_config_link_targets_by_id(
     markdown: &str,
@@ -42,7 +44,7 @@ pub fn extract_markdown_config_link_targets_by_id(
                     &cursor.id,
                     link.url.as_str(),
                     source_path,
-                    None,
+                    cursor.config_type.as_str(),
                 );
             }
             comrak::nodes::NodeValue::Image(image) => {
@@ -54,20 +56,19 @@ pub fn extract_markdown_config_link_targets_by_id(
                     &cursor.id,
                     image.url.as_str(),
                     source_path,
-                    Some("attachment".to_string()),
+                    cursor.config_type.as_str(),
                 );
             }
             comrak::nodes::NodeValue::WikiLink(link) => {
                 let Some(cursor) = &active_cursor else {
                     continue;
                 };
-                let (target, reference_type) = split_wikilink_type_hint(link.url.as_str());
                 insert_link_target(
                     &mut links_by_id,
                     &cursor.id,
-                    target,
+                    link.url.as_str(),
                     source_path,
-                    reference_type,
+                    cursor.config_type.as_str(),
                 );
             }
             _ => {}
@@ -80,6 +81,7 @@ pub fn extract_markdown_config_link_targets_by_id(
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MarkdownPropertyCursor {
     id: String,
+    config_type: String,
     heading_level: u8,
 }
 
@@ -94,6 +96,7 @@ fn parse_cursor_from_heading<'a>(
     let tag = parse_property_tag(&html.literal)?;
     Some(MarkdownPropertyCursor {
         id: tag.id,
+        config_type: tag.config_type,
         heading_level,
     })
 }
@@ -101,6 +104,7 @@ fn parse_cursor_from_heading<'a>(
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MarkdownPropertyTag {
     id: String,
+    config_type: String,
 }
 
 fn parse_property_tag(html_block: &str) -> Option<MarkdownPropertyTag> {
@@ -111,6 +115,7 @@ fn parse_property_tag(html_block: &str) -> Option<MarkdownPropertyTag> {
         .trim();
 
     let mut id: Option<String> = None;
+    let mut config_type: Option<String> = None;
     for pair in body.split(',') {
         let Some((raw_key, raw_value)) = pair.split_once(':') else {
             continue;
@@ -123,9 +128,15 @@ fn parse_property_tag(html_block: &str) -> Option<MarkdownPropertyTag> {
         if key == "id" {
             id = Some(value.to_string());
         }
+        if key == CONFIG_TYPE_KEY {
+            config_type = Some(value.to_string());
+        }
     }
 
-    Some(MarkdownPropertyTag { id: id? })
+    Some(MarkdownPropertyTag {
+        id: id?,
+        config_type: config_type.unwrap_or_else(|| DEFAULT_CONFIG_TYPE.to_string()),
+    })
 }
 
 fn trim_quotes(value: &str) -> &str {
@@ -145,12 +156,12 @@ fn insert_link_target(
     id: &str,
     raw_target: &str,
     source_path: &str,
-    reference_type: Option<String>,
+    config_type: &str,
 ) {
     let Some(target) = normalize_local_link_target(raw_target, source_path) else {
         return;
     };
-    let normalized_type = normalize_reference_type(reference_type, target.as_str());
+    let normalized_type = normalize_reference_type(config_type, target.as_str());
     let links = links_by_id.entry(id.to_string()).or_default();
     if !links
         .iter()
@@ -163,11 +174,9 @@ fn insert_link_target(
     }
 }
 
-fn normalize_reference_type(reference_type: Option<String>, target: &str) -> Option<String> {
-    let explicit = reference_type
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty());
-    explicit.or_else(|| infer_reference_type_from_target(target))
+fn normalize_reference_type(config_type: &str, target: &str) -> Option<String> {
+    infer_reference_type_from_target(target)
+        .or_else(|| normalize_config_reference_type(config_type))
 }
 
 fn infer_reference_type_from_target(target: &str) -> Option<String> {
@@ -197,20 +206,16 @@ fn is_attachment_extension(extension: &str) -> bool {
     )
 }
 
-fn split_wikilink_type_hint(raw_target: &str) -> (&str, Option<String>) {
-    let trimmed = raw_target.trim();
-    if trimmed.is_empty() {
-        return (trimmed, None);
+fn normalize_config_reference_type(config_type: &str) -> Option<String> {
+    let normalized = config_type.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "" | DEFAULT_CONFIG_TYPE => None,
+        "prompt" | "template" | "tpl" => Some("template".to_string()),
+        "persona" | "agent" => Some("persona".to_string()),
+        "knowledge" | "doc" => Some("knowledge".to_string()),
+        "workflow" | "flow" | "qianji-flow" => Some("qianji-flow".to_string()),
+        _ => Some(normalized),
     }
-    let before_alias = trimmed.split('|').next().unwrap_or(trimmed).trim();
-    let Some((target, hint)) = before_alias.rsplit_once('#') else {
-        return (before_alias, None);
-    };
-    let hint = hint.trim();
-    if target.trim().is_empty() || hint.is_empty() {
-        return (before_alias, None);
-    }
-    (target.trim(), Some(hint.to_string()))
 }
 
 fn normalize_local_link_target(raw_target: &str, source_path: &str) -> Option<String> {

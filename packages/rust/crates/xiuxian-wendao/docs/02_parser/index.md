@@ -15,6 +15,14 @@ canonical parser families, and parser implementation rules in
 
 - [architecture.md](architecture.md): Canonical parser namespace, parser-family
   matrix, parser-vs-helper decision rule, and structural parsing principles.
+- [references.md](references.md): Unified ordinary Markdown reference grammar
+  for `[...](...)` and `[[...]]`, plus the parser-owned consumer boundary.
+- [wikilinks.md](wikilinks.md): Obsidian-aligned ordinary body wikilink
+  grammar, comrak-backed extraction, and the `link_graph_refs` consumer
+  boundary.
+- [relation_semantics.md](relation_semantics.md): The difference between
+  global `[[...]]` topology links, section-scoped property-drawer relations,
+  local property scalar metadata, and the snapshot-backed regression contract.
 
 ## Current Canonical Parser Families
 
@@ -32,11 +40,16 @@ canonical parser families, and parser implementation rules in
 3. How parser modules should be split and tested
 4. Why `[[...]]` links should establish graph topology before any semantic
    typing
-5. Why explicit metadata or suffix signals should win over hardcoded link
-   strings
+5. Why explicit metadata and real structural signals should win over hardcoded
+   link strings
+6. How `PROPERTIES` scoped relations differ from global wiki links and scalar
+   metadata
+7. How ordinary Markdown reference parsing stays parser-owned and comrak-backed
+8. How the narrower ordinary wikilink subset relates to the shared reference
+   parser surface
 
 :RELATIONS:
-:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[03_features/210_search_queries_architecture]]
+:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[03_features/210_search_queries_architecture]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]]
 :END:
 
 ---

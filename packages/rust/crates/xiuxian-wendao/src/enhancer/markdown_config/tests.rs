@@ -59,32 +59,39 @@ name = "agent"
 #[test]
 fn markdown_config_link_targets_are_normalized_and_deduplicated() {
     let markdown = r"
-# Link Config
-<!-- id: link-config, type: template -->
+# Template Config
+<!-- id: template-config, type: template -->
 
 [Guide](../docs/guide.md)
 [Guide Again](../docs/guide.md)
 ![Diagram](../assets/diagram.png)
-[[wendao://repo/sciml/repo-a/resources/notes#persona]]
 [External](https://example.com)
+
+# Persona Config
+<!-- id: persona-config, type: persona -->
+
+[[wendao://repo/sciml/repo-a/resources/notes]]
 ";
 
     let links = extract_markdown_config_link_targets_by_id(markdown, "notes/section/page.md");
     assert_eq!(
-        links.get("link-config"),
+        links.get("template-config"),
         Some(&vec![
             MarkdownConfigLinkTarget {
                 target: "notes/docs/guide.md".to_string(),
-                reference_type: None,
+                reference_type: Some("template".to_string()),
             },
             MarkdownConfigLinkTarget {
                 target: "notes/assets/diagram.png".to_string(),
                 reference_type: Some("attachment".to_string()),
             },
-            MarkdownConfigLinkTarget {
-                target: "wendao://repo/sciml/repo-a/resources/notes".to_string(),
-                reference_type: Some("persona".to_string()),
-            },
         ])
+    );
+    assert_eq!(
+        links.get("persona-config"),
+        Some(&vec![MarkdownConfigLinkTarget {
+            target: "wendao://repo/sciml/repo-a/resources/notes".to_string(),
+            reference_type: Some("persona".to_string()),
+        },])
     );
 }

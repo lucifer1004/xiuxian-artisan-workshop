@@ -19,6 +19,8 @@
 use crate::link_graph::{MarkdownBlock, MarkdownBlockKind};
 use comrak::{Arena, Options, nodes::AstNode, nodes::NodeValue, parse_document};
 
+use super::sourcepos;
+
 /// Extract block-level elements from Markdown section text.
 ///
 /// # Arguments
@@ -251,70 +253,7 @@ pub(super) fn line_col_to_byte_range(
     end_line: usize,
     end_col: usize,
 ) -> Option<(usize, usize)> {
-    let mut current_line = 1;
-
-    // Find start byte
-    for (byte_idx, ch) in text.char_indices() {
-        if current_line == start_line {
-            // Found start line - calculate column offset
-            let col_offset = if start_col > 0 { start_col - 1 } else { 0 };
-            let start_byte = byte_idx
-                + text[byte_idx..]
-                    .char_indices()
-                    .nth(col_offset)
-                    .map_or(0, |(i, _)| i);
-
-            // Now find end byte
-            if start_line == end_line {
-                // Same line - find end column
-                let end_col_offset = if end_col > 0 { end_col } else { 1 };
-                let end_byte = start_byte
-                    + text[start_byte..]
-                        .char_indices()
-                        .nth(end_col_offset)
-                        .map_or(text[start_byte..].len(), |(i, _)| i);
-                return Some((start_byte, end_byte));
-            }
-
-            // Different end line - find it
-            let mut remaining = &text[start_byte..];
-            let mut current = start_line;
-            let mut end_byte = start_byte;
-
-            while current < end_line {
-                if let Some(newline_pos) = remaining.find('\n') {
-                    end_byte += newline_pos + 1;
-                    remaining = &remaining[newline_pos + 1..];
-                    current += 1;
-                } else {
-                    // No more newlines, end is at the end of text
-                    return Some((start_byte, text.len()));
-                }
-            }
-
-            // Now at end_line, find end column
-            let end_col_offset = if end_col > 0 { end_col } else { 1 };
-            let col_byte = remaining
-                .char_indices()
-                .nth(end_col_offset)
-                .map_or(remaining.len(), |(i, _)| i);
-            end_byte += col_byte;
-
-            return Some((start_byte, end_byte));
-        }
-
-        if ch == '\n' {
-            current_line += 1;
-        }
-    }
-
-    // Handle case where start_line is at end of text
-    if current_line == start_line && start_line == end_line {
-        let start_byte = text.len();
-        return Some((start_byte, text.len()));
-    }
-
-    None
+    sourcepos::line_col_to_byte_range(text, start_line, start_col, end_line, end_col)
 }
 
 #[cfg(test)]

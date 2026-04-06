@@ -34,10 +34,12 @@ fn parse_search_query_tracks_related_ppr_and_tree_filters() {
         .options
         .filters
         .related
-        .expect("related filter should parse");
+        .unwrap_or_else(|| panic!("related filter should parse"));
     assert_eq!(related.seeds, vec!["alpha"]);
     assert_eq!(related.max_distance, Some(2));
-    let ppr = related.ppr.expect("ppr options should parse");
+    let ppr = related
+        .ppr
+        .unwrap_or_else(|| panic!("ppr options should parse"));
     assert_eq!(ppr.alpha, Some(0.2));
     assert_eq!(ppr.max_iter, Some(9));
     assert_eq!(ppr.tol, Some(0.001));
@@ -73,7 +75,7 @@ fn parse_search_query_supports_negated_paths_and_boolean_tags() {
         .options
         .filters
         .tags
-        .expect("tag filter should parse");
+        .unwrap_or_else(|| panic!("tag filter should parse"));
     assert_eq!(tags.any, vec!["alpha", "beta"]);
     assert_eq!(
         parsed.options.filters.exclude_paths,

@@ -328,6 +328,7 @@ mod tests {
     use crate::gateway::studio::repo_index::RepoCodeDocument;
     use crate::gateway::studio::router::{GatewayState, StudioState};
     use crate::gateway::studio::search::build_symbol_index;
+    use crate::gateway::studio::test_support::init_git_repository;
     use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
     use crate::search_plane::{
         SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
@@ -365,7 +366,8 @@ mod tests {
 
     #[cfg(feature = "julia")]
     fn init_git_repo_or_panic(path: impl AsRef<Path>, context: &str) {
-        git2::Repository::init(path).unwrap_or_else(|error| panic!("{context}: {error}"));
+        let _ = context;
+        init_git_repository(path);
     }
 
     fn repo_document(path: &str, language: &str, contents: &str) -> RepoCodeDocument {

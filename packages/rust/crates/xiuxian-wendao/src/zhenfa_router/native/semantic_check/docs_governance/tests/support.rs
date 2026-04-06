@@ -10,7 +10,9 @@ pub(super) use crate::zhenfa_router::native::audit::fix::AtomicFixBatch;
 pub(super) use crate::zhenfa_router::native::audit::generate_surgical_fixes;
 pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::collect_workspace_doc_governance_issues;
 pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::collection::collect_stale_index_footer_standards;
-pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::derive_opaque_doc_id;
+pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::{
+    derive_opaque_doc_id, extract_wikilinks,
+};
 pub(super) use crate::zhenfa_router::native::semantic_check::docs_governance::{
     CANONICAL_DOC_HIDDEN_PATH_LINK_ISSUE_TYPE, DOC_IDENTITY_PROTOCOL_ISSUE_TYPE,
     INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE,

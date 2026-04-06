@@ -1,8 +1,7 @@
 use super::*;
 use crate::gateway::studio::router::StudioState;
-use crate::gateway::studio::test_support::assert_studio_json_snapshot;
+use crate::gateway::studio::test_support::{assert_studio_json_snapshot, init_git_repository};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
-use git2::Repository;
 use serde_json::json;
 use tempfile::tempdir;
 
@@ -500,8 +499,7 @@ async fn scan_roots_and_read_content_support_repo_checkout_roots() {
         "within Modelica; end Modelica;\n",
     )
     .unwrap_or_else(|err| panic!("failed to write repo fixture file: {err}"));
-    Repository::init(&repo_root)
-        .unwrap_or_else(|err| panic!("failed to initialize git repo fixture: {err}"));
+    init_git_repository(&repo_root);
 
     let mut state = StudioState::new();
     state.project_root = temp_dir.path().to_path_buf();

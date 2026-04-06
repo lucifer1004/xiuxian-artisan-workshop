@@ -22,17 +22,17 @@ This skill implements the **Evolution Trinity** for autonomous capability upgrad
 
 ## 1. The Forge Codex
 
-- [[references/forge_laws.md#knowledge]]
+- [[references/forge_laws.md]]
 
 ## 2. The Evolution Trinity
 
-- **Grand Auditor**: [[references/grand_auditor.md#persona]] (Failure DNA extraction)
-- **Soul-Forger**: [[references/soul_forger.md#persona]] (Persona synthesis and methodology stitching)
-- **Forge-Guard**: [[references/forge_guard.md#persona]] (Regression and degeneration prevention)
+- **Grand Auditor**: [[references/grand_auditor.md]] (Failure DNA extraction)
+- **Soul-Forger**: [[references/soul_forger.md]] (Persona synthesis and methodology stitching)
+- **Forge-Guard**: [[references/forge_guard.md]] (Regression and degeneration prevention)
 
 ## 3. The Synaptic Forge Flow
 
-- [[references/soul_forge_flow.toml#qianji-flow]]
+- [[references/soul_forge_flow.toml]]
 
 ## 4. Registry Anchors
 
@@ -40,28 +40,28 @@ This skill implements the **Evolution Trinity** for autonomous capability upgrad
 
 <!-- id: "grand_auditor", type: "persona", target: "references/grand_auditor.md" -->
 
-- [[references/grand_auditor.md#persona]]
+- [[references/grand_auditor.md]]
 
 ### Soul-Forger Persona
 
 <!-- id: "soul_forger", type: "persona", target: "references/soul_forger.md" -->
 
-- [[references/soul_forger.md#persona]]
+- [[references/soul_forger.md]]
 
 ### Forge-Guard Persona
 
 <!-- id: "forge_guard", type: "persona", target: "references/forge_guard.md" -->
 
-- [[references/forge_guard.md#persona]]
+- [[references/forge_guard.md]]
 
 ### Forge Laws
 
 <!-- id: "forge_laws", type: "knowledge", target: "references/forge_laws.md" -->
 
-- [[references/forge_laws.md#knowledge]]
+- [[references/forge_laws.md]]
 
 ### Soul Forge Flow
 
 <!-- id: "soul_forge_flow", type: "workflow", target: "references/soul_forge_flow.toml" -->
 
-- [[references/soul_forge_flow.toml#qianji-flow]]
+- [[references/soul_forge_flow.toml]]

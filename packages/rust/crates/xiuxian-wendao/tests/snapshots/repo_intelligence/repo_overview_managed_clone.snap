@@ -1,6 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
-assertion_line: 22
+source: packages/rust/crates/xiuxian-wendao/tests/integration/support/../../support/repo_intelligence.rs
+assertion_line: 34
 expression: value
 ---
 {
@@ -153,7 +153,7 @@ expression: value
     "name": "ManagedPkg",
     "path": "[repo-root]",
     "repo_id": "managed",
-    "revision": "6eb5a36800774f6ab79e8b33656ca42e17f6fe11",
+    "revision": "[revision]",
     "url": "[repo-url]",
     "uuid": "12345678-1234-1234-1234-123456789abc",
     "version": "0.1.0"

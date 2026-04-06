@@ -62,10 +62,12 @@ matching:
 1. explicit fields, structured delimiters, and graph-visible links come first
 2. ordinary wiki links create graph topology first; semantic upgrades come
    later and only from explicit metadata owners
-3. file suffix or owned path conventions may classify resources such as
+3. Obsidian-style wiki-link fragments such as `#Heading` or `#^block-id`
+   should be treated as real target addresses, not semantic type suffixes
+4. file suffix or owned path conventions may classify resources such as
    attachments without introducing link-token string matches
-4. heuristic or path-based fallbacks should stay bounded and local
-5. keyword-only matching should not become the primary contract when a
+5. heuristic or path-based fallbacks should stay bounded and local
+6. keyword-only matching should not become the primary contract when a
    structural signal already exists
 
 ## Structural Relation Rule
@@ -83,9 +85,58 @@ attachment, that classification should come from an explicit structural signal
 such as the file suffix, not from a special relation index note or a
 hardcoded link label.
 
+For ordinary body links, Wendao follows one parser-owned Markdown reference
+contract:
+
+1. `[label](note/path.md)` means a Markdown reference target
+2. `[label](note/path.md#Heading)` means a Markdown reference plus structural
+   address
+3. `[label](#Local Heading)` means a local same-note structural address
+4. `[[note]]` means a wiki-link note target
+5. `[[note#Heading]]` means a wiki-link note plus heading target
+6. `[[note#^block-id]]` means a wiki-link note plus block target
+7. `[[#Local Heading]]` means a local same-note structural address
+
+These address fragments are structural coordinates, not semantic type tags.
+
+The canonical implementation for ordinary Markdown references lives under
+`src/parsers/markdown/references/` and uses comrak AST parsing plus source-span
+reconstruction, so ordinary Markdown reference parsing is not owned by
+consumer-local scanners.
+
+The narrower wikilink-only subset is exposed under
+`src/parsers/markdown/wikilinks/` for consumers that only care about ordinary
+Obsidian-style topology links.
+
 Typed relation semantics belong to explicit metadata surfaces, such as
 property drawers or subsystem-owned metadata, not to hardcoded string matches
 inside parser helpers.
+
+## Property Drawer Scope Rule
+
+Property drawers are the explicit metadata surface for section-scoped relation
+semantics.
+
+This means Wendao distinguishes three different parser contracts:
+
+1. ordinary global `[[...]]` links in note content:
+   topology, backlinks, and structural adjacency
+2. property-drawer relation values:
+   explicit typed relations scoped to the owning heading or section
+3. property-drawer scalar values:
+   local metadata such as limits, weights, policy tags, or scope markers that
+   do not create graph edges by default
+
+Inside a property drawer, Wendao uses an explicit target grammar so a value
+such as `[[file-b#section-2]]` means a scoped relation target rather than the
+ordinary body-link interpretation of `#...`.
+
+Stable cross-document section relations should prefer explicit `:ID:` anchors.
+Path- and hash-scoped targets are still preserved by the parser, but the
+current graph adapter only resolves the safe subset that can be mapped without
+guessing.
+
+See [relation_semantics.md](relation_semantics.md) for the detailed contract.
 
 ## Persistence Rule
 
@@ -95,7 +146,7 @@ strings as known semantic relation types. Unknown labels are preserved rather
 than promoted.
 
 :RELATIONS:
-:LINKS: [[02_parser/index]], [[01_core/103_package_layering]], [[03_features/210_search_queries_architecture]], [[06_roadmap/405_large_rust_modularization]]
+:LINKS: [[02_parser/index]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]], [[03_features/210_search_queries_architecture]], [[06_roadmap/405_large_rust_modularization]]
 :END:
 
 ---

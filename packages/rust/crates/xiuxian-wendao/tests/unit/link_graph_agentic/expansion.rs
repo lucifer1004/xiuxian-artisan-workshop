@@ -318,6 +318,7 @@ async fn test_agentic_expansion_pair_uses_julia_graph_structural_fetch_helper() 
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_fetch_helper_against_solver_demo_service()
 -> TestResult {
     let (server_base_url, mut server_guard) =
@@ -406,6 +407,7 @@ async fn test_host_uses_julia_graph_structural_fetch_helper_against_solver_demo_
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_fetch_helper_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let (server_base_url, mut server_guard) =
@@ -492,6 +494,7 @@ async fn test_host_uses_julia_graph_structural_fetch_helper_via_manifest_discove
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_filter_helper_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let (server_base_url, mut server_guard) =
@@ -556,6 +559,7 @@ async fn test_host_uses_julia_graph_structural_filter_helper_via_manifest_discov
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let fixture = build_index_fixture(&[
@@ -608,6 +612,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_via
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for_multiple_connected_pair_collections_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let fixture = build_index_fixture(&[
@@ -672,6 +677,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for_seed_centered_plan_candidate_batches_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let fixture = build_index_fixture(&[
@@ -742,6 +748,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
 
 #[cfg(feature = "julia")]
 #[tokio::test]
+#[serial_test::serial(julia_live)]
 async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for_worker_partition_plan_candidate_batches_via_manifest_discovery_against_solver_demo_multi_route_service()
 -> TestResult {
     let fixture = build_index_fixture(&[

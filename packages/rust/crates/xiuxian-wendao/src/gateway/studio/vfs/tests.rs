@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::Path;
 
-use git2::{Repository, Signature};
 use uuid::Uuid;
 
 use super::content::resolve_vfs_path;
@@ -9,12 +8,12 @@ use super::roots::resolve_all_vfs_roots;
 use super::scan::scan_all_roots;
 use super::scan_roots;
 use crate::gateway::studio::router::{StudioState, configured_repositories};
+use crate::gateway::studio::test_support::commit_all;
 use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
 use crate::git::checkout::{RepositorySyncMode, resolve_repository_source};
 
 fn init_git_repository(root: &Path) {
-    let repository =
-        Repository::init(root).unwrap_or_else(|error| panic!("init repository: {error}"));
+    crate::gateway::studio::test_support::init_git_repository(root);
     fs::write(
         root.join("Project.toml"),
         "name = \"BaseModelica\"\nversion = \"0.1.0\"\n",
@@ -26,27 +25,7 @@ fn init_git_repository(root: &Path) {
         "module BaseModelica\nend\n",
     )
     .unwrap_or_else(|error| panic!("write julia source: {error}"));
-
-    let mut index = repository
-        .index()
-        .unwrap_or_else(|error| panic!("open index: {error}"));
-    index
-        .add_path(Path::new("Project.toml"))
-        .unwrap_or_else(|error| panic!("stage project file: {error}"));
-    index
-        .add_path(Path::new("src/BaseModelica.jl"))
-        .unwrap_or_else(|error| panic!("stage source file: {error}"));
-    let tree_id = index
-        .write_tree()
-        .unwrap_or_else(|error| panic!("write tree: {error}"));
-    let tree = repository
-        .find_tree(tree_id)
-        .unwrap_or_else(|error| panic!("find tree: {error}"));
-    let signature = Signature::now("vfs-test", "vfs-test@example.com")
-        .unwrap_or_else(|error| panic!("signature: {error}"));
-    repository
-        .commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
-        .unwrap_or_else(|error| panic!("commit: {error}"));
+    commit_all(root, "init");
 }
 
 #[test]

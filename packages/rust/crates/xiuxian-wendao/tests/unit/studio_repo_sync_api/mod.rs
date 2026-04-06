@@ -10,7 +10,6 @@ use std::time::UNIX_EPOCH;
 use axum::body::{Body, to_bytes};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::{Request, StatusCode};
-use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::Value;
 use tower::util::ServiceExt;
 
@@ -24,7 +23,9 @@ use xiuxian_wendao::analyzers::{
 use xiuxian_wendao::gateway::studio::repo_index::RepoCodeDocument;
 use xiuxian_wendao::gateway::studio::repo_index::{RepoIndexCoordinator, RepoIndexRequest};
 use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
-use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
+use xiuxian_wendao::gateway::studio::test_support::{
+    add_git_remote, assert_studio_json_snapshot, commit_all, init_git_repository,
+};
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
 use xiuxian_wendao::search_plane::{SearchPlaneService, publish_repo_entities};
 
@@ -3831,15 +3832,16 @@ version = "0.1.0"
         format!("module {package_name}\nend\n"),
     )?;
 
-    let repository = Repository::init(&repo_dir)?;
-    repository.remote(
+    init_git_repository(&repo_dir);
+    add_git_remote(
+        &repo_dir,
         "origin",
         &format!(
             "https://example.invalid/xiuxian-wendao/{}.git",
             package_name.to_ascii_lowercase()
         ),
-    )?;
-    commit_all(&repository, "initial import")?;
+    );
+    commit_all(&repo_dir, "initial import");
     Ok(repo_dir)
 }
 
@@ -3912,15 +3914,16 @@ fn create_local_modelica_repo(
         ),
     )?;
 
-    let repository = Repository::init(&repo_dir)?;
-    repository.remote(
+    init_git_repository(&repo_dir);
+    add_git_remote(
+        &repo_dir,
         "origin",
         &format!(
             "https://example.invalid/xiuxian-wendao/{}.git",
             package_name.to_ascii_lowercase()
         ),
-    )?;
-    commit_all(&repository, "initial import")?;
+    );
+    commit_all(&repo_dir, "initial import");
     Ok(repo_dir)
 }
 
@@ -3988,23 +3991,6 @@ fn projected_page_and_node_id_for_title(
     let node_id = find_node_id(tree.roots.as_slice(), node_title)
         .unwrap_or_else(|| panic!("expected a projected page-index node titled `{node_title}`"));
     Ok((page_id, node_id))
-}
-
-fn commit_all(repository: &Repository, message: &str) -> Result<(), git2::Error> {
-    let mut index = repository.index()?;
-    index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
-    index.write()?;
-
-    let tree_id = index.write_tree()?;
-    let tree = repository.find_tree(tree_id)?;
-    let signature = Signature::new(
-        "Xiuxian Test",
-        "test@example.com",
-        &Time::new(1_700_000_000, 0),
-    )?;
-
-    repository.commit(Some("HEAD"), &signature, &signature, message, &tree, &[])?;
-    Ok(())
 }
 
 fn redact_repo_sync_payload(value: &mut Value) {
