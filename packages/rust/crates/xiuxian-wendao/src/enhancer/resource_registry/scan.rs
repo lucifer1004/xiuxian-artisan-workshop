@@ -2,6 +2,7 @@ use include_dir::{Dir, File};
 use std::path::Path;
 
 use crate::WendaoResourceUri;
+use crate::parsers::markdown::parse_frontmatter;
 
 pub(crate) fn is_markdown_file(path: &str) -> bool {
     matches!(
@@ -38,7 +39,7 @@ pub(crate) fn semantic_skill_name_from_descriptor(path: &str, markdown: &str) ->
     {
         return None;
     }
-    crate::enhancer::parse_frontmatter(markdown)
+    parse_frontmatter(markdown)
         .name
         .map(|value| value.trim().to_ascii_lowercase())
         .filter(|value| !value.is_empty())

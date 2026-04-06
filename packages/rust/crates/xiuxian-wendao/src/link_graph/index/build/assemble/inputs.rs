@@ -5,7 +5,7 @@ use crate::link_graph::index::build::constants::DEFAULT_EXCLUDED_DIR_NAMES;
 use crate::link_graph::index::build::filters::{
     merge_excluded_dirs, normalize_include_dir, should_skip_entry,
 };
-use crate::link_graph::parser::is_supported_note;
+use crate::parsers::markdown::is_supported_note;
 use walkdir::WalkDir;
 
 pub(crate) fn prepare_build_inputs(

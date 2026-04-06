@@ -132,11 +132,11 @@ impl From<PluginArtifactPayload> for UiPluginArtifact {
 #[cfg(all(test, feature = "julia"))]
 mod tests {
     use super::{UiPluginArtifact, UiPluginLaunchSpec};
-    use xiuxian_wendao_julia::integration_support::julia_ui_artifact_payload_fixture;
+    use xiuxian_wendao_builtin::linked_builtin_julia_gateway_artifact_ui_payload_fixture;
 
     #[test]
     fn generic_ui_artifact_builds_from_plugin_artifact_payload() {
-        let payload = julia_ui_artifact_payload_fixture();
+        let payload = linked_builtin_julia_gateway_artifact_ui_payload_fixture();
         let expected_endpoint = payload
             .endpoint
             .clone()

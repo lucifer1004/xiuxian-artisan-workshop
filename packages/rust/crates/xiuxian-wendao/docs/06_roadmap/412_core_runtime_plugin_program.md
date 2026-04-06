@@ -1662,6 +1662,97 @@ The landed changes are:
    confirm the public facade cut lands without a new touched-scope warning
    front
 
+## Landed Slice: Builtin Plugin Link Anchor Extraction
+
+Macro phase:
+
+1. `M4` external plugin ownership follow-through
+
+Gate:
+
+1. host registration-thin-layer clarity
+
+Ownership seam:
+
+1. the host-private builtin-plugin link anchor should live in a dedicated
+   registration seam, not in `analyzers::languages`, so the host registration
+   layer stays explicit and `languages` stops carrying plugin-bootstrap
+   semantics
+
+The landed changes are:
+
+1. extract the builtin-plugin link anchor from `src/analyzers/languages/` into
+   one dedicated host-private registration seam
+2. make `bootstrap_builtin_registry()` depend on that dedicated seam instead
+   of on the misleading `languages` namespace
+3. rerun focused bootstrap and non-plugin probes to confirm the registration
+   thin layer stays linked and warning-clean in the touched scope
+
+## Landed Slice: Builtin Plugin Bundle Crate Extraction
+
+Macro phase:
+
+1. `M4` external plugin ownership follow-through
+
+Gate:
+
+1. builtin plugin registration independence
+
+Ownership seam:
+
+1. `xiuxian-wendao` should not remain the owner of builtin-plugin link
+   anchoring and generic bootstrap assembly; that host-specific plugin bundle
+   should move into one dedicated crate so the host consumes one registration
+   package instead of directly naming builtin plugin crates
+
+The landed changes are:
+
+1. add `xiuxian-wendao-builtin` as one dedicated builtin-plugin bundle crate
+   that owns the generic bootstrap loop plus private builtin-plugin linking
+2. move the current host bootstrap implementation and link seam into that new
+   crate, then delete the old `analyzers/builtin_plugins/` host seam
+3. rewire `xiuxian-wendao` feature forwarding and
+   `analyzers::service::bootstrap` to consume the bundle crate instead of
+   carrying builtin plugin linkage locally
+4. rerun default and feature-enabled bundle tests plus host bootstrap and
+   non-Julia compile probes to confirm the ownership cut lands without a new
+   touched-scope regression
+
+## Landed Slice: Generic Plugin Arrow Exchange Runtime Extraction
+
+Macro phase:
+
+1. `M3` runtime extraction follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the generic `WendaoArrow` request or response batch helpers used by host
+   rerank execution should not remain owned by `xiuxian-wendao-julia`; runtime
+   should own those transport-contract helpers while the Julia plugin keeps
+   repository config parsing and remote transport bootstrap
+
+The landed changes are:
+
+1. add one runtime-owned `transport/plugin_arrow_exchange/` feature folder that
+   owns `PluginArrowRequestRow`, `PluginArrowScoreRow`, request-batch
+   assembly, response decoding, cross-batch response validation, and focused
+   transport-contract tests
+2. rewire `xiuxian-wendao` production consumers in quantum-fusion and rerank
+   execution to consume those runtime-owned helpers instead of importing the
+   generic `WendaoArrow` helper set from `xiuxian-wendao-julia`
+3. rewire `xiuxian-wendao-julia` to keep only Julia-specific repository
+   config parsing, remote Flight bootstrap, and repository fetch ownership,
+   while deleting the old crate-root and module-local `JuliaArrow*`,
+   `build_julia_arrow_request_batch(...)`,
+   `decode_julia_arrow_score_rows(...)`, and
+   `validate_julia_arrow_response_batches(...)` facade exports
+4. rerun runtime, plugin, host quantum, non-Julia compile, and diff checks to
+   confirm the owner cut lands without a touched-scope regression
+
 ## Governance Rule
 
 Any future implementation note, ExecPlan, or code slice that affects this
@@ -1673,6 +1764,705 @@ program should explicitly state:
 4. compatibility impact
 
 If it does not, it is not yet ready to be treated as migration-program work.
+
+## Landed Slice: Builtin Plugin Artifact Dispatch Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. builtin plugin artifact selector dispatch for link-graph deployment
+   artifacts should not remain owned by `xiuxian-wendao`; the builtin bundle
+   crate should own builtin-plugin artifact resolution and render dispatch so
+   the host stops importing Julia compatibility artifact helpers directly
+
+The landed changes are:
+
+1. add one builtin-owned `src/artifacts/` feature folder in
+   `xiuxian-wendao-builtin` that owns builtin deployment-artifact selector
+   dispatch plus focused bundle tests
+2. move the current Julia deployment-artifact selector, resolve, and TOML
+   render dispatch out of `xiuxian-wendao/src/link_graph/runtime_config/artifacts.rs`
+   so the host production artifact seam now calls into the builtin bundle
+3. rewire gateway and Zhenfa deployment consumers to keep calling the same
+   host runtime-config surface while that surface delegates builtin-plugin
+   artifact dispatch to `xiuxian-wendao-builtin`
+4. keep Julia-specific deployment-artifact payload shaping inside
+   `xiuxian-wendao-julia`, and confirm the non-Julia host compile probe still
+   passes after the new builtin artifact surface is feature-gated to Julia
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Host Plugin Cargo Dependency Retirement
+
+Macro phase:
+
+1. `M4` Julia and Modelica host-thinning follow-through
+
+Gate:
+
+1. host manifest ownership thinning
+
+Ownership seam:
+
+1. `xiuxian-wendao/Cargo.toml` should not keep direct builtin plugin
+   dependency ownership once the host crate no longer imports Julia or
+   Modelica plugin crates directly; the builtin bundle should own that
+   forwarding seam, including the bounded Modelica `tree-sitter` feature
+   bridge
+
+The landed changes are:
+
+1. add one builtin-owned feature-forwarding bridge for the remaining
+   Modelica `tree-sitter` seam
+2. remove the host manifest's direct `dep:xiuxian-wendao-julia` and
+   `dep:xiuxian-wendao-modelica` wiring while keeping the host-facing
+   `julia`, `modelica`, and `tree-sitter` feature names stable
+3. re-validate plugin-enabled and non-default host compile probes and confirm
+   the direct plugin dependency declarations disappear from the host manifest
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Quantum Fusion Plugin Request Wrapper Ownership Cutover
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. host plugin-wrapper thinning
+
+Ownership seam:
+
+1. `link_graph/index/search/plan/payload/quantum/rerank.rs` should not retain
+   backend-specific request wrapper logic for OpenAI-compatible and vector-store
+   semantic ignition; those wrappers belong with the ignition owners in
+   `quantum_fusion/*_ignition.rs`
+2. the legacy `build_julia_rerank_request_batch` compatibility shims in the
+   ignition adapters no longer have live callers and should retire
+
+The landed changes are:
+
+1. move backend-specific request-wrapper ownership from host `rerank.rs` into
+   `openai_ignition.rs` and `vector_ignition.rs`
+2. delete the unused Julia-named compatibility request-builder shims
+3. keep host `rerank.rs` focused on domain orchestration, transport roundtrip,
+   telemetry, and score application
+4. close the touched-scope warning surfaced during validation by removing the
+   stale unused `RecordBatch` import from host `rerank.rs`
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Provider-Aware Trace Id Cutover
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `xiuxian-wendao-runtime` owns the plugin arrow request metadata seam, but
+   `plugin_arrow_request_trace_id(...)` still hardcodes the Julia-specific
+   `julia-rerank:*` prefix
+2. the runtime seam should build one provider-aware generic trace id and let
+   host ignition adapters thread the negotiated provider id through, instead
+   of baking plugin-specific identity into runtime
+
+The landed changes are:
+
+1. change the runtime request trace-id helper so it accepts one provider id and
+   emits one generic provider-aware trace id
+2. thread the provider id through `openai_ignition.rs`, `vector_ignition.rs`,
+   and host `quantum/rerank.rs`
+3. update focused runtime, quantum-fusion, and integration proof so they assert
+   the provider-aware trace id instead of the Julia-specific prefix
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Metadata-Aware Request Shaping Extraction
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `quantum_fusion/openai_ignition.rs` and
+   `quantum_fusion/vector_ignition.rs` still duplicate the same
+   runtime-oriented request shaping sequence:
+   build one `WendaoArrow` request batch from scored candidates and fetched
+   embeddings, then attach provider-aware request metadata
+2. that composition belongs in `xiuxian-wendao-runtime`, while the ignition
+   owners should stay focused on query-vector resolution and embedding fetch
+
+The landed changes are:
+
+1. add one runtime helper that builds a plugin arrow request batch from scored
+   candidates plus embeddings and attaches provider-aware metadata
+2. rewire both ignition owners to consume that runtime helper
+3. keep ignition-local logic limited to query-vector resolution, embedding
+   lookup, and owner-specific error mapping
+4. close the touched-scope warning surfaced during validation by restoring the
+   public method docs after the private embedding helper insertion
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Quantum Plugin Rerank Host Orchestration Deduplication
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. host rerank flow thinning
+
+Ownership seam:
+
+1. `quantum/rerank.rs` still duplicates the same host-local
+   `QuantumContext -> QuantumAnchorHit` staging, request-batch failure
+   telemetry, negotiated roundtrip, and score-apply orchestration across the
+   vector-store and openai-compatible plugin rerank paths
+2. that duplication belongs in the host rerank flow itself, not in runtime,
+   because it depends on `QuantumContext`, host telemetry shaping, and the
+   domain rerank orchestration boundary
+
+Landed changes:
+
+1. add one host-local helper that stages `QuantumContext` into
+   `QuantumAnchorHit`
+2. add one host-local helper that runs the shared request-batch
+   failure/roundtrip/telemetry orchestration
+3. keep the vector-store and openai-compatible entrypoints focused on their
+   real behavioral differences only
+4. keep the blocker recovery inside this same lane by moving the canonical
+   semantic-lineage helper back under `link_graph/index/lookup.rs`, removing
+   the parser-owned `LinkGraphIndex` impl from
+   `parsers/markdown/links/normalize.rs`, fixing the `PageIndexNode`
+   namespace import in `link_graph/index/page_indices.rs`, and adding one
+   focused page-index lineage regression in `tests/unit/link_graph/index.rs`
+
+Validation:
+
+1. `direnv exec . cargo fmt -p xiuxian-wendao`
+2. `direnv exec . cargo test -p xiuxian-wendao parsers::markdown:: --lib`
+3. `direnv exec . cargo test -p xiuxian-wendao --lib link_graph::index::tests::test_page_index_lineage_helpers_follow_canonical_owner_surface`
+4. `direnv exec . cargo test -p xiuxian-wendao --lib link_graph::index::search::plan::payload::quantum`
+5. `direnv exec . cargo test -p xiuxian-wendao --lib link_graph::index::search::quantum_fusion`
+6. `direnv exec . cargo check -p xiuxian-wendao --no-default-features --features julia,zhenfa-router`
+7. `direnv exec . git diff --check`
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Vector-Store Request Row Preparation Extraction
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `quantum_fusion/openai_ignition.rs` and
+   `quantum_fusion/vector_ignition.rs` still duplicate the same generic
+   request-row preparation from doc-score pairs into fetched embeddings plus
+   owned `PluginArrowRequestRow` values
+2. that preparation is runtime-owned host wiring around `xiuxian-vector`, while
+   the ignition owners should stay focused on query-vector resolution and
+   owner-specific error mapping
+
+The landed changes are:
+
+1. add one runtime helper that fetches candidate embeddings and materializes
+   `PluginArrowRequestRow` values from doc-score pairs
+2. rewire both ignition owners to consume that helper
+3. keep ignition-local logic limited to query-vector resolution and
+   owner-specific error mapping
+4. move the direct `fetch_embeddings_by_ids(...)` call out of host
+   `quantum_fusion` and into one runtime-owned `plugin_arrow_exchange/prepare.rs`
+   seam
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Candidate Projection Extraction
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `quantum_fusion/openai_ignition.rs` and
+   `quantum_fusion/vector_ignition.rs` still duplicate the same generic
+   projection from owner-local anchor hits into `doc_ids` plus
+   `PluginArrowScoredCandidate`
+2. that projection is transport-side request shaping and belongs in
+   `xiuxian-wendao-runtime`, while the ignition owners should stay focused on
+   query-vector resolution and embedding fetch
+
+The landed changes are:
+
+1. add one runtime helper that projects one generic doc-id list and scored
+   candidate list from doc-score pairs
+2. rewire both ignition owners to consume that helper
+3. keep ignition-local logic limited to query-vector resolution, embedding
+   lookup, and owner-specific error mapping
+4. close the touched-scope issues surfaced during validation by adding explicit
+   anchor-tied lifetimes to the private helper returns and removing one stale
+   unused import
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Request Metadata Extraction
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `link_graph/index/search/plan/payload/quantum/rerank.rs` should not keep
+   request-batch metadata attachment once `xiuxian-wendao-runtime` already owns
+   the transport metadata keys and the `WendaoArrow` request-batch surface
+
+The landed changes are:
+
+1. add one runtime-owned helper for plugin rerank request `trace_id` shaping
+   and batch metadata attachment
+2. rewire host rerank wrappers to consume that helper instead of calling
+   `attach_record_batch_metadata` locally
+3. move metadata-shaping proof out of host quantum tests and into runtime
+   transport tests
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Request-Batch Builder Extraction
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `openai_ignition.rs` and `vector_ignition.rs` should not keep assembling
+   `PluginArrowRequestRow` values and bridging them into one `WendaoArrow`
+   request batch once `xiuxian-wendao-runtime` already owns the request-row
+   contract and Arrow request-batch materialization
+
+The landed changes are:
+
+1. add one runtime-owned helper that converts anchor hits plus fetched
+   embeddings into one `WendaoArrow` request batch
+2. rewire the host quantum-fusion ignition adapters to consume that helper
+   while keeping query-vector resolution and vector-store retrieval semantics
+   host-owned
+3. split proof ownership so runtime covers request shaping and host covers
+   semantic ignition semantics
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Runtime Plugin Arrow Rerank Roundtrip Extraction
+
+Macro phase:
+
+1. `M4` host transport-thinning follow-through
+
+Gate:
+
+1. plugin transport ownership thinning
+
+Ownership seam:
+
+1. `quantum/rerank.rs` should not keep transport negotiation, Arrow batch
+   roundtrip, and typed response decode as host-local logic once
+   `xiuxian-wendao-runtime` already owns the underlying transport contract,
+   negotiation client, and request/response typing
+
+The landed changes are:
+
+1. add one runtime-owned `plugin_arrow_exchange` helper surface for one
+   negotiated rerank batch roundtrip plus typed response decode
+2. rewire `quantum/rerank.rs` to consume the runtime helper instead of owning
+   transport negotiation and response decode locally
+3. keep host ownership only for request-batch generation, metadata attachment,
+   telemetry shaping, and score application
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Retrieval Policy Julia Runtime Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the host retrieval-policy runtime model should not retain a
+   `LinkGraphJuliaRerankRuntimeConfig` field or resolve that Julia-specific
+   runtime directly; builtin or plugin-owned helpers should project the
+   generic rerank binding, score weights, schema version, and artifact-dispatch
+   inputs so `xiuxian-wendao` keeps only generic retrieval-policy ownership
+
+The landed changes are:
+
+1. add one builtin-owned retrieval-policy helper surface that resolves
+   Julia-backed rerank binding, rerank score weights, rerank schema version,
+   and artifact-dispatch input from merged settings
+2. rewire `xiuxian-wendao/src/link_graph/runtime_config/models/retrieval/`
+   and `resolve/policy/retrieval/` so the host runtime model stores only
+   generic rerank outputs instead of a Julia-specific runtime struct
+3. rewire host runtime-config and artifact-dispatch helpers to consume that
+   builtin-owned projection surface while keeping non-Julia host probes green
+4. keep Julia-specific runtime parsing and deployment-artifact payload shaping
+   inside `xiuxian-wendao-julia`, and rerun builtin, host runtime-config,
+   host quantum, and non-Julia compile probes to confirm the owner cut lands
+   without a touched-scope regression
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin OpenAPI Julia Example Assertion Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the host bundled `OpenAPI` assertion surface under `gateway/openapi/`
+   should not import Julia example helpers directly from the plugin crate; the
+   builtin bundle should own that example-consumption seam so host assertion
+   code depends only on the builtin package
+
+The landed changes are:
+
+1. add one builtin-owned `artifacts/openapi.rs` helper surface for the current
+   Julia-backed bundled `OpenAPI` examples used by the host assertion layer
+2. rewire `xiuxian-wendao/src/gateway/openapi/document.rs` tests to consume
+   those builtin-owned helpers instead of importing Julia example helpers
+   directly from `xiuxian-wendao-julia`
+3. keep the actual example source of truth inside `xiuxian-wendao-julia`
+   while confirming the host bundled `OpenAPI` assertion seam no longer
+   imports the plugin crate directly and the non-Julia host compile probe
+   stays green
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Studio Gateway Artifact Fixture Assertion Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the host `gateway/studio` artifact fixture assertion seam should not import
+   Julia fixture helpers directly from the plugin crate; the builtin bundle
+   should own the linked fixture-consumption seam so host gateway assertions
+   depend only on the builtin package
+
+The landed changes were:
+
+1. added builtin-owned linked gateway fixture helpers under
+   `xiuxian-wendao-builtin/src/artifacts/gateway.rs` and re-exported them
+   through the builtin crate root
+2. rewired
+   `gateway/studio/router/handlers/capabilities/deployment.rs`,
+   `gateway/studio/types/config.rs`, and
+   `gateway/studio/router/tests/config.rs` to consume builtin-owned fixture
+   helpers instead of importing Julia helpers directly
+3. kept the concrete fixture source of truth inside `xiuxian-wendao-julia`
+   while confirming the touched host `gateway/studio` assertion seam no longer
+   imports the plugin crate directly
+4. added builtin regression coverage for the linked gateway helper surface and
+   kept the non-Julia host compile probe green
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Host Julia Src-Test Helper Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the host internal `src/` test seams under `link_graph/runtime_config/` and
+   `link_graph/index/search/plan/payload/quantum/` should not import Julia
+   compatibility helpers directly from the plugin crate; the builtin bundle
+   should own the linked helper surface for those host internal tests
+
+The landed changes were:
+
+1. added one builtin-owned `test_support/` linked helper surface for the
+   current Julia selectors, constants, and rerank binding fixture used by host
+   internal `src/` tests
+2. rewire
+   `link_graph/runtime_config/tests.rs` and
+   `link_graph/index/search/plan/payload/quantum/tests.rs`
+   to consume builtin-owned linked helpers instead of importing Julia helpers
+   directly
+3. keep the concrete Julia compatibility source of truth inside
+   `xiuxian-wendao-julia` while confirming the touched host internal test seam
+   no longer imports the plugin crate directly
+4. added builtin regression coverage for the new linked host-test helper seam
+   and kept the non-Julia host compile probe green
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Zhenfa Router Julia Fixture Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the host `zhenfa_router` unit-test seams should not import Julia gateway
+   fixture helpers directly from the plugin crate; the builtin bundle should
+   own the linked fixture-consumption seam for those host unit tests
+
+The landed changes were:
+
+1. extend the builtin-owned linked gateway fixture helpers for the JSON-RPC
+   params and expected JSON fragment fixtures used by host `zhenfa_router`
+   tests
+2. rewired
+   `tests/unit/zhenfa_router/native/deployment.rs` and
+   `tests/unit/zhenfa_router/rpc.rs`
+   to consume builtin-owned fixture helpers instead of importing Julia helpers
+   directly
+3. kept the concrete gateway fixture source of truth inside
+   `xiuxian-wendao-julia` while confirming the touched host `zhenfa_router`
+   unit-test seam no longer imports the plugin crate directly
+4. added builtin regression coverage for the extended linked gateway fixture
+   seam and kept the non-Julia host compile probe green
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Planned Search Julia Integration Fixture Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the host planned-search integration tests that only consume plugin
+   integration-support fixtures should not import those helpers directly from
+   the plugin crate; the builtin bundle should own the linked fixture
+   consumption seam for those integration tests
+
+The landed changes are:
+
+1. add one builtin-owned linked planned-search helper surface under
+   `xiuxian-wendao-builtin/src/test_support/planned_search/` for the current
+   runtime-config and test-server helpers used by the touched host
+   `planned_search_*` integration tests
+2. rewire
+   `planned_search_julia_rerank.rs`,
+   `planned_search_julia_rerank_vector_store.rs`,
+   `planned_search_julia_rerank_metadata_example.rs`,
+   `planned_search_julia_rerank_official_example.rs`, and
+   `planned_search_wendaoanalyzer_linear_blend.rs`
+   to consume builtin-owned helpers instead of importing plugin helpers
+   directly
+3. keep the concrete planned-search fixture source of truth inside
+   `xiuxian-wendao-julia` while confirming the touched host integration seam
+   no longer imports the plugin crate directly and the non-Julia host compile
+   probe remains green
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Planned Search Similarity-Only Analyzer Artifact Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the remaining host planned-search similarity-only integration test should
+   not import Julia compatibility runtime types, analyzer artifact materialization,
+   or artifact-backed service spawn helpers directly from the plugin crate;
+   the builtin bundle should own that linked analyzer-artifact seam
+
+The landed changes are:
+
+1. add one builtin-owned linked helper surface for the similarity-only
+   planned-search analyzer-artifact path, covering runtime-config rendering
+   and artifact-backed analyzer service spawn while keeping the thick
+   implementation in `xiuxian-wendao-julia::integration_support::planned_search`
+2. rewire
+   `planned_search_wendaoanalyzer_similarity_only.rs`
+   to consume builtin-owned helpers instead of importing plugin compatibility
+   or integration-support helpers directly
+3. keep the concrete analyzer runtime and deployment artifact source of truth
+   inside `xiuxian-wendao-julia` while confirming the touched host integration
+   seam no longer imports the plugin crate directly and the non-Julia host
+   compile probe remains green
+
+:RELATIONS:
+:LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]
+:END:
+
+---
+
+## Landed Slice: Builtin Graph-Structural Host Test Helper Extraction
+
+Macro phase:
+
+1. `M4` Julia ownership externalization follow-through
+
+Gate:
+
+1. host direct plugin-import thinning
+
+Ownership seam:
+
+1. the remaining host `link_graph_agentic` unit tests should not import
+   graph-structural constants or helper functions directly from the Julia
+   plugin crate; the builtin bundle should own that linked test-support seam
+
+The landed changes are:
+
+1. add one builtin-owned linked graph-structural test-support helper surface
+   for the bounded constants and helper functions used by
+   `tests/unit/link_graph_agentic/expansion.rs` without moving concrete
+   graph-structural implementation out of `xiuxian-wendao-julia`
+2. rewire
+   `tests/unit/link_graph_agentic/expansion.rs`
+   to consume builtin-owned helpers instead of importing those graph-structural
+   helpers directly from `xiuxian-wendao-julia`
+3. keep the concrete graph-structural implementation source of truth inside
+   `xiuxian-wendao-julia` while confirming the touched host test seam no
+   longer imports the plugin crate directly and the non-Julia host test-compile
+   probe still completes
 
 :RELATIONS:
 :LINKS: [[index]], [[06_roadmap/409_core_runtime_plugin_surface_inventory]], [[06_roadmap/410_p1_generic_plugin_contract_staging]], [[06_roadmap/411_p1_first_code_slice_plan]], [[06_roadmap/413_m2_core_extraction_package_list]], [[06_roadmap/414_m3_runtime_extraction_package_list]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/416_compatibility_retirement_ledger]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]

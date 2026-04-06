@@ -2,7 +2,7 @@ use std::path::{Component, Path};
 
 use crate::gateway::studio::analysis;
 use crate::gateway::studio::types::{AnalysisNodeKind, AstSearchHit};
-use crate::link_graph::parser::{ParsedSection, parse_note};
+use crate::parsers::markdown::{ParsedSection, parse_note};
 
 use super::navigation::ast_navigation_target;
 

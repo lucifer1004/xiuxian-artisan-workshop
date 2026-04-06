@@ -12,9 +12,10 @@ use crate::link_graph::set_link_graph_wendao_config_override;
 use serial_test::serial;
 use std::fs;
 #[cfg(feature = "julia")]
-use xiuxian_wendao_julia::compatibility::link_graph::{
-    DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH,
-    julia_deployment_artifact_selector, julia_rerank_provider_selector,
+use xiuxian_wendao_builtin::{
+    linked_builtin_julia_analyzer_example_config_path, linked_builtin_julia_analyzer_launcher_path,
+    linked_builtin_julia_deployment_artifact_selector,
+    linked_builtin_julia_rerank_provider_selector,
 };
 use xiuxian_wendao_runtime::runtime_config::{
     DEFAULT_LINK_GRAPH_COACTIVATION_HOP_DECAY_SCALE, DEFAULT_LINK_GRAPH_COACTIVATION_MAX_HOPS,
@@ -22,6 +23,8 @@ use xiuxian_wendao_runtime::runtime_config::{
     DEFAULT_LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH,
 };
 use xiuxian_wendao_runtime::transport::CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER;
+#[cfg(feature = "julia")]
+use xiuxian_wendao_runtime::transport::RerankScoreWeights;
 
 #[cfg(feature = "julia")]
 fn configure_julia_rerank_runtime_fixture() -> Result<tempfile::TempDir, Box<dyn std::error::Error>>
@@ -41,11 +44,12 @@ health_route = "/healthz"
 schema_version = "v1"
 timeout_secs = 15
 service_mode = "stream"
-analyzer_config_path = "{DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH}"
+analyzer_config_path = "{config_path}"
 analyzer_strategy = "similarity_only"
 vector_weight = 0.2
 similarity_weight = 0.8
-"#
+"#,
+            config_path = linked_builtin_julia_analyzer_example_config_path()
         ),
     )?;
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
@@ -180,9 +184,9 @@ graph_rows_per_source = 4
         runtime.semantic_ignition.embedding_model.as_deref(),
         Some("glm-5")
     );
-    #[cfg(feature = "julia")]
-    assert!(runtime.julia_rerank.base_url.is_none());
     assert!(runtime.rerank_binding().is_none());
+    assert!(runtime.rerank_schema_version().is_none());
+    assert!(runtime.rerank_score_weights().is_none());
 
     Ok(())
 }
@@ -194,28 +198,33 @@ fn test_retrieval_runtime_resolves_julia_rerank_config() -> Result<(), Box<dyn s
     let _temp = configure_julia_rerank_runtime_fixture()?;
 
     let runtime = resolve_link_graph_retrieval_policy_runtime();
+    let Some(binding) = runtime.rerank_binding() else {
+        panic!("generic rerank binding");
+    };
+
     assert_eq!(
-        runtime.julia_rerank.base_url.as_deref(),
+        binding.selector,
+        linked_builtin_julia_rerank_provider_selector()
+    );
+    assert_eq!(
+        binding.endpoint.base_url.as_deref(),
         Some("http://127.0.0.1:8088")
     );
-    assert_eq!(runtime.julia_rerank.route.as_deref(), Some("/rerank"));
+    assert_eq!(binding.endpoint.route.as_deref(), Some("/rerank"));
+    assert_eq!(binding.endpoint.health_route.as_deref(), Some("/healthz"));
+    assert_eq!(binding.endpoint.timeout_secs, Some(15));
     assert_eq!(
-        runtime.julia_rerank.health_route.as_deref(),
-        Some("/healthz")
+        binding
+            .launch
+            .as_ref()
+            .map(|launch| launch.launcher_path.as_str()),
+        Some(linked_builtin_julia_analyzer_launcher_path())
     );
-    assert_eq!(runtime.julia_rerank.schema_version.as_deref(), Some("v1"));
-    assert_eq!(runtime.julia_rerank.timeout_secs, Some(15));
-    assert_eq!(runtime.julia_rerank.service_mode.as_deref(), Some("stream"));
+    assert_eq!(runtime.rerank_schema_version().as_deref(), Some("v1"));
     assert_eq!(
-        runtime.julia_rerank.analyzer_config_path.as_deref(),
-        Some(DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH)
+        runtime.rerank_score_weights(),
+        Some(RerankScoreWeights::new(0.2, 0.8).expect("valid weight fixture"))
     );
-    assert_eq!(
-        runtime.julia_rerank.analyzer_strategy.as_deref(),
-        Some("similarity_only")
-    );
-    assert_eq!(runtime.julia_rerank.vector_weight, Some(0.2));
-    assert_eq!(runtime.julia_rerank.similarity_weight, Some(0.8));
 
     Ok(())
 }
@@ -247,7 +256,10 @@ fn test_retrieval_runtime_projects_julia_rerank_host_helpers()
     let Some(binding) = runtime.rerank_binding() else {
         panic!("generic rerank binding");
     };
-    assert_eq!(binding.selector, julia_rerank_provider_selector());
+    assert_eq!(
+        binding.selector,
+        linked_builtin_julia_rerank_provider_selector()
+    );
     assert_eq!(
         binding.endpoint.base_url.as_deref(),
         Some("http://127.0.0.1:8088")
@@ -265,13 +277,16 @@ fn test_retrieval_runtime_projects_julia_rerank_host_helpers()
             .launch
             .as_ref()
             .map(|launch| launch.launcher_path.as_str()),
-        Some(DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH)
+        Some(linked_builtin_julia_analyzer_launcher_path())
     );
 
     let Some(resolved_binding) = resolve_link_graph_rerank_binding() else {
         panic!("resolved generic rerank binding");
     };
-    assert_eq!(resolved_binding.selector, julia_rerank_provider_selector());
+    assert_eq!(
+        resolved_binding.selector,
+        linked_builtin_julia_rerank_provider_selector()
+    );
     assert_eq!(
         resolved_binding.endpoint.base_url.as_deref(),
         Some("http://127.0.0.1:8088")
@@ -308,7 +323,7 @@ service_mode = "stream"
     )?;
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
 
-    let selector = julia_deployment_artifact_selector();
+    let selector = linked_builtin_julia_deployment_artifact_selector();
     let Some(artifact) = super::resolve_link_graph_plugin_artifact_for_selector(&selector) else {
         panic!("artifact");
     };
@@ -350,7 +365,7 @@ schema_version = "v1"
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
 
     let Some(rendered) = super::render_link_graph_plugin_artifact_toml_for_selector(
-        &julia_deployment_artifact_selector(),
+        &linked_builtin_julia_deployment_artifact_selector(),
     )?
     else {
         panic!("rendered artifact");

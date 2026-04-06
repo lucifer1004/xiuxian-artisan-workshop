@@ -8,7 +8,10 @@ use thiserror::Error;
 use xiuxian_llm::embedding::openai_compat::embed_openai_compatible;
 use xiuxian_vector::{SearchOptions, VectorStore, VectorStoreError, distance_to_score};
 #[cfg(feature = "julia")]
-use xiuxian_wendao_julia::{PluginArrowRequestRow, build_plugin_arrow_request_batch};
+use xiuxian_wendao_runtime::transport::{
+    PluginArrowVectorStoreRequestBuildError, build_plugin_arrow_request_batch_from_vector_store,
+    build_plugin_arrow_request_batch_from_vector_store_with_metadata,
+};
 
 /// Semantic ignition adapter backed by an OpenAI-compatible embeddings API plus
 /// the Rust vector store.
@@ -115,6 +118,34 @@ impl OpenAiCompatibleSemanticIgnition {
         Ok(vector)
     }
 
+    #[cfg(feature = "julia")]
+    async fn resolve_plugin_rerank_query_vector(
+        &self,
+        request: QuantumSemanticSearchRequest<'_>,
+    ) -> Result<Vec<f32>, OpenAiCompatiblePluginRerankRequestError> {
+        let query_vector = self
+            .resolve_query_vector(request)
+            .await
+            .map_err(OpenAiCompatiblePluginRerankRequestError::Ignition)?;
+        Ok(query_vector)
+    }
+
+    #[cfg(feature = "julia")]
+    fn validate_plugin_rerank_anchors(
+        &self,
+        anchors: &[QuantumAnchorHit],
+    ) -> Result<(), OpenAiCompatiblePluginRerankRequestError> {
+        if anchors.is_empty() {
+            return Err(OpenAiCompatiblePluginRerankRequestError::Build(
+                RepoIntelligenceError::AnalysisFailed {
+                    message: "cannot build plugin rerank request from an empty anchor set"
+                        .to_string(),
+                },
+            ));
+        }
+        Ok(())
+    }
+
     /// Build a `WendaoArrow` `v1` plugin rerank request batch for one
     /// OpenAI-compatible semantic-ignition result set.
     ///
@@ -129,64 +160,57 @@ impl OpenAiCompatibleSemanticIgnition {
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
     ) -> Result<RecordBatch, OpenAiCompatiblePluginRerankRequestError> {
-        if anchors.is_empty() {
-            return Err(OpenAiCompatiblePluginRerankRequestError::Build(
-                RepoIntelligenceError::AnalysisFailed {
-                    message: "cannot build Julia rerank request from an empty anchor set"
-                        .to_string(),
-                },
-            ));
-        }
-        let query_vector = self
-            .resolve_query_vector(request)
-            .await
-            .map_err(OpenAiCompatiblePluginRerankRequestError::Ignition)?;
-        let ids = anchors
-            .iter()
-            .map(|anchor| anchor.anchor_id.clone())
-            .collect::<Vec<_>>();
-        let embeddings = self
-            .store
-            .fetch_embeddings_by_ids(self.table_name.as_str(), &ids)
-            .await
-            .map_err(OpenAiCompatiblePluginRerankRequestError::VectorStore)?;
-
-        let mut rows = Vec::with_capacity(anchors.len());
-        for anchor in anchors {
-            let embedding = embeddings
-                .get(anchor.anchor_id.as_str())
-                .cloned()
-                .ok_or_else(
-                    || OpenAiCompatiblePluginRerankRequestError::MissingEmbedding {
-                        anchor_id: anchor.anchor_id.clone(),
-                    },
-                )?;
-            rows.push(PluginArrowRequestRow {
-                doc_id: anchor.anchor_id.clone(),
-                vector_score: anchor.vector_score,
-                embedding,
-            });
-        }
-
-        build_plugin_arrow_request_batch(&rows, &query_vector)
-            .map_err(OpenAiCompatiblePluginRerankRequestError::Build)
+        self.validate_plugin_rerank_anchors(anchors)?;
+        let query_vector = self.resolve_plugin_rerank_query_vector(request).await?;
+        build_plugin_arrow_request_batch_from_vector_store(
+            &self.store,
+            self.table_name.as_str(),
+            anchors
+                .iter()
+                .map(|anchor| (anchor.anchor_id.clone(), anchor.vector_score)),
+            &query_vector,
+        )
+        .await
+        .map_err(map_openai_plugin_request_build_error)
     }
 
-    /// Compatibility shim for the legacy Julia-named rerank request builder.
+    /// Build a plugin rerank request batch and attach transport metadata for
+    /// one OpenAI-compatible semantic-ignition result set.
     ///
     /// # Errors
     ///
     /// Returns [`OpenAiCompatiblePluginRerankRequestError`] when the effective
-    /// query vector cannot be resolved, candidate embeddings cannot be fetched,
-    /// or the `WendaoArrow` request batch cannot be assembled.
+    /// query vector cannot be resolved or the base request batch cannot be
+    /// assembled, and returns a string error when transport metadata cannot be
+    /// attached to the batch.
     #[cfg(feature = "julia")]
-    pub async fn build_julia_rerank_request_batch(
+    pub(crate) async fn build_plugin_rerank_request_batch_with_metadata(
         &self,
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
-    ) -> Result<RecordBatch, OpenAiCompatibleJuliaRequestError> {
-        self.build_plugin_rerank_request_batch(request, anchors)
+        provider_id: &str,
+        query_text: &str,
+        schema_version: &str,
+    ) -> Result<RecordBatch, String> {
+        self.validate_plugin_rerank_anchors(anchors)
+            .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))?;
+        let query_vector = self
+            .resolve_plugin_rerank_query_vector(request)
             .await
+            .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))?;
+        build_plugin_arrow_request_batch_from_vector_store_with_metadata(
+            &self.store,
+            self.table_name.as_str(),
+            anchors
+                .iter()
+                .map(|anchor| (anchor.anchor_id.clone(), anchor.vector_score)),
+            &query_vector,
+            provider_id,
+            query_text,
+            schema_version,
+        )
+        .await
+        .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))
     }
 }
 
@@ -231,7 +255,21 @@ pub enum OpenAiCompatiblePluginRerankRequestError {
 }
 
 #[cfg(feature = "julia")]
-pub type OpenAiCompatibleJuliaRequestError = OpenAiCompatiblePluginRerankRequestError;
+fn map_openai_plugin_request_build_error(
+    error: PluginArrowVectorStoreRequestBuildError,
+) -> OpenAiCompatiblePluginRerankRequestError {
+    match error {
+        PluginArrowVectorStoreRequestBuildError::VectorStore(error) => {
+            OpenAiCompatiblePluginRerankRequestError::VectorStore(error)
+        }
+        PluginArrowVectorStoreRequestBuildError::MissingEmbedding { doc_id } => {
+            OpenAiCompatiblePluginRerankRequestError::MissingEmbedding { anchor_id: doc_id }
+        }
+        PluginArrowVectorStoreRequestBuildError::Build(error) => {
+            OpenAiCompatiblePluginRerankRequestError::Build(error)
+        }
+    }
+}
 
 impl QuantumSemanticIgnition for OpenAiCompatibleSemanticIgnition {
     type Error = OpenAiCompatibleSemanticIgnitionError;
@@ -304,7 +342,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_plugin_rerank_request_batch_uses_explicit_query_vector() {
+    async fn build_plugin_rerank_request_batch_with_metadata_uses_explicit_query_vector() {
         let temp_dir = tempdir_or_panic();
         let db_path = temp_dir.path().join("openai_ignition_julia");
         let db_path_str = db_path.to_string_lossy();
@@ -332,18 +370,29 @@ mod tests {
             max_vector_score: None,
         };
         let batch = ignition
-            .build_plugin_rerank_request_batch(
+            .build_plugin_rerank_request_batch_with_metadata(
                 request,
                 &[QuantumAnchorHit {
                     anchor_id: "doc-1#alpha".to_string(),
                     vector_score: 0.31,
                 }],
+                "xiuxian-wendao-julia",
+                "demo",
+                "v1",
             )
             .await
             .unwrap_or_else(|error| panic!("request batch should build: {error}"));
 
         assert_eq!(batch.num_rows(), 1);
         assert!(batch.column_by_name("query_embedding").is_some());
+        assert_eq!(
+            batch.schema().metadata().get("trace_id"),
+            Some(&"plugin-rerank:xiuxian-wendao-julia:demo".to_string())
+        );
+        assert_eq!(
+            batch.schema().metadata().get("wendao.schema_version"),
+            Some(&"v1".to_string())
+        );
     }
 
     #[tokio::test]

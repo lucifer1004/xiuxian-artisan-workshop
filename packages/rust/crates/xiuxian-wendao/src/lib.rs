@@ -19,6 +19,7 @@
 //! - `link_graph_refs` / `link_graph_refs_py`: `LinkGraph` entity references
 //! - `dependency_indexer` / `dep_indexer_py`: Dependency scanning
 //! - `unified_symbol` / `unified_symbol_py`: Cross-language symbol index
+//! - `parsers`: Canonical Wendao parser families
 //!
 //! The Python binding implementation lives under `pybindings/` and is
 //! exposed through the `xiuxian_wendao::pybindings` namespace when the
@@ -67,6 +68,7 @@ pub mod graph;
 pub mod hmas;
 pub mod kg_cache;
 pub mod link_graph;
+pub mod parsers;
 /// Optional Python binding namespace.
 #[cfg(feature = "pybindings")]
 pub mod pybindings;
@@ -133,9 +135,9 @@ pub use dependency_indexer::{
     DependencyIndexer, DependencyStats, ExternalSymbol, SymbolIndex, SymbolKind,
 };
 pub use enhancer::{
-    EnhancedNote, EntityRefData, InferredRelation, NoteFrontmatter, NoteInput, RefStatsData,
+    EnhancedNote, EntityRefData, InferredRelation, NoteInput, RefStatsData,
     WendaoResourceLinkTarget, WendaoResourceRegistry, classify_skill_reference, enhance_note,
-    enhance_notes_batch, infer_relations, parse_frontmatter,
+    enhance_notes_batch, infer_relations,
 };
 pub use entity::{
     Entity, EntitySearchQuery, EntityType, GraphStats, MultiHopOptions, Relation, RelationType,
@@ -173,22 +175,22 @@ pub use link_graph::{
     LinkGraphSuggestedLink, LinkGraphSuggestedLinkDecision, LinkGraphSuggestedLinkDecisionRequest,
     LinkGraphSuggestedLinkDecisionResult, LinkGraphSuggestedLinkRequest,
     LinkGraphSuggestedLinkState, LinkGraphTagFilter, OpenAiCompatibleSemanticIgnition,
-    OpenAiCompatibleSemanticIgnitionError, ParsedLinkGraphQuery, QUANTUM_SALIENCY_COLUMN,
-    QuantumAnchorHit, QuantumContext, QuantumContextBuildError, QuantumContextSnapshot,
-    QuantumFusionOptions, QuantumFusionTelemetry, QuantumSemanticIgnition,
-    QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest,
-    VectorStoreSemanticIgnition, compute_link_graph_saliency, narrate_subgraph, parse_search_query,
-    quantum_context_snapshot_id, resolve_link_graph_index_runtime,
-    set_link_graph_config_home_override, set_link_graph_wendao_config_override,
-    valkey_quantum_context_snapshot_drop, valkey_quantum_context_snapshot_get,
-    valkey_quantum_context_snapshot_get_with_valkey, valkey_quantum_context_snapshot_rollback,
-    valkey_quantum_context_snapshot_rollback_with_valkey, valkey_quantum_context_snapshot_save,
-    valkey_quantum_context_snapshot_save_with_valkey, valkey_saliency_decay_all,
-    valkey_saliency_decay_all_with_valkey, valkey_saliency_del, valkey_saliency_get,
-    valkey_saliency_get_with_valkey, valkey_saliency_touch, valkey_saliency_touch_with_valkey,
-    valkey_suggested_link_decide, valkey_suggested_link_decide_with_valkey,
-    valkey_suggested_link_decisions_recent, valkey_suggested_link_decisions_recent_with_valkey,
-    valkey_suggested_link_log, valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
+    OpenAiCompatibleSemanticIgnitionError, QUANTUM_SALIENCY_COLUMN, QuantumAnchorHit,
+    QuantumContext, QuantumContextBuildError, QuantumContextSnapshot, QuantumFusionOptions,
+    QuantumFusionTelemetry, QuantumSemanticIgnition, QuantumSemanticIgnitionError,
+    QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest, VectorStoreSemanticIgnition,
+    compute_link_graph_saliency, narrate_subgraph, quantum_context_snapshot_id,
+    resolve_link_graph_index_runtime, set_link_graph_config_home_override,
+    set_link_graph_wendao_config_override, valkey_quantum_context_snapshot_drop,
+    valkey_quantum_context_snapshot_get, valkey_quantum_context_snapshot_get_with_valkey,
+    valkey_quantum_context_snapshot_rollback, valkey_quantum_context_snapshot_rollback_with_valkey,
+    valkey_quantum_context_snapshot_save, valkey_quantum_context_snapshot_save_with_valkey,
+    valkey_saliency_decay_all, valkey_saliency_decay_all_with_valkey, valkey_saliency_del,
+    valkey_saliency_get, valkey_saliency_get_with_valkey, valkey_saliency_touch,
+    valkey_saliency_touch_with_valkey, valkey_suggested_link_decide,
+    valkey_suggested_link_decide_with_valkey, valkey_suggested_link_decisions_recent,
+    valkey_suggested_link_decisions_recent_with_valkey, valkey_suggested_link_log,
+    valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
     valkey_suggested_link_recent_latest, valkey_suggested_link_recent_latest_with_valkey,
     valkey_suggested_link_recent_with_valkey,
 };
@@ -197,6 +199,8 @@ pub use link_graph_refs::{
     extract_entity_refs_batch, find_notes_referencing_entity, get_ref_stats, is_valid_entity_ref,
     parse_entity_ref,
 };
+pub use parsers::link_graph::query::{ParsedLinkGraphQuery, parse_search_query};
+pub use parsers::markdown::{NoteFrontmatter, parse_frontmatter};
 pub use search::{
     FuzzyMatch, FuzzyMatcher, FuzzyScore, FuzzySearchOptions, LexicalMatcher, SearchDocument,
     SearchDocumentFields, SearchDocumentIndex, TantivyDocumentMatch, TantivyMatcher, edit_distance,

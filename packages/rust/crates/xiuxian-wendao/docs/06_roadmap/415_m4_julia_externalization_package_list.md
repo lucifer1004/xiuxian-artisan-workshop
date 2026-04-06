@@ -358,6 +358,67 @@ Current implementation status:
     live in `xiuxian-wendao-julia`, so the host no longer manually normalizes
     each raw candidate before calling the plugin-owned request-batch or
     repository-fetch helpers
+31. the Julia plugin capability-discovery seam now also follows that same
+    rule:
+    the Rust host keeps only static plugin identity registration, while
+    Julia-specific capability discovery, manifest decoding, manifest-to-binding
+    conversion, and repository transport interpretation for a
+    `/plugin/capabilities` Arrow route now live in `xiuxian-wendao-julia`
+    instead of growing a second host-owned registration adapter
+32. the bounded host live-smoke slice now also follows that same rule:
+    `xiuxian-wendao` consumes the existing Julia-owned graph-structural fetch
+    helper through `xiuxian_wendao::analyzers::languages` against the live
+    `WendaoSearch.jl --mode solver_demo` service, both for explicit transport
+    config and for manifest-discovery fallback, rather than adding a second
+    host-local structural transport path
+33. the bounded host generic-topology proof now also keeps planner-aware
+    connected-pair collection extraction inside dedicated host test-support,
+    so `tests/unit/link_graph_agentic/expansion.rs` no longer carries that
+    collection-selection algorithm inline while the live solver-demo downcall
+    contract remains unchanged
+34. the next host generic-topology live-harness layer now also keeps
+    manifest-discovery repository setup, shared query-context setup, and
+    baseline solver-demo row assertions inside dedicated host test-support, so
+    `tests/unit/link_graph_agentic/expansion.rs` keeps only test intent plus
+    pin-specific assertions while the Julia-owned fetch seam remains unchanged
+35. the next host mixed-graph promotion step now also derives one seed-centered
+    generic-topology batch from a real `LinkGraphAgenticExpansionPlan`, so the
+    host proof now exercises one more realistic plan-derived candidate batch
+    above connected-pair collections without changing the Julia-owned live
+    contract
+36. that same host live lane now also derives one worker-partition
+    generic-topology batch from real `LinkGraphAgenticWorkerPlan` partitions,
+    so the current solver-demo route now covers one more planner-shaped
+    candidate batch above seed-centered groups while accepting mixed feasible
+    and infeasible solver rows inside the same returned batch
+37. the next bounded host proof now also derives one batch-level
+    generic-topology query context from the real expansion-plan query plus
+    selected worker seed metadata, so the manifest-discovered solver-demo
+    downcall no longer hard-codes `"alpha"` or `"related"` inside the host
+    helper layer
+38. that same host-through-language-seam live lane now also derives
+    worker-batch dependency, keyword, and tag scores from real plan-aware
+    batch semantics and validates those staged request-batch columns before the
+    live solver-demo downcall, so the host proof is less synthetic without
+    moving planner ranking semantics into `xiuxian-wendao-julia`
+39. that same host-through-language-seam live lane now also validates the
+    staged `semantic_score` request column derived from real worker-partition
+    pair semantics before the live solver-demo downcall, so the outgoing Arrow
+    batch is proven above one less implicit Julia-owned normalization step
+    without changing the Julia contract
+40. that same host-through-language-seam live lane now also validates the
+    staged `query_id`, `retrieval_layer`, `query_max_layers`,
+    `anchor_planes`, `anchor_values`, and `edge_constraint_kinds` request
+    columns against the same plan-aware batch fixture before the live
+    solver-demo downcall, so the outgoing Arrow batch is proven above one less
+    implicit host-to-Julia query-context handoff without changing the Julia
+    contract
+41. that same host-through-language-seam live lane now also validates the
+    staged `candidate_node_ids`, `candidate_edge_sources`,
+    `candidate_edge_destinations`, and `candidate_edge_kinds` request columns
+    against the same plan-aware batch fixture before the live solver-demo
+    downcall, so the outgoing Arrow batch is proven above one less implicit
+    host-to-Julia topology handoff without changing the Julia contract
 
 ## Compatibility Plan
 

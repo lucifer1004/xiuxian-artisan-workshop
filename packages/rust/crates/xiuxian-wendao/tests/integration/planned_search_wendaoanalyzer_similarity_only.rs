@@ -9,12 +9,9 @@ use xiuxian_vector::VectorStore;
 use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
-use xiuxian_wendao_julia::compatibility::link_graph::{
-    DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
-    LinkGraphJuliaRerankRuntimeConfig,
-};
-use xiuxian_wendao_julia::integration_support::{
-    spawn_wendaoanalyzer_service_from_artifact, wendaoanalyzer_deployment_artifact_from_runtime,
+use xiuxian_wendao_builtin::{
+    linked_builtin_julia_planned_search_similarity_only_runtime_config_toml as julia_planned_search_similarity_only_runtime_config_toml,
+    linked_builtin_spawn_wendaoanalyzer_similarity_only_service as spawn_wendaoanalyzer_similarity_only_service,
 };
 
 #[test]
@@ -47,78 +44,18 @@ fn test_planned_search_payload_applies_wendaoanalyzer_similarity_only_strategy()
         vec!["{}".to_string(), "{}".to_string()],
     ))?;
 
+    let (server_base_url, mut server_guard) =
+        runtime.block_on(spawn_wendaoanalyzer_similarity_only_service());
+
     let config_path = temp.path().join("wendao.toml");
     fs::write(
         &config_path,
-        format!(
-            r#"[link_graph.retrieval]
-mode = "hybrid"
-candidate_multiplier = 2
-max_sources = 2
-graph_rows_per_source = 2
-
-[link_graph.retrieval.semantic_ignition]
-backend = "vector-store"
-vector_store_path = "{}"
-table_name = "wendao_semantic_docs"
-
-[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:0"
-route = "{}"
-schema_version = "v1"
-timeout_secs = 10
-service_mode = "stream"
-analyzer_config_path = "{}"
-analyzer_strategy = "similarity_only"
-"#,
-            vector_store_path.to_string_lossy(),
-            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
-            DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH,
+        julia_planned_search_similarity_only_runtime_config_toml(
+            vector_store_path.to_string_lossy().as_ref(),
+            server_base_url.as_str(),
         ),
     )?;
     let config_path_string = config_path.to_string_lossy().to_string();
-    set_link_graph_wendao_config_override(&config_path_string);
-
-    let analyzer_runtime =
-        wendaoanalyzer_deployment_artifact_from_runtime(&LinkGraphJuliaRerankRuntimeConfig {
-            service_mode: Some("stream".to_string()),
-            analyzer_config_path: Some(DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH.to_string()),
-            analyzer_strategy: Some("similarity_only".to_string()),
-            ..LinkGraphJuliaRerankRuntimeConfig::default()
-        });
-    let (server_base_url, mut server_guard) = runtime.block_on(
-        spawn_wendaoanalyzer_service_from_artifact(&analyzer_runtime),
-    );
-
-    fs::write(
-        &config_path,
-        format!(
-            r#"[link_graph.retrieval]
-mode = "hybrid"
-candidate_multiplier = 2
-max_sources = 2
-graph_rows_per_source = 2
-
-[link_graph.retrieval.semantic_ignition]
-backend = "vector-store"
-vector_store_path = "{}"
-table_name = "wendao_semantic_docs"
-
-[link_graph.retrieval.julia_rerank]
-base_url = "{}"
-route = "{}"
-schema_version = "v1"
-timeout_secs = 10
-service_mode = "stream"
-analyzer_config_path = "{}"
-analyzer_strategy = "similarity_only"
-"#,
-            vector_store_path.to_string_lossy(),
-            server_base_url,
-            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
-            DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH,
-        ),
-    )?;
     set_link_graph_wendao_config_override(&config_path_string);
 
     let index = LinkGraphIndex::build(temp.path())?;

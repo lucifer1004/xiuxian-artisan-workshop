@@ -7,7 +7,6 @@ pub(in crate::link_graph::index) use super::models::{
     LinkGraphScope, LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField,
     LinkGraphSortOrder, LinkGraphSortTerm, LinkGraphStats, PageIndexNode,
 };
-pub(in crate::link_graph::index) use super::query::parse_search_query;
 
 mod agentic_expansion;
 mod agentic_overlay;

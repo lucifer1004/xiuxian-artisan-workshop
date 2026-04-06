@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 
 use crate::enhancer::{self, NoteInput};
+use crate::parsers::markdown::parse_frontmatter;
 
 use super::py_types::{PyEnhancedNote, PyNoteFrontmatter};
 
@@ -65,6 +66,6 @@ pub fn link_graph_enhance_notes_batch(notes: Vec<(String, String, String)>) -> V
 #[must_use]
 pub fn link_graph_parse_frontmatter(content: &str) -> PyNoteFrontmatter {
     PyNoteFrontmatter {
-        inner: enhancer::parse_frontmatter(content),
+        inner: parse_frontmatter(content),
     }
 }

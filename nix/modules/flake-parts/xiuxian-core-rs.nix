@@ -67,7 +67,7 @@
         "xiuxian-wendao" = {
           depsDrvConfig = {
             env = {
-              protoc = "${pkgs.protobuf}/bin/protoc";
+              PROTOC = "${pkgs.protobuf}/bin/protoc";
             };
           };
         };

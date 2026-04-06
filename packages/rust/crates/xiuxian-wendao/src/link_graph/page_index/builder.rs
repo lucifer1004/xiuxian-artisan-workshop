@@ -1,6 +1,6 @@
 use crate::link_graph::index::IndexedSection;
 use crate::link_graph::models::{PageIndexMeta, PageIndexNode};
-use crate::link_graph::parser::extract_blocks;
+use crate::parsers::markdown::extract_blocks;
 use std::collections::HashMap;
 use std::sync::Arc;
 

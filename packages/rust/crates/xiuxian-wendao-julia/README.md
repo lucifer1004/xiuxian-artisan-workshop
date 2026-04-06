@@ -6,8 +6,15 @@
 
 - `xiuxian-wendao-runtime` owns the reusable Arrow Flight runtime client and negotiation seam.
 - `xiuxian-wendao-julia` owns Julia-specific interpretation of repository plugin options and translates them into the runtime-owned Flight binding.
-- `xiuxian-wendao-julia` owns the Julia Arrow rerank exchange seam, including typed request or score rows, request-batch assembly, response decoding, repository fetch helpers, and plugin-local tests.
+- `xiuxian-wendao-julia` owns the Julia Arrow rerank exchange seam only where it stays Julia-specific: repository plugin-option interpretation, remote fetch helpers, and plugin-local loopback tests.
 - `xiuxian-wendao-julia` also owns Julia-specific graph-structural transport option parsing, route-kind dispatch defaults, and staged request or response validation for promoted structural-search downcalls.
+- `xiuxian-wendao-julia` also owns manifest-driven graph-structural binding fallback, so graph-structural client construction can derive route bindings from the live Julia capability manifest when explicit graph-structural transport config is absent.
+- `xiuxian-wendao-julia` also owns the plugin-side proof that one live `WendaoSearch.jl` endpoint can advertise the capability manifest and immediately serve graph-structural downcalls discovered from that same manifest.
+- `xiuxian-wendao-julia` also owns the plugin-side proof that the same live
+  `WendaoSearch.jl` endpoint can serve both heuristic `demo` and bounded
+  solver-backed `solver_demo` graph-structural traffic for both
+  `structural_rerank` and `constraint_filter` without widening the staged Rust
+  graph-structural contract.
 - `xiuxian-wendao-julia` also owns Julia-specific graph-structural route names, draft schema-version defaults, semantic projection DTOs, typed request or response row helpers, and Arrow batch validation for the mixed-graph structural plugin lane.
 - `xiuxian-wendao-julia` also owns stable two-node pair projection helpers for that lane, including pair candidate id normalization, pair candidate subgraph projection, and pair-to-request-row builders.
 - `xiuxian-wendao-julia` also owns simple keyword-or-tag query-context builders and binary keyword-or-tag rerank-signal builders for that lane, so host consumers do not manually create anchor DTOs or convert boolean matches into staged plane scores.
@@ -22,6 +29,20 @@
 - `xiuxian-wendao-julia` also owns the raw-to-pair staging helper above that seam, so host callers can hand over raw pair ids and edge kinds without manually constructing the pair-input DTO layer first.
 - `xiuxian-wendao-julia` also owns the raw pair-metadata-to-candidate staging helper above that seam, so host callers can hand over raw pair ids, edge kinds, left or right tags, and scores without manually composing the metadata-bundle helper and the candidate-bundle helper in sequence.
 - `xiuxian-wendao-julia` also owns the raw-candidate collection batch or fetch seam above that layer, so host callers can hand over one shared query plus raw candidate bundles without manually normalizing each candidate before request-batch or repository-fetch dispatch.
+- `xiuxian-wendao-julia` also now owns one generic explicit-edge topology seam above the pair helpers for structural rerank, so non-pair candidate graphs can be staged and fetched without pair normalization.
+- `xiuxian-wendao-julia` also now owns one raw connected-pair staging seam above the scored pair-collection helper, so host callers can hand over connected pair ids plus semantic scores without first normalizing them into scored pair DTOs.
+- `xiuxian-wendao-julia` also now owns the Julia capability-manifest Arrow seam, including route constants, typed manifest request or response rows, manifest transport option parsing, repository-scoped fetch helpers, manifest-to-binding decoding, and plugin-owned preflight validation against the live Julia capability-manifest route.
+- the internal graph-structural projection surface now lives under the
+  feature-folder `src/plugin/graph_structural_projection/` with interface-only
+  `mod.rs` plus responsibility modules for core DTOs, generic topology,
+  pair staging, overlap staging, request-row builders, and normalization
+  support; that refactor preserved the existing public exports and live route
+  proofs
+- the graph-structural exchange test surface now follows the same pattern:
+  `graph_structural_exchange.rs` keeps production code only, while
+  `#[cfg(test)] #[path = "..."]` modules hold the unit and live proof suites
+  in `graph_structural_exchange_tests.rs` and
+  `graph_structural_exchange_generic_topology_tests.rs`
 - `xiuxian-wendao-julia` also owns the legacy Julia link-graph compatibility semantics under `src/compatibility/link_graph/`, including Julia selector ids, the default analyzer package dir, launcher path, example-config path, the Julia rerank runtime record, service-descriptor and CLI-arg meaning, launch-manifest meaning, deployment-artifact meaning, and conversions to and from Wendao core plugin contracts.
 - `xiuxian-wendao` hosts the analyzer registry and loads repository config, but it does not own a second transport implementation or a second graph-structural adapter layer.
 - `xiuxian-wendao` now consumes this crate through a normal Cargo dependency instead of sibling-source inclusion.
@@ -32,7 +53,6 @@
 - `register_into`
 - `build_julia_flight_transport_client`
 - `process_julia_flight_batches`
-- `validate_julia_arrow_response_batches`
 - `GraphStructuralRouteKind`
 - `JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION`
 - `graph_structural_route_kind`
@@ -50,6 +70,9 @@
 - `GraphStructuralKeywordOverlapQueryInputs`
 - `GraphStructuralKeywordOverlapRawCandidateInputs`
 - `GraphStructuralKeywordOverlapCandidateInputs`
+- `GraphStructuralRawConnectedPairInputs`
+- `GraphStructuralGenericTopologyCandidateMetadataInputs`
+- `GraphStructuralGenericTopologyCandidateInputs`
 - `GraphStructuralRerankSignals`
 - `GraphStructuralFilterConstraint`
 - `GraphStructural*RequestRow`
@@ -63,9 +86,16 @@
 - `build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw`
 - `build_graph_structural_keyword_overlap_query_inputs`
 - `build_graph_structural_pair_candidate_inputs`
+- `build_graph_structural_raw_connected_pair_inputs`
 - `build_graph_structural_keyword_overlap_pair_request_input`
 - `build_graph_structural_keyword_overlap_pair_rerank_request_batch`
 - `build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_raw_candidates`
+- `build_graph_structural_generic_topology_candidate_metadata_inputs`
+- `build_graph_structural_generic_topology_candidate_inputs`
+- `build_graph_structural_generic_topology_candidate_inputs_from_raw_connected_pairs`
+- `build_graph_structural_generic_topology_candidate_subgraph`
+- `build_graph_structural_generic_topology_rerank_request_row`
+- `build_graph_structural_generic_topology_rerank_request_batch`
 - `build_graph_structural_keyword_overlap_pair_rerank_request_row`
 - `build_graph_structural_keyword_overlap_pair_rerank_request_row_from_metadata`
 - `build_graph_structural_keyword_tag_query_context`
@@ -77,7 +107,18 @@
 - `build_graph_structural_*_request_batch`
 - `decode_graph_structural_*_score_rows`
 - `fetch_graph_structural_*_rows_for_repository`
+- `fetch_graph_structural_generic_topology_rerank_rows_for_repository`
 - `fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates`
+- `JULIA_PLUGIN_CAPABILITY_MANIFEST_*`
+- `JuliaPluginCapabilityManifestRequestRow`
+- `JuliaPluginCapabilityManifestRow`
+- `build_julia_capability_manifest_flight_transport_client`
+- `build_julia_plugin_capability_manifest_request_batch`
+- `decode_julia_plugin_capability_manifest_rows`
+- `fetch_julia_plugin_capability_manifest_rows_for_repository`
+- `process_julia_capability_manifest_flight_batches`
+- `process_julia_capability_manifest_flight_batches_for_repository`
+- `validate_julia_plugin_capability_manifest_*`
 - `build_graph_structural_flight_transport_client`
 - `process_graph_structural_flight_batches`
 - `process_graph_structural_flight_batches_for_repository`
@@ -113,6 +154,41 @@ plugins = [
 That block is interpreted in `xiuxian-wendao-julia` rather than in
 `xiuxian-wendao-runtime`. The runtime still owns generic Arrow Flight
 negotiation only.
+When that block is absent but `capability_manifest_transport` is configured,
+`xiuxian-wendao-julia` now falls back to the live `/plugin/capabilities`
+manifest and derives the graph-structural binding for the requested variant
+inside the plugin crate.
+That fallback is now also covered against one real same-port multi-route
+`WendaoSearch.jl` demo service, so manifest discovery and structural-rerank
+fetch are proven to work through the same Julia endpoint.
+That same plugin-owned proof now also covers the bounded
+`WendaoSearch.jl --mode solver_demo` rerank and filter lanes, both through
+explicit graph-structural transport config and through capability-manifest
+discovery, and the staged request shape now carries explicit edge endpoints.
+
+The same ownership rule now also applies to plugin capability discovery. Rust
+keeps static plugin identity registration, while the Julia plugin crate owns
+the Arrow contract for a dedicated capability-manifest route:
+
+```toml
+[link_graph.projects.sample]
+root = "/path/to/repo"
+plugins = [
+  "julia",
+  { id = "julia", capability_manifest_transport = { base_url = "http://127.0.0.1:8815", route = "/plugin/capabilities", health_route = "/healthz", schema_version = "v0-draft", timeout_secs = 15 } }
+]
+```
+
+That block is interpreted in `xiuxian-wendao-julia` and decoded into manifest
+rows plus runtime `PluginCapabilityBinding` values. The host does not need a
+second Julia-specific registration adapter layer for this discovery step.
+When the block is configured, `JuliaRepoIntelligencePlugin::preflight_repository`
+now also performs one plugin-owned live discovery roundtrip against
+`/plugin/capabilities` before repository layout analysis continues.
+
+The repository plugin config id remains `julia`, while the capability-manifest
+rows themselves advertise the canonical provider id
+`xiuxian-wendao-julia` so runtime provider selectors stay stable.
 
 The same ownership rule now applies to the typed Rust exchange helpers for
 these structural routes:
@@ -182,6 +258,12 @@ That same proof now also consumes
 `build_graph_structural_keyword_overlap_query_inputs(...)`, so the host no
 longer manually constructs `GraphStructuralKeywordOverlapQueryInputs` before
 staging the rerank request or repository fetch.
+That same thin-seam host proof now also covers the live
+`WendaoSearch.jl --mode solver_demo` rerank and filter services without
+widening the staged Rust request contract.
+That staged Rust request contract now includes explicit edge endpoints, so the
+same proof no longer relies on the Julia service's projected-path topology
+assumption.
 That same proof now also consumes
 `build_graph_structural_pair_candidate_inputs(...)`, so the host no longer
 manually constructs `GraphStructuralPairCandidateInputs` before staging the
@@ -199,6 +281,67 @@ and
 `fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(...)`,
 so the host no longer manually normalizes each raw candidate before batch or
 repository-fetch dispatch.
+That same thin-seam live lane now also promotes one connected
+`LinkGraphAgenticExpansionPlan` pair collection into the generic explicit-edge
+topology helper path, so the three-node `solver_demo` proof no longer
+hand-builds node and edge arrays in either the plugin crate or the host proof.
+That same live lane now also owns one scored pair-collection helper above the
+pair DTO seam, so generic-topology proofs no longer manually average pair
+priorities or manually normalize connected pairs into
+`GraphStructuralPairCandidateInputs`.
+That same live lane now also owns one raw connected-pair helper above the
+scored pair-collection seam, so host proofs no longer map
+`LinkGraphAgenticCandidatePair` into scored pair DTOs before the generic
+topology downcall.
+That same live lane now also proves one multi-candidate generic-topology
+batch against the same `WendaoSearch.jl --mode solver_demo` endpoint, both in
+the plugin crate and through the host language seam, so the connected-pair
+collection path is no longer limited to one candidate per request.
+That same host-through-language-seam proof now also relies on a dedicated
+host test-support extractor for connected pair collections, so
+`link_graph_agentic/expansion.rs` no longer carries that collection-selection
+algorithm inline while the live downcall behavior stays unchanged.
+That same host-side proof now also relies on dedicated host test-support for
+generic-topology manifest-discovery repository setup, shared query-context
+setup, and baseline solver-demo row assertions, so `expansion.rs` keeps only
+test intent plus pin-specific assertions while the Julia-owned fetch seam and
+live contract stay unchanged.
+That same live lane now also proves one higher-level seed-centered candidate
+batch derived from a real `LinkGraphAgenticExpansionPlan`, so host proofs can
+promote one more realistic mixed-graph batch above connected-pair collections
+without changing the Julia-owned generic-topology fetch seam.
+That same host-through-language-seam live lane now also proves one
+worker-partition generic-topology batch derived from real
+`LinkGraphAgenticWorkerPlan` partitions, so the current solver-demo route now
+covers one more planner-shaped candidate batch above seed-centered groups.
+That worker-partition proof now accepts mixed feasible and infeasible solver
+rows inside the same batch, while still requiring at least one feasible live
+result from the returned candidate set.
+That same host live lane now also derives one batch-level generic-topology
+query context from the real expansion-plan query plus selected worker seed
+metadata, so the host proof no longer hard-codes `"alpha"` or `"related"`
+inside the final manifest-discovered solver-demo downcall helper.
+That same host live lane now also derives worker-batch dependency, keyword,
+and tag scores from real plan-aware batch semantics before the downcall, and
+validates those staged request-batch columns against the outgoing
+generic-topology Arrow batch while the Julia-owned live contract remains
+unchanged.
+That same host live lane now also validates the staged `semantic_score`
+request column derived from real worker-partition pair semantics, so the
+outgoing generic-topology Arrow batch is now proven above one less implicit
+Julia-owned normalization step while the live solver-demo contract remains
+unchanged.
+That same host live lane now also validates the staged `query_id`,
+`retrieval_layer`, `query_max_layers`, `anchor_planes`, `anchor_values`, and
+`edge_constraint_kinds` request columns against the same plan-aware batch
+fixture before the live downcall, so the outgoing generic-topology Arrow batch
+is now proven above one less implicit host-to-Julia query-context handoff.
+That same host live lane now also validates the staged
+`candidate_node_ids`, `candidate_edge_sources`,
+`candidate_edge_destinations`, and `candidate_edge_kinds` request columns
+against the same plan-aware batch fixture before the live downcall, so the
+outgoing generic-topology Arrow batch is now proven above one less implicit
+host-to-Julia topology handoff.
 That bounded host-side proof now also exercises that public fetch helper
 directly and confirms that the missing-transport failure still resolves through
 the Julia-owned structural-rerank route instead of a host-local adapter layer.
@@ -215,8 +358,9 @@ The transport client now sends `x-wendao-schema-version` and defaults to the
 request batch metadata so the managed Julia Flight services see the same
 request-side contract boundary as the Rust rerank path.
 
-`validate_julia_arrow_response_batches` enforces the current `v1` response
-shape before a future gateway integration accepts analyzer output:
+The runtime-owned `validate_plugin_arrow_response_batches(...)` helper enforces
+the current `v1` response shape before a future gateway integration accepts
+analyzer output:
 
 - required columns: `doc_id`, `analyzer_score`, `final_score`
 - `doc_id` must be unique and non-null
@@ -227,7 +371,8 @@ integration. It performs:
 
 - Arrow Flight roundtrip via `xiuxian-wendao-runtime`'s negotiated client
 - response schema-version enforcement
-- `v1` Julia response validation before returning decoded record batches
+- runtime-owned `v1` plugin Arrow response validation before returning
+  decoded record batches
 
 ## Graph-Structural Draft Contract
 
@@ -281,7 +426,17 @@ fixture.
 The corresponding test support is now split under `src/plugin/test_support/`
 into shared child/path helpers and official-example helpers, mirroring the
 same semantic split used by `xiuxian-wendao` integration support.
-That official-example layer now includes a real `WendaoSearch.jl` structural
-demo launcher as well, so plugin-owned graph-structural fetch helpers can be
-proven against a live Search child service without moving route logic back
-into `xiuxian-wendao`.
+That official-example layer now includes real `WendaoSearch.jl` structural
+launchers for both `demo` and `solver_demo`, so plugin-owned
+graph-structural fetch helpers can be proven against a live Search child
+service without moving route logic back into `xiuxian-wendao`.
+Those live proofs now cover both hand-built generic topology smoke and the
+real pair-collection promotion path above `LinkGraphAgenticExpansionPlan`.
+They now also cover plugin-owned candidate-level semantic aggregation from that
+raw pair collection before the generic-topology downcall.
+They now also cover the one-step-higher raw connected-pair seam above that
+aggregation path, so host proofs can forward only connected pair ids plus
+semantic scores into Julia-owned staging before live downcall.
+They now also keep the exchange implementation file lean by externalizing the
+remaining unit and live proof modules behind `#[cfg(test)] #[path = "..."]`
+without changing the green live baseline.

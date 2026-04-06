@@ -1710,20 +1710,6 @@ fn code_content_globs_do_not_exclude_cache_root() {
 }
 
 #[test]
-fn parse_repo_code_search_query_extracts_lang_kind_and_term() {
-    let spec = parse_repo_code_search_query("lang:julia kind:file reexport");
-    assert_eq!(spec.search_term(), Some("reexport"));
-    assert!(spec.language_filters.contains("julia"));
-    assert!(spec.kind_filters.contains("file"));
-}
-
-#[test]
-fn parse_repo_code_search_query_keeps_unknown_kind_token_in_search_term() {
-    let spec = parse_repo_code_search_query("kind:custom reexport");
-    assert_eq!(spec.search_term(), Some("kind:custom reexport"));
-}
-
-#[test]
 fn language_filter_matches_julia_path_extensions() {
     let mut filters = std::collections::HashSet::new();
     filters.insert("julia".to_string());

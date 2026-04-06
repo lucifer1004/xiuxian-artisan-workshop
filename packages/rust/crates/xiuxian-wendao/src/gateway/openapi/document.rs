@@ -36,10 +36,11 @@ pub fn load_bundled_wendao_gateway_openapi_document() -> Result<Value> {
 mod tests {
     use serde_json::Value;
     #[cfg(feature = "julia")]
-    use xiuxian_wendao_julia::compatibility::link_graph::{
-        julia_deployment_artifact_openapi_json_example,
-        julia_deployment_artifact_openapi_toml_example, julia_plugin_artifact_openapi_json_example,
-        julia_plugin_artifact_openapi_toml_example,
+    use xiuxian_wendao_builtin::{
+        linked_builtin_julia_deployment_artifact_openapi_json_example,
+        linked_builtin_julia_deployment_artifact_openapi_toml_example,
+        linked_builtin_plugin_artifact_openapi_json_example,
+        linked_builtin_plugin_artifact_openapi_toml_example,
     };
 
     use super::{
@@ -189,11 +190,11 @@ mod tests {
         let document = load_bundled_wendao_gateway_openapi_document()
             .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
         let get = &document["paths"]["/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}"]["get"];
-        let expected_toml = julia_plugin_artifact_openapi_toml_example();
+        let expected_toml = linked_builtin_plugin_artifact_openapi_toml_example();
 
         assert_eq!(
             get["responses"]["200"]["content"]["application/json"]["example"],
-            julia_plugin_artifact_openapi_json_example()
+            linked_builtin_plugin_artifact_openapi_json_example()
         );
         assert_eq!(
             get["responses"]["200"]["content"]["text/plain"]["example"].as_str(),
@@ -207,14 +208,14 @@ mod tests {
         let document = load_bundled_wendao_gateway_openapi_document()
             .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
         let get = &document["paths"]["/api/ui/julia-deployment-artifact"]["get"];
-        let expected_toml =
-            julia_deployment_artifact_openapi_toml_example().unwrap_or_else(|error| {
+        let expected_toml = linked_builtin_julia_deployment_artifact_openapi_toml_example()
+            .unwrap_or_else(|error| {
                 panic!("render Julia deployment artifact OpenAPI example: {error}")
             });
 
         assert_eq!(
             get["responses"]["200"]["content"]["application/json"]["example"],
-            julia_deployment_artifact_openapi_json_example()
+            linked_builtin_julia_deployment_artifact_openapi_json_example()
         );
         assert_eq!(
             get["responses"]["200"]["content"]["text/plain"]["example"].as_str(),

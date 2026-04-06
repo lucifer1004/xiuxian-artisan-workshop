@@ -3,7 +3,7 @@ use serde_json::json;
 
 use crate::entity::Relation;
 
-use super::parsers::parse_relation_type;
+use super::parsers::parse_persisted_relation_type;
 
 /// Python wrapper for Relation.
 #[pyclass]
@@ -17,7 +17,7 @@ impl PyRelation {
     #[new]
     #[pyo3(signature = (source, target, relation_type, description))]
     fn new(source: &str, target: &str, relation_type: &str, description: &str) -> Self {
-        let rtype = parse_relation_type(relation_type);
+        let rtype = parse_persisted_relation_type(relation_type);
         Self {
             inner: Relation::new(
                 source.to_string(),

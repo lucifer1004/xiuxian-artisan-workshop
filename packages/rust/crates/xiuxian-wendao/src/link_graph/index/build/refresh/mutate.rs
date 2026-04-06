@@ -1,6 +1,6 @@
 use super::super::attachments::attachments_for_parsed_note;
 use crate::link_graph::index::{IndexedSection, LinkGraphIndex};
-use crate::link_graph::parser::{ParsedNote, normalize_alias};
+use crate::parsers::markdown::{ParsedNote, normalize_alias};
 use std::collections::HashSet;
 
 impl LinkGraphIndex {

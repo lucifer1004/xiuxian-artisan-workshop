@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
+use crate::parsers::markdown::parse_frontmatter;
 use crate::skill_vfs::zhixing::{Error, Result};
-use crate::{KnowledgeGraph, WendaoResourceUri, parse_frontmatter};
+use crate::{KnowledgeGraph, WendaoResourceUri};
 
 use super::registry::{
     embedded_skill_links_for_id, embedded_skill_links_for_reference_type,

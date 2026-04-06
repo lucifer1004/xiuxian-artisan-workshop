@@ -14,7 +14,8 @@ pub mod cache;
 pub mod config;
 /// Error types for repository intelligence operations.
 pub mod errors;
-/// Language-specific plugin placeholders and registration guidance.
+/// Language-specific plugin guidance; plugin-specific public APIs live in the
+/// plugin crates.
 pub mod languages;
 /// Plugin trait definitions and analysis context types.
 pub mod plugin;

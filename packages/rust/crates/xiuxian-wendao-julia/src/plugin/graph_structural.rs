@@ -41,6 +41,10 @@ pub const GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN: &str = "anchor_values";
 pub const GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN: &str = "edge_constraint_kinds";
 /// Canonical graph-structural request `candidate_node_ids` column.
 pub const GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN: &str = "candidate_node_ids";
+/// Canonical graph-structural request `candidate_edge_sources` column.
+pub const GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN: &str = "candidate_edge_sources";
+/// Canonical graph-structural request `candidate_edge_destinations` column.
+pub const GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN: &str = "candidate_edge_destinations";
 /// Canonical graph-structural request `candidate_edge_kinds` column.
 pub const GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN: &str = "candidate_edge_kinds";
 /// Canonical structural-rerank response `feasible` column.
@@ -59,7 +63,7 @@ pub const GRAPH_STRUCTURAL_EXPLANATION_COLUMN: &str = "explanation";
 pub const GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN: &str = "rejection_reason";
 
 /// Canonical structural-rerank request column order.
-pub const GRAPH_STRUCTURAL_RERANK_REQUEST_COLUMNS: [&str; 13] = [
+pub const GRAPH_STRUCTURAL_RERANK_REQUEST_COLUMNS: [&str; 15] = [
     GRAPH_STRUCTURAL_QUERY_ID_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN,
     GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN,
@@ -72,6 +76,8 @@ pub const GRAPH_STRUCTURAL_RERANK_REQUEST_COLUMNS: [&str; 13] = [
     GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN,
     GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN,
+    GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN,
+    GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
 ];
 
@@ -86,7 +92,7 @@ pub const GRAPH_STRUCTURAL_RERANK_RESPONSE_COLUMNS: [&str; 6] = [
 ];
 
 /// Canonical constraint-filter request column order.
-pub const GRAPH_STRUCTURAL_FILTER_REQUEST_COLUMNS: [&str; 11] = [
+pub const GRAPH_STRUCTURAL_FILTER_REQUEST_COLUMNS: [&str; 13] = [
     GRAPH_STRUCTURAL_QUERY_ID_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN,
     GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN,
@@ -97,6 +103,8 @@ pub const GRAPH_STRUCTURAL_FILTER_REQUEST_COLUMNS: [&str; 11] = [
     GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN,
     GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN,
+    GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN,
+    GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
 ];
 
@@ -135,6 +143,15 @@ impl GraphStructuralRouteKind {
             Self::StructuralRerank | Self::ConstraintFilter => {
                 JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION
             }
+        }
+    }
+
+    /// Return the capability-manifest variant tag for this exchange kind.
+    #[must_use]
+    pub fn capability_variant(self) -> &'static str {
+        match self {
+            Self::StructuralRerank => "structural_rerank",
+            Self::ConstraintFilter => "constraint_filter",
         }
     }
 
@@ -201,6 +218,8 @@ pub fn validate_graph_structural_rerank_request_schema(schema: &Schema) -> Resul
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN)?;
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN)?;
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN)?;
+    validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN)?;
+    validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN)?;
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN)?;
     Ok(())
 }
@@ -231,8 +250,17 @@ pub fn validate_graph_structural_rerank_request_batch(batch: &RecordBatch) -> Re
     let anchor_values =
         require_utf8_list_column(batch, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, false)?;
     require_utf8_list_column(batch, GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN, true)?;
-    require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN, false)?;
-    require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN, true)?;
+    let candidate_node_ids =
+        require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN, false)?;
+    let candidate_edge_sources =
+        require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN, true)?;
+    let candidate_edge_destinations = require_utf8_list_column(
+        batch,
+        GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
+        true,
+    )?;
+    let candidate_edge_kinds =
+        require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN, true)?;
     for row_index in 0..batch.num_rows() {
         if anchor_planes[row_index].len() != anchor_values[row_index].len() {
             return Err(format!(
@@ -241,6 +269,14 @@ pub fn validate_graph_structural_rerank_request_batch(batch: &RecordBatch) -> Re
                 anchor_values[row_index].len(),
             ));
         }
+        validate_candidate_edge_lists(
+            "graph structural rerank request",
+            row_index,
+            &candidate_node_ids[row_index],
+            &candidate_edge_sources[row_index],
+            &candidate_edge_destinations[row_index],
+            &candidate_edge_kinds[row_index],
+        )?;
     }
     Ok(())
 }
@@ -295,6 +331,8 @@ pub fn validate_graph_structural_filter_request_schema(schema: &Schema) -> Resul
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN)?;
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN)?;
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN)?;
+    validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN)?;
+    validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN)?;
     validate_list_utf8_field(schema, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN)?;
     Ok(())
 }
@@ -323,8 +361,17 @@ pub fn validate_graph_structural_filter_request_batch(batch: &RecordBatch) -> Re
     let anchor_values =
         require_utf8_list_column(batch, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, false)?;
     require_utf8_list_column(batch, GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN, true)?;
-    require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN, false)?;
-    require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN, true)?;
+    let candidate_node_ids =
+        require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN, false)?;
+    let candidate_edge_sources =
+        require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN, true)?;
+    let candidate_edge_destinations = require_utf8_list_column(
+        batch,
+        GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
+        true,
+    )?;
+    let candidate_edge_kinds =
+        require_utf8_list_column(batch, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN, true)?;
     for row_index in 0..batch.num_rows() {
         if anchor_planes[row_index].len() != anchor_values[row_index].len() {
             return Err(format!(
@@ -333,6 +380,14 @@ pub fn validate_graph_structural_filter_request_batch(batch: &RecordBatch) -> Re
                 anchor_values[row_index].len(),
             ));
         }
+        validate_candidate_edge_lists(
+            "graph structural filter request",
+            row_index,
+            &candidate_node_ids[row_index],
+            &candidate_edge_sources[row_index],
+            &candidate_edge_destinations[row_index],
+            &candidate_edge_kinds[row_index],
+        )?;
     }
     Ok(())
 }
@@ -620,6 +675,53 @@ fn require_utf8_list_column(
     Ok(rows)
 }
 
+fn validate_candidate_edge_lists(
+    subject: &str,
+    row_index: usize,
+    node_ids: &[String],
+    edge_sources: &[String],
+    edge_destinations: &[String],
+    edge_kinds: &[String],
+) -> Result<(), String> {
+    if edge_sources.len() != edge_destinations.len() {
+        return Err(format!(
+            "{subject} edge endpoint columns must stay aligned; row {row_index} has {} sources but {} destinations",
+            edge_sources.len(),
+            edge_destinations.len(),
+        ));
+    }
+    if edge_sources.len() != edge_kinds.len() {
+        return Err(format!(
+            "{subject} edge columns must align with edge kinds; row {row_index} has {} edge endpoints but {} edge kinds",
+            edge_sources.len(),
+            edge_kinds.len(),
+        ));
+    }
+    let node_ids = node_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    for (edge_index, (src_id, dst_id)) in edge_sources
+        .iter()
+        .zip(edge_destinations.iter())
+        .enumerate()
+    {
+        if src_id == dst_id {
+            return Err(format!(
+                "{subject} edge endpoints must not be identical; row {row_index} edge {edge_index} repeats `{src_id}`",
+            ));
+        }
+        if !node_ids.contains(src_id.as_str()) {
+            return Err(format!(
+                "{subject} edge source `{src_id}` is not present in candidate nodes at row {row_index}",
+            ));
+        }
+        if !node_ids.contains(dst_id.as_str()) {
+            return Err(format!(
+                "{subject} edge destination `{dst_id}` is not present in candidate nodes at row {row_index}",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn utf8_column<'a>(batch: &'a RecordBatch, field_name: &str) -> Result<&'a StringArray, String> {
     batch
         .column_by_name(field_name)
@@ -721,6 +823,8 @@ mod tests {
             vec![vec!["graph retrieval"]],
             vec![vec!["depends_on"]],
             vec![vec!["node-a", "node-b"]],
+            vec![vec!["node-a"]],
+            vec![vec!["node-b"]],
             vec![vec!["depends_on"]],
         );
         assert!(validate_graph_structural_rerank_request_batch(&batch).is_ok());
@@ -740,7 +844,9 @@ mod tests {
             vec![vec!["semantic", "keyword"]],
             vec![vec!["graph retrieval"]],
             vec![vec!["depends_on"]],
+            vec![vec!["node-a", "node-b"]],
             vec![vec!["node-a"]],
+            vec![vec!["node-b"]],
             vec![vec!["depends_on"]],
         );
         assert_eq!(
@@ -784,6 +890,8 @@ mod tests {
             vec![vec!["graph retrieval"]],
             vec![vec!["depends_on"]],
             vec![vec!["node-a", "node-b"]],
+            vec![vec!["node-a"]],
+            vec![vec!["node-b"]],
             vec![vec!["depends_on"]],
         );
         assert!(validate_graph_structural_filter_request_batch(&batch).is_ok());
@@ -838,6 +946,8 @@ mod tests {
         anchor_values: Vec<Vec<&str>>,
         edge_constraint_kinds: Vec<Vec<&str>>,
         candidate_node_ids: Vec<Vec<&str>>,
+        candidate_edge_sources: Vec<Vec<&str>>,
+        candidate_edge_destinations: Vec<Vec<&str>>,
         candidate_edge_kinds: Vec<Vec<&str>>,
     ) -> RecordBatch {
         RecordBatch::try_new(
@@ -854,6 +964,8 @@ mod tests {
                 list_utf8_field(GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
             ])),
             vec![
@@ -869,6 +981,8 @@ mod tests {
                 Arc::new(list_utf8_array(anchor_values)) as ArrayRef,
                 Arc::new(list_utf8_array(edge_constraint_kinds)) as ArrayRef,
                 Arc::new(list_utf8_array(candidate_node_ids)) as ArrayRef,
+                Arc::new(list_utf8_array(candidate_edge_sources)) as ArrayRef,
+                Arc::new(list_utf8_array(candidate_edge_destinations)) as ArrayRef,
                 Arc::new(list_utf8_array(candidate_edge_kinds)) as ArrayRef,
             ],
         )
@@ -915,6 +1029,8 @@ mod tests {
         anchor_values: Vec<Vec<&str>>,
         edge_constraint_kinds: Vec<Vec<&str>>,
         candidate_node_ids: Vec<Vec<&str>>,
+        candidate_edge_sources: Vec<Vec<&str>>,
+        candidate_edge_destinations: Vec<Vec<&str>>,
         candidate_edge_kinds: Vec<Vec<&str>>,
     ) -> RecordBatch {
         RecordBatch::try_new(
@@ -929,6 +1045,8 @@ mod tests {
                 list_utf8_field(GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
             ])),
             vec![
@@ -942,6 +1060,8 @@ mod tests {
                 Arc::new(list_utf8_array(anchor_values)) as ArrayRef,
                 Arc::new(list_utf8_array(edge_constraint_kinds)) as ArrayRef,
                 Arc::new(list_utf8_array(candidate_node_ids)) as ArrayRef,
+                Arc::new(list_utf8_array(candidate_edge_sources)) as ArrayRef,
+                Arc::new(list_utf8_array(candidate_edge_destinations)) as ArrayRef,
                 Arc::new(list_utf8_array(candidate_edge_kinds)) as ArrayRef,
             ],
         )

@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::gateway::studio::search::project_scope::project_metadata_for_path;
 use crate::gateway::studio::types::{AttachmentSearchHit, StudioNavigationTarget, UiProjectConfig};
 use crate::link_graph::LinkGraphAttachmentKind;
-use crate::link_graph::parser::{is_supported_note, parse_note};
+use crate::parsers::markdown::{ParsedNote, is_supported_note, parse_note};
 use crate::search_plane::ProjectScannedFile;
 
 pub(crate) fn build_attachment_hits_for_files(
@@ -55,7 +55,7 @@ pub(crate) fn build_attachment_hits_for_file(
 }
 
 fn attachment_hits_for_parsed_note(
-    parsed: &crate::link_graph::parser::ParsedNote,
+    parsed: &ParsedNote,
     project_name: Option<&str>,
     root_label: Option<&str>,
 ) -> Vec<AttachmentSearchHit> {

@@ -25,14 +25,14 @@ use chrono::DateTime;
 use serial_test::serial;
 use std::fs;
 #[cfg(feature = "julia")]
-use xiuxian_wendao_julia::compatibility::link_graph::{
-    DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
-};
-#[cfg(feature = "julia")]
-use xiuxian_wendao_julia::integration_support::{
-    julia_gateway_artifact_base_url, julia_gateway_artifact_expected_toml_fragments,
-    julia_gateway_artifact_path, julia_gateway_artifact_runtime_config_toml,
-    julia_gateway_artifact_schema_version, julia_gateway_artifact_selected_transport,
+use xiuxian_wendao_builtin::{
+    linked_builtin_julia_gateway_artifact_base_url,
+    linked_builtin_julia_gateway_artifact_expected_toml_fragments,
+    linked_builtin_julia_gateway_artifact_path, linked_builtin_julia_gateway_artifact_route,
+    linked_builtin_julia_gateway_artifact_runtime_config_toml,
+    linked_builtin_julia_gateway_artifact_schema_version,
+    linked_builtin_julia_gateway_artifact_selected_transport,
+    linked_builtin_julia_gateway_launcher_path,
 };
 
 #[test]
@@ -309,10 +309,10 @@ async fn symbol_index_status_records_first_deferred_bootstrap_activation() {
 async fn plugin_artifact_handler_returns_resolved_artifact() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
     fs::write(
         &config_path,
-        julia_gateway_artifact_runtime_config_toml(Some("similarity_only")),
+        linked_builtin_julia_gateway_artifact_runtime_config_toml(Some("similarity_only")),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -351,21 +351,21 @@ async fn plugin_artifact_handler_returns_resolved_artifact() {
     assert_eq!(artifact.artifact_id, artifact_id);
     assert_eq!(
         artifact.artifact_schema_version,
-        julia_gateway_artifact_schema_version()
+        linked_builtin_julia_gateway_artifact_schema_version()
     );
     DateTime::parse_from_rfc3339(&artifact.generated_at)
         .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
     assert_eq!(
         artifact.base_url.as_deref(),
-        Some(julia_gateway_artifact_base_url())
+        Some(linked_builtin_julia_gateway_artifact_base_url())
     );
     assert_eq!(
         artifact.route.as_deref(),
-        Some(DEFAULT_JULIA_RERANK_FLIGHT_ROUTE)
+        Some(linked_builtin_julia_gateway_artifact_route())
     );
     assert_eq!(
         artifact.schema_version.as_deref(),
-        Some(julia_gateway_artifact_schema_version())
+        Some(linked_builtin_julia_gateway_artifact_schema_version())
     );
     assert_eq!(
         artifact.selected_transport,
@@ -378,7 +378,7 @@ async fn plugin_artifact_handler_returns_resolved_artifact() {
             .launch
             .as_ref()
             .map(|launch| launch.launcher_path.as_str()),
-        Some(DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH)
+        Some(linked_builtin_julia_gateway_launcher_path())
     );
 }
 
@@ -388,10 +388,10 @@ async fn plugin_artifact_handler_returns_resolved_artifact() {
 async fn plugin_artifact_handler_returns_canonical_json_shape() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
     fs::write(
         &config_path,
-        julia_gateway_artifact_runtime_config_toml(None),
+        linked_builtin_julia_gateway_artifact_runtime_config_toml(None),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -430,11 +430,11 @@ async fn plugin_artifact_handler_returns_canonical_json_shape() {
     assert_eq!(artifact["artifactId"], artifact_id);
     assert_eq!(
         artifact["selectedTransport"],
-        julia_gateway_artifact_selected_transport()
+        linked_builtin_julia_gateway_artifact_selected_transport()
     );
     assert_eq!(
         artifact["launch"]["launcherPath"],
-        DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
+        linked_builtin_julia_gateway_launcher_path()
     );
 }
 
@@ -444,10 +444,10 @@ async fn plugin_artifact_handler_returns_canonical_json_shape() {
 async fn plugin_artifact_handler_returns_toml_when_requested() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
     fs::write(
         &config_path,
-        julia_gateway_artifact_runtime_config_toml(None),
+        linked_builtin_julia_gateway_artifact_runtime_config_toml(None),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -489,7 +489,7 @@ async fn plugin_artifact_handler_returns_toml_when_requested() {
         String::from_utf8(body.to_vec()).unwrap_or_else(|error| panic!("utf8 toml body: {error}"));
 
     assert_eq!(content_type, "text/plain; charset=utf-8");
-    for expected_fragment in julia_gateway_artifact_expected_toml_fragments() {
+    for expected_fragment in linked_builtin_julia_gateway_artifact_expected_toml_fragments() {
         assert!(
             body_text.contains(&expected_fragment),
             "expected rendered TOML to contain `{expected_fragment}`"

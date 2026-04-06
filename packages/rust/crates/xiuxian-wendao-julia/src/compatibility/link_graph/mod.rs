@@ -26,8 +26,9 @@ pub use paths::{
 };
 pub use runtime::{LinkGraphJuliaRerankRuntimeConfig, build_rerank_provider_binding};
 pub use selectors::{
-    JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID, JULIA_PLUGIN_ID,
-    JULIA_RERANK_CAPABILITY_ID, julia_deployment_artifact_selector,
+    JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID, JULIA_DEPLOYMENT_ARTIFACT_ID,
+    JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID, JULIA_PLUGIN_ID, JULIA_RERANK_CAPABILITY_ID,
+    julia_capability_manifest_provider_selector, julia_deployment_artifact_selector,
     julia_graph_structural_provider_selector, julia_rerank_provider_selector,
 };
 pub use settings::{

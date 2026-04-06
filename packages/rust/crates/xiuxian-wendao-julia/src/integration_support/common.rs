@@ -93,14 +93,36 @@ pub(crate) fn wendaoanalyzer_script(name: &str) -> PathBuf {
         .unwrap_or_else(|error| panic!("resolve WendaoAnalyzer script `{name}`: {error}"))
 }
 
+pub(crate) fn wendaosearch_package_dir() -> PathBuf {
+    repo_root()
+        .join(".data/WendaoSearch.jl")
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve WendaoSearch package dir: {error}"))
+}
+
+pub(crate) fn wendaosearch_script(name: &str) -> PathBuf {
+    wendaosearch_package_dir()
+        .join("scripts")
+        .join(name)
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve WendaoSearch script `{name}`: {error}"))
+}
+
 pub(crate) async fn wait_for_service_ready(base_url: &str) -> Result<(), String> {
+    wait_for_service_ready_with_attempts(base_url, 150).await
+}
+
+pub(crate) async fn wait_for_service_ready_with_attempts(
+    base_url: &str,
+    attempts: usize,
+) -> Result<(), String> {
     let socket_addr = base_url
         .strip_prefix("http://")
         .or_else(|| base_url.strip_prefix("https://"))
         .unwrap_or(base_url)
         .to_string();
 
-    for _ in 0..150 {
+    for _ in 0..attempts {
         if TcpStream::connect(&socket_addr).await.is_ok() {
             return Ok(());
         }

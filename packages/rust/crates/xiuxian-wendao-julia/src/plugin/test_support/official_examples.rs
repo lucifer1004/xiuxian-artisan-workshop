@@ -34,6 +34,64 @@ pub(crate) fn spawn_real_wendaoanalyzer_linear_blend_service(port: u16) -> Child
 }
 
 pub(crate) fn spawn_real_wendaosearch_demo_structural_rerank_service(port: u16) -> ChildGuard {
+    spawn_real_wendaosearch_service("structural_rerank", "demo", port)
+}
+
+pub(crate) fn spawn_real_wendaosearch_demo_capability_manifest_service(port: u16) -> ChildGuard {
+    spawn_real_wendaosearch_service("capability_manifest", "demo", port)
+}
+
+pub(crate) fn spawn_real_wendaosearch_solver_demo_structural_rerank_service(
+    port: u16,
+) -> ChildGuard {
+    spawn_real_wendaosearch_service("structural_rerank", "solver_demo", port)
+}
+
+pub(crate) fn spawn_real_wendaosearch_solver_demo_constraint_filter_service(
+    port: u16,
+) -> ChildGuard {
+    spawn_real_wendaosearch_service("constraint_filter", "solver_demo", port)
+}
+
+pub(crate) fn spawn_real_wendaosearch_demo_multi_route_service(port: u16) -> ChildGuard {
+    spawn_real_wendaosearch_multi_route_service("demo", port)
+}
+
+pub(crate) fn spawn_real_wendaosearch_solver_demo_multi_route_service(port: u16) -> ChildGuard {
+    spawn_real_wendaosearch_multi_route_service("solver_demo", port)
+}
+
+fn spawn_real_wendaosearch_multi_route_service(mode: &str, port: u16) -> ChildGuard {
+    let script = wendaosearch_script("run_search_service.jl");
+    let child = Command::new("direnv")
+        .arg("exec")
+        .arg(".")
+        .arg("julia")
+        .arg(format!(
+            "--project={}",
+            wendaosearch_package_dir().display()
+        ))
+        .arg(script)
+        .arg("--route-names")
+        .arg("capability_manifest,structural_rerank,constraint_filter")
+        .arg("--mode")
+        .arg(mode)
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(repo_root())
+        .env("JULIA_LOAD_PATH", "@:@stdlib")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|error| {
+            panic!("spawn real WendaoSearch multi-route `{mode}` service: {error}")
+        });
+    ChildGuard::new(child)
+}
+
+fn spawn_real_wendaosearch_service(route_name: &str, mode: &str, port: u16) -> ChildGuard {
     let script = wendaosearch_script("run_search_service.jl");
     let child = Command::new("direnv")
         .arg("exec")
@@ -45,9 +103,9 @@ pub(crate) fn spawn_real_wendaosearch_demo_structural_rerank_service(port: u16) 
         ))
         .arg(script)
         .arg("--route-name")
-        .arg("structural_rerank")
+        .arg(route_name)
         .arg("--mode")
-        .arg("demo")
+        .arg(mode)
         .arg("--host")
         .arg("127.0.0.1")
         .arg("--port")
@@ -58,7 +116,7 @@ pub(crate) fn spawn_real_wendaosearch_demo_structural_rerank_service(port: u16) 
         .stderr(Stdio::null())
         .spawn()
         .unwrap_or_else(|error| {
-            panic!("spawn real WendaoSearch structural-rerank service: {error}")
+            panic!("spawn real WendaoSearch `{route_name}` `{mode}` service: {error}")
         });
     ChildGuard::new(child)
 }

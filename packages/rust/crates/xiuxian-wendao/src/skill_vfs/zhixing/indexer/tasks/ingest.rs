@@ -1,4 +1,7 @@
 use crate::entity::{Entity, EntityType};
+use crate::parsers::zhixing::tasks::{
+    TaskLineProjection, normalize_identity_token, parse_task_projection,
+};
 use crate::skill_vfs::zhixing::{
     ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_REMINDED, ATTR_TIMER_SCHEDULED, Error, Result,
 };
@@ -7,7 +10,6 @@ use std::fs;
 use std::path::Path;
 
 use super::super::file_discovery::collect_markdown_files;
-use super::super::parse::{TaskLineProjection, normalize_identity_token, parse_task_projection};
 use super::super::{ZhixingIndexSummary, ZhixingWendaoIndexer};
 
 impl ZhixingWendaoIndexer {

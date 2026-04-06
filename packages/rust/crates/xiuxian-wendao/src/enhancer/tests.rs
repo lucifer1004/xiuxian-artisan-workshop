@@ -3,81 +3,68 @@ use crate::link_graph_refs::LinkGraphEntityRef;
 use super::*;
 
 #[test]
-fn test_parse_frontmatter_basic() {
-    let content =
-        "---\ntitle: My Note\ndescription: A test\ntags:\n  - python\n  - rust\n---\n# Content";
-    let fm = parse_frontmatter(content);
-    assert_eq!(fm.title.as_deref(), Some("My Note"));
-    assert_eq!(fm.description.as_deref(), Some("A test"));
-    assert_eq!(fm.tags, vec!["python", "rust"]);
-}
-
-#[test]
-fn test_parse_frontmatter_skill() {
-    let content = "---\nname: git\ndescription: Git ops\nmetadata:\n  routing_keywords:\n    - commit\n    - branch\n  intents:\n    - version_control\n---\n# SKILL";
-    let fm = parse_frontmatter(content);
-    assert_eq!(fm.name.as_deref(), Some("git"));
-    assert_eq!(fm.routing_keywords, vec!["commit", "branch"]);
-    assert_eq!(fm.intents, vec!["version_control"]);
-}
-
-#[test]
-fn test_parse_frontmatter_empty() {
-    let fm = parse_frontmatter("# No frontmatter");
-    assert!(fm.title.is_none());
-    assert!(fm.tags.is_empty());
-}
-
-#[test]
-fn test_parse_frontmatter_malformed() {
-    let fm = parse_frontmatter("---\n: bad [[\n---\n");
-    assert!(fm.title.is_none());
-}
-
-#[test]
-fn test_infer_relations_documented_in() {
+fn test_infer_relations_from_wikilinks_are_structural() {
     let refs = vec![LinkGraphEntityRef::new(
         "Python".to_string(),
         None,
         "[[Python]]".to_string(),
     )];
-    let fm = NoteFrontmatter::default();
-    let relations = infer_relations("docs/test.md", "Test Doc", &fm, &refs);
+    let relations = infer_relations("docs/test.md", "Test Doc", "Content", &refs);
 
     assert_eq!(relations.len(), 1);
-    assert_eq!(relations[0].source, "Python");
-    assert_eq!(relations[0].relation_type, "DOCUMENTED_IN");
+    assert_eq!(relations[0].source, "Test Doc");
+    assert_eq!(relations[0].source_address, None);
+    assert_eq!(relations[0].target, "Python");
+    assert_eq!(relations[0].target_address, None);
+    assert_eq!(relations[0].relation_type, None);
+    assert_eq!(relations[0].metadata_owner, None);
 }
 
 #[test]
-fn test_infer_relations_skill_contains() {
-    let fm = NoteFrontmatter {
-        name: Some("git".to_string()),
-        ..Default::default()
-    };
-    let relations = infer_relations("assets/skills/git/SKILL.md", "Git Skill", &fm, &[]);
+fn test_infer_relations_do_not_invent_semantics_from_skill_path() {
+    let relations = infer_relations("assets/skills/git/SKILL.md", "Git Skill", "Content", &[]);
 
-    let contains: Vec<_> = relations
-        .iter()
-        .filter(|r| r.relation_type == "CONTAINS")
-        .collect();
-    assert_eq!(contains.len(), 1);
-    assert_eq!(contains[0].source, "git");
+    assert!(relations.is_empty());
 }
 
 #[test]
-fn test_infer_relations_tags() {
-    let fm = NoteFrontmatter {
-        tags: vec!["search".to_string(), "vector".to_string()],
-        ..Default::default()
-    };
-    let relations = infer_relations("docs/test.md", "Test", &fm, &[]);
+fn test_infer_relations_do_not_promote_frontmatter_tags_to_relations() {
+    let content = "---\ntags:\n  - search\n  - vector\n---\nBody";
+    let relations = infer_relations("docs/test.md", "Test", content, &[]);
 
-    let tag_rels: Vec<_> = relations
-        .iter()
-        .filter(|r| r.relation_type == "RELATED_TO")
-        .collect();
-    assert_eq!(tag_rels.len(), 2);
+    assert!(relations.is_empty());
+}
+
+#[test]
+fn test_infer_relations_from_property_drawers_are_scoped_and_explicit() {
+    let content = r#"
+## Heading 1
+:PROPERTIES:
+:ID: heading-1
+:RELATED: [[file-b#section-2]], [[#local-target]], [[/Heading 2]]
+:WEIGHT: 5
+:END:
+"#;
+
+    let relations = infer_relations("docs/a.md", "Doc A", content, &[]);
+
+    assert_eq!(relations.len(), 3);
+
+    assert_eq!(relations[0].source, "Doc A");
+    assert_eq!(relations[0].source_address.as_deref(), Some("#heading-1"));
+    assert_eq!(relations[0].target, "file-b");
+    assert_eq!(relations[0].target_address.as_deref(), Some("#section-2"));
+    assert_eq!(relations[0].relation_type.as_deref(), Some("RELATED_TO"));
+    assert_eq!(relations[0].metadata_owner.as_deref(), Some("RELATED"));
+
+    assert_eq!(relations[1].target, "Doc A");
+    assert_eq!(
+        relations[1].target_address.as_deref(),
+        Some("#local-target")
+    );
+
+    assert_eq!(relations[2].target, "Doc A");
+    assert_eq!(relations[2].target_address.as_deref(), Some("/Heading 2"));
 }
 
 #[test]
@@ -95,8 +82,13 @@ fn test_enhance_note_full() {
     assert_eq!(result.entity_refs[0].name, "Python");
     assert_eq!(result.entity_refs[0].entity_type.as_deref(), Some("lang"));
     assert!(result.ref_stats.total_refs >= 1);
-    // DOCUMENTED_IN + RELATED_TO(tag:demo)
-    assert!(result.inferred_relations.len() >= 2);
+    assert_eq!(result.inferred_relations.len(), 1);
+    assert_eq!(result.inferred_relations[0].source, "Test Doc");
+    assert_eq!(result.inferred_relations[0].source_address, None);
+    assert_eq!(result.inferred_relations[0].target, "Python");
+    assert_eq!(result.inferred_relations[0].target_address, None);
+    assert_eq!(result.inferred_relations[0].relation_type, None);
+    assert_eq!(result.inferred_relations[0].metadata_owner, None);
 }
 
 #[test]

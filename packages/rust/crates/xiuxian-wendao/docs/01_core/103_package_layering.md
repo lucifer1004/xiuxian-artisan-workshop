@@ -125,6 +125,34 @@ core.
 They belong in `xiuxian-wendao` because they define how Wendao understands and
 retrieves knowledge.
 
+The canonical implementation home for parser families is the crate-root
+`src/parsers/{cargo,graph,markdown,link_graph,search,zhixing,...}` namespace.
+`link_graph`, `dependency_indexer`, `skill_vfs`, and other subsystems may
+consume parser services, but they do not own parallel parser namespaces.
+That canonical parser stack also owns semantic markdown frontmatter parsing,
+the `NoteFrontmatter` contract consumed by enhancement and skill-discovery
+flows, and the link-graph search-query parser now implemented under
+`src/parsers/link_graph/query/`, repo-code search query parsing now
+implemented under `src/parsers/search/repo_code_query/`, graph persistence
+dict parsing now implemented under `src/parsers/graph/persistence/`, plus
+Cargo.toml dependency parsing now implemented under
+`src/parsers/cargo/dependencies/`.
+
+Remaining parse-like helpers outside `src/parsers/` stay local by design.
+`search/queries/graphql/document.rs` is adapter-local GraphQL request parsing,
+`gateway/studio/router/handlers/repo/parse.rs` is gateway-local request
+validation, and helpers such as analyzer config parsing, search-plane hydrate
+decode, and pybinding refresh JSON parsing remain subsystem-local utilities
+rather than standalone parser families. Likewise, `entity/query.rs`,
+`storage/query.rs`, and similar `query.rs` modules are query models or
+execution surfaces, not parser ownership gaps. See the dedicated parser docs
+under [../02_parser/index.md](../02_parser/index.md).
+
+Within that parser stack, ordinary `[[...]]` links establish graph topology
+first. Typed relation semantics should come from explicit metadata owners such
+as property drawers or subsystem-owned metadata, not from parser-side
+hardcoded string matches on wiki-link text.
+
 Only their stable plugin-facing contracts should move to `core`.
 
 ## Gateway Rule

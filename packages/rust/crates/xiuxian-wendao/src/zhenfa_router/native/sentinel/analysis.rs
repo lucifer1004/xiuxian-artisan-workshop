@@ -4,8 +4,8 @@ use std::sync::OnceLock;
 use log::info;
 
 use crate::LinkGraphIndex;
-use crate::link_graph::parser::code_observation::path_matches_scope;
 use crate::link_graph::{PageIndexNode, SymbolRef};
+use crate::parsers::markdown::code_observation::path_matches_scope;
 
 use super::types::{AffectedDoc, DriftConfidence, SemanticDriftSignal};
 

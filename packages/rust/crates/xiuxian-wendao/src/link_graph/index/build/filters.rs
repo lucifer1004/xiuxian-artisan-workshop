@@ -1,4 +1,4 @@
-use crate::link_graph::parser::{is_supported_note, normalize_alias};
+use crate::parsers::markdown::{is_supported_note, normalize_alias};
 use std::collections::HashSet;
 use std::path::Path;
 

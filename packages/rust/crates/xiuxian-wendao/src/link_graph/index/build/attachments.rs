@@ -1,6 +1,6 @@
 use crate::link_graph::LinkGraphAttachmentKind;
 use crate::link_graph::models::LinkGraphAttachment;
-use crate::link_graph::parser::ParsedNote;
+use crate::parsers::markdown::ParsedNote;
 use std::path::Path;
 
 fn attachment_name(path: &str) -> String {

@@ -1,8 +1,8 @@
 use super::super::models::{
     LinkGraphAttachment, LinkGraphDocument, LinkGraphPassage, PageIndexNode,
 };
-use super::super::parser::{CodeObservation, LogbookEntry, ParsedSection};
 use super::build;
+use crate::parsers::markdown::{CodeObservation, LogbookEntry, ParsedSection};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

@@ -1,0 +1,402 @@
+use std::collections::HashSet;
+
+use xiuxian_wendao_core::repo_intelligence::RepoIntelligenceError;
+
+use super::pair::{
+    GraphStructuralPairCandidateInputs, GraphStructuralRawConnectedPairInputs,
+    GraphStructuralScoredPairCandidateInputs, build_graph_structural_raw_connected_pair_inputs,
+    build_graph_structural_scored_pair_candidate_inputs,
+};
+use super::support::{
+    graph_structural_projection_error, normalize_non_blank, normalize_pair_endpoint_ids,
+    normalize_string_list,
+};
+
+/// Raw generic explicit-edge topology inputs before score attachment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphStructuralGenericTopologyCandidateMetadataInputs {
+    pub(super) candidate_id: String,
+    pub(super) node_ids: Vec<String>,
+    pub(super) edge_sources: Vec<String>,
+    pub(super) edge_destinations: Vec<String>,
+    pub(super) edge_kinds: Vec<String>,
+}
+
+impl GraphStructuralGenericTopologyCandidateMetadataInputs {
+    /// Store one generic explicit-edge topology metadata bundle.
+    #[must_use]
+    pub fn new(
+        candidate_id: impl Into<String>,
+        node_ids: Vec<String>,
+        edge_sources: Vec<String>,
+        edge_destinations: Vec<String>,
+        edge_kinds: Vec<String>,
+    ) -> Self {
+        Self {
+            candidate_id: candidate_id.into(),
+            node_ids,
+            edge_sources,
+            edge_destinations,
+            edge_kinds,
+        }
+    }
+}
+
+/// Build one generic explicit-edge topology metadata bundle from raw fields.
+///
+/// This keeps callers on a plugin-owned staging seam instead of manually
+/// constructing generic topology metadata DTOs.
+#[must_use]
+pub fn build_graph_structural_generic_topology_candidate_metadata_inputs(
+    candidate_id: impl Into<String>,
+    node_ids: Vec<String>,
+    edge_sources: Vec<String>,
+    edge_destinations: Vec<String>,
+    edge_kinds: Vec<String>,
+) -> GraphStructuralGenericTopologyCandidateMetadataInputs {
+    GraphStructuralGenericTopologyCandidateMetadataInputs::new(
+        candidate_id,
+        node_ids,
+        edge_sources,
+        edge_destinations,
+        edge_kinds,
+    )
+}
+
+/// Raw generic explicit-edge topology candidate inputs with staged plane
+/// scores.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphStructuralGenericTopologyCandidateInputs {
+    pub(super) metadata_inputs: GraphStructuralGenericTopologyCandidateMetadataInputs,
+    pub(super) semantic_score: f64,
+    pub(super) dependency_score: f64,
+    pub(super) keyword_score: f64,
+    pub(super) tag_score: f64,
+}
+
+impl GraphStructuralGenericTopologyCandidateInputs {
+    /// Store one generic explicit-edge topology candidate bundle.
+    #[must_use]
+    pub fn new(
+        metadata_inputs: GraphStructuralGenericTopologyCandidateMetadataInputs,
+        semantic_score: f64,
+        dependency_score: f64,
+        keyword_score: f64,
+        tag_score: f64,
+    ) -> Self {
+        Self {
+            metadata_inputs,
+            semantic_score,
+            dependency_score,
+            keyword_score,
+            tag_score,
+        }
+    }
+}
+
+/// Build one generic explicit-edge topology candidate bundle from raw topology
+/// metadata and staged plane scores.
+///
+/// This keeps callers on a plugin-owned staging seam instead of manually
+/// constructing generic topology candidate DTOs.
+#[must_use]
+pub fn build_graph_structural_generic_topology_candidate_inputs(
+    metadata_inputs: GraphStructuralGenericTopologyCandidateMetadataInputs,
+    semantic_score: f64,
+    dependency_score: f64,
+    keyword_score: f64,
+    tag_score: f64,
+) -> GraphStructuralGenericTopologyCandidateInputs {
+    GraphStructuralGenericTopologyCandidateInputs::new(
+        metadata_inputs,
+        semantic_score,
+        dependency_score,
+        keyword_score,
+        tag_score,
+    )
+}
+
+/// Build one generic explicit-edge topology metadata bundle from a staged pair
+/// collection.
+///
+/// Any pair with an empty `edge_kinds` list is promoted with the supplied
+/// `fallback_edge_kind`, which keeps bounded pair collections from
+/// `LinkGraphAgenticExpansionPlan` usable on the generic-topology live seam.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the candidate id or fallback edge
+/// kind is blank, the pair collection is empty, any pair endpoint is invalid,
+/// or any non-empty edge-kind list contains blank items.
+pub fn build_graph_structural_generic_topology_candidate_metadata_inputs_from_pair_collection(
+    candidate_id: impl Into<String>,
+    pair_candidates: Vec<GraphStructuralPairCandidateInputs>,
+    fallback_edge_kind: impl Into<String>,
+) -> Result<GraphStructuralGenericTopologyCandidateMetadataInputs, RepoIntelligenceError> {
+    let candidate_id = normalize_non_blank(candidate_id.into(), "generic topology candidate id")?;
+    if pair_candidates.is_empty() {
+        return Err(graph_structural_projection_error(
+            "generic topology pair collection must contain at least one pair",
+        ));
+    }
+    let fallback_edge_kind = normalize_non_blank(fallback_edge_kind.into(), "fallback edge kind")?;
+
+    let mut node_ids = Vec::new();
+    let mut seen_nodes = HashSet::new();
+    let mut edge_sources = Vec::new();
+    let mut edge_destinations = Vec::new();
+    let mut edge_kinds = Vec::new();
+    let mut seen_edges = HashSet::new();
+
+    for pair in pair_candidates {
+        let (left_id, right_id) = normalize_pair_endpoint_ids(pair.left_id, pair.right_id)?;
+        if seen_nodes.insert(left_id.clone()) {
+            node_ids.push(left_id.clone());
+        }
+        if seen_nodes.insert(right_id.clone()) {
+            node_ids.push(right_id.clone());
+        }
+
+        let normalized_edge_kinds = if pair.edge_kinds.is_empty() {
+            vec![fallback_edge_kind.clone()]
+        } else {
+            normalize_string_list(pair.edge_kinds, "pair edge kinds", false)?
+        };
+
+        for edge_kind in normalized_edge_kinds {
+            let edge_key = (left_id.clone(), right_id.clone(), edge_kind.clone());
+            if seen_edges.insert(edge_key) {
+                edge_sources.push(left_id.clone());
+                edge_destinations.push(right_id.clone());
+                edge_kinds.push(edge_kind);
+            }
+        }
+    }
+
+    Ok(GraphStructuralGenericTopologyCandidateMetadataInputs::new(
+        candidate_id,
+        node_ids,
+        edge_sources,
+        edge_destinations,
+        edge_kinds,
+    ))
+}
+
+/// Build one generic explicit-edge topology candidate bundle from a staged
+/// pair collection plus plane scores.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the pair-collection topology cannot
+/// be normalized into the bounded generic-topology request shape.
+pub fn build_graph_structural_generic_topology_candidate_inputs_from_pair_collection(
+    candidate_id: impl Into<String>,
+    pair_candidates: Vec<GraphStructuralPairCandidateInputs>,
+    fallback_edge_kind: impl Into<String>,
+    semantic_score: f64,
+    dependency_score: f64,
+    keyword_score: f64,
+    tag_score: f64,
+) -> Result<GraphStructuralGenericTopologyCandidateInputs, RepoIntelligenceError> {
+    Ok(build_graph_structural_generic_topology_candidate_inputs(
+        build_graph_structural_generic_topology_candidate_metadata_inputs_from_pair_collection(
+            candidate_id,
+            pair_candidates,
+            fallback_edge_kind,
+        )?,
+        semantic_score,
+        dependency_score,
+        keyword_score,
+        tag_score,
+    ))
+}
+
+/// Build one generic explicit-edge topology candidate bundle from a scored pair
+/// collection and staged non-semantic plane scores.
+///
+/// The candidate-level semantic score is the arithmetic mean of the pair-level
+/// semantic scores after score normalization.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the pair collection is empty, any
+/// pair-level semantic score is negative or non-finite, or the staged
+/// pair-collection topology cannot be normalized into the bounded
+/// generic-topology request shape.
+pub fn build_graph_structural_generic_topology_candidate_inputs_from_scored_pair_collection(
+    candidate_id: impl Into<String>,
+    pair_candidates: Vec<GraphStructuralScoredPairCandidateInputs>,
+    fallback_edge_kind: impl Into<String>,
+    dependency_score: f64,
+    keyword_score: f64,
+    tag_score: f64,
+) -> Result<GraphStructuralGenericTopologyCandidateInputs, RepoIntelligenceError> {
+    if pair_candidates.is_empty() {
+        return Err(graph_structural_projection_error(
+            "generic topology scored pair collection must contain at least one pair",
+        ));
+    }
+
+    let pair_count = pair_candidates.len() as f64;
+    let semantic_score = pair_candidates
+        .iter()
+        .map(|pair| pair.semantic_score)
+        .sum::<f64>()
+        / pair_count;
+    let pair_candidates = pair_candidates
+        .into_iter()
+        .map(|pair| pair.pair_inputs)
+        .collect::<Vec<_>>();
+
+    build_graph_structural_generic_topology_candidate_inputs_from_pair_collection(
+        candidate_id,
+        pair_candidates,
+        fallback_edge_kind,
+        semantic_score,
+        dependency_score,
+        keyword_score,
+        tag_score,
+    )
+}
+
+/// Build one generic explicit-edge topology candidate bundle from a raw
+/// connected-pair collection and staged non-semantic plane scores.
+///
+/// Each connected pair is promoted into one scored pair candidate with an
+/// empty edge-kind list; `fallback_edge_kind` supplies the bounded edge label
+/// for the eventual generic-topology materialization.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the raw pair collection is empty,
+/// any connected pair is invalid, or the staged pair-collection topology
+/// cannot be normalized into the bounded generic-topology request shape.
+pub fn build_graph_structural_generic_topology_candidate_inputs_from_raw_connected_pairs(
+    candidate_id: impl Into<String>,
+    pair_candidates: Vec<GraphStructuralRawConnectedPairInputs>,
+    fallback_edge_kind: impl Into<String>,
+    dependency_score: f64,
+    keyword_score: f64,
+    tag_score: f64,
+) -> Result<GraphStructuralGenericTopologyCandidateInputs, RepoIntelligenceError> {
+    let pair_candidates = pair_candidates
+        .into_iter()
+        .map(|pair| {
+            build_graph_structural_scored_pair_candidate_inputs(
+                pair.left_id,
+                pair.right_id,
+                Vec::new(),
+                pair.semantic_score,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    build_graph_structural_generic_topology_candidate_inputs_from_scored_pair_collection(
+        candidate_id,
+        pair_candidates,
+        fallback_edge_kind,
+        dependency_score,
+        keyword_score,
+        tag_score,
+    )
+}
+
+/// Raw connected-pair collection inputs for one generic-topology candidate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphStructuralRawConnectedPairCollectionCandidateInputs {
+    pub(super) candidate_id: String,
+    pub(super) pair_candidates: Vec<GraphStructuralRawConnectedPairInputs>,
+    pub(super) fallback_edge_kind: String,
+    pub(super) dependency_score: f64,
+    pub(super) keyword_score: f64,
+    pub(super) tag_score: f64,
+}
+
+impl GraphStructuralRawConnectedPairCollectionCandidateInputs {
+    /// Store one raw connected-pair collection bundle for later normalization.
+    #[must_use]
+    pub fn new(
+        candidate_id: impl Into<String>,
+        pair_candidates: Vec<GraphStructuralRawConnectedPairInputs>,
+        fallback_edge_kind: impl Into<String>,
+        dependency_score: f64,
+        keyword_score: f64,
+        tag_score: f64,
+    ) -> Self {
+        Self {
+            candidate_id: candidate_id.into(),
+            pair_candidates,
+            fallback_edge_kind: fallback_edge_kind.into(),
+            dependency_score,
+            keyword_score,
+            tag_score,
+        }
+    }
+}
+
+/// Build one raw connected-pair collection bundle from raw candidate-level
+/// fields.
+#[must_use]
+pub fn build_graph_structural_raw_connected_pair_collection_candidate_inputs(
+    candidate_id: impl Into<String>,
+    pair_candidates: Vec<GraphStructuralRawConnectedPairInputs>,
+    fallback_edge_kind: impl Into<String>,
+    dependency_score: f64,
+    keyword_score: f64,
+    tag_score: f64,
+) -> GraphStructuralRawConnectedPairCollectionCandidateInputs {
+    GraphStructuralRawConnectedPairCollectionCandidateInputs::new(
+        candidate_id,
+        pair_candidates,
+        fallback_edge_kind,
+        dependency_score,
+        keyword_score,
+        tag_score,
+    )
+}
+
+/// Build one raw connected-pair collection bundle from raw tuple fields.
+///
+/// Each tuple is normalized through the existing raw connected-pair helper so
+/// callers do not manually materialize `GraphStructuralRawConnectedPairInputs`
+/// before using the collection-level generic-topology seam.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when any tuple contains invalid pair
+/// endpoints or a negative or non-finite semantic score.
+pub fn build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_raw_tuples<
+    I,
+    L,
+    R,
+>(
+    candidate_id: impl Into<String>,
+    pair_candidates: I,
+    fallback_edge_kind: impl Into<String>,
+    dependency_score: f64,
+    keyword_score: f64,
+    tag_score: f64,
+) -> Result<GraphStructuralRawConnectedPairCollectionCandidateInputs, RepoIntelligenceError>
+where
+    I: IntoIterator<Item = (L, R, f64)>,
+    L: Into<String>,
+    R: Into<String>,
+{
+    let pair_candidates = pair_candidates
+        .into_iter()
+        .map(|(left_id, right_id, semantic_score)| {
+            build_graph_structural_raw_connected_pair_inputs(left_id, right_id, semantic_score)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(
+        build_graph_structural_raw_connected_pair_collection_candidate_inputs(
+            candidate_id,
+            pair_candidates,
+            fallback_edge_kind,
+            dependency_score,
+            keyword_score,
+            tag_score,
+        ),
+    )
+}

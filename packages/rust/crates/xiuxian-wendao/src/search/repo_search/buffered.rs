@@ -20,7 +20,7 @@ use tokio::time::{Instant, timeout_at};
 #[cfg(test)]
 use super::entity::{record_query_core_telemetry, relation_to_search_hits};
 #[cfg(test)]
-use super::query::parse_repo_code_search_query;
+use crate::parsers::search::repo_code_query::parse_repo_code_search_query;
 #[cfg(test)]
 use crate::query_core::{
     InMemoryWendaoExplainSink, RepoCodeQueryRequest, RetrievalCorpus, query_repo_code_relation,

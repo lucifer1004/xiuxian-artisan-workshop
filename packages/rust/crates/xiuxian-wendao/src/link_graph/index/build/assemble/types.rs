@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::link_graph::models::{LinkGraphAttachment, LinkGraphDocument};
-use crate::link_graph::parser::ParsedNote;
+use crate::parsers::markdown::ParsedNote;
 
 pub(crate) struct BuildInputs {
     pub(crate) root: PathBuf,

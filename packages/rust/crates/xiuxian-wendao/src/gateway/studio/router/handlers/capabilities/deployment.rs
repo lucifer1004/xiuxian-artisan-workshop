@@ -99,9 +99,10 @@ mod tests {
     use serial_test::serial;
     use std::fs;
     use std::sync::Arc;
-    use xiuxian_wendao_julia::integration_support::{
-        julia_gateway_artifact_path, julia_gateway_artifact_runtime_config_toml,
-        julia_gateway_artifact_schema_version,
+    use xiuxian_wendao_builtin::{
+        linked_builtin_julia_gateway_artifact_path,
+        linked_builtin_julia_gateway_artifact_runtime_config_toml,
+        linked_builtin_julia_gateway_artifact_schema_version,
     };
 
     #[tokio::test]
@@ -109,10 +110,10 @@ mod tests {
     async fn generic_plugin_artifact_handler_returns_plugin_artifact() {
         let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let config_path = temp.path().join("wendao.toml");
-        let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+        let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
         fs::write(
             &config_path,
-            julia_gateway_artifact_runtime_config_toml(None),
+            linked_builtin_julia_gateway_artifact_runtime_config_toml(None),
         )
         .unwrap_or_else(|error| panic!("write config: {error}"));
         let config_path_string = config_path.to_string_lossy().to_string();
@@ -149,7 +150,7 @@ mod tests {
         assert_eq!(artifact.artifact_id, artifact_id);
         assert_eq!(
             artifact.schema_version.as_deref(),
-            Some(julia_gateway_artifact_schema_version())
+            Some(linked_builtin_julia_gateway_artifact_schema_version())
         );
         assert_eq!(artifact.route.as_deref(), Some("/rerank"));
     }

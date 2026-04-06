@@ -1,8 +1,8 @@
 //! JSON persistence: save, load, export, and dict-based parsing.
 
-use super::parse::{entity_from_dict, relation_from_dict};
 use crate::entity::{Entity, Relation};
 use crate::graph::{GraphError, KnowledgeGraph, read_lock};
+use crate::parsers::graph::persistence::{entity_from_dict, relation_from_dict};
 use log::info;
 use serde_json::{Value, json, to_string};
 use std::fs::{self, File};
@@ -135,3 +135,7 @@ impl KnowledgeGraph {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/graph/persistence_save_load.rs"]
+mod tests;

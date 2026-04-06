@@ -4,6 +4,8 @@ use std::sync::OnceLock;
 
 use include_dir::Dir;
 
+use crate::parsers::markdown::parse_frontmatter;
+
 use super::paths::{embedded_resource_dir, normalize_embedded_resource_path};
 
 static EMBEDDED_MOUNTS_BY_SEMANTIC: OnceLock<HashMap<String, Vec<PathBuf>>> = OnceLock::new();
@@ -31,7 +33,7 @@ fn resolve_embedded_skill_mount_index() -> HashMap<String, Vec<PathBuf>> {
         let Some(content) = file.contents_utf8() else {
             continue;
         };
-        let semantic_name = crate::parse_frontmatter(content)
+        let semantic_name = parse_frontmatter(content)
             .name
             .map(|value| value.trim().to_ascii_lowercase())
             .filter(|value| !value.is_empty());

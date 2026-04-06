@@ -1,16 +1,9 @@
-use std::collections::BTreeSet;
-
-use arrow::array::{Array, Float64Array, StringArray};
 use arrow::record_batch::RecordBatch;
 use serde_json::Value;
 use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::{
     capabilities::{ContractVersion, PluginCapabilityBinding},
-    repo_intelligence::{
-        JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN,
-        JULIA_ARROW_FINAL_SCORE_COLUMN, RegisteredRepository, RepoIntelligenceError,
-        RepositoryPluginConfig,
-    },
+    repo_intelligence::{RegisteredRepository, RepoIntelligenceError, RepositoryPluginConfig},
     transport::{PluginTransportEndpoint, PluginTransportKind},
 };
 use xiuxian_wendao_runtime::transport::{
@@ -18,6 +11,7 @@ use xiuxian_wendao_runtime::transport::{
     FLIGHT_SCHEMA_VERSION_METADATA_KEY, NegotiatedFlightTransportClient,
     negotiate_flight_transport_client_from_bindings, normalize_flight_route,
     validate_flight_schema_version, validate_flight_timeout_secs,
+    validate_plugin_arrow_response_batches,
 };
 
 use crate::compatibility::link_graph::{
@@ -78,7 +72,7 @@ pub async fn process_julia_flight_batches(
         .map_err(|error| RepoIntelligenceError::AnalysisFailed {
             message: format!("Julia Arrow Flight request failed: {error}"),
         })?;
-    validate_julia_arrow_response_batches(response_batches.as_slice())?;
+    validate_plugin_arrow_response_batches(response_batches.as_slice())?;
     Ok(response_batches)
 }
 
@@ -231,70 +225,6 @@ fn contains_transport_keys(value: &Value) -> bool {
     .any(|key| object.contains_key(*key))
 }
 
-/// Validate a `WendaoArrow` `v1` Julia analyzer response batch set.
-///
-/// # Errors
-///
-/// Returns [`RepoIntelligenceError`] when the response batches are missing
-/// required columns, contain duplicate `doc_id` values, or emit invalid
-/// `final_score` values.
-pub fn validate_julia_arrow_response_batches(
-    batches: &[RecordBatch],
-) -> Result<(), RepoIntelligenceError> {
-    let mut seen_doc_ids = BTreeSet::new();
-
-    for batch in batches {
-        let doc_id = batch
-            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
-            .ok_or_else(|| contract_error("missing required Utf8 column `doc_id`"))?;
-        let analyzer_score = batch
-            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
-            .ok_or_else(|| contract_error("missing required Float64 column `analyzer_score`"))?;
-        let final_score = batch
-            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
-            .ok_or_else(|| contract_error("missing required Float64 column `final_score`"))?;
-
-        for row in 0..batch.num_rows() {
-            if doc_id.is_null(row) {
-                return Err(contract_error("`doc_id` must be non-null"));
-            }
-            if analyzer_score.is_null(row) {
-                return Err(contract_error("`analyzer_score` must be non-null"));
-            }
-            if final_score.is_null(row) {
-                return Err(contract_error("`final_score` must be non-null"));
-            }
-
-            let doc_id_value = doc_id.value(row).to_string();
-            if !seen_doc_ids.insert(doc_id_value.clone()) {
-                return Err(contract_error(format!(
-                    "duplicate `doc_id` in Julia analyzer response: {doc_id_value}"
-                )));
-            }
-
-            if !final_score.value(row).is_finite() {
-                return Err(contract_error(format!(
-                    "`final_score` must be finite for doc_id `{doc_id_value}`"
-                )));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn contract_error(message: impl Into<String>) -> RepoIntelligenceError {
-    RepoIntelligenceError::AnalysisFailed {
-        message: format!(
-            "Julia Arrow response contract `{JULIA_ARROW_RESPONSE_SCHEMA_VERSION}` violated: {}",
-            message.into()
-        ),
-    }
-}
-
 fn object_option<'a>(
     value: &'a Value,
     field: &str,
@@ -385,13 +315,10 @@ mod tests {
     use super::{
         DEFAULT_JULIA_HEALTH_ROUTE, JULIA_ARROW_RESPONSE_SCHEMA_VERSION,
         build_julia_flight_transport_client, process_julia_flight_batches,
-        process_julia_flight_batches_for_repository, validate_julia_arrow_response_batches,
+        process_julia_flight_batches_for_repository,
     };
     use crate::compatibility::link_graph::julia_rerank_provider_selector;
-    use crate::julia_plugin_test_support::contract::{
-        invalid_response_missing_analyzer_score_batch, request_batch, request_batch_with_trace_id,
-        response_batch_with_duplicates, response_batch_without_trace_id,
-    };
+    use crate::julia_plugin_test_support::contract::{request_batch, request_batch_with_trace_id};
     use crate::julia_plugin_test_support::official_examples::{
         reserve_real_service_port, spawn_real_wendaoanalyzer_linear_blend_service,
         spawn_real_wendaoarrow_bad_response_service, spawn_real_wendaoarrow_metadata_service,
@@ -494,39 +421,6 @@ mod tests {
             Err(error) => panic!("expected disabled config to be ignored: {error}"),
         };
         assert!(client.is_none());
-    }
-
-    #[test]
-    fn validate_julia_arrow_response_batches_accepts_v1_shape() {
-        let batch = response_batch_without_trace_id();
-
-        let result = validate_julia_arrow_response_batches(&[batch]);
-        assert!(result.is_ok(), "expected valid Julia response: {result:?}");
-    }
-
-    #[test]
-    fn validate_julia_arrow_response_batches_rejects_duplicates_and_missing_columns() {
-        let duplicate_batch = response_batch_with_duplicates();
-
-        let duplicate_error = validate_julia_arrow_response_batches(&[duplicate_batch])
-            .expect_err("duplicate doc_id must fail");
-        assert!(
-            duplicate_error
-                .to_string()
-                .contains("duplicate `doc_id` in Julia analyzer response"),
-            "unexpected duplicate error: {duplicate_error}"
-        );
-
-        let missing_column_batch = invalid_response_missing_analyzer_score_batch();
-
-        let missing_error = validate_julia_arrow_response_batches(&[missing_column_batch])
-            .expect_err("missing analyzer_score must fail");
-        assert!(
-            missing_error
-                .to_string()
-                .contains("missing required Float64 column `analyzer_score`"),
-            "unexpected missing-column error: {missing_error}"
-        );
     }
 
     #[tokio::test]

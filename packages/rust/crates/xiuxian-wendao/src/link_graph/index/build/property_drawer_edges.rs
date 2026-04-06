@@ -1,43 +1,8 @@
-//! Property Drawer Edge Extraction (Blueprint v2.0 Section 5.3).
-//!
-//! This module extracts structured edges from Org-style property drawer attributes.
-//! Property drawers can contain explicit references to other nodes, which are
-//! converted to typed edges in the link graph.
-//!
-//! ## Supported Attribute Keys
-//!
-//! - `:RELATED:` - References to related nodes (e.g., `:RELATED: #arch-v1, #impl-v2`)
-//! - `:DEPENDS_ON:` - Dependency relationships
-//! - `:EXTENDS:` - Extension/inheritance relationships
-//!
-//! ## Edge Type
-//!
-//! All property drawer edges are typed as `LinkGraphEdgeType::PropertyDrawer`,
-//! enabling filtered traversal and distinct ranking behavior.
-
 use std::collections::HashMap;
 
+use crate::link_graph::addressing::Address;
 use crate::link_graph::models::LinkGraphEdgeType;
-
-/// Standard property drawer attribute keys that contain node references.
-pub mod ref_attrs {
-    /// References to related nodes (comma-separated IDs).
-    pub const RELATED: &str = "RELATED";
-    /// Dependencies (this node depends on the referenced nodes).
-    pub const DEPENDS_ON: &str = "DEPENDS_ON";
-    /// Extension/inheritance (this node extends the referenced nodes).
-    pub const EXTENDS: &str = "EXTENDS";
-    /// See also references.
-    pub const SEE_ALSO: &str = "SEE_ALSO";
-}
-
-/// All property drawer attribute keys that contain node references.
-pub const REF_ATTRIBUTE_KEYS: &[&str] = &[
-    ref_attrs::RELATED,
-    ref_attrs::DEPENDS_ON,
-    ref_attrs::EXTENDS,
-    ref_attrs::SEE_ALSO,
-];
+use crate::parsers::markdown::{ParsedSection, extract_property_relations, normalize_alias};
 
 /// A property drawer edge extracted from attributes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,56 +17,65 @@ pub struct PropertyDrawerEdge {
     pub attribute_key: String,
 }
 
-/// Extract property drawer edges from a section's attributes.
+/// Extract property drawer edges for one parsed section.
 ///
-/// Looks for reference attributes in the format:
-/// - `:RELATED: #id1, #id2`
-/// - `:DEPENDS_ON: #arch-v1`
-///
-/// Returns a list of edges from the source node to the referenced targets.
+/// This is a graph adapter over the canonical markdown relation parser. It
+/// only resolves targets that can be mapped safely with the current graph
+/// inputs: document aliases and explicit `:ID:` anchors.
 pub fn extract_property_drawer_edges(
-    source_node_id: &str,
-    attributes: &HashMap<String, String>,
+    doc_id: &str,
+    section: &ParsedSection,
+    alias_to_doc_id: &HashMap<String, String>,
 ) -> Vec<PropertyDrawerEdge> {
-    let mut edges = Vec::new();
+    let source_node_id = resolve_source_node_id(doc_id, section);
 
-    for &attr_key in REF_ATTRIBUTE_KEYS {
-        if let Some(value) = attributes.get(attr_key) {
-            let refs = parse_id_references(value);
-            for target_id in refs {
-                edges.push(PropertyDrawerEdge {
-                    from: source_node_id.to_string(),
-                    to: target_id,
-                    edge_type: LinkGraphEdgeType::PropertyDrawer,
-                    attribute_key: attr_key.to_string(),
-                });
+    extract_property_relations(std::slice::from_ref(section))
+        .into_iter()
+        .filter_map(|relation| {
+            let target_node_id = resolve_target_node_id(doc_id, alias_to_doc_id, &relation.target)?;
+            if target_node_id == source_node_id {
+                return None;
             }
-        }
-    }
 
-    edges
-}
-
-/// Parse ID references from a property drawer value.
-///
-/// Supports formats:
-/// - `#id1` - Single ID reference
-/// - `#id1, #id2, #id3` - Comma-separated references
-/// - `#id1 #id2` - Space-separated references
-pub fn parse_id_references(value: &str) -> Vec<String> {
-    value
-        .split([',', ' ', '\n', '\t'])
-        .filter_map(|s| {
-            let trimmed = s.trim();
-            if let Some(id) = trimmed.strip_prefix('#') {
-                let id = id.trim();
-                if !id.is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-            None
+            Some(PropertyDrawerEdge {
+                from: source_node_id.clone(),
+                to: target_node_id,
+                edge_type: LinkGraphEdgeType::PropertyDrawer,
+                attribute_key: relation.property_key,
+            })
         })
         .collect()
+}
+
+fn resolve_source_node_id(doc_id: &str, section: &ParsedSection) -> String {
+    if let Some(explicit_id) = section.attributes.get("ID") {
+        return format!("{doc_id}#{explicit_id}");
+    }
+
+    if section.heading_path.is_empty() {
+        return doc_id.to_string();
+    }
+
+    format!("{}#{}", doc_id, section.heading_path.replace(" / ", "/"))
+}
+
+fn resolve_target_node_id(
+    doc_id: &str,
+    alias_to_doc_id: &HashMap<String, String>,
+    target: &crate::parsers::markdown::ExplicitRelationTarget,
+) -> Option<String> {
+    let resolved_doc_id = target
+        .note_target
+        .as_ref()
+        .map(|note_target| normalize_alias(note_target))
+        .and_then(|normalized| alias_to_doc_id.get(&normalized).cloned());
+
+    match (&resolved_doc_id, &target.address) {
+        (Some(resolved_doc_id), None) => Some(resolved_doc_id.clone()),
+        (Some(resolved_doc_id), Some(Address::Id(id))) => Some(format!("{resolved_doc_id}#{id}")),
+        (None, Some(Address::Id(id))) => Some(format!("{doc_id}#{id}")),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

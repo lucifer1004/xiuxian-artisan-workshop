@@ -3,6 +3,7 @@ use xiuxian_wendao_runtime::transport::RepoSearchFlightRequest;
 
 use super::batch::repo_search_batch_from_hits;
 use crate::gateway::studio::types::SearchHit;
+use crate::parsers::search::repo_code_query::parse_repo_code_search_query;
 use crate::search_plane::{RepoContentChunkSearchFilters, SearchPlaneService};
 
 pub(crate) async fn search_repo_content_hits_for_query(
@@ -11,7 +12,7 @@ pub(crate) async fn search_repo_content_hits_for_query(
     raw_query: &str,
     limit: usize,
 ) -> Result<Vec<SearchHit>, String> {
-    let parsed = super::query::parse_repo_code_search_query(raw_query);
+    let parsed = parse_repo_code_search_query(raw_query);
     let Some(search_term) = parsed.search_term() else {
         return Ok(Vec::new());
     };

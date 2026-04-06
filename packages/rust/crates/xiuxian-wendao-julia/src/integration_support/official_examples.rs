@@ -3,7 +3,8 @@ use std::process::{Command, Stdio};
 
 use super::common::{
     JuliaExampleServiceGuard, repo_root, reserve_service_port, wait_for_service_ready,
-    wendaoanalyzer_script, wendaoarrow_script,
+    wait_for_service_ready_with_attempts, wendaoanalyzer_script, wendaoarrow_script,
+    wendaosearch_package_dir, wendaosearch_script,
 };
 use crate::compatibility::link_graph::{
     LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaDeploymentArtifact,
@@ -51,6 +52,53 @@ pub async fn spawn_wendaoanalyzer_stream_linear_blend_service() -> (String, Juli
         "spawn real WendaoAnalyzer linear blend service",
     )
     .await
+}
+
+/// Spawns the official `WendaoSearch` structural-rerank example in `demo`
+/// mode.
+///
+/// # Panics
+///
+/// Panics when the example script cannot be resolved or the service fails to
+/// start.
+pub async fn spawn_wendaosearch_demo_structural_rerank_service()
+-> (String, JuliaExampleServiceGuard) {
+    spawn_wendaosearch_service("structural_rerank", "demo").await
+}
+
+/// Spawns the official `WendaoSearch` structural-rerank example in
+/// `solver_demo` mode.
+///
+/// # Panics
+///
+/// Panics when the example script cannot be resolved or the service fails to
+/// start.
+pub async fn spawn_wendaosearch_solver_demo_structural_rerank_service()
+-> (String, JuliaExampleServiceGuard) {
+    spawn_wendaosearch_service("structural_rerank", "solver_demo").await
+}
+
+/// Spawns the official same-port multi-route `WendaoSearch` example in `demo`
+/// mode.
+///
+/// # Panics
+///
+/// Panics when the example script cannot be resolved or the service fails to
+/// start.
+pub async fn spawn_wendaosearch_demo_multi_route_service() -> (String, JuliaExampleServiceGuard) {
+    spawn_wendaosearch_multi_route_service("demo").await
+}
+
+/// Spawns the official same-port multi-route `WendaoSearch` example in
+/// `solver_demo` mode.
+///
+/// # Panics
+///
+/// Panics when the example script cannot be resolved or the service fails to
+/// start.
+pub async fn spawn_wendaosearch_solver_demo_multi_route_service()
+-> (String, JuliaExampleServiceGuard) {
+    spawn_wendaosearch_multi_route_service("solver_demo").await
 }
 
 /// Materializes a Julia deployment artifact from runtime-config values.
@@ -132,6 +180,91 @@ async fn spawn_script_service(
         .unwrap_or_else(|error| {
             guard.kill();
             panic!("wait for Julia official example service readiness: {error}");
+        });
+
+    (base_url, guard)
+}
+
+async fn spawn_wendaosearch_service(
+    route_name: &str,
+    mode: &str,
+) -> (String, JuliaExampleServiceGuard) {
+    let port = reserve_service_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let script = wendaosearch_script("run_search_service.jl");
+    let child = Command::new("direnv")
+        .arg("exec")
+        .arg(".")
+        .arg("julia")
+        .arg(format!(
+            "--project={}",
+            wendaosearch_package_dir().display()
+        ))
+        .arg(script)
+        .arg("--route-name")
+        .arg(route_name)
+        .arg("--mode")
+        .arg(mode)
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(repo_root())
+        .env("JULIA_LOAD_PATH", "@:@stdlib")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|error| {
+            panic!("spawn real WendaoSearch `{route_name}` `{mode}` service: {error}")
+        });
+    let mut guard = JuliaExampleServiceGuard::new(child);
+
+    wait_for_service_ready_with_attempts(base_url.as_str(), 600)
+        .await
+        .unwrap_or_else(|error| {
+            guard.kill();
+            panic!("wait for WendaoSearch service readiness: {error}");
+        });
+
+    (base_url, guard)
+}
+
+async fn spawn_wendaosearch_multi_route_service(mode: &str) -> (String, JuliaExampleServiceGuard) {
+    let port = reserve_service_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let script = wendaosearch_script("run_search_service.jl");
+    let child = Command::new("direnv")
+        .arg("exec")
+        .arg(".")
+        .arg("julia")
+        .arg(format!(
+            "--project={}",
+            wendaosearch_package_dir().display()
+        ))
+        .arg(script)
+        .arg("--route-names")
+        .arg("capability_manifest,structural_rerank,constraint_filter")
+        .arg("--mode")
+        .arg(mode)
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(repo_root())
+        .env("JULIA_LOAD_PATH", "@:@stdlib")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|error| {
+            panic!("spawn real WendaoSearch multi-route `{mode}` service: {error}")
+        });
+    let mut guard = JuliaExampleServiceGuard::new(child);
+
+    wait_for_service_ready_with_attempts(base_url.as_str(), 600)
+        .await
+        .unwrap_or_else(|error| {
+            guard.kill();
+            panic!("wait for WendaoSearch multi-route service readiness: {error}");
         });
 
     (base_url, guard)

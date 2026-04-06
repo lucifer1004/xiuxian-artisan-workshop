@@ -10,18 +10,11 @@ use arrow::record_batch::RecordBatch;
 use std::cmp::Ordering;
 #[cfg(feature = "julia")]
 use std::collections::BTreeMap;
-#[cfg(feature = "julia")]
-use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::capabilities::PluginCapabilityBinding;
 #[cfg(feature = "julia")]
-use xiuxian_wendao_julia::validate_julia_arrow_response_batches;
-#[cfg(feature = "julia")]
-use xiuxian_wendao_julia::{PluginArrowScoreRow, decode_plugin_arrow_score_rows};
-#[cfg(feature = "julia")]
 use xiuxian_wendao_runtime::transport::{
-    DEFAULT_FLIGHT_SCHEMA_VERSION, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
-    FLIGHT_TRACE_ID_METADATA_KEY, NegotiatedFlightTransportClient, NegotiatedTransportSelection,
-    negotiate_flight_transport_client_from_bindings,
+    DEFAULT_FLIGHT_SCHEMA_VERSION, NegotiatedTransportSelection, PluginArrowScoreRoundtripError,
+    PluginArrowScoreRow, roundtrip_plugin_arrow_score_rows_with_binding,
 };
 
 #[cfg(feature = "julia")]
@@ -51,76 +44,27 @@ pub(super) async fn apply_vector_store_plugin_rerank(
         });
     }
 
-    let transport = match build_plugin_rerank_transport_client(binding) {
-        Ok(Some(client)) => client,
-        Ok(None) => return None,
-        Err(error) => return Some(plugin_rerank_negotiation_error_telemetry(binding, error)),
-    };
     let request = QuantumSemanticSearchRequest::from_retrieval_budget(
         Some(query_text),
         query_vector,
         Some(&retrieval_plan.budget),
         None,
     );
-    let anchors = contexts
-        .iter()
-        .map(|context| QuantumAnchorHit {
-            anchor_id: context.anchor_id.clone(),
-            vector_score: context.vector_score,
-        })
-        .collect::<Vec<_>>();
-    let request_batch = match build_vector_store_plugin_rerank_request_batch(
-        ignition,
-        request,
-        &anchors,
-        query_text,
-        plugin_rerank_request_schema_version(binding),
+    let anchors = collect_plugin_rerank_anchors(contexts);
+    complete_plugin_rerank_roundtrip(
+        binding,
+        ignition
+            .build_plugin_rerank_request_batch_with_metadata(
+                request,
+                &anchors,
+                binding.selector.provider.0.as_str(),
+                query_text,
+                plugin_rerank_request_schema_version(binding),
+            )
+            .await,
+        contexts,
     )
     .await
-    {
-        Ok(batch) => batch,
-        Err(error) => {
-            return Some(build_plugin_rerank_telemetry(
-                Some(transport.selection()),
-                false,
-                0,
-                Vec::new(),
-                Some(error),
-            ));
-        }
-    };
-    let response_batches = match transport.process_batch(&request_batch).await {
-        Ok(batches) => batches,
-        Err(error) => {
-            return Some(build_plugin_rerank_telemetry(
-                Some(transport.selection()),
-                false,
-                0,
-                Vec::new(),
-                Some(format!("Julia rerank transport failed: {error}")),
-            ));
-        }
-    };
-    let response_rows = match decode_plugin_rerank_response_rows(response_batches.as_slice()) {
-        Ok(rows) => rows,
-        Err(error) => {
-            return Some(build_plugin_rerank_telemetry(
-                Some(transport.selection()),
-                false,
-                0,
-                Vec::new(),
-                Some(error),
-            ));
-        }
-    };
-    let updated = apply_plugin_rerank_scores(contexts, &response_rows);
-    Some(build_plugin_rerank_telemetry(
-        Some(transport.selection()),
-        updated > 0,
-        response_rows.len(),
-        collect_plugin_rerank_trace_ids(&response_rows),
-        None,
-    ))
 }
 
 #[cfg(not(feature = "julia"))]
@@ -163,78 +107,27 @@ pub(super) async fn apply_openai_plugin_rerank(
         return None;
     }
 
-    let transport = match build_plugin_rerank_transport_client(binding) {
-        Ok(Some(client)) => client,
-        Ok(None) => return None,
-        Err(error) => return Some(plugin_rerank_negotiation_error_telemetry(binding, error)),
-    };
-
     let request = QuantumSemanticSearchRequest::from_retrieval_budget(
         Some(query_text),
         &[],
         Some(&retrieval_plan.budget),
         None,
     );
-    let anchors = contexts
-        .iter()
-        .map(|context| QuantumAnchorHit {
-            anchor_id: context.anchor_id.clone(),
-            vector_score: context.vector_score,
-        })
-        .collect::<Vec<_>>();
-    let request_batch = match build_openai_plugin_rerank_request_batch(
-        ignition,
-        request,
-        &anchors,
-        query_text,
-        plugin_rerank_request_schema_version(binding),
+    let anchors = collect_plugin_rerank_anchors(contexts);
+    complete_plugin_rerank_roundtrip(
+        binding,
+        ignition
+            .build_plugin_rerank_request_batch_with_metadata(
+                request,
+                &anchors,
+                binding.selector.provider.0.as_str(),
+                query_text,
+                plugin_rerank_request_schema_version(binding),
+            )
+            .await,
+        contexts,
     )
     .await
-    {
-        Ok(batch) => batch,
-        Err(error) => {
-            return Some(build_plugin_rerank_telemetry(
-                Some(transport.selection()),
-                false,
-                0,
-                Vec::new(),
-                Some(error),
-            ));
-        }
-    };
-    let response_batches = match transport.process_batch(&request_batch).await {
-        Ok(batches) => batches,
-        Err(error) => {
-            return Some(build_plugin_rerank_telemetry(
-                Some(transport.selection()),
-                false,
-                0,
-                Vec::new(),
-                Some(format!("Julia rerank transport failed: {error}")),
-            ));
-        }
-    };
-    let response_rows = match decode_plugin_rerank_response_rows(response_batches.as_slice()) {
-        Ok(rows) => rows,
-        Err(error) => {
-            return Some(build_plugin_rerank_telemetry(
-                Some(transport.selection()),
-                false,
-                0,
-                Vec::new(),
-                Some(error),
-            ));
-        }
-    };
-
-    let updated = apply_plugin_rerank_scores(contexts, &response_rows);
-    Some(build_plugin_rerank_telemetry(
-        Some(transport.selection()),
-        updated > 0,
-        response_rows.len(),
-        collect_plugin_rerank_trace_ids(&response_rows),
-        None,
-    ))
 }
 
 #[cfg(not(feature = "julia"))]
@@ -264,53 +157,6 @@ pub(super) async fn apply_openai_plugin_rerank(
 }
 
 #[cfg(feature = "julia")]
-pub(super) fn build_plugin_rerank_transport_client(
-    binding: &PluginCapabilityBinding,
-) -> Result<Option<NegotiatedFlightTransportClient>, String> {
-    negotiate_flight_transport_client_from_bindings(std::slice::from_ref(binding))
-}
-
-#[cfg(feature = "julia")]
-async fn build_vector_store_plugin_rerank_request_batch(
-    ignition: &VectorStoreSemanticIgnition,
-    request: QuantumSemanticSearchRequest<'_>,
-    anchors: &[QuantumAnchorHit],
-    query_text: &str,
-    schema_version: &str,
-) -> Result<RecordBatch, String> {
-    let batch = ignition
-        .build_plugin_rerank_request_batch(request, anchors)
-        .await
-        .map_err(|error| format!("failed to build Julia rerank request batch: {error}"))?;
-    attach_plugin_rerank_request_metadata(&batch, query_text, schema_version)
-}
-
-#[cfg(feature = "julia")]
-async fn build_openai_plugin_rerank_request_batch(
-    ignition: &OpenAiCompatibleSemanticIgnition,
-    request: QuantumSemanticSearchRequest<'_>,
-    anchors: &[QuantumAnchorHit],
-    query_text: &str,
-    schema_version: &str,
-) -> Result<RecordBatch, String> {
-    let batch = ignition
-        .build_plugin_rerank_request_batch(request, anchors)
-        .await
-        .map_err(|error| format!("failed to build Julia rerank request batch: {error}"))?;
-    attach_plugin_rerank_request_metadata(&batch, query_text, schema_version)
-}
-
-#[cfg(feature = "julia")]
-fn decode_plugin_rerank_response_rows(
-    response_batches: &[RecordBatch],
-) -> Result<BTreeMap<String, PluginArrowScoreRow>, String> {
-    validate_julia_arrow_response_batches(response_batches)
-        .map_err(|error| format!("Julia rerank response contract validation failed: {error}"))?;
-    decode_plugin_arrow_score_rows(response_batches)
-        .map_err(|error| format!("failed to decode Julia rerank response rows: {error}"))
-}
-
-#[cfg(feature = "julia")]
 pub(super) fn build_plugin_rerank_telemetry(
     selection: Option<&NegotiatedTransportSelection>,
     applied: bool,
@@ -330,18 +176,65 @@ pub(super) fn build_plugin_rerank_telemetry(
 }
 
 #[cfg(feature = "julia")]
-fn plugin_rerank_negotiation_error_telemetry(
+pub(super) fn collect_plugin_rerank_anchors(contexts: &[QuantumContext]) -> Vec<QuantumAnchorHit> {
+    contexts
+        .iter()
+        .map(|context| QuantumAnchorHit {
+            anchor_id: context.anchor_id.clone(),
+            vector_score: context.vector_score,
+        })
+        .collect()
+}
+
+#[cfg(feature = "julia")]
+fn plugin_rerank_request_build_error_telemetry(error: String) -> LinkGraphJuliaRerankTelemetry {
+    build_plugin_rerank_telemetry(None, false, 0, Vec::new(), Some(error))
+}
+
+#[cfg(feature = "julia")]
+async fn complete_plugin_rerank_roundtrip(
     binding: &PluginCapabilityBinding,
-    error: String,
+    request_batch: Result<RecordBatch, String>,
+    contexts: &mut [QuantumContext],
+) -> Option<LinkGraphJuliaRerankTelemetry> {
+    let request_batch = match request_batch {
+        Ok(batch) => batch,
+        Err(error) => return Some(plugin_rerank_request_build_error_telemetry(error)),
+    };
+    let roundtrip =
+        match roundtrip_plugin_arrow_score_rows_with_binding(binding, &request_batch).await {
+            Ok(Some(roundtrip)) => roundtrip,
+            Ok(None) => return None,
+            Err(error) => return Some(plugin_rerank_roundtrip_error_telemetry(binding, error)),
+        };
+    let updated = apply_plugin_rerank_scores(contexts, &roundtrip.rows);
+    Some(build_plugin_rerank_telemetry(
+        Some(&roundtrip.selection),
+        updated > 0,
+        roundtrip.rows.len(),
+        collect_plugin_rerank_trace_ids(&roundtrip.rows),
+        None,
+    ))
+}
+
+#[cfg(feature = "julia")]
+fn plugin_rerank_roundtrip_error_telemetry(
+    binding: &PluginCapabilityBinding,
+    error: PluginArrowScoreRoundtripError,
 ) -> LinkGraphJuliaRerankTelemetry {
+    let selection = error.selection.as_ref();
     LinkGraphJuliaRerankTelemetry {
         applied: false,
         response_row_count: 0,
-        selected_transport: None,
-        fallback_from: Some(binding.transport),
-        fallback_reason: Some(error.clone()),
+        selected_transport: selection.map(|selection| selection.selected_transport),
+        fallback_from: selection
+            .and_then(|selection| selection.fallback_from)
+            .or(Some(binding.transport)),
+        fallback_reason: selection
+            .and_then(|selection| selection.fallback_reason.clone())
+            .or_else(|| error.selection.is_none().then(|| error.error.clone())),
         trace_ids: Vec::new(),
-        error: Some(error),
+        error: Some(error.error),
     }
 }
 
@@ -380,42 +273,6 @@ pub(super) fn collect_plugin_rerank_trace_ids(
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect()
-}
-
-#[cfg(feature = "julia")]
-pub(super) fn attach_plugin_rerank_request_metadata(
-    batch: &RecordBatch,
-    query_text: &str,
-    schema_version: &str,
-) -> Result<RecordBatch, String> {
-    attach_record_batch_metadata(
-        batch,
-        [
-            (
-                FLIGHT_TRACE_ID_METADATA_KEY,
-                plugin_rerank_request_trace_id(query_text),
-            ),
-            (
-                FLIGHT_SCHEMA_VERSION_METADATA_KEY,
-                schema_version.to_string(),
-            ),
-        ],
-    )
-    .map_err(|error| format!("failed to attach Julia rerank request metadata: {error}"))
-}
-
-#[cfg(feature = "julia")]
-pub(super) fn plugin_rerank_request_trace_id(query_text: &str) -> String {
-    let normalized = query_text
-        .split_whitespace()
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>()
-        .join("_");
-    if normalized.is_empty() {
-        "julia-rerank:query".to_string()
-    } else {
-        format!("julia-rerank:{normalized}")
-    }
 }
 
 #[cfg(feature = "julia")]

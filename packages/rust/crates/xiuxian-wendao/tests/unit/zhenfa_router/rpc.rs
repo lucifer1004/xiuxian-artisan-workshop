@@ -12,9 +12,11 @@ use crate::set_link_graph_wendao_config_override;
 #[cfg(feature = "julia")]
 use std::fs;
 #[cfg(feature = "julia")]
-use xiuxian_wendao_julia::integration_support::{
-    julia_gateway_artifact_expected_json_fragments, julia_gateway_artifact_expected_toml_fragments,
-    julia_gateway_artifact_rpc_params_fixture, julia_gateway_artifact_runtime_config_toml,
+use xiuxian_wendao_builtin::{
+    linked_builtin_julia_gateway_artifact_expected_json_fragments,
+    linked_builtin_julia_gateway_artifact_expected_toml_fragments,
+    linked_builtin_julia_gateway_artifact_rpc_params_fixture,
+    linked_builtin_julia_gateway_artifact_runtime_config_toml,
 };
 
 #[cfg(feature = "julia")]
@@ -27,7 +29,7 @@ fn write_config_and_set_override(temp: &tempfile::TempDir) {
     let config_path = temp.path().join("wendao.toml");
     fs::write(
         &config_path,
-        julia_gateway_artifact_runtime_config_toml(None),
+        linked_builtin_julia_gateway_artifact_runtime_config_toml(None),
     )
     .unwrap_or_else(|error| panic!("write config: {error}"));
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -131,11 +133,11 @@ fn export_plugin_artifact_from_rpc_params_returns_toml() {
     write_config_and_set_override(&temp);
 
     let rendered = export_plugin_artifact_from_rpc_params(
-        julia_gateway_artifact_rpc_params_fixture(None, None),
+        linked_builtin_julia_gateway_artifact_rpc_params_fixture(None, None),
     )
     .unwrap_or_else(|error| panic!("export generic toml: {error:?}"));
 
-    for fragment in julia_gateway_artifact_expected_toml_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_toml_fragments() {
         assert!(
             rendered.contains(&fragment),
             "expected rendered TOML to contain `{fragment}`: {rendered}"
@@ -150,11 +152,11 @@ fn export_plugin_artifact_from_rpc_params_returns_json() {
     write_config_and_set_override(&temp);
 
     let rendered = export_plugin_artifact_from_rpc_params(
-        julia_gateway_artifact_rpc_params_fixture(Some("json"), None),
+        linked_builtin_julia_gateway_artifact_rpc_params_fixture(Some("json"), None),
     )
     .unwrap_or_else(|error| panic!("export generic json: {error:?}"));
 
-    for fragment in julia_gateway_artifact_expected_json_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_json_fragments() {
         assert!(
             rendered.contains(&fragment),
             "expected rendered JSON to contain `{fragment}`: {rendered}"
@@ -169,18 +171,19 @@ fn export_plugin_artifact_from_rpc_params_writes_json_file() {
     write_config_and_set_override(&temp);
 
     let output_path = temp.path().join("plugin-artifact.json");
-    let rendered =
-        export_plugin_artifact_from_rpc_params(julia_gateway_artifact_rpc_params_fixture(
+    let rendered = export_plugin_artifact_from_rpc_params(
+        linked_builtin_julia_gateway_artifact_rpc_params_fixture(
             Some("json"),
             Some(output_path.to_string_lossy().as_ref()),
-        ))
-        .unwrap_or_else(|error| panic!("export generic json file: {error:?}"));
+        ),
+    )
+    .unwrap_or_else(|error| panic!("export generic json file: {error:?}"));
 
     assert!(rendered.contains("Wrote plugin artifact"));
     let written = fs::read_to_string(&output_path)
         .unwrap_or_else(|error| panic!("read written json: {error}"));
 
-    for fragment in julia_gateway_artifact_expected_json_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_json_fragments() {
         assert!(
             written.contains(&fragment),
             "expected written JSON to contain `{fragment}`: {written}"

@@ -13,22 +13,16 @@
   ],
   "inferred_relations": [
     {
-      "description": "rules documented in Snapshot Persona",
-      "relation_type": "DOCUMENTED_IN",
-      "source": "rules",
-      "target": "Snapshot Persona"
-    },
-    {
-      "description": "agenda_flow.toml documented in Snapshot Persona",
-      "relation_type": "DOCUMENTED_IN",
-      "source": "agenda_flow.toml",
-      "target": "Snapshot Persona"
-    },
-    {
-      "description": "Snapshot Persona tagged with agenda",
-      "relation_type": "RELATED_TO",
+      "description": "Snapshot Persona links to rules",
+      "relation_type": null,
       "source": "Snapshot Persona",
-      "target": "tag:agenda"
+      "target": "rules"
+    },
+    {
+      "description": "Snapshot Persona links to agenda_flow.toml",
+      "relation_type": null,
+      "source": "Snapshot Persona",
+      "target": "agenda_flow.toml"
     }
   ]
 }

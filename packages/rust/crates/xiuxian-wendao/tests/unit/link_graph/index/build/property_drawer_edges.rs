@@ -1,67 +1,71 @@
 //! Unit tests for `property_drawer_edges` module.
 
+use std::collections::HashMap;
+
+use crate::parsers::markdown::ParsedSection;
+
 use super::*;
 
-#[test]
-fn test_parse_id_references_single() {
-    let refs = parse_id_references("#arch-v1");
-    assert_eq!(refs, vec!["arch-v1"]);
+fn parsed_section(attrs: &[(&str, &str)], heading_path: &str) -> ParsedSection {
+    ParsedSection {
+        heading_title: heading_path
+            .rsplit(" / ")
+            .next()
+            .unwrap_or_default()
+            .to_string(),
+        heading_path: heading_path.to_string(),
+        heading_path_lower: heading_path.to_lowercase(),
+        heading_level: 2,
+        line_start: 1,
+        line_end: 3,
+        byte_start: 0,
+        byte_end: 0,
+        section_text: String::new(),
+        section_text_lower: String::new(),
+        entities: Vec::new(),
+        attributes: attrs
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+            .collect(),
+        logbook: Vec::new(),
+        observations: Vec::new(),
+    }
 }
 
 #[test]
-fn test_parse_id_references_comma_separated() {
-    let refs = parse_id_references("#id1, #id2, #id3");
-    assert_eq!(refs, vec!["id1", "id2", "id3"]);
-}
+fn test_extract_property_drawer_edges_resolve_document_and_id_targets() {
+    let section = parsed_section(
+        &[
+            ("ID", "heading-1"),
+            (
+                "RELATED",
+                "[[file-b#section-2]], [[#local-target]], [[file-b]]",
+            ),
+        ],
+        "Heading 1",
+    );
+    let alias_to_doc_id = HashMap::from([(String::from("file-b"), String::from("docs/file-b.md"))]);
 
-#[test]
-fn test_parse_id_references_space_separated() {
-    let refs = parse_id_references("#id1 #id2 #id3");
-    assert_eq!(refs, vec!["id1", "id2", "id3"]);
-}
+    let edges = extract_property_drawer_edges("docs/a.md", &section, &alias_to_doc_id);
 
-#[test]
-fn test_parse_id_references_mixed() {
-    let refs = parse_id_references("#id1, #id2 #id3,\n#id4");
-    assert_eq!(refs, vec!["id1", "id2", "id3", "id4"]);
-}
-
-#[test]
-fn test_parse_id_references_empty() {
-    let refs = parse_id_references("");
-    assert!(refs.is_empty());
-}
-
-#[test]
-fn test_parse_id_references_no_hash() {
-    let refs = parse_id_references("id1, id2");
-    assert!(refs.is_empty());
-}
-
-#[test]
-fn test_extract_property_drawer_edges_related() {
-    let mut attrs = HashMap::new();
-    attrs.insert("RELATED".to_string(), "#arch-v1, #impl-v2".to_string());
-
-    let edges = extract_property_drawer_edges("doc.md#intro", &attrs);
-
-    assert_eq!(edges.len(), 2);
-    assert_eq!(edges[0].from, "doc.md#intro");
-    assert_eq!(edges[0].to, "arch-v1");
+    assert_eq!(edges.len(), 3);
+    assert_eq!(edges[0].from, "docs/a.md#heading-1");
+    assert_eq!(edges[0].to, "docs/file-b.md#section-2");
     assert_eq!(edges[0].edge_type, LinkGraphEdgeType::PropertyDrawer);
     assert_eq!(edges[0].attribute_key, "RELATED");
-    assert_eq!(edges[1].to, "impl-v2");
+    assert_eq!(edges[1].to, "docs/a.md#local-target");
+    assert_eq!(edges[2].to, "docs/file-b.md");
 }
 
 #[test]
-fn test_extract_property_drawer_edges_multiple_attrs() {
-    let mut attrs = HashMap::new();
-    attrs.insert("RELATED".to_string(), "#id1".to_string());
-    attrs.insert("DEPENDS_ON".to_string(), "#id2".to_string());
+fn test_extract_property_drawer_edges_skip_unresolved_path_targets() {
+    let section = parsed_section(
+        &[("RELATED", "[[file-b#/Deep/Section]], [[/Local Path]]")],
+        "Heading 1",
+    );
+    let alias_to_doc_id = HashMap::from([(String::from("file-b"), String::from("docs/file-b.md"))]);
 
-    let edges = extract_property_drawer_edges("doc.md#section", &attrs);
+    let edges = extract_property_drawer_edges("docs/a.md", &section, &alias_to_doc_id);
 
-    assert_eq!(edges.len(), 2);
-    assert!(edges.iter().any(|e| e.attribute_key == "RELATED"));
-    assert!(edges.iter().any(|e| e.attribute_key == "DEPENDS_ON"));
+    assert!(edges.is_empty());
 }

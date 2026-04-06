@@ -9,8 +9,9 @@ use xiuxian_vector::VectorStore;
 use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
-use xiuxian_wendao_julia::integration_support::{
-    julia_planned_search_vector_store_runtime_config_toml, spawn_wendaoarrow_stream_scoring_service,
+use xiuxian_wendao_builtin::{
+    linked_builtin_julia_planned_search_vector_store_runtime_config_toml as julia_planned_search_vector_store_runtime_config_toml,
+    linked_builtin_spawn_wendaoarrow_stream_scoring_service as spawn_wendaoarrow_stream_scoring_service,
 };
 
 #[test]

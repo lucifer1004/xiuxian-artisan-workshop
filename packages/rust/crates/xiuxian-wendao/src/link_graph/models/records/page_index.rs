@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::MarkdownBlock;
-use crate::link_graph::parser::{CodeObservation, LogbookEntry};
+use crate::parsers::markdown::{CodeObservation, LogbookEntry};
 
 /// One hierarchical `PageIndex` node derived from a markdown heading section.
 #[derive(Debug, Clone, PartialEq, Eq)]

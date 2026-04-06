@@ -1,25 +1,6 @@
 use tempfile::TempDir;
-use xiuxian_wendao::graph::{KnowledgeGraph, entity_from_dict};
+use xiuxian_wendao::graph::KnowledgeGraph;
 use xiuxian_wendao::{Entity, EntityType, Relation, RelationType};
-
-#[test]
-fn test_entity_from_dict() {
-    let data = serde_json::json!({
-        "name": "Claude Code",
-        "entity_type": "TOOL",
-        "description": "AI coding assistant",
-        "source": "docs/tools.md",
-        "aliases": ["claude", "claude-dev"],
-        "confidence": 0.95
-    });
-
-    let Some(entity) = entity_from_dict(&data) else {
-        panic!("entity_from_dict should return an entity");
-    };
-    assert_eq!(entity.name, "Claude Code");
-    assert!(matches!(entity.entity_type, EntityType::Tool));
-    assert_eq!(entity.aliases.len(), 2);
-}
 
 #[test]
 fn test_save_and_load_graph() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,7 +1,5 @@
-use super::super::{
-    LinkGraphHit, LinkGraphIndex, LinkGraphScope, LinkGraphSearchOptions, ParsedLinkGraphQuery,
-    parse_search_query,
-};
+use super::super::{LinkGraphHit, LinkGraphIndex, LinkGraphScope, LinkGraphSearchOptions};
+use crate::parsers::link_graph::query::{ParsedLinkGraphQuery, parse_search_query};
 use std::collections::HashMap;
 
 impl LinkGraphIndex {

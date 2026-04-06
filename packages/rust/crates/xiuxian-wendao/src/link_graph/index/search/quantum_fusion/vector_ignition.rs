@@ -8,7 +8,10 @@ use arrow::record_batch::RecordBatch;
 use thiserror::Error;
 use xiuxian_vector::{SearchOptions, VectorStore, VectorStoreError, distance_to_score};
 #[cfg(feature = "julia")]
-use xiuxian_wendao_julia::{PluginArrowRequestRow, build_plugin_arrow_request_batch};
+use xiuxian_wendao_runtime::transport::{
+    PluginArrowVectorStoreRequestBuildError, build_plugin_arrow_request_batch_from_vector_store,
+    build_plugin_arrow_request_batch_from_vector_store_with_metadata,
+};
 
 /// Semantic ignition adapter backed by the Rust vector store.
 #[derive(Clone)]
@@ -44,6 +47,22 @@ impl VectorStoreSemanticIgnition {
         self
     }
 
+    #[cfg(feature = "julia")]
+    fn validate_plugin_rerank_candidates(
+        &self,
+        anchors: &[QuantumAnchorHit],
+    ) -> Result<(), VectorStorePluginRerankRequestError> {
+        if anchors.is_empty() {
+            return Err(VectorStorePluginRerankRequestError::Build(
+                RepoIntelligenceError::AnalysisFailed {
+                    message: "cannot build plugin rerank request from an empty anchor set"
+                        .to_string(),
+                },
+            ));
+        }
+        Ok(())
+    }
+
     /// Build a `WendaoArrow` `v1` plugin rerank request batch for the provided
     /// anchors.
     ///
@@ -52,71 +71,59 @@ impl VectorStoreSemanticIgnition {
     ///
     /// # Errors
     ///
-    /// Returns [`VectorStoreJuliaRequestError`] when candidate
-    /// embeddings cannot
-    /// be fetched from the vector store or the `WendaoArrow` request batch cannot
-    /// be assembled.
+    /// Returns [`VectorStoreJuliaRequestError`] when candidate embeddings
+    /// cannot be fetched from the vector store or the `WendaoArrow` request
+    /// batch cannot be assembled.
     #[cfg(feature = "julia")]
     pub async fn build_plugin_rerank_request_batch(
         &self,
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
     ) -> Result<RecordBatch, VectorStorePluginRerankRequestError> {
-        let query_vector = request.query_vector;
-        if anchors.is_empty() {
-            return Err(VectorStorePluginRerankRequestError::Build(
-                RepoIntelligenceError::AnalysisFailed {
-                    message: "cannot build Julia rerank request from an empty anchor set"
-                        .to_string(),
-                },
-            ));
-        }
-
-        let ids = anchors
-            .iter()
-            .map(|anchor| anchor.anchor_id.clone())
-            .collect::<Vec<_>>();
-        let embeddings = self
-            .store
-            .fetch_embeddings_by_ids(self.table_name.as_str(), &ids)
-            .await
-            .map_err(VectorStorePluginRerankRequestError::VectorStore)?;
-
-        let mut rows = Vec::with_capacity(anchors.len());
-        for anchor in anchors {
-            let embedding = embeddings
-                .get(anchor.anchor_id.as_str())
-                .cloned()
-                .ok_or_else(|| VectorStorePluginRerankRequestError::MissingEmbedding {
-                    anchor_id: anchor.anchor_id.clone(),
-                })?;
-            rows.push(PluginArrowRequestRow {
-                doc_id: anchor.anchor_id.clone(),
-                vector_score: anchor.vector_score,
-                embedding,
-            });
-        }
-
-        build_plugin_arrow_request_batch(&rows, query_vector)
-            .map_err(VectorStorePluginRerankRequestError::Build)
+        self.validate_plugin_rerank_candidates(anchors)?;
+        build_plugin_arrow_request_batch_from_vector_store(
+            &self.store,
+            self.table_name.as_str(),
+            anchors
+                .iter()
+                .map(|anchor| (anchor.anchor_id.clone(), anchor.vector_score)),
+            request.query_vector,
+        )
+        .await
+        .map_err(map_vector_store_plugin_request_build_error)
     }
 
-    /// Compatibility shim for the legacy Julia-named rerank request builder.
+    /// Build a plugin rerank request batch and attach transport metadata for
+    /// the provided anchors.
     ///
     /// # Errors
     ///
-    /// Returns [`VectorStorePluginRerankRequestError`] when candidate
-    /// embeddings cannot
-    /// be fetched from the vector store or the `WendaoArrow` request batch cannot
-    /// be assembled.
+    /// Returns a string error when the base request batch cannot be assembled
+    /// or transport metadata cannot be attached to the batch.
     #[cfg(feature = "julia")]
-    pub async fn build_julia_rerank_request_batch(
+    pub(crate) async fn build_plugin_rerank_request_batch_with_metadata(
         &self,
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
-    ) -> Result<RecordBatch, VectorStoreJuliaRequestError> {
-        self.build_plugin_rerank_request_batch(request, anchors)
-            .await
+        provider_id: &str,
+        query_text: &str,
+        schema_version: &str,
+    ) -> Result<RecordBatch, String> {
+        self.validate_plugin_rerank_candidates(anchors)
+            .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))?;
+        build_plugin_arrow_request_batch_from_vector_store_with_metadata(
+            &self.store,
+            self.table_name.as_str(),
+            anchors
+                .iter()
+                .map(|anchor| (anchor.anchor_id.clone(), anchor.vector_score)),
+            request.query_vector,
+            provider_id,
+            query_text,
+            schema_version,
+        )
+        .await
+        .map_err(|error| format!("failed to build plugin rerank request batch: {error}"))
     }
 }
 
@@ -140,7 +147,21 @@ pub enum VectorStorePluginRerankRequestError {
 }
 
 #[cfg(feature = "julia")]
-pub type VectorStoreJuliaRequestError = VectorStorePluginRerankRequestError;
+fn map_vector_store_plugin_request_build_error(
+    error: PluginArrowVectorStoreRequestBuildError,
+) -> VectorStorePluginRerankRequestError {
+    match error {
+        PluginArrowVectorStoreRequestBuildError::VectorStore(error) => {
+            VectorStorePluginRerankRequestError::VectorStore(error)
+        }
+        PluginArrowVectorStoreRequestBuildError::MissingEmbedding { doc_id } => {
+            VectorStorePluginRerankRequestError::MissingEmbedding { anchor_id: doc_id }
+        }
+        PluginArrowVectorStoreRequestBuildError::Build(error) => {
+            VectorStorePluginRerankRequestError::Build(error)
+        }
+    }
+}
 
 impl QuantumSemanticIgnition for VectorStoreSemanticIgnition {
     type Error = VectorStoreError;
@@ -186,7 +207,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_plugin_rerank_request_batch_uses_anchor_ids_as_request_doc_ids() {
+    async fn build_plugin_rerank_request_batch_with_metadata_uses_anchor_ids_as_request_doc_ids() {
         let temp_dir = tempdir_or_panic();
         let db_path = temp_dir.path().join("vector_ignition_julia");
         let db_path_str = db_path.to_string_lossy();
@@ -213,7 +234,7 @@ mod tests {
             max_vector_score: None,
         };
         let batch = ignition
-            .build_plugin_rerank_request_batch(
+            .build_plugin_rerank_request_batch_with_metadata(
                 request,
                 &[
                     QuantumAnchorHit {
@@ -225,6 +246,9 @@ mod tests {
                         vector_score: 0.42,
                     },
                 ],
+                "xiuxian-wendao-julia",
+                "demo",
+                "v1",
             )
             .await
             .unwrap_or_else(|error| panic!("request batch should build: {error}"));
@@ -237,5 +261,9 @@ mod tests {
         };
         assert_eq!(doc_ids.value(0), "doc-1#alpha");
         assert_eq!(doc_ids.value(1), "doc-2#beta");
+        assert_eq!(
+            batch.schema().metadata().get("trace_id"),
+            Some(&"plugin-rerank:xiuxian-wendao-julia:demo".to_string())
+        );
     }
 }

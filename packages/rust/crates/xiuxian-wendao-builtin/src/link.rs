@@ -1,0 +1,10 @@
+// Keep builtin plugin crates linked so their `inventory`-submitted registrars
+// remain visible to the bootstrap bundle without widening any host-facing API.
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia as _;
+#[cfg(feature = "modelica")]
+use xiuxian_wendao_modelica as _;
+
+/// Ensure builtin plugin crates stay linked into the current host build.
+#[inline]
+pub(crate) fn ensure_builtin_plugins_linked() {}

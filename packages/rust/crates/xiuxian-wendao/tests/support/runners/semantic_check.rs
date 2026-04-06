@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use walkdir::WalkDir;
 use xiuxian_testing::{Scenario, ScenarioRunner};
-use xiuxian_wendao::link_graph::parser::{CodeObservation, is_supported_note, parse_note};
+use xiuxian_wendao::parsers::markdown::{CodeObservation, is_supported_note, parse_note};
 use xiuxian_wendao::zhenfa_router::native::audit::{
     SourceFile, resolve_source_files, suggest_pattern_fix_with_threshold,
 };

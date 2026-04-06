@@ -1,26 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Parsed YAML frontmatter from a markdown note.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct NoteFrontmatter {
-    /// Document title from frontmatter.
-    pub title: Option<String>,
-    /// Human-readable description.
-    pub description: Option<String>,
-    /// Skill name (for SKILL.md files).
-    pub name: Option<String>,
-    /// Document category (e.g. "pattern", "architecture").
-    pub category: Option<String>,
-    /// Tags for discovery and filtering.
-    #[serde(default)]
-    pub tags: Vec<String>,
-    /// Routing keywords from `metadata.routing_keywords`.
-    #[serde(default)]
-    pub routing_keywords: Vec<String>,
-    /// Intent descriptions from `metadata.intents`.
-    #[serde(default)]
-    pub intents: Vec<String>,
-}
+use crate::parsers::markdown::NoteFrontmatter;
 
 /// Input for a single note to be enhanced.
 #[derive(Debug, Clone)]
@@ -38,10 +18,16 @@ pub struct NoteInput {
 pub struct InferredRelation {
     /// Source entity name.
     pub source: String,
+    /// Optional source section or anchor address.
+    pub source_address: Option<String>,
     /// Target entity name.
     pub target: String,
-    /// Relation type string (e.g. `DOCUMENTED_IN`, `CONTAINS`).
-    pub relation_type: String,
+    /// Optional target section or anchor address.
+    pub target_address: Option<String>,
+    /// Optional explicit semantic relation tag. `None` means structural link only.
+    pub relation_type: Option<String>,
+    /// Optional explicit metadata owner, such as a property drawer key.
+    pub metadata_owner: Option<String>,
     /// Human-readable description of the relation.
     pub description: String,
 }

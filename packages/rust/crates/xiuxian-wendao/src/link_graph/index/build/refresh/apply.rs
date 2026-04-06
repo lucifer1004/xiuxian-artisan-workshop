@@ -5,7 +5,7 @@ use super::super::graphmem::sync_graphmem_state_best_effort;
 use crate::link_graph::index::{
     INCREMENTAL_REBUILD_THRESHOLD, LinkGraphIndex, LinkGraphRefreshMode,
 };
-use crate::link_graph::parser::{is_supported_note, normalize_alias, parse_note};
+use crate::parsers::markdown::{ParsedNote, is_supported_note, normalize_alias, parse_note};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -45,7 +45,7 @@ impl LinkGraphIndex {
 
         let included: HashSet<String> = self.include_dirs.iter().cloned().collect();
         let excluded: HashSet<String> = self.excluded_dirs.iter().cloned().collect();
-        let mut parsed_updates: Vec<crate::link_graph::parser::ParsedNote> = Vec::new();
+        let mut parsed_updates: Vec<ParsedNote> = Vec::new();
         for changed in changed_paths {
             let raw_candidate = if changed.is_absolute() {
                 changed.clone()

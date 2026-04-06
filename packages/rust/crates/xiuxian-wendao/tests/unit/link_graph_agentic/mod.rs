@@ -39,6 +39,9 @@ fn clear_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 mod expansion;
+#[cfg(feature = "julia")]
+mod expansion_plan_batch_support;
+mod expansion_support;
 mod suggested_link_decide_promoted_with_audit;
 mod suggested_link_decide_rejects_invalid_transition;
 mod suggested_link_log_rejects_invalid_payload;

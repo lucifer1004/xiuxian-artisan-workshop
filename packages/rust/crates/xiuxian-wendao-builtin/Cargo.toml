@@ -1,0 +1,26 @@
+[package]
+name = "xiuxian-wendao-builtin"
+version.workspace = true
+edition.workspace = true
+description = "Builtin plugin bundle and registry bootstrap for xiuxian-wendao hosts"
+authors = ["CyberXiuXian Artisan workshop"]
+license = "Apache-2.0"
+publish = false
+
+[features]
+default = []
+julia = ["dep:xiuxian-wendao-julia"]
+modelica = ["dep:xiuxian-wendao-modelica"]
+modelica-tree-sitter = ["modelica", "xiuxian-wendao-modelica/tree-sitter"]
+
+[dependencies]
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
+xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false, features = ["transport"] }
+xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
+xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }
+xiuxian-wendao-modelica = { path = "../xiuxian-wendao-modelica", optional = true, default-features = false }
+toml = { workspace = true }
+
+[lints]
+workspace = true

@@ -9,7 +9,7 @@ use super::types::{
     INTERNAL_SKILL_URI_PREFIX, InternalSkillAuthorityOutcome, InternalSkillAuthorityReport,
     InternalSkillManifestError,
 };
-use crate::enhancer::parse_frontmatter;
+use crate::parsers::markdown::parse_frontmatter;
 
 /// Resolve internal skill authority by intersecting intent links and physical manifests.
 ///

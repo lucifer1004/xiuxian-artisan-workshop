@@ -12883,12 +12883,24 @@ dependencies = [
  "xiuxian-testing",
  "xiuxian-types",
  "xiuxian-vector",
+ "xiuxian-wendao-builtin",
+ "xiuxian-wendao-core",
+ "xiuxian-wendao-runtime",
+ "xiuxian-zhenfa",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "xiuxian-wendao-builtin"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "serde_yaml",
+ "toml 0.8.23",
  "xiuxian-wendao-core",
  "xiuxian-wendao-julia",
  "xiuxian-wendao-modelica",
  "xiuxian-wendao-runtime",
- "xiuxian-zhenfa",
- "xxhash-rust",
 ]
 
 [[package]]

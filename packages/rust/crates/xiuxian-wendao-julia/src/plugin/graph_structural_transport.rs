@@ -12,6 +12,7 @@ use xiuxian_wendao_runtime::transport::{
     normalize_flight_route, validate_flight_schema_version, validate_flight_timeout_secs,
 };
 
+use super::capability_manifest::discover_julia_graph_structural_binding_from_manifest_for_repository;
 use super::graph_structural::{
     GraphStructuralRouteKind, validate_graph_structural_filter_request_batch,
     validate_graph_structural_filter_response_batch,
@@ -149,9 +150,18 @@ fn build_graph_structural_flight_transport_binding(
     route_kind: GraphStructuralRouteKind,
 ) -> Result<Option<PluginCapabilityBinding>, RepoIntelligenceError> {
     let Some(options) = resolve_graph_structural_transport_options(repository, route_kind)? else {
-        return Ok(None);
+        return discover_julia_graph_structural_binding_from_manifest_for_repository(
+            repository, route_kind,
+        );
     };
+    build_graph_structural_flight_transport_binding_from_options(repository, route_kind, options)
+}
 
+fn build_graph_structural_flight_transport_binding_from_options(
+    repository: &RegisteredRepository,
+    route_kind: GraphStructuralRouteKind,
+    options: GraphStructuralTransportOptions,
+) -> Result<Option<PluginCapabilityBinding>, RepoIntelligenceError> {
     if let Some(false) = options.enabled {
         return Ok(None);
     }
@@ -460,8 +470,12 @@ mod tests {
     };
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
+    use tokio::runtime::Builder;
     use xiuxian_wendao_core::{
-        repo_intelligence::RepositoryPluginConfig, transport::PluginTransportKind,
+        repo_intelligence::{
+            RegisteredRepository, RepositoryPluginConfig, RepositoryRefreshPolicy,
+        },
+        transport::PluginTransportKind,
     };
     use xiuxian_wendao_runtime::transport::FLIGHT_SCHEMA_VERSION_METADATA_KEY;
 
@@ -484,7 +498,10 @@ mod tests {
         GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN, GRAPH_STRUCTURAL_TAG_SCORE_COLUMN,
         GraphStructuralRouteKind, JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION,
     };
-    use xiuxian_wendao_core::repo_intelligence::RegisteredRepository;
+    use crate::plugin::test_support::official_examples::{
+        reserve_real_service_port, spawn_real_wendaosearch_demo_capability_manifest_service,
+        wait_for_service_ready_with_attempts,
+    };
 
     #[test]
     fn build_graph_structural_flight_transport_client_returns_none_without_config() {
@@ -632,6 +649,60 @@ mod tests {
                 .contains("Julia plugin field `timeout_secs` must be an unsigned integer"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn build_graph_structural_flight_transport_client_falls_back_to_capability_manifest() {
+        let port = reserve_real_service_port();
+        let base_url = format!("http://127.0.0.1:{port}");
+        let _service = spawn_real_wendaosearch_demo_capability_manifest_service(port);
+        Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap_or_else(|error| panic!("build wait runtime: {error}"))
+            .block_on(wait_for_service_ready_with_attempts(
+                &format!("http://127.0.0.1:{port}"),
+                600,
+            ))
+            .unwrap_or_else(|error| {
+                panic!("wait for real WendaoSearch capability-manifest service: {error}")
+            });
+
+        let repository = RegisteredRepository {
+            id: "repo-julia".to_string(),
+            path: None,
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![RepositoryPluginConfig::Config {
+                id: "julia".to_string(),
+                options: serde_json::json!({
+                    "capability_manifest_transport": {
+                        "base_url": base_url,
+                        "route": "/plugin/capabilities",
+                        "schema_version": "v0-draft"
+                    }
+                }),
+            }],
+        };
+
+        let rerank_client = build_graph_structural_flight_transport_client(
+            &repository,
+            GraphStructuralRouteKind::StructuralRerank,
+        )
+        .unwrap_or_else(|error| panic!("manifest fallback should parse rerank route: {error}"))
+        .unwrap_or_else(|| panic!("manifest fallback rerank client should exist"));
+        let filter_client = build_graph_structural_flight_transport_client(
+            &repository,
+            GraphStructuralRouteKind::ConstraintFilter,
+        )
+        .unwrap_or_else(|error| panic!("manifest fallback should parse filter route: {error}"))
+        .unwrap_or_else(|| panic!("manifest fallback filter client should exist"));
+
+        assert_eq!(rerank_client.flight_base_url(), base_url);
+        assert_eq!(rerank_client.flight_route(), GRAPH_STRUCTURAL_RERANK_ROUTE);
+        assert_eq!(filter_client.flight_base_url(), base_url);
+        assert_eq!(filter_client.flight_route(), GRAPH_STRUCTURAL_FILTER_ROUTE);
     }
 
     #[test]

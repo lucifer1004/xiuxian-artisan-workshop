@@ -46,46 +46,14 @@ pub fn resolve_link_graph_rerank_binding() -> Option<PluginCapabilityBinding> {
 /// retrieval policy settings.
 #[must_use]
 pub fn resolve_link_graph_rerank_score_weights() -> Option<RerankScoreWeights> {
-    #[cfg(feature = "julia")]
-    {
-        let runtime = resolve_link_graph_retrieval_policy_runtime();
-        let defaults = RerankScoreWeights::default();
-        let vector_weight = runtime.julia_rerank.vector_weight;
-        let similarity_weight = runtime.julia_rerank.similarity_weight;
-
-        if vector_weight.is_none() && similarity_weight.is_none() {
-            return None;
-        }
-
-        RerankScoreWeights::new(
-            vector_weight.unwrap_or(defaults.vector_weight),
-            similarity_weight.unwrap_or(defaults.semantic_weight),
-        )
-        .ok()
-    }
-
-    #[cfg(not(feature = "julia"))]
-    {
-        None
-    }
+    resolve_link_graph_retrieval_policy_runtime().rerank_score_weights()
 }
 
 /// Resolve the current rerank-side schema version from Wendao retrieval
 /// policy settings.
 #[must_use]
 pub fn resolve_link_graph_rerank_schema_version() -> Option<String> {
-    #[cfg(feature = "julia")]
-    {
-        resolve_link_graph_retrieval_policy_runtime()
-            .julia_rerank
-            .schema_version
-            .filter(|value| !value.trim().is_empty())
-    }
-
-    #[cfg(not(feature = "julia"))]
-    {
-        None
-    }
+    resolve_link_graph_retrieval_policy_runtime().rerank_schema_version()
 }
 
 /// Resolve the current file-backed Flight rerank host settings from Wendao

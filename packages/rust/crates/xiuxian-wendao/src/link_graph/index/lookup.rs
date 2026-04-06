@@ -60,6 +60,22 @@ impl LinkGraphIndex {
         self.extract_lineage(anchor_id)
     }
 
+    pub(crate) fn extract_lineage(&self, anchor_id: &str) -> Option<Vec<String>> {
+        let anchor_id = self.canonical_anchor_id(anchor_id)?;
+        let doc_id = canonical_doc_id(anchor_id.as_str());
+
+        if anchor_id == doc_id {
+            return self.root_lineage(doc_id);
+        }
+
+        let roots = self.get_tree(doc_id)?;
+        let node_ids = collect_lineage_node_ids(self.get_node_parent_map(), anchor_id.as_str())?;
+        node_ids
+            .into_iter()
+            .map(|node_id| find_node_title(roots, node_id.as_str()))
+            .collect()
+    }
+
     pub(crate) fn has_doc(&self, doc_id: &str) -> bool {
         self.docs_by_id.contains_key(doc_id)
     }
@@ -78,6 +94,43 @@ impl LinkGraphIndex {
 
     pub(crate) fn resolve_doc_id_pub(&self, stem_or_id: &str) -> Option<&str> {
         self.resolve_doc_id(stem_or_id)
+    }
+
+    fn canonical_anchor_id(&self, anchor_id: &str) -> Option<String> {
+        let trimmed = anchor_id.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        if let Some((doc_ref, suffix)) = trimmed.split_once('#') {
+            let doc_id = if self.has_doc(doc_ref) {
+                doc_ref.to_string()
+            } else {
+                self.resolve_doc_id_pub(doc_ref)?.to_string()
+            };
+            let suffix = suffix.trim_matches(|ch: char| ch == '#' || ch.is_whitespace());
+            return if suffix.is_empty() {
+                Some(doc_id)
+            } else {
+                Some(format!("{doc_id}#{suffix}"))
+            };
+        }
+
+        if self.has_doc(trimmed) {
+            return Some(trimmed.to_string());
+        }
+
+        self.resolve_doc_id_pub(trimmed).map(str::to_string)
+    }
+
+    fn root_lineage(&self, doc_id: &str) -> Option<Vec<String>> {
+        if let Some(roots) = self.get_tree(doc_id)
+            && let Some(root) = roots.first()
+        {
+            return Some(vec![root.title.clone()]);
+        }
+
+        self.get_doc(doc_id).map(|doc| vec![doc.title.clone()])
     }
 
     /// Get document relative path by stem or ID.
@@ -157,4 +210,43 @@ impl LinkGraphIndex {
     pub fn build_topology_index(&self) -> super::super::addressing::TopologyIndex {
         super::super::addressing::TopologyIndex::build_from_trees(&self.trees_by_doc)
     }
+}
+
+fn canonical_doc_id(anchor_id: &str) -> &str {
+    anchor_id
+        .split_once('#')
+        .map_or(anchor_id, |(doc_id, _)| doc_id)
+}
+
+fn collect_lineage_node_ids(
+    node_parent_map: &HashMap<String, Option<String>>,
+    target_node_id: &str,
+) -> Option<Vec<String>> {
+    let mut node_ids = Vec::new();
+    let mut current = Some(target_node_id.to_string());
+    let mut visited = std::collections::HashSet::new();
+
+    while let Some(node_id) = current {
+        if !visited.insert(node_id.clone()) {
+            return None;
+        }
+        let parent_id = node_parent_map.get(node_id.as_str())?.clone();
+        node_ids.push(node_id);
+        current = parent_id;
+    }
+
+    node_ids.reverse();
+    Some(node_ids)
+}
+
+fn find_node_title(nodes: &[PageIndexNode], target_node_id: &str) -> Option<String> {
+    for node in nodes {
+        if node.node_id == target_node_id {
+            return Some(node.title.clone());
+        }
+        if let Some(title) = find_node_title(&node.children, target_node_id) {
+            return Some(title);
+        }
+    }
+    None
 }

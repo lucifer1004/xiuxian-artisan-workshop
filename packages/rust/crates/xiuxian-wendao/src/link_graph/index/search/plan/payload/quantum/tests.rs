@@ -1,20 +1,12 @@
 use super::rerank::{
-    apply_plugin_rerank_scores, attach_plugin_rerank_request_metadata,
-    build_plugin_rerank_telemetry, build_plugin_rerank_transport_client,
-    collect_plugin_rerank_trace_ids, plugin_rerank_request_trace_id,
+    apply_plugin_rerank_scores, build_plugin_rerank_telemetry, collect_plugin_rerank_anchors,
+    collect_plugin_rerank_trace_ids,
 };
-use crate::link_graph::models::QuantumContext;
-use arrow::array::StringArray;
-use arrow::datatypes::{DataType, Field, Schema};
-use arrow::record_batch::RecordBatch;
+use crate::link_graph::models::{QuantumAnchorHit, QuantumContext};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use xiuxian_wendao_core::transport::PluginTransportKind;
-use xiuxian_wendao_julia::PluginArrowScoreRow;
-use xiuxian_wendao_julia::compatibility::link_graph::{
-    LinkGraphJuliaRerankRuntimeConfig, build_rerank_provider_binding,
-};
 use xiuxian_wendao_runtime::transport::NegotiatedTransportSelection;
+use xiuxian_wendao_runtime::transport::PluginArrowScoreRow;
 
 #[test]
 fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
@@ -73,64 +65,6 @@ fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
 }
 
 #[test]
-fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
-    let binding = build_rerank_provider_binding(&LinkGraphJuliaRerankRuntimeConfig {
-        base_url: Some("http://127.0.0.1:8090".to_string()),
-        route: Some("/custom-rerank".to_string()),
-        health_route: Some("/healthz".to_string()),
-        schema_version: Some("v1".to_string()),
-        timeout_secs: Some(15),
-        service_mode: None,
-        analyzer_config_path: None,
-        analyzer_strategy: None,
-        vector_weight: None,
-        similarity_weight: None,
-    });
-    let client = build_plugin_rerank_transport_client(&binding)
-        .unwrap_or_else(|error| panic!("config should be valid: {error}"));
-    let Some(client) = client else {
-        panic!("base url should enable transport");
-    };
-
-    assert_eq!(
-        client.selection().selected_transport,
-        PluginTransportKind::ArrowFlight
-    );
-    assert_eq!(client.flight_base_url(), "http://127.0.0.1:8090");
-    assert_eq!(client.flight_route(), "/custom-rerank");
-}
-
-#[test]
-fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
-    let mut binding = build_rerank_provider_binding(&LinkGraphJuliaRerankRuntimeConfig {
-        base_url: Some("http://127.0.0.1:18080".to_string()),
-        route: Some("/rerank".to_string()),
-        health_route: Some("/healthz".to_string()),
-        schema_version: Some("v2".to_string()),
-        timeout_secs: Some(20),
-        service_mode: None,
-        analyzer_config_path: None,
-        analyzer_strategy: None,
-        vector_weight: None,
-        similarity_weight: None,
-    });
-    binding.transport = PluginTransportKind::ArrowFlight;
-
-    let client = build_plugin_rerank_transport_client(&binding)
-        .unwrap_or_else(|error| panic!("flight binding should be negotiable: {error}"));
-    let Some(client) = client else {
-        panic!("flight binding should materialize a lazy Flight client");
-    };
-
-    assert_eq!(
-        client.selection().selected_transport,
-        PluginTransportKind::ArrowFlight
-    );
-    assert_eq!(client.flight_base_url(), "http://127.0.0.1:18080");
-    assert_eq!(client.flight_route(), "/rerank");
-}
-
-#[test]
 fn collect_plugin_rerank_trace_ids_deduplicates_non_empty_values() {
     let response_rows = BTreeMap::from([
         (
@@ -171,6 +105,50 @@ fn collect_plugin_rerank_trace_ids_deduplicates_non_empty_values() {
 }
 
 #[test]
+fn collect_plugin_rerank_anchors_preserves_anchor_ids_and_scores() {
+    let contexts = vec![
+        QuantumContext {
+            anchor_id: "doc-1#a".to_string(),
+            doc_id: "doc-1".to_string(),
+            path: "notes/doc-1.md".to_string(),
+            semantic_path: vec![],
+            trace_label: None,
+            related_clusters: vec![],
+            saliency_score: 0.2,
+            vector_score: 0.6,
+            topology_score: 0.1,
+        },
+        QuantumContext {
+            anchor_id: "doc-2#b".to_string(),
+            doc_id: "doc-2".to_string(),
+            path: "notes/doc-2.md".to_string(),
+            semantic_path: vec![],
+            trace_label: None,
+            related_clusters: vec![],
+            saliency_score: 0.9,
+            vector_score: 0.5,
+            topology_score: 0.2,
+        },
+    ];
+
+    let anchors = collect_plugin_rerank_anchors(&contexts);
+
+    assert_eq!(
+        anchors,
+        vec![
+            QuantumAnchorHit {
+                anchor_id: "doc-1#a".to_string(),
+                vector_score: 0.6,
+            },
+            QuantumAnchorHit {
+                anchor_id: "doc-2#b".to_string(),
+                vector_score: 0.5,
+            },
+        ]
+    );
+}
+
+#[test]
 fn build_plugin_rerank_telemetry_carries_transport_selection_and_fallback() {
     let telemetry = build_plugin_rerank_telemetry(
         Some(&NegotiatedTransportSelection {
@@ -194,41 +172,4 @@ fn build_plugin_rerank_telemetry_carries_transport_selection_and_fallback() {
     assert_eq!(telemetry.fallback_reason, None);
     assert_eq!(telemetry.trace_ids, vec!["trace-123".to_string()]);
     assert_eq!(telemetry.error, None);
-}
-
-#[test]
-fn plugin_rerank_request_trace_id_normalizes_query_text() {
-    assert_eq!(
-        plugin_rerank_request_trace_id("  alpha   signal "),
-        "julia-rerank:alpha_signal"
-    );
-    assert_eq!(plugin_rerank_request_trace_id(""), "julia-rerank:query");
-}
-
-#[test]
-fn attach_plugin_rerank_request_metadata_sets_schema_metadata() {
-    let batch = RecordBatch::try_new(
-        Arc::new(Schema::new(vec![Field::new(
-            "doc_id",
-            DataType::Utf8,
-            false,
-        )])),
-        vec![Arc::new(StringArray::from(vec!["doc-1"]))],
-    )
-    .unwrap_or_else(|error| panic!("batch: {error}"));
-
-    let traced_batch = attach_plugin_rerank_request_metadata(&batch, "alpha signal", "v1")
-        .unwrap_or_else(|error| panic!("metadata: {error}"));
-
-    assert_eq!(
-        traced_batch.schema().metadata().get("trace_id"),
-        Some(&"julia-rerank:alpha_signal".to_string())
-    );
-    assert_eq!(
-        traced_batch
-            .schema()
-            .metadata()
-            .get("wendao.schema_version"),
-        Some(&"v1".to_string())
-    );
 }

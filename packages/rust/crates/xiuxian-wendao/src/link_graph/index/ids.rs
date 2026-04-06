@@ -1,5 +1,5 @@
 use super::LinkGraphIndex;
-use crate::link_graph::parser::normalize_alias;
+use crate::parsers::markdown::normalize_alias;
 use std::collections::HashSet;
 
 impl LinkGraphIndex {

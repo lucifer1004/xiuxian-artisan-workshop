@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::link_graph::index::build::assemble::types::EdgeTables;
-use crate::link_graph::parser::{ParsedNote, normalize_alias};
+use crate::parsers::markdown::{ParsedNote, normalize_alias};
 
 pub(crate) fn build_edge_tables(
     parsed_notes: &[ParsedNote],
@@ -36,30 +36,26 @@ pub(crate) fn build_edge_tables(
         }
 
         for section in &parsed.sections {
-            let source_node_id = if section.heading_path.is_empty() {
-                from_id.clone()
-            } else {
-                format!("{}#{}", from_id, section.heading_path.replace(" / ", "/"))
-            };
-            let pd_edges = crate::link_graph::index::build::property_drawer_edges::extract_property_drawer_edges(
-                &source_node_id,
-                &section.attributes,
-            );
+            let pd_edges =
+                crate::link_graph::index::build::property_drawer_edges::extract_property_drawer_edges(
+                    from_id,
+                    section,
+                    alias_to_doc_id,
+                );
 
             for edge in pd_edges {
-                let normalized_target = normalize_alias(&edge.to);
-                let Some(to_id) = alias_to_doc_id.get(&normalized_target).cloned() else {
-                    continue;
-                };
-                if to_id == *from_id {
+                if edge.to == *from_id {
                     continue;
                 }
                 let inserted = outgoing
                     .entry(edge.from.clone())
                     .or_default()
-                    .insert(to_id.clone());
+                    .insert(edge.to.clone());
                 if inserted {
-                    incoming.entry(to_id).or_default().insert(edge.from.clone());
+                    incoming
+                        .entry(edge.to)
+                        .or_default()
+                        .insert(edge.from.clone());
                     edge_count += 1;
                 }
             }

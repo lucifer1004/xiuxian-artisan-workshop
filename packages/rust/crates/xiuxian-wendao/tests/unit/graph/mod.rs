@@ -20,7 +20,7 @@
 //! query-time tool relevance, and export/import roundtrip.
 
 use tempfile::TempDir;
-use xiuxian_wendao::graph::{KnowledgeGraph, SkillDoc, entity_from_dict};
+use xiuxian_wendao::graph::{KnowledgeGraph, SkillDoc};
 use xiuxian_wendao::{Entity, EntityType, Relation, RelationType};
 
 fn has_valkey() -> bool {

@@ -2,10 +2,12 @@ use super::*;
 use crate::set_link_graph_wendao_config_override;
 use serial_test::serial;
 use std::fs;
-use xiuxian_wendao_julia::integration_support::{
-    julia_gateway_artifact_default_strategy, julia_gateway_artifact_expected_json_fragments,
-    julia_gateway_artifact_expected_toml_fragments, julia_gateway_artifact_path,
-    julia_gateway_artifact_runtime_config_toml,
+use xiuxian_wendao_builtin::{
+    linked_builtin_julia_gateway_artifact_default_strategy,
+    linked_builtin_julia_gateway_artifact_expected_json_fragments,
+    linked_builtin_julia_gateway_artifact_expected_toml_fragments,
+    linked_builtin_julia_gateway_artifact_path,
+    linked_builtin_julia_gateway_artifact_runtime_config_toml,
 };
 
 fn tempdir_or_panic() -> tempfile::TempDir {
@@ -20,7 +22,7 @@ fn write_config_and_set_override(temp: &tempfile::TempDir, body: &str) {
 }
 
 fn plugin_selector_or_panic() -> PluginArtifactSelector {
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
 
     build_plugin_artifact_selector(&plugin_id, &artifact_id)
         .unwrap_or_else(|error| panic!("build plugin selector: {error}"))
@@ -28,7 +30,7 @@ fn plugin_selector_or_panic() -> PluginArtifactSelector {
 
 #[test]
 fn wendao_plugin_artifact_args_deserialize_selector_and_format() {
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
     let args: WendaoPluginArtifactArgs = serde_json::from_value(serde_json::json!({
         "plugin_id": plugin_id.clone(),
         "artifact_id": artifact_id.clone(),
@@ -46,7 +48,7 @@ fn wendao_plugin_artifact_args_deserialize_selector_and_format() {
 
 #[test]
 fn wendao_plugin_artifact_args_default_to_toml_output() {
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
     let args: WendaoPluginArtifactArgs = serde_json::from_value(serde_json::json!({
         "plugin_id": plugin_id.clone(),
         "artifact_id": artifact_id.clone()
@@ -61,7 +63,7 @@ fn wendao_plugin_artifact_args_default_to_toml_output() {
 
 #[test]
 fn wendao_plugin_artifact_args_deserialize_output_path() {
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
     let args: WendaoPluginArtifactArgs = serde_json::from_value(serde_json::json!({
         "plugin_id": plugin_id.clone(),
         "artifact_id": artifact_id.clone(),
@@ -82,16 +84,16 @@ fn render_plugin_artifact_toml_uses_runtime_config() {
     let temp = tempdir_or_panic();
     write_config_and_set_override(
         &temp,
-        &julia_gateway_artifact_runtime_config_toml(
-            Some(julia_gateway_artifact_default_strategy()),
-        ),
+        &linked_builtin_julia_gateway_artifact_runtime_config_toml(Some(
+            linked_builtin_julia_gateway_artifact_default_strategy(),
+        )),
     );
 
     let selector = plugin_selector_or_panic();
     let rendered = render_plugin_artifact_toml(&selector)
         .unwrap_or_else(|error| panic!("render toml: {error}"));
 
-    for fragment in julia_gateway_artifact_expected_toml_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_toml_fragments() {
         assert!(
             rendered.contains(&fragment),
             "expected rendered TOML to contain `{fragment}`: {rendered}"
@@ -100,7 +102,7 @@ fn render_plugin_artifact_toml_uses_runtime_config() {
     assert!(rendered.contains("generated_at = "));
     assert!(rendered.contains(&format!(
         "\"{}\"",
-        julia_gateway_artifact_default_strategy()
+        linked_builtin_julia_gateway_artifact_default_strategy()
     )));
 }
 
@@ -110,16 +112,16 @@ fn render_plugin_artifact_json_uses_runtime_config() {
     let temp = tempdir_or_panic();
     write_config_and_set_override(
         &temp,
-        &julia_gateway_artifact_runtime_config_toml(
-            Some(julia_gateway_artifact_default_strategy()),
-        ),
+        &linked_builtin_julia_gateway_artifact_runtime_config_toml(Some(
+            linked_builtin_julia_gateway_artifact_default_strategy(),
+        )),
     );
 
     let selector = plugin_selector_or_panic();
     let rendered = render_plugin_artifact_json(&selector)
         .unwrap_or_else(|error| panic!("render json: {error}"));
 
-    for fragment in julia_gateway_artifact_expected_json_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_json_fragments() {
         assert!(
             rendered.contains(&fragment),
             "expected rendered JSON to contain `{fragment}`: {rendered}"
@@ -132,13 +134,16 @@ fn render_plugin_artifact_json_uses_runtime_config() {
 #[serial]
 fn render_plugin_artifact_uses_selected_format() {
     let temp = tempdir_or_panic();
-    write_config_and_set_override(&temp, &julia_gateway_artifact_runtime_config_toml(None));
+    write_config_and_set_override(
+        &temp,
+        &linked_builtin_julia_gateway_artifact_runtime_config_toml(None),
+    );
 
     let selector = plugin_selector_or_panic();
     let rendered = render_plugin_artifact(&selector, WendaoPluginArtifactOutputFormat::Json)
         .unwrap_or_else(|error| panic!("render generic plugin artifact: {error}"));
 
-    for fragment in julia_gateway_artifact_expected_json_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_json_fragments() {
         assert!(
             rendered.contains(&fragment),
             "expected rendered JSON to contain `{fragment}`: {rendered}"
@@ -150,8 +155,11 @@ fn render_plugin_artifact_uses_selected_format() {
 #[serial]
 fn export_plugin_artifact_writes_json_file_when_requested() {
     let temp = tempdir_or_panic();
-    let (plugin_id, artifact_id) = julia_gateway_artifact_path();
-    write_config_and_set_override(&temp, &julia_gateway_artifact_runtime_config_toml(None));
+    let (plugin_id, artifact_id) = linked_builtin_julia_gateway_artifact_path();
+    write_config_and_set_override(
+        &temp,
+        &linked_builtin_julia_gateway_artifact_runtime_config_toml(None),
+    );
 
     let output_path = temp.path().join("exports").join("plugin-artifact.json");
     let message = export_plugin_artifact(&WendaoPluginArtifactArgs {
@@ -168,7 +176,7 @@ fn export_plugin_artifact_writes_json_file_when_requested() {
     let written = fs::read_to_string(&output_path)
         .unwrap_or_else(|error| panic!("read written json: {error}"));
 
-    for fragment in julia_gateway_artifact_expected_json_fragments() {
+    for fragment in linked_builtin_julia_gateway_artifact_expected_json_fragments() {
         assert!(
             written.contains(&fragment),
             "expected written JSON to contain `{fragment}`: {written}"

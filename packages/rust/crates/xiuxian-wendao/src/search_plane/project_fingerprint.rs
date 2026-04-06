@@ -12,7 +12,7 @@ use crate::gateway::studio::search::source_index::{
     ast_search_lang, is_markdown_path, should_skip_entry,
 };
 use crate::gateway::studio::types::UiProjectConfig;
-use crate::link_graph::parser::is_supported_note;
+use crate::parsers::markdown::is_supported_note;
 use crate::search_plane::SearchFileFingerprint;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

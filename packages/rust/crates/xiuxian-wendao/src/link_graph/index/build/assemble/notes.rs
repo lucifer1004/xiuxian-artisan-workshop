@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::link_graph::index::build::assemble::types::NoteTables;
 use crate::link_graph::index::{IndexedSection, doc_sort_key};
 use crate::link_graph::models::LinkGraphAttachment;
-use crate::link_graph::parser::{ParsedNote, normalize_alias, parse_note};
+use crate::parsers::markdown::{ParsedNote, normalize_alias, parse_note};
 use rayon::prelude::*;
 
 pub(crate) fn parse_notes(root: &Path, candidate_paths: Vec<PathBuf>) -> Vec<ParsedNote> {

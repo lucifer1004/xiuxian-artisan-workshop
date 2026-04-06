@@ -11,7 +11,8 @@ use xiuxian_wendao_core::repo_intelligence::{RegisteredRepository, RepoIntellige
 
 use super::graph_structural::{
     GRAPH_STRUCTURAL_ACCEPTED_COLUMN, GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN,
-    GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
+    GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
+    GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN,
     GRAPH_STRUCTURAL_CONSTRAINT_KIND_COLUMN, GRAPH_STRUCTURAL_DEPENDENCY_SCORE_COLUMN,
     GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN, GRAPH_STRUCTURAL_EXPLANATION_COLUMN,
@@ -28,8 +29,14 @@ use super::graph_structural::{
     validate_graph_structural_rerank_response_batch,
 };
 use super::graph_structural_projection::{
+    GraphStructuralFilterConstraint, GraphStructuralGenericTopologyCandidateInputs,
     GraphStructuralKeywordOverlapCandidateInputs, GraphStructuralKeywordOverlapQueryInputs,
     GraphStructuralKeywordOverlapRawCandidateInputs,
+    GraphStructuralRawConnectedPairCollectionCandidateInputs,
+    build_graph_structural_generic_topology_filter_request_batch,
+    build_graph_structural_generic_topology_filter_request_batch_from_raw_connected_pair_collections,
+    build_graph_structural_generic_topology_rerank_request_batch,
+    build_graph_structural_generic_topology_rerank_request_batch_from_raw_connected_pair_collections,
     build_graph_structural_keyword_overlap_pair_rerank_request_batch,
     build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_raw_candidates,
 };
@@ -62,6 +69,10 @@ pub struct GraphStructuralRerankRequestRow {
     pub edge_constraint_kinds: Vec<String>,
     /// Node identifiers contained in the candidate subgraph.
     pub candidate_node_ids: Vec<String>,
+    /// Edge source identifiers aligned with `candidate_edge_kinds`.
+    pub candidate_edge_sources: Vec<String>,
+    /// Edge destination identifiers aligned with `candidate_edge_kinds`.
+    pub candidate_edge_destinations: Vec<String>,
     /// Edge kinds contained in the candidate subgraph.
     pub candidate_edge_kinds: Vec<String>,
 }
@@ -89,6 +100,10 @@ pub struct GraphStructuralFilterRequestRow {
     pub edge_constraint_kinds: Vec<String>,
     /// Node identifiers contained in the candidate subgraph.
     pub candidate_node_ids: Vec<String>,
+    /// Edge source identifiers aligned with `candidate_edge_kinds`.
+    pub candidate_edge_sources: Vec<String>,
+    /// Edge destination identifiers aligned with `candidate_edge_kinds`.
+    pub candidate_edge_destinations: Vec<String>,
     /// Edge kinds contained in the candidate subgraph.
     pub candidate_edge_kinds: Vec<String>,
 }
@@ -186,6 +201,13 @@ pub fn build_graph_structural_rerank_request_batch(
                 rows.iter().map(|row| row.candidate_node_ids.as_slice()),
             )),
             Arc::new(build_utf8_list_array(
+                rows.iter().map(|row| row.candidate_edge_sources.as_slice()),
+            )),
+            Arc::new(build_utf8_list_array(
+                rows.iter()
+                    .map(|row| row.candidate_edge_destinations.as_slice()),
+            )),
+            Arc::new(build_utf8_list_array(
                 rows.iter().map(|row| row.candidate_edge_kinds.as_slice()),
             )),
         ],
@@ -255,6 +277,13 @@ pub fn build_graph_structural_filter_request_batch(
             )),
             Arc::new(build_utf8_list_array(
                 rows.iter().map(|row| row.candidate_node_ids.as_slice()),
+            )),
+            Arc::new(build_utf8_list_array(
+                rows.iter().map(|row| row.candidate_edge_sources.as_slice()),
+            )),
+            Arc::new(build_utf8_list_array(
+                rows.iter()
+                    .map(|row| row.candidate_edge_destinations.as_slice()),
             )),
             Arc::new(build_utf8_list_array(
                 rows.iter().map(|row| row.candidate_edge_kinds.as_slice()),
@@ -413,6 +442,95 @@ pub async fn fetch_graph_structural_rerank_rows_for_repository(
     decode_graph_structural_rerank_score_rows(response_batches.as_slice())
 }
 
+/// Build one query-plus-generic-topology structural-rerank request batch,
+/// execute the repository-configured Julia graph-structural rerank transport,
+/// and decode the staged response rows.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the query-plus-generic-topology
+/// projection fails staged Julia-owned normalization, the remote roundtrip
+/// fails, or the decoded response violates the staged structural-rerank
+/// contract.
+pub async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository(
+    repository: &RegisteredRepository,
+    query: &super::graph_structural_projection::GraphStructuralQueryContext,
+    candidates: &[GraphStructuralGenericTopologyCandidateInputs],
+) -> Result<BTreeMap<String, GraphStructuralRerankScoreRow>, RepoIntelligenceError> {
+    let request_batch =
+        build_graph_structural_generic_topology_rerank_request_batch(query, candidates)?;
+    let request_batches = vec![request_batch];
+    fetch_graph_structural_rerank_rows_for_repository(repository, request_batches.as_slice()).await
+}
+
+/// Build one query-plus-raw-connected-pair-collection structural-rerank
+/// request batch, execute the repository-configured Julia graph-structural
+/// rerank transport, and decode the staged response rows.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the query-plus-collection projection
+/// fails staged Julia-owned normalization, the remote roundtrip fails, or the
+/// decoded response violates the staged structural-rerank contract.
+pub async fn fetch_graph_structural_generic_topology_rerank_rows_for_repository_from_raw_connected_pair_collections(
+    repository: &RegisteredRepository,
+    query: &super::graph_structural_projection::GraphStructuralQueryContext,
+    candidates: &[GraphStructuralRawConnectedPairCollectionCandidateInputs],
+) -> Result<BTreeMap<String, GraphStructuralRerankScoreRow>, RepoIntelligenceError> {
+    let request_batch =
+        build_graph_structural_generic_topology_rerank_request_batch_from_raw_connected_pair_collections(
+            query, candidates,
+        )?;
+    let request_batches = vec![request_batch];
+    fetch_graph_structural_rerank_rows_for_repository(repository, request_batches.as_slice()).await
+}
+
+/// Build one query-plus-generic-topology structural-filter request batch,
+/// execute the repository-configured Julia graph-structural filter transport,
+/// and decode the staged response rows.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the query-plus-generic-topology
+/// projection fails staged Julia-owned normalization, the remote roundtrip
+/// fails, or the decoded response violates the staged constraint-filter
+/// contract.
+pub async fn fetch_graph_structural_generic_topology_filter_rows_for_repository(
+    repository: &RegisteredRepository,
+    query: &super::graph_structural_projection::GraphStructuralQueryContext,
+    constraint: &GraphStructuralFilterConstraint,
+    candidates: &[GraphStructuralGenericTopologyCandidateInputs],
+) -> Result<BTreeMap<String, GraphStructuralFilterScoreRow>, RepoIntelligenceError> {
+    let request_batch = build_graph_structural_generic_topology_filter_request_batch(
+        query, constraint, candidates,
+    )?;
+    let request_batches = vec![request_batch];
+    fetch_graph_structural_filter_rows_for_repository(repository, request_batches.as_slice()).await
+}
+
+/// Build one query-plus-raw-connected-pair-collection structural-filter
+/// request batch, execute the repository-configured Julia graph-structural
+/// filter transport, and decode the staged response rows.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the query-plus-collection projection
+/// fails staged Julia-owned normalization, the remote roundtrip fails, or the
+/// decoded response violates the staged constraint-filter contract.
+pub async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_from_raw_connected_pair_collections(
+    repository: &RegisteredRepository,
+    query: &super::graph_structural_projection::GraphStructuralQueryContext,
+    constraint: &GraphStructuralFilterConstraint,
+    candidates: &[GraphStructuralRawConnectedPairCollectionCandidateInputs],
+) -> Result<BTreeMap<String, GraphStructuralFilterScoreRow>, RepoIntelligenceError> {
+    let request_batch =
+        build_graph_structural_generic_topology_filter_request_batch_from_raw_connected_pair_collections(
+            query, constraint, candidates,
+        )?;
+    let request_batches = vec![request_batch];
+    fetch_graph_structural_filter_rows_for_repository(repository, request_batches.as_slice()).await
+}
+
 /// Build one query-plus-candidate structural-rerank request batch, execute the
 /// repository-configured Julia graph-structural rerank transport, and decode
 /// the staged response rows.
@@ -477,7 +595,7 @@ pub async fn fetch_graph_structural_filter_rows_for_repository(
 }
 
 fn graph_structural_rerank_request_schema() -> Arc<Schema> {
-    debug_assert_eq!(GRAPH_STRUCTURAL_RERANK_REQUEST_COLUMNS.len(), 13);
+    debug_assert_eq!(GRAPH_STRUCTURAL_RERANK_REQUEST_COLUMNS.len(), 15);
     Arc::new(Schema::new(vec![
         utf8_field(GRAPH_STRUCTURAL_QUERY_ID_COLUMN),
         utf8_field(GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN),
@@ -491,12 +609,14 @@ fn graph_structural_rerank_request_schema() -> Arc<Schema> {
         list_utf8_field(GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN),
         list_utf8_field(GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN),
         list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN),
+        list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN),
+        list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN),
         list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
     ]))
 }
 
 fn graph_structural_filter_request_schema() -> Arc<Schema> {
-    debug_assert_eq!(GRAPH_STRUCTURAL_FILTER_REQUEST_COLUMNS.len(), 11);
+    debug_assert_eq!(GRAPH_STRUCTURAL_FILTER_REQUEST_COLUMNS.len(), 13);
     Arc::new(Schema::new(vec![
         utf8_field(GRAPH_STRUCTURAL_QUERY_ID_COLUMN),
         utf8_field(GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN),
@@ -508,6 +628,8 @@ fn graph_structural_filter_request_schema() -> Arc<Schema> {
         list_utf8_field(GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN),
         list_utf8_field(GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN),
         list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN),
+        list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN),
+        list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN),
         list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
     ]))
 }
@@ -665,476 +787,9 @@ fn graph_structural_decode_error(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
+#[path = "graph_structural_exchange_tests.rs"]
+mod tests;
 
-    use arrow::array::{
-        BooleanArray, Float64Array, ListArray, ListBuilder, StringArray, StringBuilder,
-    };
-    use arrow::datatypes::{DataType, Field, Schema};
-    use arrow::record_batch::RecordBatch;
-    use xiuxian_wendao_core::repo_intelligence::{
-        RegisteredRepository, RepositoryPluginConfig, RepositoryRefreshPolicy,
-    };
-
-    use crate::{
-        build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw,
-        build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs,
-        build_graph_structural_keyword_overlap_query_inputs,
-        build_graph_structural_keyword_overlap_raw_candidate_inputs,
-        graph_structural_pair_candidate_id,
-        julia_plugin_test_support::official_examples::{
-            reserve_real_service_port, spawn_real_wendaosearch_demo_structural_rerank_service,
-            wait_for_service_ready_with_attempts,
-        },
-    };
-
-    use super::{
-        GRAPH_STRUCTURAL_ACCEPTED_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
-        GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, GRAPH_STRUCTURAL_EXPLANATION_COLUMN,
-        GRAPH_STRUCTURAL_FEASIBLE_COLUMN, GRAPH_STRUCTURAL_FINAL_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN, GRAPH_STRUCTURAL_QUERY_ID_COLUMN,
-        GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN, GRAPH_STRUCTURAL_SEMANTIC_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN, GraphStructuralFilterRequestRow,
-        GraphStructuralFilterScoreRow, GraphStructuralRerankRequestRow,
-        GraphStructuralRerankScoreRow, build_graph_structural_filter_request_batch,
-        build_graph_structural_rerank_request_batch, decode_graph_structural_filter_score_rows,
-        decode_graph_structural_rerank_score_rows,
-        fetch_graph_structural_filter_rows_for_repository,
-        fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository,
-        fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates,
-        fetch_graph_structural_rerank_rows_for_repository,
-    };
-
-    #[test]
-    fn build_graph_structural_rerank_request_batch_uses_contract_columns() {
-        let batch =
-            build_graph_structural_rerank_request_batch(&[GraphStructuralRerankRequestRow {
-                query_id: "query-1".to_string(),
-                candidate_id: "candidate-a".to_string(),
-                retrieval_layer: 0,
-                query_max_layers: 2,
-                semantic_score: 0.7,
-                dependency_score: 0.6,
-                keyword_score: 0.4,
-                tag_score: 0.3,
-                anchor_planes: vec!["semantic".to_string()],
-                anchor_values: vec!["symbol:entry".to_string()],
-                edge_constraint_kinds: vec!["depends_on".to_string()],
-                candidate_node_ids: vec!["node-1".to_string(), "node-2".to_string()],
-                candidate_edge_kinds: vec!["depends_on".to_string()],
-            }])
-            .expect("rerank request batch");
-
-        assert_eq!(
-            batch.schema().field(0).name(),
-            GRAPH_STRUCTURAL_QUERY_ID_COLUMN
-        );
-        assert_eq!(
-            batch.schema().field(1).name(),
-            GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN
-        );
-        assert_eq!(
-            batch.schema().field(4).name(),
-            GRAPH_STRUCTURAL_SEMANTIC_SCORE_COLUMN
-        );
-        assert_eq!(
-            batch.schema().field(12).name(),
-            GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN
-        );
-    }
-
-    #[test]
-    fn build_graph_structural_filter_request_batch_rejects_misaligned_anchors() {
-        let error =
-            build_graph_structural_filter_request_batch(&[GraphStructuralFilterRequestRow {
-                query_id: "query-1".to_string(),
-                candidate_id: "candidate-a".to_string(),
-                retrieval_layer: 1,
-                query_max_layers: 3,
-                constraint_kind: "boundary-match".to_string(),
-                required_boundary_size: 2,
-                anchor_planes: vec!["semantic".to_string()],
-                anchor_values: vec!["symbol:entry".to_string(), "tag:core".to_string()],
-                edge_constraint_kinds: vec!["depends_on".to_string()],
-                candidate_node_ids: vec!["node-1".to_string()],
-                candidate_edge_kinds: vec!["depends_on".to_string()],
-            }])
-            .expect_err("misaligned anchors must fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("anchor columns must stay aligned"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn decode_graph_structural_rerank_score_rows_materializes_values() {
-        let rows = decode_graph_structural_rerank_score_rows(&[rerank_response_batch()])
-            .expect("rerank decode");
-
-        assert_eq!(
-            rows.get("candidate-a"),
-            Some(&GraphStructuralRerankScoreRow {
-                candidate_id: "candidate-a".to_string(),
-                feasible: true,
-                structural_score: 0.91,
-                final_score: 0.87,
-                pin_assignment: vec!["pin:entry".to_string(), "pin:exit".to_string()],
-                explanation: "accepted".to_string(),
-            })
-        );
-    }
-
-    #[test]
-    fn decode_graph_structural_filter_score_rows_materializes_values() {
-        let rows = decode_graph_structural_filter_score_rows(&[filter_response_batch()])
-            .expect("filter decode");
-
-        assert_eq!(
-            rows.get("candidate-a"),
-            Some(&GraphStructuralFilterScoreRow {
-                candidate_id: "candidate-a".to_string(),
-                accepted: false,
-                structural_score: 0.52,
-                pin_assignment: vec!["pin:entry".to_string()],
-                rejection_reason: "missing boundary".to_string(),
-            })
-        );
-    }
-
-    #[tokio::test]
-    async fn fetch_graph_structural_rerank_rows_for_repository_rejects_missing_transport() {
-        let repository = RegisteredRepository {
-            id: "demo".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({}),
-            }],
-        };
-
-        let batch =
-            build_graph_structural_rerank_request_batch(&[GraphStructuralRerankRequestRow {
-                query_id: "query-1".to_string(),
-                candidate_id: "candidate-a".to_string(),
-                retrieval_layer: 0,
-                query_max_layers: 2,
-                semantic_score: 0.7,
-                dependency_score: 0.6,
-                keyword_score: 0.4,
-                tag_score: 0.3,
-                anchor_planes: vec!["semantic".to_string()],
-                anchor_values: vec!["symbol:entry".to_string()],
-                edge_constraint_kinds: vec!["depends_on".to_string()],
-                candidate_node_ids: vec!["node-1".to_string()],
-                candidate_edge_kinds: vec!["depends_on".to_string()],
-            }])
-            .expect("rerank request batch");
-
-        let error = fetch_graph_structural_rerank_rows_for_repository(&repository, &[batch])
-            .await
-            .expect_err("missing graph-structural transport must fail");
-        assert!(
-            error.to_string().contains("/graph/structural/rerank"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_rejects_missing_transport()
-     {
-        let repository = RegisteredRepository {
-            id: "demo".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({}),
-            }],
-        };
-
-        let error = fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository(
-            &repository,
-            &build_graph_structural_keyword_overlap_query_inputs(
-                "query-1",
-                0,
-                2,
-                vec!["alpha".to_string()],
-                vec!["depends_on".to_string()],
-            ),
-            &[
-                build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw(
-                    build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                        build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
-                            "node-1",
-                            "node-2",
-                            vec!["depends_on".to_string()],
-                            vec!["alpha".to_string(), "core".to_string()],
-                            vec!["core".to_string()],
-                        ),
-                        0.7,
-                        0.6,
-                        true,
-                    ),
-                ),
-            ],
-        )
-        .await
-        .expect_err("missing graph-structural transport must fail");
-        assert!(
-            error.to_string().contains("/graph/structural/rerank"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_rejects_missing_transport()
-     {
-        let repository = RegisteredRepository {
-            id: "demo".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({}),
-            }],
-        };
-
-        let error =
-            fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
-                &repository,
-                &build_graph_structural_keyword_overlap_query_inputs(
-                    "query-raw",
-                    0,
-                    2,
-                    vec!["alpha".to_string()],
-                    vec!["depends_on".to_string()],
-                ),
-                &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                    build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
-                        "node-1",
-                        "node-2",
-                        vec!["depends_on".to_string()],
-                        vec!["alpha".to_string(), "core".to_string()],
-                        vec!["core".to_string()],
-                    ),
-                    0.7,
-                    0.6,
-                    true,
-                )],
-            )
-            .await
-            .expect_err("missing graph-structural transport must fail");
-        assert!(
-            error.to_string().contains("/graph/structural/rerank"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn fetch_graph_structural_filter_rows_for_repository_rejects_missing_transport() {
-        let repository = RegisteredRepository {
-            id: "demo".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({}),
-            }],
-        };
-
-        let batch =
-            build_graph_structural_filter_request_batch(&[GraphStructuralFilterRequestRow {
-                query_id: "query-1".to_string(),
-                candidate_id: "candidate-a".to_string(),
-                retrieval_layer: 1,
-                query_max_layers: 3,
-                constraint_kind: "boundary-match".to_string(),
-                required_boundary_size: 2,
-                anchor_planes: vec!["semantic".to_string()],
-                anchor_values: vec!["symbol:entry".to_string()],
-                edge_constraint_kinds: vec!["depends_on".to_string()],
-                candidate_node_ids: vec!["node-1".to_string()],
-                candidate_edge_kinds: vec!["depends_on".to_string()],
-            }])
-            .expect("filter request batch");
-
-        let error = fetch_graph_structural_filter_rows_for_repository(&repository, &[batch])
-            .await
-            .expect_err("missing graph-structural transport must fail");
-        assert!(
-            error.to_string().contains("/graph/structural/filter"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_demo_service()
-     {
-        let port = reserve_real_service_port();
-        let base_url = format!("http://127.0.0.1:{port}");
-        let mut service = spawn_real_wendaosearch_demo_structural_rerank_service(port);
-        let repository = RegisteredRepository {
-            id: "demo".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({
-                    "graph_structural_transport": {
-                        "base_url": base_url,
-                        "structural_rerank": {
-                            "route": "/graph/structural/rerank",
-                            "schema_version": "v0-draft"
-                        }
-                    }
-                }),
-            }],
-        };
-
-        wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-            .await
-            .unwrap_or_else(|error| {
-                panic!("wait for real WendaoSearch structural Flight service: {error}")
-            });
-
-        let rows =
-            fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
-                &repository,
-                &build_graph_structural_keyword_overlap_query_inputs(
-                    "query-live",
-                    0,
-                    2,
-                    vec!["alpha".to_string()],
-                    vec!["depends_on".to_string()],
-                ),
-                &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                    build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
-                        "node-1",
-                        "node-2",
-                        vec!["depends_on".to_string()],
-                        vec!["alpha".to_string(), "core".to_string()],
-                        vec!["core".to_string()],
-                    ),
-                    0.7,
-                    0.6,
-                    true,
-                )],
-            )
-            .await
-            .unwrap_or_else(|error| {
-                panic!("real WendaoSearch graph-structural rerank should succeed: {error}")
-            });
-
-        let candidate_id = graph_structural_pair_candidate_id("node-1", "node-2")
-            .expect("stable pair candidate id");
-        let row = rows
-            .get(&candidate_id)
-            .unwrap_or_else(|| panic!("missing candidate `{candidate_id}` in live response"));
-        assert_eq!(row.candidate_id, candidate_id);
-        assert!(row.feasible);
-        assert!((row.structural_score - 0.935).abs() < 1e-12);
-        assert!((row.final_score - 1.035).abs() < 1e-12);
-        assert_eq!(
-            row.pin_assignment,
-            vec!["node-1".to_string(), "node-2".to_string()]
-        );
-        assert_eq!(
-            row.explanation,
-            "demo feasible candidate with 2 nodes and 1 edge kinds"
-        );
-
-        service.kill();
-    }
-
-    fn rerank_response_batch() -> RecordBatch {
-        RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new(GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, DataType::Utf8, false),
-                Field::new(GRAPH_STRUCTURAL_FEASIBLE_COLUMN, DataType::Boolean, false),
-                Field::new(
-                    GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN,
-                    DataType::Float64,
-                    false,
-                ),
-                Field::new(
-                    GRAPH_STRUCTURAL_FINAL_SCORE_COLUMN,
-                    DataType::Float64,
-                    false,
-                ),
-                Field::new(
-                    GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN,
-                    DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
-                    false,
-                ),
-                Field::new(GRAPH_STRUCTURAL_EXPLANATION_COLUMN, DataType::Utf8, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["candidate-a"])),
-                Arc::new(BooleanArray::from(vec![true])),
-                Arc::new(Float64Array::from(vec![0.91])),
-                Arc::new(Float64Array::from(vec![0.87])),
-                Arc::new(list_utf8_array(vec![vec!["pin:entry", "pin:exit"]])),
-                Arc::new(StringArray::from(vec!["accepted"])),
-            ],
-        )
-        .expect("rerank response batch")
-    }
-
-    fn filter_response_batch() -> RecordBatch {
-        RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new(GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, DataType::Utf8, false),
-                Field::new(GRAPH_STRUCTURAL_ACCEPTED_COLUMN, DataType::Boolean, false),
-                Field::new(
-                    GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN,
-                    DataType::Float64,
-                    false,
-                ),
-                Field::new(
-                    GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN,
-                    DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
-                    false,
-                ),
-                Field::new(
-                    GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN,
-                    DataType::Utf8,
-                    false,
-                ),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["candidate-a"])),
-                Arc::new(BooleanArray::from(vec![false])),
-                Arc::new(Float64Array::from(vec![0.52])),
-                Arc::new(list_utf8_array(vec![vec!["pin:entry"]])),
-                Arc::new(StringArray::from(vec!["missing boundary"])),
-            ],
-        )
-        .expect("filter response batch")
-    }
-
-    fn list_utf8_array(values: Vec<Vec<&str>>) -> ListArray {
-        let mut builder = ListBuilder::new(StringBuilder::new());
-        for row in values {
-            for value in row {
-                builder.values().append_value(value);
-            }
-            builder.append(true);
-        }
-        builder.finish()
-    }
-}
+#[cfg(test)]
+#[path = "graph_structural_exchange_generic_topology_tests.rs"]
+mod generic_topology_tests;

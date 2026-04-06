@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::gateway::studio::analysis;
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{AnalysisEdgeKind, AnalysisNodeKind, MarkdownAnalysisResponse};
-use crate::link_graph::parser::code_observation::CodeObservation;
+use crate::parsers::markdown::code_observation::CodeObservation;
 
 #[derive(Debug, Default)]
 pub(super) struct DefinitionObservationHints {

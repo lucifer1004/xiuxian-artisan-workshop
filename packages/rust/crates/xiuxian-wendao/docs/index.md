@@ -20,6 +20,10 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 - [[01_core/102_atomic_mutation]]: Byte-level modification safety.
 - [[01_core/103_package_layering]]: Package ownership rules for `core`, `runtime`, `wendao`, and plugin crates.
 
+## 📁 02_parser: Parser Architecture
+
+- [02_parser/index](02_parser/index.md): Canonical parser namespace, parser-family matrix, and parser-vs-helper rules.
+
 ## 📁 03_features: Functional Ledger
 
 :PROPERTIES:

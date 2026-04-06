@@ -12,9 +12,9 @@ default-run = "wendao"
 default = ["zhenfa-router", "julia", "modelica"]
 pybindings = ["pyo3"]
 zhenfa-router = ["dep:axum", "dep:tower"]
-julia = ["dep:xiuxian-wendao-julia"]
-modelica = ["dep:xiuxian-wendao-modelica"]
-tree-sitter = ["modelica", "xiuxian-ast/modelica", "xiuxian-wendao-modelica/tree-sitter"]
+julia = ["xiuxian-wendao-builtin/julia"]
+modelica = ["xiuxian-wendao-builtin/modelica"]
+tree-sitter = ["modelica", "xiuxian-wendao-builtin/modelica-tree-sitter"]
 performance = ["xiuxian-testing/performance"]
 performance-stress = ["performance"]
 
@@ -61,9 +61,8 @@ xiuxian-logging = { path = "../xiuxian-logging" }
 xiuxian-vector = { path = "../xiuxian-vector" }
 xiuxian-io = { path = "../xiuxian-io" }
 xiuxian-llm = { path = "../xiuxian-llm" }
+xiuxian-wendao-builtin = { path = "../xiuxian-wendao-builtin", default-features = false }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
-xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }
-xiuxian-wendao-modelica = { path = "../xiuxian-wendao-modelica", optional = true, default-features = false }
 xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false, features = ["transport"] }
 xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
 xiuxian-config-core = { path = "../xiuxian-config-core" }

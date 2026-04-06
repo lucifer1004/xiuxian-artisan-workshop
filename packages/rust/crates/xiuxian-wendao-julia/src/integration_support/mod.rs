@@ -16,9 +16,15 @@ pub use gateway_artifact::{
 pub use official_examples::{
     spawn_wendaoanalyzer_service_from_artifact, spawn_wendaoanalyzer_service_from_manifest,
     spawn_wendaoanalyzer_stream_linear_blend_service, spawn_wendaoarrow_stream_metadata_service,
-    spawn_wendaoarrow_stream_scoring_service, wendaoanalyzer_deployment_artifact_from_runtime,
+    spawn_wendaoarrow_stream_scoring_service, spawn_wendaosearch_demo_multi_route_service,
+    spawn_wendaosearch_demo_structural_rerank_service,
+    spawn_wendaosearch_solver_demo_multi_route_service,
+    spawn_wendaosearch_solver_demo_structural_rerank_service,
+    wendaoanalyzer_deployment_artifact_from_runtime,
 };
 pub use planned_search::{
     julia_planned_search_openai_runtime_config_toml,
+    julia_planned_search_similarity_only_runtime_config_toml,
     julia_planned_search_vector_store_runtime_config_toml,
+    spawn_wendaoanalyzer_similarity_only_service,
 };

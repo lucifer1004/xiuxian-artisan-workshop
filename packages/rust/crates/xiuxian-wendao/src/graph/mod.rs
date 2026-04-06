@@ -20,5 +20,4 @@ pub use crate::entity::{Entity, EntitySearchQuery, GraphStats, MultiHopOptions, 
 pub use core::{KnowledgeGraph, read_lock, write_lock};
 pub use errors::GraphError;
 pub use intent::{QueryIntent, extract_intent};
-pub use persistence::parse::{entity_from_dict, relation_from_dict};
 pub use skill_registry::{SkillDoc, SkillRegistrationResult};

@@ -7,9 +7,7 @@ mod index;
 mod models;
 mod narrator;
 mod page_index;
-pub mod parser;
 pub mod ppr_hybrid;
-mod query;
 pub(crate) mod runtime_config;
 /// `GraphMem` saliency models, scoring, and Valkey persistence adapters.
 pub mod saliency;
@@ -85,8 +83,6 @@ pub use narrator::narrate_subgraph;
 pub(crate) use page_index::{
     DEFAULT_PAGE_INDEX_THINNING_TOKEN_THRESHOLD, build_page_index_tree, thin_page_index_tree,
 };
-pub use parser::blocks::extract_blocks;
-pub use query::{ParsedLinkGraphQuery, parse_search_query};
 pub use runtime_config::{
     LinkGraphIndexRuntimeConfig, LinkGraphRerankFlightRuntimeSettings,
     resolve_link_graph_index_runtime, resolve_link_graph_rerank_binding,

@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 
-use crate::enhancer::{EnhancedNote, InferredRelation, NoteFrontmatter};
+use crate::enhancer::{EnhancedNote, InferredRelation};
+use crate::parsers::markdown::NoteFrontmatter;
 
 /// Python wrapper for `NoteFrontmatter`.
 #[pyclass]
@@ -74,16 +75,34 @@ impl PyInferredRelation {
         self.inner.source.clone()
     }
 
+    /// Optional source address.
+    #[getter]
+    fn source_address(&self) -> Option<String> {
+        self.inner.source_address.clone()
+    }
+
     /// Target entity.
     #[getter]
     fn target(&self) -> String {
         self.inner.target.clone()
     }
 
+    /// Optional target address.
+    #[getter]
+    fn target_address(&self) -> Option<String> {
+        self.inner.target_address.clone()
+    }
+
     /// Relation type string.
     #[getter]
-    fn relation_type(&self) -> String {
+    fn relation_type(&self) -> Option<String> {
         self.inner.relation_type.clone()
+    }
+
+    /// Explicit metadata owner.
+    #[getter]
+    fn metadata_owner(&self) -> Option<String> {
+        self.inner.metadata_owner.clone()
     }
 
     /// Description.

@@ -1,6 +1,6 @@
 use crate::link_graph_refs::{extract_entity_refs, get_ref_stats};
+use crate::parsers::markdown::parse_frontmatter;
 
-use super::frontmatter::parse_frontmatter;
 use super::relations::infer_relations;
 use super::types::{EnhancedNote, EntityRefData, NoteInput, RefStatsData};
 
@@ -26,7 +26,7 @@ pub fn enhance_note(input: &NoteInput) -> EnhancedNote {
         by_type: stats_raw.by_type.clone(),
     };
 
-    let relations = infer_relations(&input.path, &input.title, &frontmatter, &entity_refs_raw);
+    let relations = infer_relations(&input.path, &input.title, &input.content, &entity_refs_raw);
 
     EnhancedNote {
         path: input.path.clone(),

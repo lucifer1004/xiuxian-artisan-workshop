@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::link_graph::PageIndexNode;
-use crate::link_graph::parser::CodeObservation;
+use crate::parsers::markdown::CodeObservation;
 use crate::zhenfa_router::native::audit::{SourceFile, suggest_pattern_fix_with_threshold};
 use crate::zhenfa_router::native::semantic_check::types::{
     FuzzySuggestionData, IssueLocation, SemanticIssue,

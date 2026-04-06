@@ -1,54 +1,72 @@
 use crate::link_graph_refs::LinkGraphEntityRef;
+use crate::parsers::markdown::{ExplicitSectionRelation, parse_property_relations};
 
-use super::types::{InferredRelation, NoteFrontmatter};
+use super::types::InferredRelation;
 
-/// Infer relations from note structure.
+/// Infer structural relations from note links.
 ///
-/// Relations inferred:
-/// - `DOCUMENTED_IN`: Entity refs → this document
-/// - `CONTAINS`: Skill SKILL.md → its skill name
-/// - `RELATED_TO`: Document → tags
+/// Ordinary wiki links define graph topology. They do not become typed
+/// semantic relations unless another explicit metadata owner adds a relation tag.
 #[must_use]
 pub fn infer_relations(
-    note_path: &str,
+    _note_path: &str,
     note_title: &str,
-    frontmatter: &NoteFrontmatter,
+    note_content: &str,
     entity_refs: &[LinkGraphEntityRef],
 ) -> Vec<InferredRelation> {
     let mut relations = Vec::new();
-    let doc_name = note_title;
+    let source_note = note_title;
 
-    // Entity refs → DOCUMENTED_IN
     for entity_ref in entity_refs {
         relations.push(InferredRelation {
-            source: entity_ref.name.clone(),
-            target: doc_name.to_string(),
-            relation_type: "DOCUMENTED_IN".to_string(),
-            description: format!("{} documented in {}", entity_ref.name, doc_name),
+            source: source_note.to_string(),
+            source_address: None,
+            target: entity_ref.name.clone(),
+            target_address: None,
+            relation_type: None,
+            metadata_owner: None,
+            description: format!("{source_note} links to {}", entity_ref.name),
         });
     }
 
-    // Skill SKILL.md → CONTAINS
-    let is_skill = note_path.to_uppercase().contains("SKILL.MD")
-        || note_path.to_uppercase().ends_with("SKILL.MD");
-    if is_skill && let Some(ref name) = frontmatter.name {
-        relations.push(InferredRelation {
-            source: name.clone(),
-            target: doc_name.to_string(),
-            relation_type: "CONTAINS".to_string(),
-            description: format!("Skill {name} defined in {doc_name}"),
-        });
-    }
-
-    // Tags → RELATED_TO
-    for tag in &frontmatter.tags {
-        relations.push(InferredRelation {
-            source: doc_name.to_string(),
-            target: format!("tag:{tag}"),
-            relation_type: "RELATED_TO".to_string(),
-            description: format!("{doc_name} tagged with {tag}"),
-        });
-    }
+    relations.extend(
+        parse_property_relations(note_content)
+            .into_iter()
+            .map(|relation| explicit_relation(note_title, relation)),
+    );
 
     relations
+}
+
+fn explicit_relation(note_title: &str, relation: ExplicitSectionRelation) -> InferredRelation {
+    let source_address = relation.source.scope_display();
+    let target_address = relation
+        .target
+        .address
+        .as_ref()
+        .map(crate::link_graph::addressing::Address::to_display_string);
+    let target = relation
+        .target
+        .note_target
+        .clone()
+        .unwrap_or_else(|| note_title.to_string());
+    let target_display = relation.target.display();
+    let description = if let Some(source_scope) = &source_address {
+        format!(
+            "{note_title} at {source_scope} {} {target_display}",
+            relation.relation_type
+        )
+    } else {
+        format!("{note_title} {} {target_display}", relation.relation_type)
+    };
+
+    InferredRelation {
+        source: note_title.to_string(),
+        source_address,
+        target,
+        target_address,
+        relation_type: Some(relation.relation_type.to_string()),
+        metadata_owner: Some(relation.property_key),
+        description,
+    }
 }

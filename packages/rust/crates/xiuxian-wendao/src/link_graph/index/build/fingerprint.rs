@@ -1,5 +1,5 @@
 use super::filters::should_skip_entry;
-use crate::link_graph::parser::is_supported_note;
+use crate::parsers::markdown::is_supported_note;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;

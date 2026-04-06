@@ -2,10 +2,9 @@ use std::collections::BTreeMap;
 
 use arrow::record_batch::RecordBatch;
 use xiuxian_wendao_core::repo_intelligence::{RegisteredRepository, RepoIntelligenceError};
+use xiuxian_wendao_runtime::transport::{PluginArrowScoreRow, decode_plugin_arrow_score_rows};
 
 use crate::plugin::transport::process_julia_flight_batches_for_repository;
-
-use super::response::{JuliaArrowScoreRow, PluginArrowScoreRow, decode_plugin_arrow_score_rows};
 
 /// Execute the repository-configured Julia Flight transport and materialize the
 /// validated response into typed score rows.
@@ -33,6 +32,6 @@ pub async fn fetch_plugin_arrow_score_rows_for_repository(
 pub async fn fetch_julia_flight_score_rows_for_repository(
     repository: &RegisteredRepository,
     batches: &[RecordBatch],
-) -> Result<BTreeMap<String, JuliaArrowScoreRow>, RepoIntelligenceError> {
+) -> Result<BTreeMap<String, PluginArrowScoreRow>, RepoIntelligenceError> {
     fetch_plugin_arrow_score_rows_for_repository(repository, batches).await
 }

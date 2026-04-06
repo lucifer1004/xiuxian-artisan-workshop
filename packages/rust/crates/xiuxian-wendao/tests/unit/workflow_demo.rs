@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use xiuxian_wendao::link_graph::parser::{LogbookEntry, parse_note};
+use xiuxian_wendao::parsers::markdown::{LogbookEntry, parse_note};
 
 #[test]
 fn test_workflow_demo_logbook_parsing() {

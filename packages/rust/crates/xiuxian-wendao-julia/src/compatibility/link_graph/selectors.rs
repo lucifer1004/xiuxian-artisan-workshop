@@ -8,6 +8,8 @@ use xiuxian_wendao_core::{
 pub const JULIA_PLUGIN_ID: &str = "xiuxian-wendao-julia";
 /// Stable capability id used by the Julia rerank compatibility path.
 pub const JULIA_RERANK_CAPABILITY_ID: &str = "rerank";
+/// Stable capability id used by the Julia capability-manifest path.
+pub const JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID: &str = "plugin-capabilities";
 /// Stable capability id used by the Julia graph-structural compatibility path.
 pub const JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID: &str = "graph-structural";
 /// Stable artifact id used by the Julia deployment compatibility path.
@@ -18,6 +20,15 @@ pub const JULIA_DEPLOYMENT_ARTIFACT_ID: &str = "deployment";
 pub fn julia_rerank_provider_selector() -> PluginProviderSelector {
     PluginProviderSelector {
         capability_id: CapabilityId(JULIA_RERANK_CAPABILITY_ID.to_string()),
+        provider: PluginId(JULIA_PLUGIN_ID.to_string()),
+    }
+}
+
+/// Build the canonical capability-manifest selector for the Julia plugin.
+#[must_use]
+pub fn julia_capability_manifest_provider_selector() -> PluginProviderSelector {
+    PluginProviderSelector {
+        capability_id: CapabilityId(JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID.to_string()),
         provider: PluginId(JULIA_PLUGIN_ID.to_string()),
     }
 }

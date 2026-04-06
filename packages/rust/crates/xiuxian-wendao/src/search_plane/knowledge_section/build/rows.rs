@@ -4,7 +4,7 @@ use crate::gateway::studio::search::project_scope::{
     SearchProjectMetadata, project_metadata_for_path,
 };
 use crate::gateway::studio::types::{SearchHit, StudioNavigationTarget, UiProjectConfig};
-use crate::link_graph::parser::{ParsedNote, ParsedSection, is_supported_note, parse_note};
+use crate::parsers::markdown::{ParsedNote, ParsedSection, is_supported_note, parse_note};
 use crate::search_plane::ProjectScannedFile;
 use crate::search_plane::knowledge_section::build::paths::studio_display_path;
 use crate::search_plane::knowledge_section::schema::KnowledgeSectionRow;

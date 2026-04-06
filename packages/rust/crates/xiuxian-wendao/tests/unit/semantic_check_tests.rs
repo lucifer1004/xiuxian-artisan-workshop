@@ -1,8 +1,8 @@
 //! Unit tests for `semantic_check` module (Blueprint v2.2).
 
 use super::*;
-use crate::link_graph::parser::CodeObservation;
 use crate::link_graph::{PageIndexMeta, PageIndexNode};
+use crate::parsers::markdown::CodeObservation;
 use std::sync::Arc;
 
 // =============================================================================
