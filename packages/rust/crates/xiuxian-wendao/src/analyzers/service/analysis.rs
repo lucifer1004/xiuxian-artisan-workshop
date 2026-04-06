@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use xiuxian_git_repo::{MaterializedRepo, RepoSourceKind, SyncMode, discover_checkout_metadata};
+
 use crate::analyzers::cache::{
     RepositoryAnalysisCacheKey, ValkeyAnalysisCache, build_repository_analysis_cache_key,
     load_cached_repository_analysis, store_cached_repository_analysis,
@@ -11,11 +13,8 @@ use crate::analyzers::plugin::{
     AnalysisContext, PluginLinkContext, RepoIntelligencePlugin, RepositoryAnalysisOutput,
 };
 use crate::analyzers::registry::PluginRegistry;
+use crate::analyzers::resolve_registered_repository_source;
 use crate::analyzers::skeptic;
-use crate::git::checkout::{
-    CheckoutSyncMode, ResolvedRepositorySourceKind, discover_checkout_metadata,
-    resolve_repository_source,
-};
 
 use super::bootstrap::bootstrap_builtin_registry;
 use super::cached::CachedRepositoryAnalysis;
@@ -178,14 +177,12 @@ pub fn analyze_registered_repository(
 fn resolve_analysis_source(
     repository: &RegisteredRepository,
     cwd: &Path,
-) -> Result<crate::git::checkout::ResolvedRepositorySource, RepoIntelligenceError> {
-    let status_source = resolve_repository_source(repository, cwd, CheckoutSyncMode::Status)?;
-    if matches!(
-        status_source.source_kind,
-        ResolvedRepositorySourceKind::ManagedRemote
-    ) || !status_source.checkout_root.is_dir()
+) -> Result<MaterializedRepo, RepoIntelligenceError> {
+    let status_source = resolve_registered_repository_source(repository, cwd, SyncMode::Status)?;
+    if matches!(status_source.source_kind, RepoSourceKind::ManagedRemote)
+        || !status_source.checkout_root.is_dir()
     {
-        resolve_repository_source(repository, cwd, CheckoutSyncMode::Ensure)
+        resolve_registered_repository_source(repository, cwd, SyncMode::Ensure)
     } else {
         Ok(status_source)
     }

@@ -2,7 +2,7 @@ use crate::backend::{BackendError, RepositoryHandle, checkout_detached_to_revisi
 use crate::spec::RevisionSelector;
 
 pub(crate) fn apply_revision(
-    repository: &RepositoryHandle,
+    repository: &mut RepositoryHandle,
     revision: Option<&RevisionSelector>,
 ) -> Result<(), BackendError> {
     let Some(revision) = revision else {
@@ -25,7 +25,7 @@ pub(crate) fn apply_revision(
 }
 
 pub(crate) fn sync_checkout_head(
-    repository: &RepositoryHandle,
+    repository: &mut RepositoryHandle,
     revision: Option<&RevisionSelector>,
 ) -> Result<(), BackendError> {
     if revision.is_some() {

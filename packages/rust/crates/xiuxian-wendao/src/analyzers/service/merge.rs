@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::analyzers::config::RegisteredRepository;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::records::RepositoryRecord;
-use crate::git::checkout::LocalCheckoutMetadata;
+use xiuxian_git_repo::LocalCheckoutMetadata;
 
 pub(super) fn merge_repository_analysis(
     base: &mut RepositoryAnalysisOutput,

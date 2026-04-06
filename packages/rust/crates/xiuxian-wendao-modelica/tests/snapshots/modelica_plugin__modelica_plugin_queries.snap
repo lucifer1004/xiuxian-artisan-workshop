@@ -1,6 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao-modelica/tests/modelica_plugin.rs
-assertion_line: 136
+assertion_line: 141
 expression: payload
 ---
 {
@@ -1488,7 +1488,7 @@ expression: payload
     ],
     "module_count": 5,
     "repo_id": "modelica-demo",
-    "revision": "ec775ca4ca4b8b08eab76770b0d58674eaa36894",
+    "revision": "[revision]",
     "symbol_count": 1
   },
   "plugin_ids": [

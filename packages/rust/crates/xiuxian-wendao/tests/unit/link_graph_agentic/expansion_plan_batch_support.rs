@@ -28,6 +28,8 @@ pub(super) struct PlanAwareGenericTopologyBatchFixture {
     pub query_id: String,
     pub expected_retrieval_layer: i32,
     pub expected_query_max_layers: i32,
+    pub expected_constraint_kind: String,
+    pub expected_required_boundary_size: i32,
     pub keyword_anchors: Vec<String>,
     pub tag_anchors: Vec<String>,
     pub anchor_planes: Vec<String>,
@@ -108,7 +110,8 @@ fn worker_dependency_score(worker: &LinkGraphAgenticWorkerPlan) -> f64 {
     if worker.pairs.is_empty() {
         return 0.0;
     }
-    worker.pairs.iter().map(|pair| pair.priority).sum::<f64>() / worker.pairs.len() as f64
+    worker.pairs.iter().map(|pair| pair.priority).sum::<f64>()
+        / pair_count_as_f64(worker.pairs.len())
 }
 
 #[cfg(feature = "julia")]
@@ -116,12 +119,44 @@ fn worker_semantic_score(worker: &LinkGraphAgenticWorkerPlan) -> f64 {
     if worker.pairs.is_empty() {
         return 0.0;
     }
-    worker.pairs.iter().map(|pair| pair.priority).sum::<f64>() / worker.pairs.len() as f64
+    worker.pairs.iter().map(|pair| pair.priority).sum::<f64>()
+        / pair_count_as_f64(worker.pairs.len())
 }
 
 #[cfg(feature = "julia")]
 fn binary_plane_score(matched: bool) -> f64 {
     if matched { 1.0 } else { 0.0 }
+}
+
+#[cfg(feature = "julia")]
+fn pair_count_as_f64(pair_count: usize) -> f64 {
+    let pair_count = u32::try_from(pair_count)
+        .unwrap_or_else(|error| panic!("worker pair count should fit within u32: {error}"));
+    f64::from(pair_count)
+}
+
+#[cfg(feature = "julia")]
+fn plan_aware_required_boundary_size(
+    anchor_values: &[String],
+    candidates: &[PlanAwareGenericTopologyCandidateFixture],
+) -> Result<i32, Box<dyn std::error::Error>> {
+    let requested_boundary_size = anchor_values.len().clamp(1, 2);
+    let min_candidate_nodes = candidates
+        .iter()
+        .map(|candidate| candidate.expected_nodes)
+        .min()
+        .unwrap_or(1);
+    i32::try_from(std::cmp::min(requested_boundary_size, min_candidate_nodes))
+        .map_err(Box::<dyn std::error::Error>::from)
+}
+
+#[cfg(feature = "julia")]
+fn plan_aware_constraint_kind(anchor_values: &[String], required_boundary_size: i32) -> String {
+    if required_boundary_size > 1 && anchor_values.len() > 1 {
+        "boundary_match".to_string()
+    } else {
+        "pin_assignment".to_string()
+    }
 }
 
 #[cfg(feature = "julia")]
@@ -176,7 +211,7 @@ pub(super) fn build_worker_partition_plan_aware_generic_topology_batch_fixture(
     min_pairs: usize,
     query_id: &str,
     candidate_id_prefix: &str,
-    fallback_edge_kind: &str,
+    relation_edge_kind: &str,
 ) -> Result<PlanAwareGenericTopologyBatchFixture, Box<dyn std::error::Error>> {
     let expected_retrieval_layer = 0;
     let expected_query_max_layers = 2;
@@ -209,7 +244,7 @@ pub(super) fn build_worker_partition_plan_aware_generic_topology_batch_fixture(
                 expected_candidate_edge_sources,
                 expected_candidate_edge_destinations,
                 expected_candidate_edge_kinds,
-            ) = worker_expected_topology(worker, fallback_edge_kind);
+            ) = worker_expected_topology(worker, relation_edge_kind);
             let (expected_nodes, expected_edges) =
                 worker
                     .pairs
@@ -230,7 +265,7 @@ pub(super) fn build_worker_partition_plan_aware_generic_topology_batch_fixture(
             let candidate = build_raw_connected_pair_collection_candidate_from_pairs(
                 candidate_id.clone(),
                 &worker.pairs,
-                fallback_edge_kind,
+                relation_edge_kind,
                 expected_dependency_score,
                 expected_keyword_score,
                 expected_tag_score,
@@ -251,16 +286,22 @@ pub(super) fn build_worker_partition_plan_aware_generic_topology_batch_fixture(
             })
         })
         .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+    let expected_required_boundary_size =
+        plan_aware_required_boundary_size(&anchor_values, &candidates)?;
+    let expected_constraint_kind =
+        plan_aware_constraint_kind(&anchor_values, expected_required_boundary_size);
 
     Ok(PlanAwareGenericTopologyBatchFixture {
         query_id: query_id.to_string(),
         expected_retrieval_layer,
         expected_query_max_layers,
+        expected_constraint_kind,
+        expected_required_boundary_size,
         keyword_anchors,
         tag_anchors,
         anchor_planes,
         anchor_values,
-        edge_constraint_kinds: vec![fallback_edge_kind.to_string()],
+        edge_constraint_kinds: vec![relation_edge_kind.to_string()],
         candidates,
     })
 }

@@ -21,10 +21,24 @@ Current implementation note:
   and repository reload
 - managed remote target probing now uses `gix` remote ref-map inspection with
   explicit HEAD/branch/tag probe refspecs instead of `git ls-remote`
+- managed bare clone, checkout clone, and origin fetch now also execute
+  through `gix`, including mirror refspec parity for bare repos
+- detached checkout now also executes through `gix` by combining index
+  materialization, tracked-path pruning, worktree checkout, and detached HEAD
+  reference mutation
+- detached checkout now also refuses recursive directory removal when a stale
+  tracked file path is unexpectedly backed by a directory, preserving
+  unrelated untracked contents instead of deleting them during cleanup
 - annotated tag probe results now resolve to the peeled target object so probe
   state stays comparable with checkout and tracking revisions
+- local path remotes are normalized through canonical filesystem paths before
+  drift comparison so tmp-backed mirrors and checkouts do not re-fetch solely
+  due to path aliasing such as `/var` versus `/private/var`
 - the touched materialization regressions now use tmp-backed cwd fixtures
   instead of operator-specific absolute paths
-- the remaining bounded native `git` command bridges are clone, fetch, and
-  detached checkout where that still keeps behavior aligned with the existing
-  contract
+- the internal `gix` backend now lives under `src/backend/gix/` as a
+  responsibility-sliced feature folder instead of one monolithic backend file
+- no production native `git` command bridge remains in `xiuxian-git-repo`
+- `xiuxian-wendao` no longer carries `src/git/` compatibility models; callers
+  now consume this crate through a minimal registered-repository adapter under
+  `src/analyzers/repo_source.rs`

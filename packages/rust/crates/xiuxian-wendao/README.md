@@ -37,12 +37,17 @@ Do not place new code here when it is better classified as:
 - `xiuxian-git-repo`: repository materialization, ghq-style managed layout,
   checkout locking, revision sync, and other generic repo substrate behavior
 
-The remaining `src/git/` surface in `xiuxian-wendao` is a compatibility
-facade over `xiuxian-git-repo`, not the implementation owner of repository
-substrate logic. The crate itself no longer depends on `git2`; Wendao-owned
-repo fixtures now use bounded CLI git helpers, and repo-intelligence snapshots
-treat revisions as backend-neutral contract data instead of pinning concrete
-hashes.
+`xiuxian-wendao` no longer carries a `src/git/` compatibility facade. The
+only Wendao-local repo bridge that remains is
+`src/analyzers/repo_source.rs`, which maps `RegisteredRepository` config and
+domain errors onto `xiuxian-git-repo` contracts. The crate itself no longer
+depends on `git2`; Wendao-owned repo fixtures now use bounded CLI git
+helpers, and repo-intelligence snapshots treat revisions as backend-neutral
+contract data instead of pinning concrete hashes. The post-migration Wendao
+done gate is also green again for this lane:
+`cargo test -p xiuxian-wendao --lib` and
+`cargo clippy -p xiuxian-wendao --lib --tests -- -D warnings` both pass after
+the repo compat-surface retirement and blocker recovery slices.
 
 For the canonical boundary matrix, see
 [`docs/06_roadmap/417_wendao_package_boundary_matrix.md`](docs/06_roadmap/417_wendao_package_boundary_matrix.md).

@@ -347,12 +347,24 @@ generic-topology `constraint_filter` batch above the same raw connected-pair
 collection seam, and it now validates the staged `constraint_kind` and
 `required_boundary_size` request columns before reusing that batch against the
 manifest-discovered `WendaoSearch.jl --mode solver_demo` filter route.
+That same host filter lane now also derives that staged
+`required_boundary_size` from the current plan-aware anchor and candidate-
+topology semantics, and it validates filter-side anchor and topology list
+columns before the same live downcall.
+That same host filter lane now also derives the staged `constraint_kind` from
+that same batch shape, while the paired plugin live proof now exercises the
+non-default `boundary_match` filter mode against the real solver-demo multi-
+route endpoint.
 That same plugin-owned live lane now also proves one multi-candidate generic-
 topology `constraint_filter` batch against that same manifest-discovered
 `WendaoSearch.jl --mode solver_demo` multi-route endpoint, and the real Julia
 service tests are now serialized with a shared file lock so default
 `cargo test -p xiuxian-wendao-julia graph_structural_exchange --lib` remains
 stable under the repo's normal parallel Rust harness.
+That same host generic-topology live lane now also derives its fallback edge
+labels and staged `edge_constraint_kinds` from the normalized Wendao agentic
+execution relation, so the manifest-discovered solver-demo downcall no longer
+keeps a placeholder `"related"` edge semantic in host test support.
 The capability-manifest response validator and generic-topology scored-pair
 normalization are now also clippy-clean under `-D warnings`, so this live lane
 no longer depends on local lint suppressions or precision-loss casts.

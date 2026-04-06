@@ -28,6 +28,7 @@ use xiuxian_wendao_builtin::{
 
 #[cfg(feature = "julia")]
 use super::expansion_support::{
+    GenericTopologyCandidateBuildOptions, GenericTopologyCandidateScores,
     assert_solver_demo_generic_topology_row_basics,
     assert_solver_demo_generic_topology_row_infeasible,
     assert_solver_demo_generic_topology_row_shape, build_pair_rerank_request_batch,
@@ -35,6 +36,7 @@ use super::expansion_support::{
     build_raw_connected_pair_collection_candidates_from_plan,
     build_raw_seed_centered_pair_collection_candidates_from_plan,
     build_worker_partition_generic_topology_candidate_fixtures_from_plan,
+    default_agentic_execution_relation_edge_kind,
     fetch_generic_topology_rows_via_manifest_discovery, first_connected_pair_collection,
     first_worker_pair, required_column,
 };
@@ -580,6 +582,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_via
         .index
         .agentic_expansion_plan_with_config(Some("alpha"), expansion_config(1, 10, 10));
     let pair_collection = first_connected_pair_collection(&plan);
+    let relation_edge_kind = default_agentic_execution_relation_edge_kind();
 
     let (server_base_url, mut server_guard) =
         linked_builtin_spawn_wendaosearch_solver_demo_multi_route_service().await;
@@ -590,7 +593,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_via
         &[build_raw_connected_pair_collection_candidate_from_pairs(
             candidate_id.clone(),
             pair_collection.as_slice(),
-            "related",
+            &relation_edge_kind,
             0.35,
             1.0,
             1.0,
@@ -636,15 +639,14 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
     let plan = fixture
         .index
         .agentic_expansion_plan_with_config(Some("alpha"), expansion_config(1, 20, 20));
-    let candidates = build_raw_connected_pair_collection_candidates_from_plan(
-        &plan,
-        2,
+    let relation_edge_kind = default_agentic_execution_relation_edge_kind();
+    let candidate_options = GenericTopologyCandidateBuildOptions::new(
         "candidate-chain-live",
-        "related",
-        0.35,
-        1.0,
-        1.0,
-    )?;
+        &relation_edge_kind,
+        GenericTopologyCandidateScores::new(0.35, 1.0, 1.0),
+    );
+    let candidates =
+        build_raw_connected_pair_collection_candidates_from_plan(&plan, 2, &candidate_options)?;
     assert_eq!(candidates.len(), 2);
 
     let (server_base_url, mut server_guard) =
@@ -706,15 +708,17 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
         .index
         .agentic_expansion_plan_with_config(Some("alpha"), expansion_config(1, 10, 10));
     assert_eq!(plan.selected_pairs, 10);
+    let relation_edge_kind = default_agentic_execution_relation_edge_kind();
+    let candidate_options = GenericTopologyCandidateBuildOptions::new(
+        "candidate-seed-live",
+        &relation_edge_kind,
+        GenericTopologyCandidateScores::new(0.35, 1.0, 1.0),
+    );
     let candidates = build_raw_seed_centered_pair_collection_candidates_from_plan(
         &plan,
         2,
         3,
-        "candidate-seed-live",
-        "related",
-        0.35,
-        1.0,
-        1.0,
+        &candidate_options,
     )?;
     assert_eq!(candidates.len(), 2);
 
@@ -776,15 +780,17 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
     let plan = fixture
         .index
         .agentic_expansion_plan_with_config(Some("alpha"), expansion_config(2, 10, 3));
+    let relation_edge_kind = default_agentic_execution_relation_edge_kind();
+    let candidate_options = GenericTopologyCandidateBuildOptions::new(
+        "candidate-worker-live",
+        &relation_edge_kind,
+        GenericTopologyCandidateScores::new(0.35, 1.0, 1.0),
+    );
     let fixtures = build_worker_partition_generic_topology_candidate_fixtures_from_plan(
         &plan,
         2,
         2,
-        "candidate-worker-live",
-        "related",
-        0.35,
-        1.0,
-        1.0,
+        &candidate_options,
     )?;
     assert_eq!(fixtures.len(), 2);
 

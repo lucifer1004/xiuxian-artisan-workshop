@@ -27,6 +27,7 @@ pub mod query;
 pub mod records;
 /// Plugin registry for dynamic analyzer registration.
 pub mod registry;
+mod repo_source;
 /// Saliency scoring for symbol and module importance.
 pub mod saliency;
 /// Analysis orchestration and repository processing services.
@@ -104,6 +105,7 @@ pub use records::{
     RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord,
 };
 pub use registry::PluginRegistry;
+pub(crate) use repo_source::resolve_registered_repository_source;
 pub use service::{
     JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_EMBEDDING_COLUMN,
     JULIA_ARROW_FINAL_SCORE_COLUMN, JULIA_ARROW_QUERY_EMBEDDING_COLUMN,

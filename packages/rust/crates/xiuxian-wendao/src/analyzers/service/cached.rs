@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use xiuxian_git_repo::{SyncMode, discover_checkout_metadata};
+
 use crate::analyzers::cache::{
     ValkeyAnalysisCache, build_repository_analysis_cache_key, load_cached_repository_analysis,
     store_cached_repository_analysis,
@@ -8,9 +10,7 @@ use crate::analyzers::config::RegisteredRepository;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::{AnalysisContext, RepositoryAnalysisOutput};
 use crate::analyzers::registry::PluginRegistry;
-use crate::git::checkout::{
-    CheckoutSyncMode, discover_checkout_metadata, resolve_repository_source,
-};
+use crate::analyzers::resolve_registered_repository_source;
 
 /// Ready cached repository analysis plus its stable cache identity.
 #[derive(Clone)]
@@ -52,7 +52,8 @@ pub fn analyze_registered_repository_cached_bundle_with_registry(
         });
     }
 
-    let repository_source = resolve_repository_source(repository, cwd, CheckoutSyncMode::Status)?;
+    let repository_source =
+        resolve_registered_repository_source(repository, cwd, SyncMode::Status)?;
     let repository_root = repository_source.checkout_root.clone();
     let analysis_context = AnalysisContext {
         repository: repository.clone(),

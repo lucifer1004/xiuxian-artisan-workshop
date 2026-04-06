@@ -70,7 +70,7 @@ fn resolve_repository_source_materializes_remote_checkout_under_prj_data_home() 
     .expect("discover managed mirror metadata");
     assert_eq!(
         mirror_metadata.remote_url.as_deref(),
-        Some(source.path().display().to_string().as_str())
+        Some(canonical_display_path(source.path()).as_str())
     );
 
     fs::remove_dir_all(resolved.mirror_root.as_ref().expect("mirror root"))
@@ -323,7 +323,7 @@ fn resolve_repository_source_realigns_existing_remote_urls_after_drift() {
 
     assert_eq!(
         mirror_metadata.remote_url.as_deref(),
-        Some(source.path().display().to_string().as_str())
+        Some(canonical_display_path(source.path()).as_str())
     );
     assert_eq!(
         checkout_metadata.remote_url.as_deref(),
@@ -336,4 +336,11 @@ fn resolve_repository_source_realigns_existing_remote_urls_after_drift() {
 
 fn temp_cwd() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir")
+}
+
+fn canonical_display_path(path: &std::path::Path) -> String {
+    std::fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .display()
+        .to_string()
 }

@@ -98,8 +98,10 @@ async fn repo_overview_endpoint_returns_repo_summary_payload() -> TestResult {
     write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
     let router = studio_router(gateway_state_for_project(temp.path()));
 
-    let (status, payload) = request_json(router, "/api/repo/overview?repo=gateway-sync").await?;
+    let (status, mut payload) =
+        request_json(router, "/api/repo/overview?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
+    redact_repo_overview_payload(&mut payload);
     assert_studio_json_snapshot("repo_overview_endpoint_json", payload);
     Ok(())
 }
@@ -121,7 +123,7 @@ plugins = ["modelica"]
     )?;
     let router = studio_router(gateway_state_for_project(temp.path()));
 
-    let (status, payload) =
+    let (status, mut payload) =
         request_json(router, "/api/repo/overview?repo=modelica-gateway-overview").await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -139,6 +141,7 @@ plugins = ["modelica"]
             .is_some_and(|count| count >= 1),
         "repo-overview endpoint should expose at least one Modelica module over the external plugin path"
     );
+    redact_repo_overview_payload(&mut payload);
     assert_studio_json_snapshot("repo_overview_endpoint_modelica_json", payload);
     Ok(())
 }
@@ -4020,6 +4023,31 @@ fn redact_repo_sync_payload(value: &mut Value) {
             Value::Null => Value::Null,
             _ => Value::String("[last-fetched-at]".to_string()),
         };
+    }
+    redact_revision_pointers(
+        value,
+        &[
+            "/revision",
+            "/mirror_revision",
+            "/tracking_revision",
+            "/status_summary/revisions/checkout_revision",
+            "/status_summary/revisions/mirror_revision",
+            "/status_summary/revisions/tracking_revision",
+        ],
+    );
+}
+
+fn redact_repo_overview_payload(value: &mut Value) {
+    redact_revision_pointers(value, &["/revision"]);
+}
+
+fn redact_revision_pointers(value: &mut Value, pointers: &[&str]) {
+    for pointer in pointers {
+        if let Some(revision) = value.pointer_mut(pointer)
+            && !revision.is_null()
+        {
+            *revision = Value::String("[revision]".to_string());
+        }
     }
 }
 

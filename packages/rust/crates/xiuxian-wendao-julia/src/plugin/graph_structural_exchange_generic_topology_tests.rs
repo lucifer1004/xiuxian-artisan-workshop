@@ -24,11 +24,12 @@ use super::{
 fn assert_generic_topology_filter_row_accepted(
     row: &crate::GraphStructuralFilterScoreRow,
     candidate_id: &str,
+    expected_pin_count: usize,
 ) {
     assert_eq!(row.candidate_id, candidate_id);
     assert!(row.accepted);
     assert!(row.structural_score > 0.0);
-    assert_eq!(row.pin_assignment.len(), 1);
+    assert_eq!(row.pin_assignment.len(), expected_pin_count);
     assert_eq!(row.rejection_reason, "");
 }
 
@@ -419,12 +420,12 @@ async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_via_
         0,
         2,
         vec!["alpha".to_string()],
-        Vec::new(),
+        vec!["alpha".to_string()],
         vec!["depends_on".to_string()],
     )
     .expect("generic topology filter query");
     let constraint =
-        GraphStructuralFilterConstraint::new("pin_assignment", 1).expect("filter constraint");
+        GraphStructuralFilterConstraint::new("boundary_match", 2).expect("filter constraint");
     let candidate_id = "candidate-chain-filter-live".to_string();
     let candidates = [
         build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_raw_tuples(
@@ -463,8 +464,7 @@ async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_via_
     let row = rows.get(&candidate_id).unwrap_or_else(|| {
         panic!("missing candidate `{candidate_id}` in solver-demo generic filter response")
     });
-    assert_generic_topology_filter_row_accepted(row, &candidate_id);
-    assert_eq!(row.pin_assignment, vec!["node-1".to_string()]);
+    assert_generic_topology_filter_row_accepted(row, &candidate_id, 2);
 
     service.kill();
 }
@@ -505,12 +505,12 @@ async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_with
         0,
         2,
         vec!["alpha".to_string()],
-        Vec::new(),
+        vec!["alpha".to_string()],
         vec!["depends_on".to_string()],
     )
     .expect("generic topology filter query");
     let constraint =
-        GraphStructuralFilterConstraint::new("pin_assignment", 1).expect("filter constraint");
+        GraphStructuralFilterConstraint::new("boundary_match", 2).expect("filter constraint");
     let candidates = [
         build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_raw_tuples(
             "candidate-chain-filter-live-a",
@@ -562,7 +562,7 @@ async fn fetch_graph_structural_generic_topology_filter_rows_for_repository_with
         let row = rows.get(candidate_id).unwrap_or_else(|| {
             panic!("missing candidate `{candidate_id}` in solver-demo generic filter response")
         });
-        assert_generic_topology_filter_row_accepted(row, candidate_id);
+        assert_generic_topology_filter_row_accepted(row, candidate_id, 2);
     }
 
     service.kill();

@@ -33,6 +33,48 @@ pub(super) struct GenericTopologyCandidateFixture {
 }
 
 #[cfg(feature = "julia")]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct GenericTopologyCandidateScores {
+    pub dependency: f64,
+    pub keyword: f64,
+    pub tag: f64,
+}
+
+#[cfg(feature = "julia")]
+impl GenericTopologyCandidateScores {
+    pub(super) const fn new(dependency: f64, keyword: f64, tag: f64) -> Self {
+        Self {
+            dependency,
+            keyword,
+            tag,
+        }
+    }
+}
+
+#[cfg(feature = "julia")]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct GenericTopologyCandidateBuildOptions<'a> {
+    pub candidate_id_prefix: &'a str,
+    pub fallback_edge_kind: &'a str,
+    pub scores: GenericTopologyCandidateScores,
+}
+
+#[cfg(feature = "julia")]
+impl<'a> GenericTopologyCandidateBuildOptions<'a> {
+    pub(super) const fn new(
+        candidate_id_prefix: &'a str,
+        fallback_edge_kind: &'a str,
+        scores: GenericTopologyCandidateScores,
+    ) -> Self {
+        Self {
+            candidate_id_prefix,
+            fallback_edge_kind,
+            scores,
+        }
+    }
+}
+
+#[cfg(feature = "julia")]
 pub(super) fn first_worker_pair(
     plan: &LinkGraphAgenticExpansionPlan,
 ) -> &LinkGraphAgenticCandidatePair {
@@ -180,11 +222,7 @@ pub(super) fn build_raw_connected_pair_collection_candidate_from_pairs(
 pub(super) fn build_raw_connected_pair_collection_candidates_from_plan(
     plan: &LinkGraphAgenticExpansionPlan,
     max_collections: usize,
-    candidate_id_prefix: &str,
-    fallback_edge_kind: &str,
-    dependency_score: f64,
-    keyword_score: f64,
-    tag_score: f64,
+    options: &GenericTopologyCandidateBuildOptions<'_>,
 ) -> Result<Vec<GraphStructuralRawConnectedPairCollectionCandidateInputs>, Box<dyn std::error::Error>>
 {
     connected_pair_collections(plan, max_collections)
@@ -192,12 +230,12 @@ pub(super) fn build_raw_connected_pair_collection_candidates_from_plan(
         .enumerate()
         .map(|(collection_index, pair_collection)| {
             build_raw_connected_pair_collection_candidate_from_pairs(
-                format!("{candidate_id_prefix}-{collection_index}"),
+                format!("{}-{collection_index}", options.candidate_id_prefix),
                 pair_collection,
-                fallback_edge_kind,
-                dependency_score,
-                keyword_score,
-                tag_score,
+                options.fallback_edge_kind,
+                options.scores.dependency,
+                options.scores.keyword,
+                options.scores.tag,
             )
         })
         .collect()
@@ -221,24 +259,20 @@ pub(super) fn build_worker_partition_generic_topology_candidate_fixtures_from_pl
     plan: &LinkGraphAgenticExpansionPlan,
     max_workers: usize,
     min_pairs: usize,
-    candidate_id_prefix: &str,
-    fallback_edge_kind: &str,
-    dependency_score: f64,
-    keyword_score: f64,
-    tag_score: f64,
+    options: &GenericTopologyCandidateBuildOptions<'_>,
 ) -> Result<Vec<GenericTopologyCandidateFixture>, Box<dyn std::error::Error>> {
     worker_partition_pair_groups(plan, max_workers, min_pairs)
         .into_iter()
         .map(|worker| {
-            let candidate_id = format!("{candidate_id_prefix}-{}", worker.worker_id);
+            let candidate_id = format!("{}-{}", options.candidate_id_prefix, worker.worker_id);
             let (expected_nodes, expected_edges) = pair_collection_shape(&worker.pairs);
             let candidate = build_raw_connected_pair_collection_candidate_from_pairs(
                 candidate_id.clone(),
                 &worker.pairs,
-                fallback_edge_kind,
-                dependency_score,
-                keyword_score,
-                tag_score,
+                options.fallback_edge_kind,
+                options.scores.dependency,
+                options.scores.keyword,
+                options.scores.tag,
             )?;
             Ok(GenericTopologyCandidateFixture {
                 candidate_id,
@@ -248,6 +282,11 @@ pub(super) fn build_worker_partition_generic_topology_candidate_fixtures_from_pl
             })
         })
         .collect()
+}
+
+#[cfg(feature = "julia")]
+pub(super) fn default_agentic_execution_relation_edge_kind() -> String {
+    LinkGraphIndex::resolve_agentic_execution_config().relation
 }
 
 #[cfg(feature = "julia")]
@@ -301,11 +340,7 @@ pub(super) fn build_raw_seed_centered_pair_collection_candidates_from_plan(
     plan: &LinkGraphAgenticExpansionPlan,
     max_collections: usize,
     min_pairs: usize,
-    candidate_id_prefix: &str,
-    fallback_edge_kind: &str,
-    dependency_score: f64,
-    keyword_score: f64,
-    tag_score: f64,
+    options: &GenericTopologyCandidateBuildOptions<'_>,
 ) -> Result<Vec<GraphStructuralRawConnectedPairCollectionCandidateInputs>, Box<dyn std::error::Error>>
 {
     seed_centered_pair_collections(plan, max_collections, min_pairs)
@@ -313,12 +348,12 @@ pub(super) fn build_raw_seed_centered_pair_collection_candidates_from_plan(
         .enumerate()
         .map(|(collection_index, (_, pair_collection))| {
             build_raw_connected_pair_collection_candidate_from_pairs(
-                format!("{candidate_id_prefix}-{collection_index}"),
+                format!("{}-{collection_index}", options.candidate_id_prefix),
                 pair_collection,
-                fallback_edge_kind,
-                dependency_score,
-                keyword_score,
-                tag_score,
+                options.fallback_edge_kind,
+                options.scores.dependency,
+                options.scores.keyword,
+                options.scores.tag,
             )
         })
         .collect()
@@ -356,7 +391,7 @@ pub(super) async fn fetch_generic_topology_rows_via_manifest_discovery(
             2,
             vec!["alpha".to_string()],
             Vec::new(),
-            vec!["related".to_string()],
+            vec![default_agentic_execution_relation_edge_kind()],
         )?,
         candidates,
     )
@@ -426,16 +461,8 @@ pub(super) fn assert_solver_demo_generic_topology_row_infeasible(
         row.explanation,
         row.pin_assignment
     );
-    assert_eq!(
-        row.structural_score, 0.0,
-        "unexpected {label} infeasible structural_score: {}",
-        row.structural_score
-    );
-    assert_eq!(
-        row.final_score, 0.0,
-        "unexpected {label} infeasible final_score: {}",
-        row.final_score
-    );
+    assert_zero_score(row.structural_score, label, "structural_score");
+    assert_zero_score(row.final_score, label, "final_score");
     assert!(
         row.pin_assignment.is_empty(),
         "unexpected {label} infeasible pin_assignment: {:?}",
@@ -445,6 +472,14 @@ pub(super) fn assert_solver_demo_generic_topology_row_infeasible(
         row.explanation.contains("found no feasible gadget"),
         "unexpected {label} infeasible explanation: {}",
         row.explanation
+    );
+}
+
+#[cfg(feature = "julia")]
+fn assert_zero_score(score: f64, label: &str, score_name: &str) {
+    assert!(
+        score.abs() < f64::EPSILON,
+        "unexpected {label} infeasible {score_name}: {score}"
     );
 }
 

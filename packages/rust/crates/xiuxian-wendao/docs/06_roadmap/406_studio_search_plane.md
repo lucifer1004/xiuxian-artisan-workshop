@@ -81,8 +81,9 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `search_plane/service/tests/status.rs` is now split into `search_plane/service/tests/status/` with dedicated repo-content, maintenance, and issue tests plus shared helpers, while the status test surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
 - the former `git/checkout/tests/` split is now retired entirely because
   repo-substrate contract coverage moved into `xiuxian-git-repo`, while
-  `xiuxian-wendao/src/git/checkout/mod.rs` remains only as a thin
-  compatibility facade; the next bounded target is
+  the remaining Wendao-side caller bridge now lives under
+  `analyzers/repo_source.rs` and `xiuxian-wendao/src/git/` no longer exists;
+  the next bounded target is
   `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - `zhenfa_router/native/semantic_check/checks.rs` is now split into `zhenfa_router/native/semantic_check/checks/` with dedicated contracts, identity, links, observations, and structure modules, while the public semantic-check surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - search-plane Valkey client resolution now uses the Wendao-local thin helper layer, so the first shared transport primitive is centralized without moving cache keyspace or manifest semantics out of the search-plane domain

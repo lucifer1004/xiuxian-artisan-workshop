@@ -26,7 +26,8 @@ use super::super::expansion_plan_batch_support::{
 use super::super::expansion_support::{
     assert_solver_demo_generic_topology_row_basics,
     assert_solver_demo_generic_topology_row_infeasible,
-    assert_solver_demo_generic_topology_row_shape, required_column, required_utf8_list_row_values,
+    assert_solver_demo_generic_topology_row_shape, default_agentic_execution_relation_edge_kind,
+    required_column, required_utf8_list_row_values,
 };
 #[cfg(feature = "julia")]
 use super::{TestResult, build_index_fixture, expansion_config};
@@ -61,6 +62,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
     let plan = fixture
         .index
         .agentic_expansion_plan_with_config(Some("alpha"), expansion_config(2, 10, 3));
+    let relation_edge_kind = default_agentic_execution_relation_edge_kind();
 
     let batch_fixture = build_worker_partition_plan_aware_generic_topology_batch_fixture(
         &fixture.index,
@@ -69,12 +71,12 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
         2,
         "query-live-generic-worker-plan-batch",
         "candidate-worker-plan-live",
-        "related",
+        &relation_edge_kind,
     )?;
     assert_eq!(batch_fixture.keyword_anchors, vec!["alpha".to_string()]);
     assert_eq!(
         batch_fixture.edge_constraint_kinds,
-        vec!["related".to_string()]
+        vec![relation_edge_kind.clone()]
     );
     assert!(
         batch_fixture.tag_anchors.iter().any(|tag| tag == "alpha"),
@@ -272,6 +274,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
     let plan = fixture
         .index
         .agentic_expansion_plan_with_config(Some("alpha"), expansion_config(2, 10, 3));
+    let relation_edge_kind = default_agentic_execution_relation_edge_kind();
 
     let batch_fixture = build_worker_partition_plan_aware_generic_topology_batch_fixture(
         &fixture.index,
@@ -280,10 +283,14 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
         2,
         "query-live-generic-worker-plan-filter",
         "candidate-worker-plan-filter-live",
-        "related",
+        &relation_edge_kind,
     )?;
-    let constraint_kind = "pin_assignment";
-    let required_boundary_size = 1;
+    let constraint_kind = batch_fixture.expected_constraint_kind.as_str();
+    let required_boundary_size = batch_fixture.expected_required_boundary_size;
+    let expected_boundary_size = match usize::try_from(required_boundary_size) {
+        Ok(size) => size,
+        Err(error) => panic!("required boundary size should be non-negative: {error}"),
+    };
 
     let batch = build_plan_aware_generic_topology_filter_request_batch(
         &batch_fixture,
@@ -292,6 +299,10 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
     )?;
     let query_ids =
         required_column::<StringArray>(&batch, GRAPH_STRUCTURAL_QUERY_ID_COLUMN, "utf8");
+    let retrieval_layers =
+        required_column::<Int32Array>(&batch, GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN, "int32");
+    let query_max_layers =
+        required_column::<Int32Array>(&batch, GRAPH_STRUCTURAL_QUERY_MAX_LAYERS_COLUMN, "int32");
     let candidate_ids =
         required_column::<StringArray>(&batch, GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, "utf8");
     let constraint_kinds =
@@ -305,6 +316,62 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
     assert_eq!(batch.num_rows(), batch_fixture.candidates.len());
     for (row_index, candidate) in batch_fixture.candidates.iter().enumerate() {
         assert_eq!(query_ids.value(row_index), batch_fixture.query_id);
+        assert_eq!(
+            retrieval_layers.value(row_index),
+            batch_fixture.expected_retrieval_layer
+        );
+        assert_eq!(
+            query_max_layers.value(row_index),
+            batch_fixture.expected_query_max_layers
+        );
+        assert_eq!(
+            required_utf8_list_row_values(&batch, GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN, row_index),
+            batch_fixture.anchor_planes
+        );
+        assert_eq!(
+            required_utf8_list_row_values(&batch, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, row_index),
+            batch_fixture.anchor_values
+        );
+        assert_eq!(
+            required_utf8_list_row_values(
+                &batch,
+                GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN,
+                row_index
+            ),
+            batch_fixture.edge_constraint_kinds
+        );
+        assert_eq!(
+            required_utf8_list_row_values(
+                &batch,
+                GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN,
+                row_index
+            ),
+            candidate.expected_candidate_node_ids
+        );
+        assert_eq!(
+            required_utf8_list_row_values(
+                &batch,
+                GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN,
+                row_index
+            ),
+            candidate.expected_candidate_edge_sources
+        );
+        assert_eq!(
+            required_utf8_list_row_values(
+                &batch,
+                GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
+                row_index
+            ),
+            candidate.expected_candidate_edge_destinations
+        );
+        assert_eq!(
+            required_utf8_list_row_values(
+                &batch,
+                GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
+                row_index
+            ),
+            candidate.expected_candidate_edge_kinds
+        );
         assert_eq!(candidate_ids.value(row_index), candidate.candidate_id);
         assert_eq!(constraint_kinds.value(row_index), constraint_kind);
         assert_eq!(
@@ -347,7 +414,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
             );
             assert_eq!(
                 row.pin_assignment.len(),
-                required_boundary_size as usize,
+                expected_boundary_size,
                 "unexpected accepted pin_assignment for `{}`: {:?}",
                 fixture.candidate_id,
                 row.pin_assignment
@@ -355,7 +422,7 @@ async fn test_host_uses_julia_graph_structural_generic_topology_fetch_helper_for
             assert_eq!(row.rejection_reason, "");
         } else {
             assert!(
-                row.pin_assignment.len() <= required_boundary_size as usize,
+                row.pin_assignment.len() <= expected_boundary_size,
                 "unexpected rejected pin_assignment for `{}`: {:?}",
                 fixture.candidate_id,
                 row.pin_assignment

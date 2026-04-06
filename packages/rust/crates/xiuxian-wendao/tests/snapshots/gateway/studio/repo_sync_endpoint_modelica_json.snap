@@ -15,7 +15,7 @@ expression: value
   "mode": "status",
   "refresh": "fetch",
   "repo_id": "modelica-gateway-sync",
-  "revision": "97867b37a68b78c443c9f90a44ad46bd68ee44c7",
+  "revision": "[revision]",
   "source_kind": "local_checkout",
   "staleness_state": "not_applicable",
   "status_summary": {
@@ -36,7 +36,7 @@ expression: value
     },
     "revisions": {
       "aligned_with_mirror": false,
-      "checkout_revision": "97867b37a68b78c443c9f90a44ad46bd68ee44c7",
+      "checkout_revision": "[revision]",
       "mirror_revision": null,
       "tracking_revision": null
     }

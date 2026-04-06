@@ -121,10 +121,11 @@ To avoid architectural ambiguity, the following terms are mapped to concrete imp
 The common core should absorb everything that is high-performance, repeated, and repository-agnostic:
 
 - repository registry from `link_graph.projects.<id>` in `wendao.toml`
-- git mirror management
+- dedicated `xiuxian-git-repo` ownership for git mirror management, ghq-style
+  layout, checkout locking, revision sync, and backend-neutral substrate
+  contracts
 - local checkout validation and canonical git-root discovery
 - managed checkout materialization from upstream git URLs
-- explicit git checkout feature-folder structure under `src/git/checkout/` so transport, refs, metadata, namespace, and locking evolve as independent responsibilities instead of regressing into a monolithic service file
 - mirror-backed checkout refresh policy
 - registry-aware library entry points so external crates can reuse the same configured query surface with custom plugin registries
 - lifecycle health summarization for source status and drift diagnostics
@@ -141,10 +142,10 @@ Update 2026-04-05:
 
 - the repo substrate boundary is now being extracted into the dedicated crate
   `xiuxian-git-repo`
-- `xiuxian-wendao` keeps compatibility wrappers for the existing repo
-  intelligence callers, but the implementation owner for managed layout,
-  materialization, lock handling, probe-state observation, and sync retry is
-  no longer intended to remain inside the Wendao domain crate
+- `xiuxian-wendao/src/git/` is now fully retired; the only Wendao-local repo
+  bridge that remains is `src/analyzers/repo_source.rs`, which maps
+  `RegisteredRepository` config and domain errors onto
+  `xiuxian-git-repo` contracts without duplicating substrate enums or structs
 - `xiuxian-git-repo` has now removed its runtime `git2` dependency and uses
   `gix` for repository open/probe/revision/drift handling without
   re-expanding the public API around backend-specific handles
@@ -154,16 +155,39 @@ Update 2026-04-05:
 - `xiuxian-git-repo` managed remote target probing now also stays inside the
   backend substrate by using `gix` remote ref-map inspection with explicit
   HEAD/branch/tag probe refspecs instead of `git ls-remote`
+- `xiuxian-git-repo` now also performs managed bare clone, checkout clone,
+  and origin fetch through `gix`, while preserving mirror refspec parity for
+  bare repos instead of falling back to native `git clone` or `git fetch`
 - annotated tag probe results now align with peeled checkout revisions, so
   fetch-policy reuse no longer treats tag-pinned repositories as stale when
   the tag target is unchanged
+- local path remotes are now normalized through canonical filesystem paths
+  before drift comparison, which keeps tmp-backed mirrors and checkouts from
+  re-fetching solely due to path aliases such as `/var` versus `/private/var`
 - `xiuxian-wendao` itself no longer depends on `git2`; the remaining
   Wendao-owned repo fixtures now use bounded CLI git helpers, and the
   repo-intelligence snapshots redact concrete revision hashes so the contract
   stays backend-neutral
-- the remaining backend-hardening work, if we choose to keep pushing, is to
-  reduce the smaller native-`git` bridge now limited to clone/fetch and
-  detached-checkout parity
+- `xiuxian-git-repo` now also performs detached checkout through `gix`
+  index/worktree/reference mutation, including tracked-path pruning for
+  stale-file parity when a managed checkout moves backward across revisions
+- detached checkout stale-path cleanup now also refuses recursive directory
+  removal when a previously tracked file path is unexpectedly backed by a
+  directory, preserving unrelated untracked contents instead of deleting them
+  during collision handling
+- the internal `gix` backend has been split into
+  `packages/rust/crates/xiuxian-git-repo/src/backend/gix/` so retry/open/
+  probe/remote/clone/fetch/checkout logic evolve as separate responsibilities
+  instead of accreting inside one oversized backend file
+- no production native-`git` bridge remains in `xiuxian-git-repo`; the repo
+  substrate is now end-to-end `gix` backed behind the crate-owned API surface
+- the immediate Wendao done-gate follow-up is now also closed: repo gateway
+  cache tests use unique keyspaces, repo sync/overview snapshots normalize
+  revision hashes, publication-state hydration tests use a deterministic
+  awaitable runtime sync helper, and
+  `cargo test -p xiuxian-wendao --lib` plus
+  `cargo clippy -p xiuxian-wendao --lib --tests -- -D warnings` are green
+  again for the migrated lane
 
 Legacy `[[repo_intelligence.repos]]` configuration should not remain part of the active runtime contract. Older files may still carry that table during migration, but the runtime loader now ignores it and derives registrations only from project-scoped entries.
 

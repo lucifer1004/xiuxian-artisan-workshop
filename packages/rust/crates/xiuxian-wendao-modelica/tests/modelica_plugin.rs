@@ -478,10 +478,10 @@ fn commit_all(repo_dir: &Path, message: &str) -> TestResult {
 
 fn redact_repo_revision(value: &mut serde_json::Value) {
     for pointer in ["/overview/revision", "/overview/repository/revision"] {
-        if let Some(revision) = value.pointer_mut(pointer) {
-            if !revision.is_null() {
-                *revision = serde_json::Value::String("[revision]".to_string());
-            }
+        if let Some(revision) = value.pointer_mut(pointer)
+            && !revision.is_null()
+        {
+            *revision = serde_json::Value::String("[revision]".to_string());
         }
     }
 }

@@ -10,12 +10,14 @@ use crate::gateway::studio::repo_index::state::tests::{
     init_test_repository, new_coordinator, remote_repo, repo,
 };
 use crate::gateway::studio::repo_index::types::{RepoIndexEntryStatus, RepoIndexPhase};
-use crate::git::checkout::{
-    RepositorySyncMode, discover_checkout_metadata, record_managed_remote_probe_failure,
-    record_managed_remote_probe_state, resolve_repository_source,
-};
 use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
 use uuid::Uuid;
+use xiuxian_git_repo::{
+    SyncMode, discover_checkout_metadata, record_managed_remote_probe_failure,
+    record_managed_remote_probe_state,
+};
+
+use crate::analyzers::resolve_registered_repository_source;
 
 #[test]
 fn sync_repositories_only_enqueues_new_or_changed_repositories() {
@@ -168,10 +170,11 @@ async fn sync_repositories_warm_starts_stale_fetch_policy_remote_when_recent_pro
 
     let repo_id = format!("managed-remote-probe-{}", Uuid::new_v4());
     let repository = remote_repo(&repo_id, source_repo.display().to_string().as_str());
-    let first = resolve_repository_source(&repository, temp_dir.path(), RepositorySyncMode::Ensure)
-        .unwrap_or_else(|error| panic!("resolve first ensure: {error}"));
+    let first =
+        resolve_registered_repository_source(&repository, temp_dir.path(), SyncMode::Ensure)
+            .unwrap_or_else(|error| panic!("resolve first ensure: {error}"));
     let second =
-        resolve_repository_source(&repository, temp_dir.path(), RepositorySyncMode::Ensure)
+        resolve_registered_repository_source(&repository, temp_dir.path(), SyncMode::Ensure)
             .unwrap_or_else(|error| panic!("resolve second ensure: {error}"));
     let revision = discover_checkout_metadata(&second.checkout_root)
         .unwrap_or_else(|| panic!("discover checkout metadata for `{repo_id}`"))
@@ -273,10 +276,11 @@ async fn sync_repositories_warm_starts_stale_fetch_policy_remote_when_recent_ret
 
     let repo_id = format!("managed-remote-probe-failure-{}", Uuid::new_v4());
     let repository = remote_repo(&repo_id, source_repo.display().to_string().as_str());
-    let first = resolve_repository_source(&repository, temp_dir.path(), RepositorySyncMode::Ensure)
-        .unwrap_or_else(|error| panic!("resolve first ensure: {error}"));
+    let first =
+        resolve_registered_repository_source(&repository, temp_dir.path(), SyncMode::Ensure)
+            .unwrap_or_else(|error| panic!("resolve first ensure: {error}"));
     let second =
-        resolve_repository_source(&repository, temp_dir.path(), RepositorySyncMode::Ensure)
+        resolve_registered_repository_source(&repository, temp_dir.path(), SyncMode::Ensure)
             .unwrap_or_else(|error| panic!("resolve second ensure: {error}"));
     let mirror_root = second
         .mirror_root
@@ -378,10 +382,11 @@ async fn sync_repositories_warm_starts_stale_fetch_policy_remote_when_retryable_
 
     let repo_id = format!("managed-remote-probe-history-{}", Uuid::new_v4());
     let repository = remote_repo(&repo_id, source_repo.display().to_string().as_str());
-    let first = resolve_repository_source(&repository, temp_dir.path(), RepositorySyncMode::Ensure)
-        .unwrap_or_else(|error| panic!("resolve first ensure: {error}"));
+    let first =
+        resolve_registered_repository_source(&repository, temp_dir.path(), SyncMode::Ensure)
+            .unwrap_or_else(|error| panic!("resolve first ensure: {error}"));
     let second =
-        resolve_repository_source(&repository, temp_dir.path(), RepositorySyncMode::Ensure)
+        resolve_registered_repository_source(&repository, temp_dir.path(), SyncMode::Ensure)
             .unwrap_or_else(|error| panic!("resolve second ensure: {error}"));
     let mirror_root = second
         .mirror_root

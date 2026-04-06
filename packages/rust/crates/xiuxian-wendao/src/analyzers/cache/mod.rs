@@ -14,8 +14,7 @@ pub use artifacts::{
     RepositorySearchArtifacts, load_cached_repository_search_artifacts,
     store_cached_repository_search_artifacts,
 };
-pub use keys::{
-    RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey, build_repository_analysis_cache_key,
-};
+pub(crate) use keys::build_repository_analysis_cache_key;
+pub use keys::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};
 pub use query::{load_cached_repository_search_result, store_cached_repository_search_result};
 pub(crate) use valkey::ValkeyAnalysisCache;

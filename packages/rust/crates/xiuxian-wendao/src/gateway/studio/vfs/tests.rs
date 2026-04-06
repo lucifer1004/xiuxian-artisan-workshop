@@ -7,10 +7,11 @@ use super::content::resolve_vfs_path;
 use super::roots::resolve_all_vfs_roots;
 use super::scan::scan_all_roots;
 use super::scan_roots;
+use crate::analyzers::resolve_registered_repository_source;
 use crate::gateway::studio::router::{StudioState, configured_repositories};
 use crate::gateway::studio::test_support::commit_all;
 use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
-use crate::git::checkout::{RepositorySyncMode, resolve_repository_source};
+use xiuxian_git_repo::SyncMode;
 
 fn init_git_repository(root: &Path) {
     crate::gateway::studio::test_support::init_git_repository(root);
@@ -49,12 +50,8 @@ fn scan_all_roots_includes_repo_project_checkout_entries() {
     let repository = repositories
         .first()
         .unwrap_or_else(|| panic!("configured repository"));
-    resolve_repository_source(
-        repository,
-        state.config_root.as_path(),
-        RepositorySyncMode::Ensure,
-    )
-    .unwrap_or_else(|error| panic!("materialize checkout before scan: {error}"));
+    resolve_registered_repository_source(repository, state.config_root.as_path(), SyncMode::Ensure)
+        .unwrap_or_else(|error| panic!("materialize checkout before scan: {error}"));
 
     let result = scan_all_roots(&state);
 
@@ -94,12 +91,8 @@ fn resolve_vfs_path_supports_repo_project_checkout_files() {
     let repository = repositories
         .first()
         .unwrap_or_else(|| panic!("configured repository"));
-    resolve_repository_source(
-        repository,
-        state.config_root.as_path(),
-        RepositorySyncMode::Ensure,
-    )
-    .unwrap_or_else(|error| panic!("materialize checkout before resolving: {error}"));
+    resolve_registered_repository_source(repository, state.config_root.as_path(), SyncMode::Ensure)
+        .unwrap_or_else(|error| panic!("materialize checkout before resolving: {error}"));
 
     let resolved = resolve_vfs_path(&state, format!("{repo_id}/src/BaseModelica.jl").as_str())
         .unwrap_or_else(|error| panic!("resolve repo vfs path: {error:?}"));

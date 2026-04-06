@@ -48,6 +48,12 @@ Negotiation`, not more outward-surface expansion
   query validation keeps `xiuxian-wendao` only as a dev-dependency
 - the host now consumes `xiuxian-wendao-modelica` through a normal optional
   Cargo dependency instead of sibling-source inclusion
+- Modelica integration fixtures now create deterministic repositories through
+  CLI git helpers instead of `git2`
+- the workspace root and `xiuxian-wendao-modelica` manifests no longer carry
+  `git2`
+- the snapshot-backed Modelica repo-intelligence contract now redacts
+  concrete revision hashes, keeping backend cutovers backend-neutral
 - the host `xiuxian-wendao` test gate now validates the external Modelica
   plugin through builtin-registry repo-overview, module-search,
   example-search, and symbol-search entry points
@@ -210,5 +216,5 @@ Current package-level verification for this roadmap slice:
 
 - `direnv exec . cargo check -p xiuxian-wendao-modelica`
 - `direnv exec . cargo test -p xiuxian-wendao-modelica`
-- `cargo clippy -p xiuxian-wendao -p xiuxian-wendao-modelica --all-targets --all-features -- -D warnings`
-- `cargo nextest run -p xiuxian-wendao -p xiuxian-wendao-modelica --no-fail-fast`
+- `direnv exec . cargo clippy -p xiuxian-wendao -p xiuxian-wendao-modelica --all-targets --all-features -- -D warnings`
+- `direnv exec . cargo nextest run -p xiuxian-wendao -p xiuxian-wendao-modelica --no-fail-fast`

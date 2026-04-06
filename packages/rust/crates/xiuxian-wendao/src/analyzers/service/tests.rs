@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::analyzers::config::{RegisteredRepository, RepositoryRefreshPolicy};
 use crate::analyzers::query::{RefineEntityDocRequest, RefineEntityDocResponse};
 use crate::analyzers::records::RepositoryRecord;
-use crate::git::checkout::LocalCheckoutMetadata;
+use xiuxian_git_repo::LocalCheckoutMetadata;
 
 use super::merge::{hydrate_repository_record, merge_repository_record};
 

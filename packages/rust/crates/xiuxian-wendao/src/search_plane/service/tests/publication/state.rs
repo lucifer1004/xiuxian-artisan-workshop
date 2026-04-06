@@ -17,30 +17,32 @@ async fn repo_search_publication_state_prefers_publications_over_runtime_phase()
         modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
-    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
-        total: 3,
-        active: 1,
-        queued: 1,
-        checking: 0,
-        syncing: 0,
-        indexing: 1,
-        ready: 0,
-        unsupported: 0,
-        failed: 1,
-        target_concurrency: 1,
-        max_concurrency: 1,
-        sync_concurrency_limit: 1,
-        current_repo_id: Some("searchable/repo".to_string()),
-        active_repo_ids: vec!["searchable/repo".to_string()],
-        repos: vec![
-            RepoIndexEntryStatus {
-                last_revision: Some("rev-2".to_string()),
-                ..repo_status_entry("searchable/repo", RepoIndexPhase::Indexing)
-            },
-            repo_status_entry("pending/repo", RepoIndexPhase::Queued),
-            repo_status_entry("failed/repo", RepoIndexPhase::Failed),
-        ],
-    });
+    service
+        .synchronize_repo_runtime_for_test(&RepoIndexStatusResponse {
+            total: 3,
+            active: 1,
+            queued: 1,
+            checking: 0,
+            syncing: 0,
+            indexing: 1,
+            ready: 0,
+            unsupported: 0,
+            failed: 1,
+            target_concurrency: 1,
+            max_concurrency: 1,
+            sync_concurrency_limit: 1,
+            current_repo_id: Some("searchable/repo".to_string()),
+            active_repo_ids: vec!["searchable/repo".to_string()],
+            repos: vec![
+                RepoIndexEntryStatus {
+                    last_revision: Some("rev-2".to_string()),
+                    ..repo_status_entry("searchable/repo", RepoIndexPhase::Indexing)
+                },
+                repo_status_entry("pending/repo", RepoIndexPhase::Queued),
+                repo_status_entry("failed/repo", RepoIndexPhase::Failed),
+            ],
+        })
+        .await;
 
     let searchable = service
         .repo_search_publication_state("searchable/repo")
@@ -78,27 +80,29 @@ async fn repo_search_publication_states_batches_repo_snapshot_reads() {
         modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
-    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
-        total: 3,
-        active: 0,
-        queued: 1,
-        checking: 0,
-        syncing: 0,
-        indexing: 0,
-        ready: 1,
-        unsupported: 0,
-        failed: 1,
-        target_concurrency: 1,
-        max_concurrency: 1,
-        sync_concurrency_limit: 1,
-        current_repo_id: None,
-        active_repo_ids: Vec::new(),
-        repos: vec![
-            repo_status_entry("searchable/repo", RepoIndexPhase::Ready),
-            repo_status_entry("pending/repo", RepoIndexPhase::Queued),
-            repo_status_entry("failed/repo", RepoIndexPhase::Failed),
-        ],
-    });
+    service
+        .synchronize_repo_runtime_for_test(&RepoIndexStatusResponse {
+            total: 3,
+            active: 0,
+            queued: 1,
+            checking: 0,
+            syncing: 0,
+            indexing: 0,
+            ready: 1,
+            unsupported: 0,
+            failed: 1,
+            target_concurrency: 1,
+            max_concurrency: 1,
+            sync_concurrency_limit: 1,
+            current_repo_id: None,
+            active_repo_ids: Vec::new(),
+            repos: vec![
+                repo_status_entry("searchable/repo", RepoIndexPhase::Ready),
+                repo_status_entry("pending/repo", RepoIndexPhase::Queued),
+                repo_status_entry("failed/repo", RepoIndexPhase::Failed),
+            ],
+        })
+        .await;
     service.clear_all_in_memory_repo_runtime_for_test();
 
     let repo_ids = vec![
@@ -158,23 +162,25 @@ async fn repo_search_publication_state_hydrates_from_repo_corpus_snapshot_after_
         SearchPlaneCache::for_tests(keyspace),
     );
 
-    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
-        total: 1,
-        active: 0,
-        queued: 0,
-        checking: 0,
-        syncing: 0,
-        indexing: 0,
-        ready: 0,
-        unsupported: 0,
-        failed: 1,
-        target_concurrency: 1,
-        max_concurrency: 1,
-        sync_concurrency_limit: 1,
-        current_repo_id: None,
-        active_repo_ids: Vec::new(),
-        repos: vec![repo_status_entry("failed/repo", RepoIndexPhase::Failed)],
-    });
+    service
+        .synchronize_repo_runtime_for_test(&RepoIndexStatusResponse {
+            total: 1,
+            active: 0,
+            queued: 0,
+            checking: 0,
+            syncing: 0,
+            indexing: 0,
+            ready: 0,
+            unsupported: 0,
+            failed: 1,
+            target_concurrency: 1,
+            max_concurrency: 1,
+            sync_concurrency_limit: 1,
+            current_repo_id: None,
+            active_repo_ids: Vec::new(),
+            repos: vec![repo_status_entry("failed/repo", RepoIndexPhase::Failed)],
+        })
+        .await;
     service.clear_in_memory_repo_runtime_for_test("failed/repo");
 
     ok_or_panic(
@@ -216,23 +222,25 @@ async fn repo_search_publication_state_hydrates_from_repo_corpus_record_after_me
         modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
-    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
-        total: 1,
-        active: 0,
-        queued: 0,
-        checking: 0,
-        syncing: 0,
-        indexing: 0,
-        ready: 1,
-        unsupported: 0,
-        failed: 0,
-        target_concurrency: 1,
-        max_concurrency: 1,
-        sync_concurrency_limit: 1,
-        current_repo_id: None,
-        active_repo_ids: Vec::new(),
-        repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
-    });
+    service
+        .synchronize_repo_runtime_for_test(&RepoIndexStatusResponse {
+            total: 1,
+            active: 0,
+            queued: 0,
+            checking: 0,
+            syncing: 0,
+            indexing: 0,
+            ready: 1,
+            unsupported: 0,
+            failed: 0,
+            target_concurrency: 1,
+            max_concurrency: 1,
+            sync_concurrency_limit: 1,
+            current_repo_id: None,
+            active_repo_ids: Vec::new(),
+            repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
+        })
+        .await;
     service.clear_in_memory_repo_runtime_for_test("searchable/repo");
     service.clear_in_memory_repo_publications_for_test("searchable/repo");
     service.clear_all_in_memory_repo_corpus_records_for_test();
@@ -278,23 +286,25 @@ async fn repo_search_publication_state_recovers_publication_after_runtime_only_r
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
     service.clear_all_in_memory_repo_corpus_records_for_test();
 
-    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
-        total: 1,
-        active: 0,
-        queued: 0,
-        checking: 0,
-        syncing: 0,
-        indexing: 0,
-        ready: 1,
-        unsupported: 0,
-        failed: 0,
-        target_concurrency: 1,
-        max_concurrency: 1,
-        sync_concurrency_limit: 1,
-        current_repo_id: None,
-        active_repo_ids: Vec::new(),
-        repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
-    });
+    service
+        .synchronize_repo_runtime_for_test(&RepoIndexStatusResponse {
+            total: 1,
+            active: 0,
+            queued: 0,
+            checking: 0,
+            syncing: 0,
+            indexing: 0,
+            ready: 1,
+            unsupported: 0,
+            failed: 0,
+            target_concurrency: 1,
+            max_concurrency: 1,
+            sync_concurrency_limit: 1,
+            current_repo_id: None,
+            active_repo_ids: Vec::new(),
+            repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
+        })
+        .await;
 
     ok_or_panic(
         tokio::time::timeout(Duration::from_secs(1), async {
@@ -352,30 +362,23 @@ async fn repo_search_publication_state_does_not_hydrate_from_manifest_without_re
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
     };
-    service.synchronize_repo_runtime(&ready_status);
+    service
+        .synchronize_repo_runtime_for_test(&ready_status)
+        .await;
     service
         .clear_persisted_repo_corpus_for_test("searchable/repo")
         .await;
     service.clear_all_in_memory_repo_corpus_records_for_test();
-    service.synchronize_repo_runtime(&ready_status);
+    service
+        .synchronize_repo_runtime_for_test(&ready_status)
+        .await;
 
-    ok_or_panic(
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                let state = service
-                    .repo_search_publication_state("searchable/repo")
-                    .await;
-                if state.availability == RepoSearchAvailability::Pending {
-                    assert!(!state.entity_published);
-                    assert!(!state.content_published);
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await,
-        "manifest-only fallback should stay disabled",
-    );
+    let state = service
+        .repo_search_publication_state("searchable/repo")
+        .await;
+    assert_eq!(state.availability, RepoSearchAvailability::Pending);
+    assert!(!state.entity_published);
+    assert!(!state.content_published);
 
     assert_eq!(
         repo_phase(&service, "searchable/repo"),

@@ -87,7 +87,6 @@ mod valkey_common;
 // Fusion recall boost (Rust computation, Python thin wrapper)
 // ---------------------------------------------------------------------------
 pub mod fusion;
-pub mod git;
 
 // ---------------------------------------------------------------------------
 // Feature modules (enhancer, link graph refs, dependency, unified symbol)

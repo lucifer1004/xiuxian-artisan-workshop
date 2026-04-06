@@ -447,10 +447,10 @@ fn redact_sync_revisions(value: &mut serde_json::Value) {
         "/status_summary/revisions/mirror_revision",
         "/status_summary/revisions/tracking_revision",
     ] {
-        if let Some(revision) = value.pointer_mut(pointer) {
-            if !revision.is_null() {
-                *revision = serde_json::Value::String("[revision]".to_string());
-            }
+        if let Some(revision) = value.pointer_mut(pointer)
+            && !revision.is_null()
+        {
+            *revision = serde_json::Value::String("[revision]".to_string());
         }
     }
 }

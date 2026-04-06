@@ -11,6 +11,7 @@ use crate::analyzers::cache::{
 use crate::analyzers::{
     ExampleRecord, ImportKind, ImportRecord, ModuleRecord, RepoSymbolKind,
     RepositoryAnalysisOutput, SymbolRecord, bootstrap_builtin_registry,
+    resolve_registered_repository_source,
 };
 use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::gateway::studio::router::StudioApiError;
@@ -22,9 +23,6 @@ use crate::gateway::studio::test_support::{
     assert_studio_json_snapshot, commit_all, init_git_repository,
 };
 use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
-use crate::git::checkout::{
-    CheckoutSyncMode, discover_checkout_metadata, resolve_repository_source,
-};
 use crate::query_core::{
     query_repo_entity_example_results_if_published, query_repo_entity_import_results_if_published,
     query_repo_entity_module_results_if_published, query_repo_entity_symbol_results_if_published,
@@ -32,16 +30,24 @@ use crate::query_core::{
 use crate::search_plane::{
     SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService, publish_repo_entities,
 };
+use xiuxian_git_repo::{SyncMode, discover_checkout_metadata};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct CachedRepoSearchProbe {
     value: String,
 }
 
+fn unique_repo_gateway_keyspace(label: &str, root: &std::path::Path) -> SearchManifestKeyspace {
+    SearchManifestKeyspace::new(format!(
+        "xiuxian:test:repo_gateway:{label}:{}",
+        blake3::hash(root.to_string_lossy().as_bytes()).to_hex()
+    ))
+}
+
 #[tokio::test]
 async fn cached_repo_search_result_reuses_hot_query_payload() {
     let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-    let keyspace = SearchManifestKeyspace::new("xiuxian:test:repo_gateway_cache");
+    let keyspace = unique_repo_gateway_keyspace("cache", temp_dir.path());
     let search_plane = SearchPlaneService::with_test_cache(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
@@ -101,7 +107,7 @@ async fn repo_entity_query_core_returns_none_when_publication_is_not_ready() {
     let service = SearchPlaneService::with_test_cache(
         PathBuf::from("/tmp/project"),
         temp_dir.path().join("search_plane"),
-        SearchManifestKeyspace::new("xiuxian:test:repo_entity_module_not_ready"),
+        unique_repo_gateway_keyspace("entity-module-not-ready", temp_dir.path()),
         SearchMaintenancePolicy::default(),
     );
 
@@ -441,10 +447,10 @@ fn prime_import_analysis_cache(studio: &StudioState, registry: &crate::analyzers
         registry,
     )
     .unwrap_or_else(|error| panic!("analyze import fixture repository: {error:?}"));
-    let repository_source = resolve_repository_source(
+    let repository_source = resolve_registered_repository_source(
         &repository,
         studio.project_root.as_path(),
-        CheckoutSyncMode::Status,
+        SyncMode::Status,
     )
     .unwrap_or_else(|error| panic!("resolve repository source: {error:?}"));
     let checkout_metadata = discover_checkout_metadata(repository_source.checkout_root.as_path());

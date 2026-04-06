@@ -1,6 +1,6 @@
 use crate::analyzers::config::RegisteredRepository;
-use crate::git::checkout::{LocalCheckoutMetadata, ResolvedRepositorySource};
 use crate::search::FuzzySearchOptions;
+use xiuxian_git_repo::{LocalCheckoutMetadata, MaterializedRepo};
 
 /// Cache key for repository analysis results.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -66,9 +66,9 @@ impl RepositorySearchQueryCacheKey {
 
 /// Builds a cache key from repository configuration and resolved source.
 #[must_use]
-pub fn build_repository_analysis_cache_key(
+pub(crate) fn build_repository_analysis_cache_key(
     repository: &RegisteredRepository,
-    source: &ResolvedRepositorySource,
+    source: &MaterializedRepo,
     metadata: Option<&LocalCheckoutMetadata>,
 ) -> RepositoryAnalysisCacheKey {
     let mut plugin_ids = repository

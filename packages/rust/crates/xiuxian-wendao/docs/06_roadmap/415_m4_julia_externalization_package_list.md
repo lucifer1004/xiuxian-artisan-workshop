@@ -437,6 +437,20 @@ Current implementation status:
     helpers, generic-topology scored-pair normalization no longer uses a
     precision-loss cast, and the topology-subgraph builder now satisfies the
     `missing_errors_doc` gate without relaxing `-D warnings`
+45. the host generic-topology live harness now also derives fallback edge
+    labels and staged `edge_constraint_kinds` from the normalized Wendao
+    agentic execution relation, so the manifest-discovered solver-demo lane no
+    longer hard-codes a placeholder `"related"` edge semantic in host support
+46. that same host-through-language-seam filter lane now also derives the
+    staged `required_boundary_size` from plan-aware anchor and candidate-
+    topology semantics, and it validates filter-side anchor and topology list
+    columns before the same manifest-discovered solver-demo downcall without
+    changing the Julia contract
+47. that same host-through-language-seam filter lane now also derives the
+    staged `constraint_kind` from the same plan-aware batch shape, and the
+    paired Julia-plugin live proof now exercises the non-default
+    `boundary_match` filter mode against the same solver-demo multi-route
+    endpoint without changing the Julia contract
 
 ## Compatibility Plan
 

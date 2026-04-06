@@ -10,10 +10,10 @@ use super::{
 use crate::analyzers::config::{
     RegisteredRepository, RepositoryPluginConfig, RepositoryRefreshPolicy,
 };
-use crate::git::checkout::{
-    LocalCheckoutMetadata, ResolvedRepositorySource, ResolvedRepositorySourceKind,
-};
 use crate::search::{FuzzySearchOptions, SearchDocumentIndex};
+use xiuxian_git_repo::{
+    LocalCheckoutMetadata, MaterializedRepo, RepoDriftState, RepoLifecycleState, RepoSourceKind,
+};
 
 fn ok_or_panic<T, E>(result: Result<T, E>, context: &str) -> T
 where
@@ -66,16 +66,16 @@ fn build_repository_analysis_cache_key_sorts_and_deduplicates_plugin_ids() {
             RepositoryPluginConfig::Id("plugin-z".to_string()),
         ],
     };
-    let source = ResolvedRepositorySource {
+    let source = MaterializedRepo {
         checkout_root: PathBuf::from("/tmp/repo-cache-key"),
         mirror_root: None,
         mirror_revision: Some("mirror-1".to_string()),
         tracking_revision: Some("tracking-1".to_string()),
         last_fetched_at: None,
-        drift_state: crate::analyzers::query::RepoSyncDriftState::NotApplicable,
-        mirror_state: crate::git::checkout::RepositoryLifecycleState::NotApplicable,
-        checkout_state: crate::git::checkout::RepositoryLifecycleState::Validated,
-        source_kind: ResolvedRepositorySourceKind::LocalCheckout,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
     };
     let metadata = Some(LocalCheckoutMetadata {
         revision: Some("rev-1".to_string()),

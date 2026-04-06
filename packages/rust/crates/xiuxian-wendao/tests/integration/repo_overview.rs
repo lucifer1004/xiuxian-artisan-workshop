@@ -371,10 +371,10 @@ fn redact_repo_revision(value: &mut serde_json::Value) {
         "/repository/revision",
         "/revision",
     ] {
-        if let Some(revision) = value.pointer_mut(pointer) {
-            if !revision.is_null() {
-                *revision = serde_json::Value::String("[revision]".to_string());
-            }
+        if let Some(revision) = value.pointer_mut(pointer)
+            && !revision.is_null()
+        {
+            *revision = serde_json::Value::String("[revision]".to_string());
         }
     }
 }

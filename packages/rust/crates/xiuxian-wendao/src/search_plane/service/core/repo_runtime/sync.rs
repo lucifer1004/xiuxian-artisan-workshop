@@ -1,8 +1,8 @@
 use std::sync::atomic::Ordering;
 
 use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
-use crate::search_plane::SearchCorpusKind;
 use crate::search_plane::service::core::types::SearchPlaneService;
+use crate::search_plane::{SearchCorpusKind, SearchRepoRuntimeRecord};
 
 impl SearchPlaneService {
     fn advance_repo_runtime_generation(&self) -> u64 {
@@ -13,16 +13,28 @@ impl SearchPlaneService {
         self.repo_runtime_generation.load(Ordering::Relaxed) == generation
     }
 
-    pub(crate) fn synchronize_repo_runtime(&self, repo_status: &RepoIndexStatusResponse) {
+    fn prepare_repo_runtime_refresh(
+        &self,
+        repo_status: &RepoIndexStatusResponse,
+    ) -> Option<(u64, Vec<String>, Vec<SearchRepoRuntimeRecord>)> {
         let runtime_records = Self::repo_runtime_records(repo_status);
         let next_runtime = Self::next_repo_runtime_states(repo_status);
         let (updated_records, removed_repo_ids) =
             self.repo_runtime_delta(runtime_records.as_slice(), &next_runtime);
         self.apply_repo_runtime_to_memory(runtime_records.as_slice(), removed_repo_ids.as_slice());
         if updated_records.is_empty() && removed_repo_ids.is_empty() {
-            return;
+            return None;
         }
         let generation = self.advance_repo_runtime_generation();
+        Some((generation, removed_repo_ids, runtime_records))
+    }
+
+    pub(crate) fn synchronize_repo_runtime(&self, repo_status: &RepoIndexStatusResponse) {
+        let Some((generation, removed_repo_ids, runtime_records)) =
+            self.prepare_repo_runtime_refresh(repo_status)
+        else {
+            return;
+        };
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             let service = self.clone();
             handle.spawn(async move {
@@ -159,6 +171,20 @@ impl SearchPlaneService {
         runtime_records: Vec<crate::search_plane::SearchRepoRuntimeRecord>,
     ) {
         self.refresh_repo_runtime_cache(generation, Vec::new(), runtime_records)
+            .await;
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn synchronize_repo_runtime_for_test(
+        &self,
+        repo_status: &RepoIndexStatusResponse,
+    ) {
+        let Some((generation, removed_repo_ids, runtime_records)) =
+            self.prepare_repo_runtime_refresh(repo_status)
+        else {
+            return;
+        };
+        self.refresh_repo_runtime_cache(generation, removed_repo_ids, runtime_records)
             .await;
     }
 }

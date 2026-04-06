@@ -374,7 +374,7 @@ fn resolve_managed_checkout(
         .unwrap_or_else(|_| mirror_root.clone())
         .display()
         .to_string();
-    let (repository_handle, checkout_mutated) = if checkout_existed {
+    let (mut repository_handle, checkout_mutated) = if checkout_existed {
         let mut repo = open_checkout_with_retry(&checkout_root).map_err(|error| {
             RepoError::new(
                 RepoError::classify_message(error.message()),
@@ -420,7 +420,7 @@ fn resolve_managed_checkout(
         let checkout_requires_head_sync = !matches!(mode, SyncMode::Status)
             && current_checkout_revision.as_deref() != desired_checkout_revision.as_deref();
         if checkout_requires_head_sync {
-            sync_checkout_head(&repo, spec.revision.as_ref()).map_err(|error| {
+            sync_checkout_head(&mut repo, spec.revision.as_ref()).map_err(|error| {
                 RepoError::new(
                     RepoError::classify_message(error.message()),
                     format!(
@@ -450,7 +450,7 @@ fn resolve_managed_checkout(
 
     if !matches!(mode, SyncMode::Status) && !checkout_existed && desired_checkout_revision.is_some()
     {
-        sync_checkout_head(&repository_handle, spec.revision.as_ref()).map_err(|error| {
+        sync_checkout_head(&mut repository_handle, spec.revision.as_ref()).map_err(|error| {
             RepoError::new(
                 RepoError::classify_message(error.message()),
                 format!(

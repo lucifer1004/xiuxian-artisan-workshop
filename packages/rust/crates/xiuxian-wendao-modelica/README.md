@@ -32,8 +32,10 @@ Current dependency boundary is now explicit:
 - production contracts come from `xiuxian-wendao-core::repo_intelligence`
 - `xiuxian-wendao` consumes this crate through a normal optional Cargo dependency instead of sibling-source inclusion
 - registry-aware integration-query validation still uses `xiuxian-wendao` as a dev-dependency only
+- deterministic fixture repositories now come from CLI git helpers, so this crate and the workspace no longer depend on `git2`
+- snapshot-backed repo-intelligence assertions now redact concrete revision hashes as `[revision]` to keep backend cutovers contract-neutral
 
-Package-local tracking docs now live under [docs/index.md](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/docs/index.md), mirroring the higher-level `xiuxian-wendao/docs` structure so Modelica-specific architecture, feature notes, research notes, and roadmap progress can evolve independently. The first split is now explicit:
+Package-local tracking docs now live under [docs/index.md](docs/index.md), mirroring the higher-level `xiuxian-wendao/docs` structure so Modelica-specific architecture, feature notes, research notes, and roadmap progress can evolve independently. The first split is now explicit:
 
 - `docs/01_core/` for extension-boundary and package architecture notes
   - includes the package-local document identity protocol for opaque hash-based `:ID:` values
@@ -43,9 +45,9 @@ Package-local tracking docs now live under [docs/index.md](/Users/guangtao/proje
 
 Current crate layout is intentionally modular:
 
-- [lib.rs](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/src/lib.rs) only re-exports the public plugin surface
-- [plugin/entry.rs](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/src/plugin/entry.rs) owns the plugin trait implementation
-- [plugin/analysis.rs](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/src/plugin/analysis.rs) orchestrates repository analysis
-- [plugin/discovery.rs](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/src/plugin/discovery.rs) owns repository walking, package-order discovery, and normalized record collection
-- [plugin/relations.rs](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/src/plugin/relations.rs) owns `Contains`, `Declares`, `ExampleOf`, and `Documents` relation construction
-- [plugin/parsing.rs](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/src/plugin/parsing.rs) owns conservative Modelica parsing helpers and parser snapshots
+- [lib.rs](src/lib.rs) only re-exports the public plugin surface
+- [plugin/entry.rs](src/plugin/entry.rs) owns the plugin trait implementation
+- [plugin/analysis.rs](src/plugin/analysis.rs) orchestrates repository analysis
+- [plugin/discovery.rs](src/plugin/discovery.rs) owns repository walking, package-order discovery, and normalized record collection
+- [plugin/relations.rs](src/plugin/relations.rs) owns `Contains`, `Declares`, `ExampleOf`, and `Documents` relation construction
+- [plugin/parsing.rs](src/plugin/parsing.rs) owns conservative Modelica parsing helpers and parser snapshots

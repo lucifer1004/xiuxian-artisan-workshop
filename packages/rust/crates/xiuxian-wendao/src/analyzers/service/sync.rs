@@ -3,6 +3,11 @@
 use std::path::Path;
 
 use chrono::Utc;
+use xiuxian_git_repo::{
+    LocalCheckoutMetadata, MaterializedRepo, RepoDriftState,
+    RepoLifecycleState as SubstrateLifecycleState, RepoSourceKind as SubstrateSourceKind, SyncMode,
+    discover_checkout_metadata,
+};
 
 use super::load_registered_repository;
 use crate::analyzers::config::RegisteredRepository;
@@ -12,26 +17,19 @@ use crate::analyzers::query::{
     RepoSyncLifecycleSummary, RepoSyncMode, RepoSyncQuery, RepoSyncResult, RepoSyncRevisionSummary,
     RepoSyncStalenessState, RepoSyncState, RepoSyncStatusSummary,
 };
-use crate::git::checkout::{
-    LocalCheckoutMetadata, RepositoryLifecycleState, RepositorySyncMode as CheckoutSyncMode,
-    ResolvedRepositorySource, ResolvedRepositorySourceKind, discover_checkout_metadata,
-    resolve_repository_source,
-};
+use crate::analyzers::resolve_registered_repository_source;
 
 /// Build a repository synchronization result from resolved source state.
 #[must_use]
 pub(crate) fn build_repo_sync(
     query: &RepoSyncQuery,
     repository: &RegisteredRepository,
-    source: &ResolvedRepositorySource,
+    source: &MaterializedRepo,
     metadata: Option<LocalCheckoutMetadata>,
 ) -> RepoSyncResult {
     let metadata = metadata.unwrap_or_default();
     let checked_at = Utc::now();
-    let source_kind = match source.source_kind {
-        ResolvedRepositorySourceKind::LocalCheckout => RepoSourceKind::LocalCheckout,
-        ResolvedRepositorySourceKind::ManagedRemote => RepoSourceKind::ManagedRemote,
-    };
+    let source_kind = repo_source_kind(source.source_kind);
     let mirror_state = repo_sync_state(source.mirror_state);
     let checkout_state = repo_sync_state(source.checkout_state);
     let checked_at_string = checked_at.to_rfc3339();
@@ -39,7 +37,7 @@ pub(crate) fn build_repo_sync(
     let mirror_revision = source.mirror_revision.clone();
     let tracking_revision = source.tracking_revision.clone();
     let upstream_url = repository.url.clone().or(metadata.remote_url);
-    let drift_state = source.drift_state;
+    let drift_state = repo_sync_drift_state(source.drift_state);
     let health_state = repo_sync_health_state(source);
     let staleness_state = repo_sync_staleness_state(source, checked_at);
     let revision = metadata.revision;
@@ -107,61 +105,80 @@ pub fn repo_sync_for_registered_repository(
     repository: &RegisteredRepository,
     cwd: &Path,
 ) -> Result<RepoSyncResult, RepoIntelligenceError> {
-    let source = resolve_repository_source(repository, cwd, checkout_sync_mode(query.mode))?;
+    let source =
+        resolve_registered_repository_source(repository, cwd, checkout_sync_mode(query.mode))?;
     let metadata = discover_checkout_metadata(&source.checkout_root);
     Ok(build_repo_sync(query, repository, &source, metadata))
 }
 
-fn checkout_sync_mode(mode: RepoSyncMode) -> CheckoutSyncMode {
+fn checkout_sync_mode(mode: RepoSyncMode) -> SyncMode {
     match mode {
-        RepoSyncMode::Ensure => CheckoutSyncMode::Ensure,
-        RepoSyncMode::Refresh => CheckoutSyncMode::Refresh,
-        RepoSyncMode::Status => CheckoutSyncMode::Status,
+        RepoSyncMode::Ensure => SyncMode::Ensure,
+        RepoSyncMode::Refresh => SyncMode::Refresh,
+        RepoSyncMode::Status => SyncMode::Status,
     }
 }
 
-fn repo_sync_state(state: RepositoryLifecycleState) -> RepoSyncState {
+fn repo_source_kind(state: SubstrateSourceKind) -> RepoSourceKind {
     match state {
-        RepositoryLifecycleState::NotApplicable => RepoSyncState::NotApplicable,
-        RepositoryLifecycleState::Missing => RepoSyncState::Missing,
-        RepositoryLifecycleState::Validated => RepoSyncState::Validated,
-        RepositoryLifecycleState::Observed => RepoSyncState::Observed,
-        RepositoryLifecycleState::Created => RepoSyncState::Created,
-        RepositoryLifecycleState::Reused => RepoSyncState::Reused,
-        RepositoryLifecycleState::Refreshed => RepoSyncState::Refreshed,
+        SubstrateSourceKind::LocalCheckout => RepoSourceKind::LocalCheckout,
+        SubstrateSourceKind::ManagedRemote => RepoSourceKind::ManagedRemote,
     }
 }
 
-fn repo_sync_health_state(source: &ResolvedRepositorySource) -> RepoSyncHealthState {
+fn repo_sync_state(state: SubstrateLifecycleState) -> RepoSyncState {
+    match state {
+        SubstrateLifecycleState::NotApplicable => RepoSyncState::NotApplicable,
+        SubstrateLifecycleState::Missing => RepoSyncState::Missing,
+        SubstrateLifecycleState::Validated => RepoSyncState::Validated,
+        SubstrateLifecycleState::Observed => RepoSyncState::Observed,
+        SubstrateLifecycleState::Created => RepoSyncState::Created,
+        SubstrateLifecycleState::Reused => RepoSyncState::Reused,
+        SubstrateLifecycleState::Refreshed => RepoSyncState::Refreshed,
+    }
+}
+
+fn repo_sync_drift_state(state: RepoDriftState) -> RepoSyncDriftState {
+    match state {
+        RepoDriftState::NotApplicable => RepoSyncDriftState::NotApplicable,
+        RepoDriftState::Unknown => RepoSyncDriftState::Unknown,
+        RepoDriftState::InSync => RepoSyncDriftState::InSync,
+        RepoDriftState::Ahead => RepoSyncDriftState::Ahead,
+        RepoDriftState::Behind => RepoSyncDriftState::Behind,
+        RepoDriftState::Diverged => RepoSyncDriftState::Diverged,
+    }
+}
+
+fn repo_sync_health_state(source: &MaterializedRepo) -> RepoSyncHealthState {
     match source.source_kind {
-        ResolvedRepositorySourceKind::LocalCheckout => RepoSyncHealthState::Healthy,
-        ResolvedRepositorySourceKind::ManagedRemote => {
-            if matches!(source.mirror_state, RepositoryLifecycleState::Missing)
-                || matches!(source.checkout_state, RepositoryLifecycleState::Missing)
+        SubstrateSourceKind::LocalCheckout => RepoSyncHealthState::Healthy,
+        SubstrateSourceKind::ManagedRemote => {
+            if matches!(source.mirror_state, SubstrateLifecycleState::Missing)
+                || matches!(source.checkout_state, SubstrateLifecycleState::Missing)
             {
                 return RepoSyncHealthState::MissingAssets;
             }
 
             match source.drift_state {
-                RepoSyncDriftState::NotApplicable | RepoSyncDriftState::InSync => {
+                RepoDriftState::NotApplicable | RepoDriftState::InSync => {
                     RepoSyncHealthState::Healthy
                 }
-                RepoSyncDriftState::Ahead => RepoSyncHealthState::HasLocalCommits,
-                RepoSyncDriftState::Behind => RepoSyncHealthState::NeedsRefresh,
-                RepoSyncDriftState::Diverged => RepoSyncHealthState::Diverged,
-                RepoSyncDriftState::Unknown => RepoSyncHealthState::Unknown,
+                RepoDriftState::Ahead => RepoSyncHealthState::HasLocalCommits,
+                RepoDriftState::Behind => RepoSyncHealthState::NeedsRefresh,
+                RepoDriftState::Diverged => RepoSyncHealthState::Diverged,
+                RepoDriftState::Unknown => RepoSyncHealthState::Unknown,
             }
         }
     }
 }
 
 fn repo_sync_staleness_state(
-    source: &ResolvedRepositorySource,
+    source: &MaterializedRepo,
     checked_at: chrono::DateTime<Utc>,
 ) -> RepoSyncStalenessState {
     match source.source_kind {
-        ResolvedRepositorySourceKind::LocalCheckout => RepoSyncStalenessState::NotApplicable,
-        ResolvedRepositorySourceKind::ManagedRemote => {
+        SubstrateSourceKind::LocalCheckout => RepoSyncStalenessState::NotApplicable,
+        SubstrateSourceKind::ManagedRemote => {
             let Some(last_fetched_at) = source.last_fetched_at.as_deref() else {
                 return RepoSyncStalenessState::Unknown;
             };

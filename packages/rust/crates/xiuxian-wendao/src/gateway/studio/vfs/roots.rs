@@ -3,10 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::analyzers::config::RegisteredRepository;
+use crate::analyzers::resolve_registered_repository_source;
 use crate::gateway::studio::pathing::resolve_path_like;
 use crate::gateway::studio::router::{StudioState, configured_repositories};
 use crate::gateway::studio::types::VfsEntry;
-use crate::git::checkout::{RepositorySyncMode, resolve_repository_source};
+use xiuxian_git_repo::SyncMode;
 
 use super::content::unix_timestamp_secs;
 use super::filters::ProjectFileFilter;
@@ -93,10 +94,10 @@ fn resolve_repo_vfs_root(
     state: &StudioState,
     repository: &RegisteredRepository,
 ) -> Option<VfsRoot> {
-    let source = resolve_repository_source(
+    let source = resolve_registered_repository_source(
         repository,
         state.config_root.as_path(),
-        RepositorySyncMode::Status,
+        SyncMode::Status,
     )
     .ok()?;
 

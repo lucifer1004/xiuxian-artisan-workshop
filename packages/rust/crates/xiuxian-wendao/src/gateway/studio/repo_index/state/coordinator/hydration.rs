@@ -12,7 +12,7 @@ use crate::analyzers::{
 use crate::gateway::studio::repo_index::state::coordinator::RepoIndexCoordinator;
 use crate::gateway::studio::repo_index::state::fingerprint::fingerprint;
 use crate::gateway::studio::repo_index::types::{RepoIndexEntryStatus, RepoIndexPhase};
-use crate::git::checkout::{ManagedRemoteProbeStatus, discover_managed_remote_probe_state};
+use xiuxian_git_repo::{ManagedRemoteProbeStatus, discover_managed_remote_probe_state};
 
 impl RepoIndexCoordinator {
     pub(crate) fn hydrate_repositories_from_search_plane(
@@ -222,7 +222,7 @@ mod tests {
     };
     use crate::analyzers::{RegisteredRepository, RepositoryPluginConfig, RepositoryRefreshPolicy};
     use crate::gateway::studio::repo_index::types::{RepoIndexEntryStatus, RepoIndexPhase};
-    use crate::git::checkout::{
+    use xiuxian_git_repo::{
         record_managed_remote_probe_failure, record_managed_remote_probe_state,
     };
 

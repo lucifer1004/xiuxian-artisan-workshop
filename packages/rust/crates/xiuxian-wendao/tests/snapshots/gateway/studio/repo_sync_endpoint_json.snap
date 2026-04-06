@@ -15,7 +15,7 @@ expression: value
   "mode": "status",
   "refresh": "fetch",
   "repo_id": "gateway-sync",
-  "revision": "107903cc8288129dc659b5324ee94225800b38a5",
+  "revision": "[revision]",
   "source_kind": "local_checkout",
   "staleness_state": "not_applicable",
   "status_summary": {
@@ -36,7 +36,7 @@ expression: value
     },
     "revisions": {
       "aligned_with_mirror": false,
-      "checkout_revision": "107903cc8288129dc659b5324ee94225800b38a5",
+      "checkout_revision": "[revision]",
       "mirror_revision": null,
       "tracking_revision": null
     }
