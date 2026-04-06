@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "Workflow Runtime Architecture - Omni-Dev-Fusion"
+title: "Workflow Runtime Architecture - xiuxian-artisan-workshop"
 category: "architecture"
 tags:
   - architecture
@@ -8,10 +8,10 @@ tags:
 saliency_base: 7.0
 decay_rate: 0.03
 metadata:
-  title: "Workflow Runtime Architecture - Omni-Dev-Fusion"
+  title: "Workflow Runtime Architecture - xiuxian-artisan-workshop"
 ---
 
-# Workflow Runtime Architecture - Omni-Dev-Fusion
+# Workflow Runtime Architecture - xiuxian-artisan-workshop
 
 > Cognitive state-machine runtime for agent workflows.
 > Last Updated: 2026-02-25

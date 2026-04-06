@@ -12,7 +12,7 @@
 /// Runtime-owned artifact render helpers.
 pub mod artifacts;
 /// Runtime-owned live link-graph config records and resolvers.
-pub mod runtime_config;
+pub mod config;
 /// Runtime-owned config settings merge, override, and parsing helpers.
 pub mod settings;
 /// Transport negotiation and client-construction helpers.

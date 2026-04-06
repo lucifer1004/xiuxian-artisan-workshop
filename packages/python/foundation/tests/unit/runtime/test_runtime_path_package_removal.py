@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 
-_RUNTIME_PATH_FILE = Path(
-    "/Users/guangtao/projects/xiuxian-artisan-workshop/packages/python/foundation/src/"
-    "xiuxian_foundation/runtime/path.py"
+_RUNTIME_PATH_FILE = (
+    Path(__file__).resolve().parents[3] / "src" / "xiuxian_foundation" / "runtime" / "path.py"
 )
 
 

@@ -1,6 +1,7 @@
 import importlib
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -111,21 +112,22 @@ class TestAdvancedToolsPatternMode:
     def test_can_use_python_filename_fast_path_requires_scoped_literal_query(self):
         module = _load_search_module()
         _can_use_python_filename_fast_path = module._can_use_python_filename_fast_path
+        resolved_search_root = str(Path(tempfile.gettempdir()))
 
         assert _can_use_python_filename_fast_path(
             pattern="benchmark_note",
             exclude=None,
-            resolved_search_root="/tmp",
+            resolved_search_root=resolved_search_root,
         )
         assert not _can_use_python_filename_fast_path(
             pattern="test_*.py",
             exclude=None,
-            resolved_search_root="/tmp",
+            resolved_search_root=resolved_search_root,
         )
         assert not _can_use_python_filename_fast_path(
             pattern="benchmark_note",
             exclude="target",
-            resolved_search_root="/tmp",
+            resolved_search_root=resolved_search_root,
         )
         assert not _can_use_python_filename_fast_path(
             pattern="benchmark_note",

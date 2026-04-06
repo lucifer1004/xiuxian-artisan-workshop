@@ -33,6 +33,7 @@ fn record_feedback_updates_success_and_failure_counts() -> Result<()> {
     let ep = store
         .get("ep-1")
         .ok_or_else(|| anyhow::anyhow!("episode should exist"))?;
+    assert_eq!(ep.retrieval_count, 2);
     assert_eq!(ep.success_count, 1);
     assert_eq!(ep.failure_count, 1);
     Ok(())

@@ -1,3 +1,3 @@
-pub use xiuxian_wendao_runtime::runtime_config::{
+pub use xiuxian_wendao_runtime::config::{
     LinkGraphSemanticIgnitionBackend, LinkGraphSemanticIgnitionRuntimeConfig,
 };

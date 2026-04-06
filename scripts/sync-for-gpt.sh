@@ -6,8 +6,11 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRJ_ROOT="${PRJ_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
 SRC_DIR="$PRJ_ROOT"
-DEST_DIR="$HOME/ghq/github.com/tao3k/xiuxian-artisan-workshop-gpt"
+DEST_DIR="${SYNC_FOR_GPT_DEST_DIR:-${PRJ_ROOT%/}-gpt}"
 
 echo "Syncing from: $SRC_DIR"
 echo "Syncing to:   $DEST_DIR"

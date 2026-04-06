@@ -91,6 +91,10 @@
         "next_action": {
           "type": "string",
           "enum": ["retain", "obsolete", "promote"]
+        },
+        "promotion_target": {
+          "type": "string",
+          "enum": ["working_knowledge"]
         }
       }
     }

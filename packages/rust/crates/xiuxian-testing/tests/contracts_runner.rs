@@ -1,6 +1,6 @@
 //! Integration tests for the executable contract-suite runner.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -107,15 +107,21 @@ fn test_context() -> CollectionContext {
     let mut context = CollectionContext {
         suite_id: "contracts".to_string(),
         crate_name: Some("xiuxian-wendao".to_string()),
-        workspace_root: Some(PathBuf::from(
-            "/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion",
-        )),
+        workspace_root: Some(workspace_root()),
         labels: std::collections::BTreeMap::new(),
     };
     context
         .labels
         .insert("lane".to_string(), "research".to_string());
     context
+}
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(4)
+        .unwrap_or_else(|| panic!("testing manifest dir should resolve to workspace root"))
+        .to_path_buf()
 }
 
 #[test]

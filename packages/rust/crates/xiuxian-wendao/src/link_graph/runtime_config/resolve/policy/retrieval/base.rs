@@ -2,7 +2,7 @@ use crate::link_graph::models::LinkGraphRetrievalMode;
 use crate::link_graph::runtime_config::models::LinkGraphRetrievalPolicyRuntimeConfig;
 use crate::link_graph::runtime_config::settings::{get_setting_string, merged_wendao_settings};
 use xiuxian_wendao_builtin::resolve_builtin_rerank_runtime_projection_with_settings;
-use xiuxian_wendao_runtime::runtime_config::resolve_link_graph_retrieval_base_runtime_with_settings;
+use xiuxian_wendao_runtime::config::resolve_link_graph_retrieval_base_runtime_with_settings;
 
 /// Resolve retrieval policy runtime configuration from settings.
 pub(crate) fn resolve_link_graph_retrieval_policy_runtime() -> LinkGraphRetrievalPolicyRuntimeConfig

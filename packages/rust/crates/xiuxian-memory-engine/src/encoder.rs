@@ -18,6 +18,7 @@ pub struct IntentEncoder {
 
 impl IntentEncoder {
     /// Create a new encoder with specified dimension.
+    #[must_use]
     pub fn new(dimension: usize) -> Self {
         Self { dimension }
     }
@@ -29,11 +30,12 @@ impl IntentEncoder {
     /// 2. Use hash to seed random number generator
     /// 3. Generate deterministic random vector
     /// 4. Apply position-based perturbations for uniqueness
+    #[must_use]
     pub fn encode(&self, intent: &str) -> Vec<f32> {
         let mut embedding = vec![0.0; self.dimension];
 
         // Create multiple hash variants for better distribution
-        for i in 0..self.dimension {
+        for (i, slot) in embedding.iter_mut().enumerate().take(self.dimension) {
             let mut hasher = DefaultHasher::new();
             intent.hash(&mut hasher);
             (i as u64).hash(&mut hasher);
@@ -48,15 +50,16 @@ impl IntentEncoder {
             let combined = hash1.wrapping_mul(31).wrapping_add(hash2);
 
             // Convert to float in range [0, 1]
-            embedding[i] = (combined as f32 % 1000.0) / 1000.0;
+            let bucket = (combined % 1000) as u16;
+            *slot = f32::from(bucket) / 1000.0;
         }
 
         // Normalize to unit vector
-        self.normalize(&embedding)
+        Self::normalize(&embedding)
     }
 
     /// Normalize vector to unit length.
-    fn normalize(&self, v: &[f32]) -> Vec<f32> {
+    fn normalize(v: &[f32]) -> Vec<f32> {
         let sum: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
         if sum == 0.0 {
             return v.to_vec();
@@ -65,8 +68,9 @@ impl IntentEncoder {
     }
 
     /// Calculate cosine similarity between two embeddings.
+    #[must_use]
     pub fn cosine_similarity(&self, a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() {
+        if self.dimension == 0 || a.len() != b.len() {
             return 0.0;
         }
 
@@ -82,6 +86,7 @@ impl IntentEncoder {
     }
 
     /// Get the dimension of embeddings.
+    #[must_use]
     pub fn dimension(&self) -> usize {
         self.dimension
     }

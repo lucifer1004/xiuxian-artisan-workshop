@@ -27,7 +27,7 @@ jobs:
   architecture-gate:
     runs-on: ubuntu-latest
     env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,7 +37,7 @@ jobs:
       - uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
       - name: Run architecture guardrails
         run: secretspec run --provider env --profile default -- devenv tasks run ci:architecture-gate
@@ -49,7 +49,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -59,7 +59,7 @@ jobs:
       - uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
       - name: Run lint
         run: secretspec run --provider env --profile default -- devenv tasks run ci:lint
@@ -71,7 +71,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -81,7 +81,7 @@ jobs:
       - uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
       - name: Check format
         run: secretspec run --provider env --profile default -- devenv tasks run ci:check-format
@@ -93,7 +93,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -103,7 +103,7 @@ jobs:
       - uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
       - name: Check commit messages
         run: secretspec run --provider env --profile default -- devenv tasks run ci:check-commits
@@ -129,7 +129,7 @@ jobs:
             recall_graph_perf_p95_ms: "2200"
             recall_graph_rss_peak_delta_mb: "320"
     env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
       OMNI_VECTOR_PERF_P95_MS: ${{ matrix.perf_p95_ms }}
       OMNI_VECTOR_PERF_RATIO_MAX: ${{ matrix.perf_ratio_max }}
       OMNI_KNOWLEDGE_RECALL_P95_MS: ${{ matrix.recall_perf_p95_ms }}
@@ -172,7 +172,7 @@ jobs:
       - uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
       - name: Rust gate - quality gates (strict clippy + nextest + xiuxian-core-rs runtime lane)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-quality-gate
@@ -398,7 +398,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -408,7 +408,7 @@ jobs:
       - uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
       - name: Run xiuxian-daochang memory gate (nightly via launcher)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:memory-gate-nightly

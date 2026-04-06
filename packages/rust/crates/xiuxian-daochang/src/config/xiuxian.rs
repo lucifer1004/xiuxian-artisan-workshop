@@ -5,9 +5,17 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use xiuxian_config_core::{load_toml_value_with_imports, resolve_project_root_or_cwd};
+use xiuxian_config_core::{
+    load_toml_value_with_imports, resolve_config_home as resolve_config_home_path,
+    resolve_project_root_or_cwd,
+};
 
 use super::settings::RuntimeSettings;
+
+const DEFAULT_SYSTEM_CONFIG_BASE_RELATIVE_PATH: &str =
+    "packages/rust/crates/xiuxian-daochang/resources/config";
+const DEFAULT_CONFIG_HOME_RELATIVE_PATH: &str = ".config";
+const DEFAULT_USER_CONFIG_NAMESPACE: &str = "xiuxian-artisan-workshop";
 
 /// The root configuration structure.
 #[xiuxian_macros::xiuxian_config(
@@ -214,16 +222,28 @@ pub struct LinkGraphCacheConfig {
 
 /// Resolve system and user config paths with the same base logic as runtime settings.
 fn resolve_config_paths(filename: &str) -> (PathBuf, PathBuf) {
+    let project_root = resolve_project_root_or_cwd();
+    let (default_system_base, default_user_base) = default_config_bases(project_root.as_path());
     let (system_settings_path, user_settings_path) = super::settings::runtime_settings_paths();
-    let system_base = system_settings_path.parent().map_or_else(
-        || PathBuf::from("packages/rust/crates/xiuxian-daochang/resources/config"),
-        Path::to_path_buf,
-    );
-    let user_base = user_settings_path.parent().map_or_else(
-        || PathBuf::from(".config/xiuxian-artisan-workshop"),
-        Path::to_path_buf,
-    );
+    let system_base = system_settings_path
+        .parent()
+        .map_or_else(|| default_system_base.clone(), Path::to_path_buf);
+    let user_base = user_settings_path
+        .parent()
+        .map_or_else(|| default_user_base.clone(), Path::to_path_buf);
     (system_base.join(filename), user_base.join(filename))
+}
+
+fn resolve_config_home(project_root: &Path) -> PathBuf {
+    resolve_config_home_path(Some(project_root))
+        .unwrap_or_else(|| project_root.join(DEFAULT_CONFIG_HOME_RELATIVE_PATH))
+}
+
+fn default_config_bases(project_root: &Path) -> (PathBuf, PathBuf) {
+    (
+        project_root.join(DEFAULT_SYSTEM_CONFIG_BASE_RELATIVE_PATH),
+        resolve_config_home(project_root).join(DEFAULT_USER_CONFIG_NAMESPACE),
+    )
 }
 
 fn read_toml_value(path: &Path) -> Option<toml::Value> {
@@ -333,6 +353,7 @@ pub fn load_xiuxian_config() -> XiuxianConfig {
 
     let project_root = resolve_project_root_or_cwd();
     let config_home = config_home_from_user_xiuxian_path(&user_xiuxian_path);
+    let (default_system_base, default_user_base) = default_config_bases(project_root.as_path());
 
     let mut config = XiuxianConfig::load_with_paths(
         Some(project_root.as_path()),
@@ -346,14 +367,12 @@ pub fn load_xiuxian_config() -> XiuxianConfig {
         load_xiuxian_config_from_paths(&system_xiuxian_path, &user_xiuxian_path)
     });
 
-    let system_base = system_xiuxian_path.parent().map_or_else(
-        || PathBuf::from("packages/rust/crates/xiuxian-daochang/resources/config"),
-        Path::to_path_buf,
-    );
-    let user_base = user_xiuxian_path.parent().map_or_else(
-        || PathBuf::from(".config/xiuxian-artisan-workshop"),
-        Path::to_path_buf,
-    );
+    let system_base = system_xiuxian_path
+        .parent()
+        .map_or_else(|| default_system_base, Path::to_path_buf);
+    let user_base = user_xiuxian_path
+        .parent()
+        .map_or_else(|| default_user_base, Path::to_path_buf);
     apply_modular_wendao_fallback(&mut config, &system_base, &user_base);
 
     if system_xiuxian_path.is_file() {

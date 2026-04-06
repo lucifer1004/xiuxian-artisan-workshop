@@ -2,7 +2,7 @@
 //!
 //! Loads and merges:
 //! - System defaults: `<PRJ_ROOT>/packages/conf/xiuxian.toml`
-//! - User overrides:  `<PRJ_CONFIG_HOME>/omni-dev-fusion/xiuxian.toml`
+//! - User overrides:  `<PRJ_CONFIG_HOME>/xiuxian-artisan-workshop/xiuxian.toml`
 //!
 //! Merge precedence is user over system.
 

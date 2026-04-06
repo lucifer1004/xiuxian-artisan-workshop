@@ -10,7 +10,7 @@ metadata:
 
 ## Overview
 
-The Skills Scanner provides comprehensive skill discovery and metadata extraction for the Omni-Dev-Fusion system. It scans skill directories, parses YAML frontmatter from SKILL.md files, discovers tools from script annotations, and generates the `skill_index.json` for semantic routing.
+The Skills Scanner provides comprehensive skill discovery and metadata extraction for the `xiuxian-artisan-workshop` system. It scans skill directories, parses YAML frontmatter from SKILL.md files, discovers tools from script annotations, and generates the `skill_index.json` for semantic routing.
 
 ## Features
 

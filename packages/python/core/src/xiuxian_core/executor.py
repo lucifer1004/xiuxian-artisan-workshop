@@ -1,7 +1,8 @@
 """
 executor.py - Command Execution Wrapper
 
-Automatic response wrapping for command execution following Omni-Dev-Fusion
+Automatic response wrapping for command execution following
+xiuxian-artisan-workshop
 architecture improvements (Items 4 & 5).
 
 Provides consistent error handling and response formatting for all command

@@ -4,6 +4,8 @@
 pub mod compatibility;
 /// Bounded integration-test helpers for Julia-owned official example services.
 pub mod integration_support;
+/// Runtime-level memory-family thin compat surfaces for Julia compute.
+pub mod memory;
 mod plugin;
 
 #[cfg(test)]

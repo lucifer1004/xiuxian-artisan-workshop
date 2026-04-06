@@ -45,6 +45,7 @@ use super::{
 };
 use crate::{
     build_graph_structural_filter_request_batch, build_graph_structural_rerank_request_batch,
+    julia_plugin_test_support::common::{OptionTestExt, ResultTestExt, assert_f64_eq},
 };
 
 #[test]
@@ -54,12 +55,12 @@ fn build_graph_structural_rerank_request_row_projects_semantic_dtos() {
         1,
         3,
         vec![
-            GraphStructuralQueryAnchor::new("semantic", "symbol:entry").expect("semantic anchor"),
-            GraphStructuralQueryAnchor::new("tag", "core").expect("tag anchor"),
+            GraphStructuralQueryAnchor::new("semantic", "symbol:entry").or_panic("semantic anchor"),
+            GraphStructuralQueryAnchor::new("tag", "core").or_panic("tag anchor"),
         ],
         vec!["depends_on".to_string()],
     )
-    .expect("query context");
+    .or_panic("query context");
     let candidate = GraphStructuralCandidateSubgraph::new(
         "pair:node-1:node-2",
         vec!["node-1".to_string(), "node-2".to_string()],
@@ -67,12 +68,12 @@ fn build_graph_structural_rerank_request_row_projects_semantic_dtos() {
         vec!["node-2".to_string()],
         vec!["related".to_string()],
     )
-    .expect("candidate");
-    let signals = GraphStructuralRerankSignals::new(0.7, 0.4, 0.2, 0.3).expect("rerank signals");
+    .or_panic("candidate");
+    let signals = GraphStructuralRerankSignals::new(0.7, 0.4, 0.2, 0.3).or_panic("rerank signals");
 
     let row = build_graph_structural_rerank_request_row(&query, &candidate, &signals);
-    let batch = build_graph_structural_rerank_request_batch(&[row.clone()])
-        .expect("rerank batch should validate");
+    let batch = build_graph_structural_rerank_request_batch(std::slice::from_ref(&row))
+        .or_panic("rerank batch should validate");
 
     assert_eq!(row.query_id, "query-1");
     assert_eq!(row.candidate_id, "pair:node-1:node-2");
@@ -91,10 +92,10 @@ fn build_graph_structural_filter_request_row_allows_empty_edge_lists() {
         "query-2",
         0,
         2,
-        vec![GraphStructuralQueryAnchor::new("keyword", "solver").expect("keyword anchor")],
+        vec![GraphStructuralQueryAnchor::new("keyword", "solver").or_panic("keyword anchor")],
         Vec::new(),
     )
-    .expect("query context");
+    .or_panic("query context");
     let candidate = GraphStructuralCandidateSubgraph::new(
         "candidate-a",
         vec!["node-a".to_string()],
@@ -102,12 +103,13 @@ fn build_graph_structural_filter_request_row_allows_empty_edge_lists() {
         Vec::new(),
         Vec::new(),
     )
-    .expect("candidate");
-    let constraint = GraphStructuralFilterConstraint::new("boundary-match", 1).expect("constraint");
+    .or_panic("candidate");
+    let constraint =
+        GraphStructuralFilterConstraint::new("boundary-match", 1).or_panic("constraint");
 
     let row = build_graph_structural_filter_request_row(&query, &candidate, &constraint);
-    let batch = build_graph_structural_filter_request_batch(&[row.clone()])
-        .expect("filter batch should validate");
+    let batch = build_graph_structural_filter_request_batch(std::slice::from_ref(&row))
+        .or_panic("filter batch should validate");
 
     assert_eq!(row.edge_constraint_kinds, Vec::<String>::new());
     assert_eq!(row.candidate_edge_sources, Vec::<String>::new());
@@ -125,7 +127,7 @@ fn build_graph_structural_pair_candidate_subgraph_normalizes_stable_id() {
         "node-a",
         vec!["related".to_string()],
     )
-    .expect("pair candidate should normalize");
+    .or_panic("pair candidate should normalize");
 
     assert_eq!(candidate.candidate_id(), "pair:node-a:node-z");
     assert_eq!(
@@ -141,11 +143,11 @@ fn build_graph_structural_pair_rerank_request_row_projects_pair_inputs() {
         "query-3",
         0,
         2,
-        vec![GraphStructuralQueryAnchor::new("keyword", "alpha").expect("keyword anchor")],
+        vec![GraphStructuralQueryAnchor::new("keyword", "alpha").or_panic("keyword anchor")],
         Vec::new(),
     )
-    .expect("query context");
-    let signals = GraphStructuralRerankSignals::new(0.8, 0.1, 1.0, 0.6).expect("rerank signals");
+    .or_panic("query context");
+    let signals = GraphStructuralRerankSignals::new(0.8, 0.1, 1.0, 0.6).or_panic("rerank signals");
 
     let row = build_graph_structural_pair_rerank_request_row(
         &query,
@@ -154,9 +156,9 @@ fn build_graph_structural_pair_rerank_request_row_projects_pair_inputs() {
         vec!["semantic_similar".to_string()],
         &signals,
     )
-    .expect("pair row should project");
-    let batch = build_graph_structural_rerank_request_batch(&[row.clone()])
-        .expect("pair rerank batch should validate");
+    .or_panic("pair row should project");
+    let batch = build_graph_structural_rerank_request_batch(std::slice::from_ref(&row))
+        .or_panic("pair rerank batch should validate");
 
     assert_eq!(row.candidate_id, "pair:doc-a:doc-b");
     assert_eq!(row.candidate_node_ids, vec!["doc-b", "doc-a"]);
@@ -179,7 +181,7 @@ fn build_graph_structural_generic_topology_candidate_subgraph_projects_explicit_
             vec!["depends_on".to_string(), "references".to_string()],
         ),
     )
-    .expect("generic topology candidate should normalize");
+    .or_panic("generic topology candidate should normalize");
 
     assert_eq!(candidate.candidate_id(), "candidate-chain");
     assert_eq!(
@@ -220,9 +222,9 @@ fn build_graph_structural_generic_topology_candidate_metadata_inputs_from_pair_c
             ],
             "related",
         )
-        .expect("pair collection metadata should normalize"),
+        .or_panic("pair collection metadata should normalize"),
     )
-    .expect("pair collection candidate should normalize");
+    .or_panic("pair collection candidate should normalize");
 
     assert_eq!(candidate.candidate_id(), "candidate-from-pairs");
     assert_eq!(
@@ -259,7 +261,7 @@ fn build_graph_structural_generic_topology_candidate_inputs_from_pair_collection
             Vec::new(),
             vec!["depends_on".to_string()],
         )
-        .expect("query context"),
+        .or_panic("query context"),
         build_graph_structural_generic_topology_candidate_inputs_from_pair_collection(
             "candidate-from-pairs",
             vec![
@@ -276,14 +278,14 @@ fn build_graph_structural_generic_topology_candidate_inputs_from_pair_collection
             1.0,
             0.0,
         )
-        .expect("pair collection candidate should normalize"),
+        .or_panic("pair collection candidate should normalize"),
     )
-    .expect("pair collection rerank row should project");
+    .or_panic("pair collection rerank row should project");
 
-    assert_eq!(row.semantic_score, 0.7);
-    assert_eq!(row.dependency_score, 0.6);
-    assert_eq!(row.keyword_score, 1.0);
-    assert_eq!(row.tag_score, 0.0);
+    assert_f64_eq(row.semantic_score, 0.7);
+    assert_f64_eq(row.dependency_score, 0.6);
+    assert_f64_eq(row.keyword_score, 1.0);
+    assert_f64_eq(row.tag_score, 0.0);
     assert_eq!(
         row.candidate_edge_kinds,
         vec!["depends_on".to_string(), "related".to_string()]
@@ -298,7 +300,7 @@ fn build_graph_structural_scored_pair_candidate_inputs_rejects_negative_score() 
         vec!["depends_on".to_string()],
         -0.1,
     )
-    .expect_err("negative pair score should fail");
+    .err_or_panic("negative pair score should fail");
 
     assert!(
         error
@@ -320,7 +322,7 @@ fn build_graph_structural_generic_topology_candidate_inputs_from_scored_pair_col
             Vec::new(),
             vec!["depends_on".to_string()],
         )
-        .expect("query context"),
+        .or_panic("query context"),
         build_graph_structural_generic_topology_candidate_inputs_from_scored_pair_collection(
             "candidate-from-scored-pairs",
             vec![
@@ -330,28 +332,28 @@ fn build_graph_structural_generic_topology_candidate_inputs_from_scored_pair_col
                     vec!["depends_on".to_string()],
                     0.6,
                 )
-                .expect("scored pair candidate"),
+                .or_panic("scored pair candidate"),
                 build_graph_structural_scored_pair_candidate_inputs(
                     "node-2",
                     "node-3",
                     Vec::new(),
                     0.8,
                 )
-                .expect("scored pair candidate"),
+                .or_panic("scored pair candidate"),
             ],
             "related",
             0.5,
             1.0,
             0.0,
         )
-        .expect("scored pair collection candidate should normalize"),
+        .or_panic("scored pair collection candidate should normalize"),
     )
-    .expect("scored pair collection rerank row should project");
+    .or_panic("scored pair collection rerank row should project");
 
     assert!((row.semantic_score - 0.7).abs() < f64::EPSILON);
-    assert_eq!(row.dependency_score, 0.5);
-    assert_eq!(row.keyword_score, 1.0);
-    assert_eq!(row.tag_score, 0.0);
+    assert_f64_eq(row.dependency_score, 0.5);
+    assert_f64_eq(row.keyword_score, 1.0);
+    assert_f64_eq(row.tag_score, 0.0);
     assert_eq!(
         row.candidate_edge_kinds,
         vec!["depends_on".to_string(), "related".to_string()]
@@ -370,28 +372,28 @@ fn build_graph_structural_generic_topology_candidate_inputs_from_raw_connected_p
             Vec::new(),
             vec!["related".to_string()],
         )
-        .expect("query context"),
+        .or_panic("query context"),
         build_graph_structural_generic_topology_candidate_inputs_from_raw_connected_pairs(
             "candidate-from-raw-connected-pairs",
             vec![
                 build_graph_structural_raw_connected_pair_inputs("node-1", "node-2", 0.4)
-                    .expect("raw connected pair"),
+                    .or_panic("raw connected pair"),
                 build_graph_structural_raw_connected_pair_inputs("node-2", "node-3", 0.8)
-                    .expect("raw connected pair"),
+                    .or_panic("raw connected pair"),
             ],
             "related",
             0.3,
             1.0,
             0.0,
         )
-        .expect("raw connected pair collection candidate should normalize"),
+        .or_panic("raw connected pair collection candidate should normalize"),
     )
-    .expect("raw connected pair collection rerank row should project");
+    .or_panic("raw connected pair collection rerank row should project");
 
     assert!((row.semantic_score - 0.6).abs() < f64::EPSILON);
-    assert_eq!(row.dependency_score, 0.3);
-    assert_eq!(row.keyword_score, 1.0);
-    assert_eq!(row.tag_score, 0.0);
+    assert_f64_eq(row.dependency_score, 0.3);
+    assert_f64_eq(row.keyword_score, 1.0);
+    assert_f64_eq(row.tag_score, 0.0);
     assert_eq!(
         row.candidate_edge_kinds,
         vec!["related".to_string(), "related".to_string()]
@@ -411,7 +413,7 @@ fn build_graph_structural_generic_topology_rerank_request_batch_from_raw_connect
                     Vec::new(),
                     vec!["related".to_string()],
                 )
-                .expect("query context"),
+                .or_panic("query context"),
                 &[build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_raw_tuples(
                     "candidate-from-raw-connected-collection",
                     vec![
@@ -423,23 +425,23 @@ fn build_graph_structural_generic_topology_rerank_request_batch_from_raw_connect
                     1.0,
                     0.0,
                 )
-                .expect("raw connected pair collection candidate")],
+                .or_panic("raw connected pair collection candidate")],
             )
-            .expect("raw connected pair collection batch should project");
+            .or_panic("raw connected pair collection batch should project");
 
     assert_eq!(batch.num_rows(), 1);
     let candidate_ids = batch
         .column_by_name("candidate_id")
-        .expect("candidate_id column")
+        .or_panic("candidate_id column")
         .as_any()
         .downcast_ref::<StringArray>()
-        .expect("candidate_id strings");
+        .or_panic("candidate_id strings");
     let semantic_scores = batch
         .column_by_name("semantic_score")
-        .expect("semantic_score column")
+        .or_panic("semantic_score column")
         .as_any()
         .downcast_ref::<Float64Array>()
-        .expect("semantic_score floats");
+        .or_panic("semantic_score floats");
 
     assert_eq!(
         candidate_ids.value(0),
@@ -460,7 +462,7 @@ fn build_graph_structural_raw_connected_pair_collection_candidate_inputs_from_ra
             1.0,
             0.0,
         )
-        .expect_err("blank endpoint should fail");
+        .err_or_panic("blank endpoint should fail");
 
     assert!(
         error
@@ -480,7 +482,7 @@ fn build_graph_structural_generic_topology_rerank_request_row_projects_explicit_
         vec!["core".to_string()],
         vec!["depends_on".to_string()],
     )
-    .expect("query context");
+    .or_panic("query context");
     let row = build_graph_structural_generic_topology_rerank_request_row(
         &query,
         build_graph_structural_generic_topology_candidate_inputs(
@@ -501,14 +503,14 @@ fn build_graph_structural_generic_topology_rerank_request_row_projects_explicit_
             0.0,
         ),
     )
-    .expect("generic topology rerank row should normalize");
+    .or_panic("generic topology rerank row should normalize");
 
     assert_eq!(row.candidate_id, "candidate-chain");
     assert_eq!(row.candidate_node_ids.len(), 3);
     assert_eq!(row.candidate_edge_sources, vec!["node-1", "node-2"]);
     assert_eq!(row.candidate_edge_destinations, vec!["node-2", "node-3"]);
     assert_eq!(row.candidate_edge_kinds, vec!["depends_on", "depends_on"]);
-    assert_eq!(row.keyword_score, 1.0);
+    assert_f64_eq(row.keyword_score, 1.0);
 }
 
 #[test]
@@ -517,10 +519,12 @@ fn build_graph_structural_generic_topology_rerank_request_batch_composes() {
         "query-generic-batch",
         0,
         2,
-        vec![GraphStructuralQueryAnchor::new("semantic", "symbol:entry").expect("semantic anchor")],
+        vec![
+            GraphStructuralQueryAnchor::new("semantic", "symbol:entry").or_panic("semantic anchor"),
+        ],
         vec!["depends_on".to_string()],
     )
-    .expect("query context");
+    .or_panic("query context");
     let batch = build_graph_structural_generic_topology_rerank_request_batch(
         &query,
         &[build_graph_structural_generic_topology_candidate_inputs(
@@ -541,7 +545,7 @@ fn build_graph_structural_generic_topology_rerank_request_batch_composes() {
             0.1,
         )],
     )
-    .expect("generic topology batch helper should normalize");
+    .or_panic("generic topology batch helper should normalize");
 
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 15);
@@ -553,11 +557,12 @@ fn build_graph_structural_pair_filter_request_row_rejects_duplicate_endpoints() 
         "query-4",
         0,
         1,
-        vec![GraphStructuralQueryAnchor::new("tag", "core").expect("tag anchor")],
+        vec![GraphStructuralQueryAnchor::new("tag", "core").or_panic("tag anchor")],
         Vec::new(),
     )
-    .expect("query context");
-    let constraint = GraphStructuralFilterConstraint::new("boundary-match", 1).expect("constraint");
+    .or_panic("query context");
+    let constraint =
+        GraphStructuralFilterConstraint::new("boundary-match", 1).or_panic("constraint");
 
     let error = build_graph_structural_pair_filter_request_row(
         &query,
@@ -566,7 +571,7 @@ fn build_graph_structural_pair_filter_request_row_rejects_duplicate_endpoints() 
         Vec::new(),
         &constraint,
     )
-    .expect_err("pair filter row should reject duplicate endpoints");
+    .err_or_panic("pair filter row should reject duplicate endpoints");
     assert!(
         error
             .to_string()
@@ -585,7 +590,7 @@ fn build_graph_structural_keyword_tag_query_context_orders_keyword_before_tag() 
         vec![" core ".to_string(), " graph ".to_string()],
         vec!["depends_on".to_string()],
     )
-    .expect("query context should normalize");
+    .or_panic("query context should normalize");
 
     assert_eq!(query.query_id(), "query-5");
     assert_eq!(query.anchors()[0].plane(), "keyword");
@@ -607,7 +612,7 @@ fn build_graph_structural_keyword_tag_query_context_rejects_empty_anchor_lists()
         Vec::new(),
         Vec::new(),
     )
-    .expect_err("query context should reject empty keyword and tag anchors");
+    .err_or_panic("query context should reject empty keyword and tag anchors");
     assert!(
         error
             .to_string()
@@ -619,12 +624,12 @@ fn build_graph_structural_keyword_tag_query_context_rejects_empty_anchor_lists()
 #[test]
 fn build_graph_structural_keyword_tag_rerank_signals_maps_binary_matches() {
     let signals = build_graph_structural_keyword_tag_rerank_signals(0.6, 0.2, true, false)
-        .expect("binary match signals should normalize");
+        .or_panic("binary match signals should normalize");
 
-    assert_eq!(signals.semantic_score(), 0.6);
-    assert_eq!(signals.dependency_score(), 0.2);
-    assert_eq!(signals.keyword_score(), 1.0);
-    assert_eq!(signals.tag_score(), 0.0);
+    assert_f64_eq(signals.semantic_score(), 0.6);
+    assert_f64_eq(signals.dependency_score(), 0.2);
+    assert_f64_eq(signals.keyword_score(), 1.0);
+    assert_f64_eq(signals.tag_score(), 0.0);
 }
 
 #[test]
@@ -648,17 +653,17 @@ fn build_graph_structural_keyword_tag_pair_rerank_request_row_composes_helper_la
         true,
         true,
     )
-    .expect("combined helper should normalize");
-    let batch = build_graph_structural_rerank_request_batch(&[row.clone()])
-        .expect("combined helper batch should validate");
+    .or_panic("combined helper should normalize");
+    let batch = build_graph_structural_rerank_request_batch(std::slice::from_ref(&row))
+        .or_panic("combined helper batch should validate");
 
     assert_eq!(row.query_id, "query-7");
     assert_eq!(row.candidate_id, "pair:node-a:node-b");
     assert_eq!(row.anchor_planes, vec!["keyword", "tag"]);
     assert_eq!(row.anchor_values, vec!["alpha", "core"]);
     assert_eq!(row.candidate_edge_kinds, vec!["semantic_similar"]);
-    assert_eq!(row.keyword_score, 1.0);
-    assert_eq!(row.tag_score, 1.0);
+    assert_f64_eq(row.keyword_score, 1.0);
+    assert_f64_eq(row.tag_score, 1.0);
     assert_eq!(batch.num_rows(), 1);
 }
 
@@ -673,7 +678,7 @@ fn graph_structural_shared_tag_anchors_preserve_left_order_and_uniqueness() {
         ],
         vec!["graph".to_string(), "core".to_string(), "delta".to_string()],
     )
-    .expect("shared tag anchors should normalize");
+    .or_panic("shared tag anchors should normalize");
 
     assert_eq!(shared, vec!["core".to_string(), "graph".to_string()]);
 }
@@ -700,15 +705,15 @@ fn build_graph_structural_keyword_overlap_pair_rerank_request_row_computes_tag_o
         0.0,
         true,
     )
-    .expect("tag-overlap pair helper should normalize");
-    let batch = build_graph_structural_rerank_request_batch(&[row.clone()])
-        .expect("tag-overlap batch should validate");
+    .or_panic("tag-overlap pair helper should normalize");
+    let batch = build_graph_structural_rerank_request_batch(std::slice::from_ref(&row))
+        .or_panic("tag-overlap batch should validate");
 
     assert_eq!(row.candidate_id, "pair:node-a:node-z");
     assert_eq!(row.anchor_planes, vec!["keyword", "tag"]);
     assert_eq!(row.anchor_values, vec!["alpha", "core"]);
-    assert_eq!(row.keyword_score, 1.0);
-    assert_eq!(row.tag_score, 1.0);
+    assert_f64_eq(row.keyword_score, 1.0);
+    assert_f64_eq(row.tag_score, 1.0);
     assert_eq!(batch.num_rows(), 1);
 }
 
@@ -736,17 +741,17 @@ fn build_graph_structural_keyword_overlap_pair_rerank_request_row_from_metadata_
         0.1,
         true,
     )
-    .expect("metadata-aware overlap helper should normalize");
-    let batch = build_graph_structural_rerank_request_batch(&[row.clone()])
-        .expect("metadata-aware overlap batch should validate");
+    .or_panic("metadata-aware overlap helper should normalize");
+    let batch = build_graph_structural_rerank_request_batch(std::slice::from_ref(&row))
+        .or_panic("metadata-aware overlap batch should validate");
 
     assert_eq!(row.query_id, "query-9");
     assert_eq!(row.candidate_id, "pair:node-a:node-k");
     assert_eq!(row.anchor_planes, vec!["keyword", "tag"]);
     assert_eq!(row.anchor_values, vec!["alpha", "core"]);
     assert_eq!(row.edge_constraint_kinds, vec!["semantic_similar"]);
-    assert_eq!(row.keyword_score, 1.0);
-    assert_eq!(row.tag_score, 1.0);
+    assert_f64_eq(row.keyword_score, 1.0);
+    assert_f64_eq(row.tag_score, 1.0);
     assert_eq!(batch.num_rows(), 1);
 }
 
@@ -778,7 +783,7 @@ fn build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_metadat
             true,
         ),
     ])
-    .expect("metadata-aware batch helper should normalize");
+    .or_panic("metadata-aware batch helper should normalize");
 
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 15);
@@ -804,7 +809,7 @@ fn build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_inputs_
             true,
         ),
     ])
-    .expect("higher-level candidate input helper should normalize");
+    .or_panic("higher-level candidate input helper should normalize");
 
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 15);
@@ -841,7 +846,7 @@ fn build_graph_structural_keyword_overlap_pair_request_input_composes() {
     );
     assert_eq!(request.metadata_inputs.pair_inputs.left_id, "node-left");
     assert_eq!(request.metadata_inputs.pair_inputs.right_id, "node-right");
-    assert_eq!(request.semantic_score, 0.6);
+    assert_f64_eq(request.semantic_score, 0.6);
 }
 
 #[test]
@@ -1070,7 +1075,7 @@ fn build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_raw_can
                 true,
             )],
         )
-        .expect("raw candidate batch helper should normalize");
+        .or_panic("raw candidate batch helper should normalize");
 
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 15);
@@ -1101,7 +1106,7 @@ fn build_graph_structural_keyword_overlap_pair_rerank_request_batch_composes() {
             ),
         ],
     )
-    .expect("query-candidate batch helper should normalize");
+    .or_panic("query-candidate batch helper should normalize");
 
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 15);
@@ -1152,7 +1157,7 @@ fn build_graph_structural_generic_topology_candidate_inputs_composes() {
 #[test]
 fn graph_structural_query_context_rejects_empty_anchor_list() {
     let error = GraphStructuralQueryContext::new("query-1", 0, 1, Vec::new(), Vec::new())
-        .expect_err("query context should reject empty anchors");
+        .err_or_panic("query context should reject empty anchors");
     assert!(
         error
             .to_string()
@@ -1170,7 +1175,7 @@ fn graph_structural_candidate_subgraph_rejects_blank_node_ids() {
         Vec::new(),
         Vec::new(),
     )
-    .expect_err("candidate should reject blank node ids");
+    .err_or_panic("candidate should reject blank node ids");
     assert!(
         error
             .to_string()
@@ -1182,7 +1187,7 @@ fn graph_structural_candidate_subgraph_rejects_blank_node_ids() {
 #[test]
 fn graph_structural_rerank_signals_reject_negative_scores() {
     let error = GraphStructuralRerankSignals::new(-0.1, 0.0, 0.0, 0.0)
-        .expect_err("signals should reject negative scores");
+        .err_or_panic("signals should reject negative scores");
     assert!(
         error
             .to_string()
@@ -1194,7 +1199,7 @@ fn graph_structural_rerank_signals_reject_negative_scores() {
 #[test]
 fn graph_structural_pair_candidate_id_rejects_duplicate_endpoints() {
     let error = graph_structural_pair_candidate_id("same-node", "same-node")
-        .expect_err("pair candidate id should reject duplicate endpoints");
+        .err_or_panic("pair candidate id should reject duplicate endpoints");
     assert!(
         error
             .to_string()

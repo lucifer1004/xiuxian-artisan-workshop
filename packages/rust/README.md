@@ -1,14 +1,14 @@
 ---
 type: knowledge
 metadata:
-  title: "Rust Crates for Omni-Dev-Fusion"
+  title: "Rust Crates for xiuxian-artisan-workshop"
 ---
 
-# Rust Crates for Omni-Dev-Fusion
+# Rust Crates for xiuxian-artisan-workshop
 
 > Rust Workspace - Managed from project root `Cargo.toml`
 
-This directory contains Rust crates for the Omni project. The workspace is managed from the **project root** (`xiuxian-artisan-workshop/Cargo.toml`).
+This directory contains Rust crates for the `xiuxian-artisan-workshop` repository. The workspace is managed from the **project root** (`xiuxian-artisan-workshop/Cargo.toml`).
 
 ## Quick Start
 

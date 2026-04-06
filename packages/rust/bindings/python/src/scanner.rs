@@ -9,7 +9,7 @@
 use crate::vector::PyToolRecord;
 use pyo3::prelude::*;
 use skills_scanner::SkillMetadata;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use xiuxian_vector::{ScriptScanner, SkillScanner, SkillStructure};
 
 /// Python wrapper for SkillMetadata
@@ -201,7 +201,7 @@ pub fn scan_skill(skill_path: String) -> Option<PySkillMetadata> {
 #[pyo3(signature = (content, skill_name))]
 pub fn scan_skill_from_content(content: &str, skill_name: String) -> PySkillMetadata {
     let scanner = SkillScanner::new();
-    let temp_path = std::path::Path::new("/tmp").join(&skill_name);
+    let temp_path = temp_skill_path(&skill_name);
 
     match scanner.parse_skill_md(content, &temp_path) {
         Ok(metadata) => metadata.into(),
@@ -215,5 +215,22 @@ pub fn scan_skill_from_content(content: &str, skill_name: String) -> PySkillMeta
             require_refs: Vec::new(),
             repository: String::new(),
         },
+    }
+}
+
+fn temp_skill_path(skill_name: &str) -> PathBuf {
+    std::env::temp_dir().join(skill_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::temp_skill_path;
+
+    #[test]
+    fn temp_skill_path_uses_system_temp_dir() {
+        assert_eq!(
+            temp_skill_path("example-skill"),
+            std::env::temp_dir().join("example-skill")
+        );
     }
 }

@@ -1,24 +1,26 @@
-//! Q-Table implementation for self-evolving memory.
+//! Q-table implementation for self-evolving memory.
 //!
-//! Implements Q-Learning algorithm: Q_new = Q_old + α * (r - Q_old)
-//! where α is the learning rate and r is the reward.
+//! Implements the smoothing update
+//! `Q_new = Q_old + α * (reward - Q_old)`,
+//! where `α` is the learning rate and `reward` is the observed outcome.
+
+use std::collections::HashMap;
+use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use dashmap::DashMap;
-use std::sync::RwLock;
 
-/// Q-Learning table for episode utility tracking.
+/// Q-learning table for episode utility tracking.
 ///
 /// Uses a concurrent hash map for thread-safe updates.
 pub struct QTable {
-    /// Internal Q-table mapping episode_id -> q_value
+    /// Internal Q-table mapping `episode_id` -> `q_value`.
     table: RwLock<DashMap<String, f32>>,
-    /// Learning rate (α) - typically 0.1-0.3
+    /// Learning rate (`α`) - typically 0.1-0.3.
     learning_rate: f32,
-    /// Discount factor (γ) - typically 0.9-0.99
+    /// Discount factor (`γ`) - currently stored for future RL evolution.
     discount_factor: f32,
 }
 
-// Manual Clone implementation - creates a new empty table
 impl Clone for QTable {
     fn clone(&self) -> Self {
         Self {
@@ -30,19 +32,17 @@ impl Clone for QTable {
 }
 
 impl QTable {
-    /// Create a new Q-Table with default parameters.
+    /// Create a new Q-table with default parameters.
     ///
-    /// Default learning_rate = 0.2
-    /// Default discount_factor = 0.95
+    /// Default `learning_rate` = 0.2.
+    /// Default `discount_factor` = 0.95.
+    #[must_use]
     pub fn new() -> Self {
         Self::with_params(0.2, 0.95)
     }
 
-    /// Create a new Q-Table with custom parameters.
-    ///
-    /// # Arguments
-    /// * `learning_rate` - α in Q-learning, controls how much new info overrides old
-    /// * `discount_factor` - γ in Q-learning, balances immediate vs future reward
+    /// Create a new Q-table with custom parameters.
+    #[must_use]
     pub fn with_params(learning_rate: f32, discount_factor: f32) -> Self {
         Self {
             table: RwLock::new(DashMap::new()),
@@ -51,72 +51,59 @@ impl QTable {
         }
     }
 
-    /// Update Q-value for an episode using Q-learning.
-    ///
-    /// Q_new = Q_old + α * (reward - Q_old)
-    ///
-    /// # Arguments
-    /// * `episode_id` - The episode identifier
-    /// * `reward` - The reward signal (typically 0.0-1.0)
-    ///
-    /// # Returns
-    /// The new Q-value after update
+    fn read_table(&self) -> RwLockReadGuard<'_, DashMap<String, f32>> {
+        self.table.read().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn write_table(&self) -> RwLockWriteGuard<'_, DashMap<String, f32>> {
+        self.table.write().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Update one Q-value using
+    /// `Q_new = Q_old + α * (reward - Q_old)`.
     pub fn update(&self, episode_id: &str, reward: f32) -> f32 {
         let q_old = self.get_q(episode_id);
         let q_new = q_old + self.learning_rate * (reward - q_old);
-
-        // Clamp Q-value to [0.0, 1.0] range
         let q_clamped = q_new.clamp(0.0, 1.0);
-
-        self.table
-            .write()
-            .unwrap()
-            .insert(episode_id.to_string(), q_clamped);
-
+        self.write_table().insert(episode_id.to_string(), q_clamped);
         q_clamped
     }
 
-    /// Get the Q-value for an episode.
+    /// Get the Q-value for one episode.
     ///
-    /// Returns default 0.5 if episode not found (initial Q-value).
+    /// Returns 0.5 when the episode has no stored value.
     pub fn get_q(&self, episode_id: &str) -> f32 {
-        self.table
-            .read()
-            .unwrap()
+        self.read_table()
             .get(episode_id)
-            .map(|v| *v.value())
-            .unwrap_or(0.5)
+            .map_or(0.5, |v| *v.value())
     }
 
-    /// Initialize Q-value for a new episode.
+    /// Initialize a new episode with the default Q-value.
     pub fn init_episode(&self, episode_id: &str) {
-        let table = self.table.write().unwrap();
-        if !table.contains_key(episode_id) {
-            table.insert(episode_id.to_string(), 0.5);
-        }
+        self.write_table()
+            .entry(episode_id.to_string())
+            .or_insert(0.5);
     }
 
     /// Get multiple Q-values at once.
     pub fn get_batch(&self, episode_ids: &[String]) -> Vec<(String, f32)> {
-        let table = self.table.read().unwrap();
+        let table = self.read_table();
         episode_ids
             .iter()
-            .map(|id| {
-                let q = table.get(id).map(|v| *v.value()).unwrap_or(0.5);
-                (id.clone(), q)
-            })
+            .map(|id| (id.clone(), table.get(id).map_or(0.5, |v| *v.value())))
             .collect()
     }
 
     /// Batch update multiple Q-values.
     ///
-    /// More efficient than individual updates.
+    /// More efficient than individual updates when callers already have a
+    /// grouped update set.
     pub fn update_batch(&self, updates: &[(String, f32)]) -> Vec<(String, f32)> {
-        let table = self.table.write().unwrap();
+        let table = self.write_table();
         updates
             .iter()
             .map(|(episode_id, reward)| {
-                let q_old = table.get(episode_id).map(|v| *v.value()).unwrap_or(0.5);
+                let q_old = table.get(episode_id).map_or(0.5, |v| *v.value());
                 let q_new = q_old + self.learning_rate * (reward - q_old);
                 let q_clamped = q_new.clamp(0.0, 1.0);
                 table.insert(episode_id.clone(), q_clamped);
@@ -127,17 +114,12 @@ impl QTable {
 
     /// Get all episode IDs in the Q-table.
     pub fn get_all_ids(&self) -> Vec<String> {
-        self.table
-            .read()
-            .unwrap()
-            .iter()
-            .map(|r| r.key().clone())
-            .collect()
+        self.read_table().iter().map(|r| r.key().clone()).collect()
     }
 
     /// Get the number of entries in the Q-table.
     pub fn len(&self) -> usize {
-        self.table.read().unwrap().len()
+        self.read_table().len()
     }
 
     /// Check if the Q-table is empty.
@@ -147,62 +129,67 @@ impl QTable {
 
     /// Remove an entry from the Q-table.
     pub fn remove(&self, episode_id: &str) {
-        self.table.write().unwrap().remove(episode_id);
+        self.write_table().remove(episode_id);
     }
 
-    /// Save Q-table to JSON file.
+    /// Save the Q-table to a JSON file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the table cannot be serialized or written to disk.
     pub fn save(&self, path: &str) -> Result<(), anyhow::Error> {
-        let data: std::collections::HashMap<String, f32> = self
-            .table
-            .read()
-            .unwrap()
+        let data: HashMap<String, f32> = self
+            .read_table()
             .iter()
             .map(|r| (r.key().clone(), *r.value()))
             .collect();
         let json = serde_json::to_string_pretty(&data)?;
         std::fs::write(path, json)?;
-        log::info!("Saved Q-table with {} entries to {}", data.len(), path);
+        log::info!("Saved Q-table with {} entries to {path}", data.len());
         Ok(())
     }
 
-    /// Load Q-table from JSON file.
+    /// Load the Q-table from a JSON file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file exists but cannot be read or parsed.
     pub fn load(&mut self, path: &str) -> Result<(), anyhow::Error> {
         if !std::path::Path::new(path).exists() {
-            log::info!("No existing Q-table file at {}", path);
+            log::info!("No existing Q-table file at {path}");
             return Ok(());
         }
+
         let json = std::fs::read_to_string(path)?;
-        let data: std::collections::HashMap<String, f32> = serde_json::from_str(&json)?;
+        let data: HashMap<String, f32> = serde_json::from_str(&json)?;
         let count = data.len();
-        *self.table.write().unwrap() = DashMap::from_iter(data);
-        log::info!("Loaded {} Q-table entries from {}", count, path);
+        *self.write_table() = DashMap::from_iter(data);
+        log::info!("Loaded {count} Q-table entries from {path}");
         Ok(())
     }
 
-    /// Get learning rate.
+    /// Get the configured learning rate.
     pub fn learning_rate(&self) -> f32 {
         self.learning_rate
     }
 
-    /// Get discount factor.
+    /// Get the configured discount factor.
     pub fn discount_factor(&self) -> f32 {
         self.discount_factor
     }
 
-    /// Get a snapshot of the Q-table as a HashMap.
+    /// Get a snapshot of the Q-table as a `HashMap`.
     #[must_use]
-    pub fn snapshot_map(&self) -> std::collections::HashMap<String, f32> {
-        self.table
-            .read()
-            .unwrap()
+    pub fn snapshot_map(&self) -> HashMap<String, f32> {
+        self.read_table()
             .iter()
             .map(|r| (r.key().clone(), *r.value()))
             .collect()
     }
 
-    /// Replace the Q-table contents from a HashMap.
-    pub fn replace_map(&mut self, data: std::collections::HashMap<String, f32>) {
-        *self.table.write().unwrap() = DashMap::from_iter(data);
+    /// Replace the Q-table contents from a `HashMap`.
+    pub fn replace_map(&mut self, data: HashMap<String, f32>) {
+        *self.write_table() = DashMap::from_iter(data);
     }
 }
 

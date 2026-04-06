@@ -16,7 +16,7 @@ pub const GLOBAL_EPISODE_SCOPE: &str = "_global";
 /// - Experience (the actual experience/response)
 /// - Outcome (success/failure result)
 /// - Q-value (learned utility from Q-learning)
-/// - Usage statistics (success/failure counts)
+/// - Usage statistics (retrieval and feedback counts)
 /// - Scope (logical grouping for recall)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Episode {
@@ -32,12 +32,18 @@ pub struct Episode {
     pub outcome: String,
     /// Current Q-value (learned utility, initialized to 0.5)
     pub q_value: f32,
+    /// Number of times the episode was retrieved or used.
+    #[serde(default)]
+    pub retrieval_count: u32,
     /// Number of successful retrievals
     pub success_count: u32,
     /// Number of failed retrievals
     pub failure_count: u32,
     /// Creation timestamp (Unix milliseconds)
     pub created_at: i64,
+    /// Last update timestamp (Unix milliseconds)
+    #[serde(default)]
+    pub updated_at: i64,
     /// Logical scope for grouping episodes
     pub scope: String,
 }
@@ -52,6 +58,7 @@ impl Episode {
         experience: String,
         outcome: String,
     ) -> Self {
+        let now = Utc::now().timestamp_millis();
         Self {
             id,
             intent,
@@ -59,9 +66,11 @@ impl Episode {
             experience,
             outcome,
             q_value: 0.5, // Initial Q-value (neutral)
+            retrieval_count: 0,
             success_count: 0,
             failure_count: 0,
-            created_at: Utc::now().timestamp_millis(),
+            created_at: now,
+            updated_at: now,
             scope: GLOBAL_EPISODE_SCOPE.to_string(),
         }
     }
@@ -74,8 +83,9 @@ impl Episode {
         intent_embedding: Vec<f32>,
         experience: String,
         outcome: String,
-        scope: String,
+        scope: impl AsRef<str>,
     ) -> Self {
+        let now = Utc::now().timestamp_millis();
         Self {
             id,
             intent,
@@ -83,10 +93,27 @@ impl Episode {
             experience,
             outcome,
             q_value: 0.5, // Initial Q-value (neutral)
+            retrieval_count: 0,
             success_count: 0,
             failure_count: 0,
-            created_at: Utc::now().timestamp_millis(),
-            scope: Self::normalize_scope(&scope),
+            created_at: now,
+            updated_at: now,
+            scope: Self::normalize_scope(scope.as_ref()),
+        }
+    }
+
+    fn touch(&mut self) {
+        self.updated_at = Utc::now().timestamp_millis();
+    }
+
+    /// Normalize derived episode fields after deserialization or migration.
+    pub fn normalize_tracking_fields(&mut self) {
+        if self.updated_at == 0 {
+            self.updated_at = self.created_at;
+        }
+        let feedback_count = self.feedback_count();
+        if self.retrieval_count < feedback_count {
+            self.retrieval_count = feedback_count;
         }
     }
 
@@ -117,31 +144,47 @@ impl Episode {
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn utility(&self) -> f32 {
-        let total = (self.success_count + self.failure_count) as f32 + 1.0;
+        let total = self.feedback_count() as f32 + 1.0;
         let success_rate = (self.success_count as f32 + 1.0) / total;
         success_rate * self.q_value
     }
 
+    /// Get the total number of feedback outcomes.
+    #[must_use]
+    pub fn feedback_count(&self) -> u32 {
+        self.success_count + self.failure_count
+    }
+
     /// Update success count and recalculate Q-value.
     pub fn mark_success(&mut self) {
-        self.success_count += 1;
+        self.retrieval_count = self.retrieval_count.saturating_add(1);
+        self.success_count = self.success_count.saturating_add(1);
+        self.touch();
     }
 
     /// Update failure count and recalculate Q-value.
     pub fn mark_failure(&mut self) {
-        self.failure_count += 1;
+        self.retrieval_count = self.retrieval_count.saturating_add(1);
+        self.failure_count = self.failure_count.saturating_add(1);
+        self.touch();
+    }
+
+    /// Mark the episode as retrieved without assigning outcome feedback.
+    pub fn mark_accessed(&mut self) {
+        self.retrieval_count = self.retrieval_count.saturating_add(1);
+        self.touch();
     }
 
     /// Get the total number of uses.
     #[must_use]
     pub fn total_uses(&self) -> u32 {
-        self.success_count + self.failure_count
+        self.retrieval_count
     }
 
     /// Check if this episode has been validated (used at least once).
     #[must_use]
     pub fn is_validated(&self) -> bool {
-        self.total_uses() > 0
+        self.feedback_count() > 0
     }
 
     /// Apply time-based decay to the Q-value.

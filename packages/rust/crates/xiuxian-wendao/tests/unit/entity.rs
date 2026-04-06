@@ -38,14 +38,14 @@ fn test_entity_builder() {
 fn test_relation_creation() {
     let relation = Relation::new(
         "Claude Code".to_string(),
-        "Omni-Dev-Fusion".to_string(),
+        "xiuxian-artisan-workshop".to_string(),
         RelationType::PartOf,
-        "Part of the Omni-Dev-Fusion project".to_string(),
+        "Part of the xiuxian-artisan-workshop repository".to_string(),
     );
 
     assert!(relation.id.contains("claude_code"));
     assert!(relation.id.contains("part_of"));
-    assert!(relation.id.contains("omni-dev-fusion"));
+    assert!(relation.id.contains("xiuxian-artisan-workshop"));
 }
 
 #[test]

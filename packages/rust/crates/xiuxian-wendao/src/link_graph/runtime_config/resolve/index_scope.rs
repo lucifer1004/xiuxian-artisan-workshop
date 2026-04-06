@@ -1,7 +1,7 @@
 use crate::link_graph::runtime_config::LinkGraphIndexRuntimeConfig;
 use crate::link_graph::runtime_config::settings::merged_wendao_settings;
 use std::path::Path;
-use xiuxian_wendao_runtime::runtime_config::resolve_link_graph_index_runtime_with_settings;
+use xiuxian_wendao_runtime::config::resolve_link_graph_index_runtime_with_settings;
 
 /// Resolve `LinkGraph` index scope from merged `wendao` settings.
 ///

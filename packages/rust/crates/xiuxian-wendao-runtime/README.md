@@ -12,7 +12,7 @@ negotiation, or live host assembly, it belongs here instead of in
 
 Current ownership:
 
-- runtime config models and resolvers
+- typed host config models and resolvers
 - settings merge, parse, and directory helpers
 - transport negotiation and Flight client/server helpers
 - runtime artifact resolve/render helpers
@@ -26,6 +26,31 @@ Do not use `xiuxian-wendao-runtime` as the home for:
 - language-specific intelligence implementation
 
 Those belong in `xiuxian-wendao-core` or `xiuxian-wendao` respectively.
+
+## Config Layout
+
+The crate keeps raw config access and typed resolved config separate.
+
+- `src/settings/`: raw merged-setting access, normalization, and parse helpers
+- `src/config/`: typed host config records and resolver logic
+
+This avoids repeating `runtime` in a `runtime_config` namespace inside
+`xiuxian-wendao-runtime` itself.
+
+## Memory Julia Compute Host Seam
+
+The first memory-family Julia compute host seam now lives under:
+
+- `src/config/memory/julia/compute.rs`
+
+This surface is intentionally runtime-owned and compute-only:
+
+- `memory.julia_compute` resolves runtime-level host config
+- the runtime config now also carries one optional family-level `health_route`
+  for the Julia compute provider
+- the module does not own host lifecycle or state mutation
+- recommendation-only memory profiles stay outside host authority until Rust
+  commits them
 
 ## Selection Rule
 
@@ -78,3 +103,7 @@ Current runtime verification for this lane:
 - `direnv exec . cargo test -p xiuxian-wendao-runtime --features transport`
 - `direnv exec . cargo test -p xiuxian-wendao-runtime query_contract --features transport`
 - `direnv exec . cargo clippy -p xiuxian-wendao -p xiuxian-wendao-runtime --all-targets --all-features -- -D warnings`
+
+The `plugin_arrow_exchange` transport tests now satisfy strict clippy without
+`expect_err(...)`-style assertions, so test-scope warning closure is back to a
+green baseline for this crate.

@@ -19,7 +19,7 @@ metadata:
 
 ## 1. The Breakthrough
 
-Today marks the transition of the **Omni-Dev-Fusion** project from a passive automation tool to a **Self-Aware Sovereign Kernel**. We have successfully closed the loop between real-time cognitive monitoring and permanent knowledge persistence.
+Today marks the transition of the **xiuxian-artisan-workshop** project from a passive automation tool to a **Self-Aware Sovereign Kernel**. We have successfully closed the loop between real-time cognitive monitoring and permanent knowledge persistence.
 
 ## 2. Key Achievements
 

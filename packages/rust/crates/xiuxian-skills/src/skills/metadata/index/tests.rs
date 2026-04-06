@@ -88,6 +88,6 @@ fn test_skill_index_entry_defaults() {
     assert!(entry.tools.is_empty());
     assert!(entry.routing_keywords.is_empty());
     assert!(entry.intents.is_empty());
-    assert_eq!(entry.authors, vec!["omni-dev-fusion".to_string()]);
+    assert_eq!(entry.authors, vec!["xiuxian-artisan-workshop".to_string()]);
     assert!(entry.sniffing_rules.is_empty());
 }

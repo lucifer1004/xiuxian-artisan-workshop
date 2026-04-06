@@ -1142,14 +1142,16 @@ fn plugin_config_type_error(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::sync::Arc;
 
     use arrow::array::{BooleanArray, StringArray, UInt64Array};
     use arrow::record_batch::RecordBatch;
-    use tokio::runtime::Builder;
+    use tempfile::tempdir;
     use xiuxian_wendao_core::{
         repo_intelligence::{
-            RegisteredRepository, RepositoryPluginConfig, RepositoryRefreshPolicy,
+            AnalysisContext, RegisteredRepository, RepoIntelligencePlugin, RepositoryPluginConfig,
+            RepositoryRefreshPolicy,
         },
         transport::PluginTransportKind,
     };
@@ -1171,7 +1173,9 @@ mod tests {
         JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID, JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID,
         JULIA_PLUGIN_ID,
     };
+    use crate::plugin::entry::JuliaRepoIntelligencePlugin;
     use crate::plugin::graph_structural::GraphStructuralRouteKind;
+    use crate::plugin::graph_structural_transport::build_graph_structural_flight_transport_client;
     use crate::plugin::test_support::official_examples::{
         reserve_real_service_port, spawn_real_wendaosearch_demo_capability_manifest_service,
         wait_for_service_ready_with_attempts,
@@ -1185,6 +1189,26 @@ mod tests {
                 options,
             }],
             ..RegisteredRepository::default()
+        }
+    }
+
+    fn live_capability_manifest_repository(base_url: &str) -> RegisteredRepository {
+        RegisteredRepository {
+            id: "repo-julia".to_string(),
+            path: None,
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![RepositoryPluginConfig::Config {
+                id: "julia".to_string(),
+                options: serde_json::json!({
+                    "capability_manifest_transport": {
+                        "base_url": base_url,
+                        "route": "/plugin/capabilities",
+                        "schema_version": "v0-draft"
+                    }
+                }),
+            }],
         }
     }
 
@@ -1268,9 +1292,9 @@ mod tests {
             }
         }));
 
-        let error = match build_julia_capability_manifest_flight_transport_client(&repository) {
-            Ok(_) => panic!("invalid timeout type must fail"),
-            Err(error) => error,
+        let Err(error) = build_julia_capability_manifest_flight_transport_client(&repository)
+        else {
+            panic!("invalid timeout type must fail");
         };
         assert!(
             error
@@ -1342,8 +1366,10 @@ mod tests {
         )
         .unwrap_or_else(|error| panic!("invalid transport batch should build: {error}"));
 
-        let error = validate_julia_plugin_capability_manifest_response_batches(&[batch])
-            .expect_err("unsupported transport should fail");
+        let Err(error) = validate_julia_plugin_capability_manifest_response_batches(&[batch])
+        else {
+            panic!("unsupported transport should fail");
+        };
         assert!(
             error
                 .to_string()
@@ -1396,28 +1422,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fetch_capability_manifest_rows_for_repository_against_real_wendaosearch_demo_service()
-    {
+    #[serial_test::serial(julia_live)]
+    async fn demo_capability_manifest_live_proof_covers_fetch_preflight_binding_and_plugin_preflight()
+     {
         let port = reserve_real_service_port();
         let base_url = format!("http://127.0.0.1:{port}");
         let _service = spawn_real_wendaosearch_demo_capability_manifest_service(port);
-        let repository = RegisteredRepository {
-            id: "repo-julia".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({
-                    "capability_manifest_transport": {
-                        "base_url": base_url,
-                        "route": "/plugin/capabilities",
-                        "schema_version": "v0-draft"
-                    }
-                }),
-            }],
-        };
+        let repository = live_capability_manifest_repository(&base_url);
 
         wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
             .await
@@ -1445,42 +1456,6 @@ mod tests {
             rows.iter()
                 .any(|row| row.capability_id == JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID)
         );
-    }
-
-    #[test]
-    fn capability_manifest_preflight_validation_accepts_real_wendaosearch_demo_service() {
-        let port = reserve_real_service_port();
-        let base_url = format!("http://127.0.0.1:{port}");
-        let _service = spawn_real_wendaosearch_demo_capability_manifest_service(port);
-        Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap_or_else(|error| panic!("build wait runtime: {error}"))
-            .block_on(wait_for_service_ready_with_attempts(
-                &format!("http://127.0.0.1:{port}"),
-                600,
-            ))
-            .unwrap_or_else(|error| {
-                panic!("wait for real WendaoSearch capability-manifest service: {error}")
-            });
-
-        let repository = RegisteredRepository {
-            id: "repo-julia".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({
-                    "capability_manifest_transport": {
-                        "base_url": base_url,
-                        "route": "/plugin/capabilities",
-                        "schema_version": "v0-draft"
-                    }
-                }),
-            }],
-        };
 
         let rows = validate_julia_capability_manifest_preflight_for_repository(&repository)
             .unwrap_or_else(|error| {
@@ -1492,42 +1467,6 @@ mod tests {
             rows.iter()
                 .any(|row| row.capability_id == JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID)
         );
-    }
-
-    #[test]
-    fn capability_manifest_discovery_can_derive_graph_structural_binding_for_repository() {
-        let port = reserve_real_service_port();
-        let base_url = format!("http://127.0.0.1:{port}");
-        let _service = spawn_real_wendaosearch_demo_capability_manifest_service(port);
-        Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap_or_else(|error| panic!("build wait runtime: {error}"))
-            .block_on(wait_for_service_ready_with_attempts(
-                &format!("http://127.0.0.1:{port}"),
-                600,
-            ))
-            .unwrap_or_else(|error| {
-                panic!("wait for real WendaoSearch capability-manifest service: {error}")
-            });
-
-        let repository = RegisteredRepository {
-            id: "repo-julia".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({
-                    "capability_manifest_transport": {
-                        "base_url": base_url,
-                        "route": "/plugin/capabilities",
-                        "schema_version": "v0-draft"
-                    }
-                }),
-            }],
-        };
 
         let binding = discover_julia_graph_structural_binding_from_manifest_for_repository(
             &repository,
@@ -1546,5 +1485,52 @@ mod tests {
             binding.endpoint.route.as_deref(),
             Some("/graph/structural/rerank")
         );
+
+        let rerank_client = build_graph_structural_flight_transport_client(
+            &repository,
+            GraphStructuralRouteKind::StructuralRerank,
+        )
+        .unwrap_or_else(|error| panic!("manifest fallback should parse rerank route: {error}"))
+        .unwrap_or_else(|| panic!("manifest fallback rerank client should exist"));
+        let filter_client = build_graph_structural_flight_transport_client(
+            &repository,
+            GraphStructuralRouteKind::ConstraintFilter,
+        )
+        .unwrap_or_else(|error| panic!("manifest fallback should parse filter route: {error}"))
+        .unwrap_or_else(|| panic!("manifest fallback filter client should exist"));
+
+        assert_eq!(rerank_client.flight_base_url(), base_url);
+        assert_eq!(rerank_client.flight_route(), "/graph/structural/rerank");
+        assert_eq!(filter_client.flight_base_url(), base_url);
+        assert_eq!(filter_client.flight_route(), "/graph/structural/filter");
+
+        let temp = tempdir().unwrap_or_else(|error| panic!("create temp repo: {error}"));
+        fs::create_dir_all(temp.path().join("src"))
+            .unwrap_or_else(|error| panic!("create src directory: {error}"));
+        fs::write(
+            temp.path().join("Project.toml"),
+            "name = \"DemoPkg\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap_or_else(|error| panic!("write Project.toml: {error}"));
+        fs::write(
+            temp.path().join("src").join("DemoPkg.jl"),
+            "module DemoPkg\n\nexport greet\n\ngreet() = :ok\n\nend\n",
+        )
+        .unwrap_or_else(|error| panic!("write root Julia module: {error}"));
+
+        let repository_with_path = RegisteredRepository {
+            path: Some(temp.path().to_path_buf()),
+            ..repository.clone()
+        };
+        let context = AnalysisContext {
+            repository: repository_with_path,
+            repository_root: temp.path().to_path_buf(),
+        };
+
+        JuliaRepoIntelligencePlugin
+            .preflight_repository(&context, temp.path())
+            .unwrap_or_else(|error| {
+                panic!("repository preflight with live capability manifest should succeed: {error}")
+            });
     }
 }

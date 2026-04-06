@@ -1,30 +1,65 @@
 //! Schema validation tests for `EpisodeMetadata`.
 
-use xiuxian_memory_engine::EpisodeMetadata;
+use xiuxian_memory_engine::{Episode, EpisodeMetadata};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_metadata_validation_valid() -> TestResult {
-    let m = EpisodeMetadata::from_episode("exp", "ok", 0.5, 0, 0, 12345)?;
+    let mut episode = Episode::new(
+        "ep-1".to_string(),
+        "intent".to_string(),
+        vec![0.1, 0.2],
+        "exp".to_string(),
+        "ok".to_string(),
+    );
+    episode.q_value = 0.5;
+    episode.retrieval_count = 2;
+    episode.created_at = 12_345;
+    episode.updated_at = 12_345;
+    let m = EpisodeMetadata::from_episode(&episode)?;
     assert!((m.q_value - 0.5).abs() < f32::EPSILON);
     assert_eq!(m.experience, "exp");
+    assert_eq!(m.retrieval_count, 2);
     Ok(())
 }
 
 #[test]
 fn test_metadata_validation_q_out_of_range() {
-    assert!(EpisodeMetadata::from_episode("a", "b", 1.5, 0, 0, 0).is_err());
-    assert!(EpisodeMetadata::from_episode("a", "b", -0.1, 0, 0, 0).is_err());
+    let mut episode = Episode::new(
+        "ep-1".to_string(),
+        "intent".to_string(),
+        vec![0.1, 0.2],
+        "a".to_string(),
+        "b".to_string(),
+    );
+    episode.q_value = 1.5;
+    assert!(EpisodeMetadata::from_episode(&episode).is_err());
+    episode.q_value = -0.1;
+    assert!(EpisodeMetadata::from_episode(&episode).is_err());
 }
 
 #[test]
 fn test_metadata_roundtrip() -> TestResult {
-    let m = EpisodeMetadata::from_episode("exp", "out", 0.7, 1, 2, 999)?;
+    let mut episode = Episode::new(
+        "ep-1".to_string(),
+        "intent".to_string(),
+        vec![0.1, 0.2],
+        "exp".to_string(),
+        "out".to_string(),
+    );
+    episode.q_value = 0.7;
+    episode.retrieval_count = 3;
+    episode.success_count = 1;
+    episode.failure_count = 2;
+    episode.created_at = 999;
+    episode.updated_at = 1000;
+    let m = EpisodeMetadata::from_episode(&episode)?;
     let json = m.to_json()?;
     let m2 = EpisodeMetadata::from_json(&json)?;
     assert_eq!(m.experience, m2.experience);
     assert!((m.q_value - m2.q_value).abs() < f32::EPSILON);
+    assert_eq!(m.updated_at, m2.updated_at);
     Ok(())
 }
 
@@ -47,6 +82,6 @@ fn test_metadata_missing_required_fields_fails() {
 
 #[test]
 fn test_metadata_invalid_q_value_in_json_fails() {
-    let json = r#"{"experience":"x","outcome":"y","q_value":1.5,"success_count":0,"failure_count":0,"created_at":0}"#;
+    let json = r#"{"experience":"x","outcome":"y","q_value":1.5,"retrieval_count":0,"success_count":0,"failure_count":0,"created_at":0,"updated_at":0}"#;
     assert!(EpisodeMetadata::from_json(json).is_err());
 }

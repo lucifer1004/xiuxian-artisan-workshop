@@ -2,7 +2,7 @@
 
 #![cfg(feature = "llm")]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -161,9 +161,7 @@ fn test_context() -> CollectionContext {
     CollectionContext {
         suite_id: "contracts".to_string(),
         crate_name: Some("xiuxian-wendao".to_string()),
-        workspace_root: Some(PathBuf::from(
-            "/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion",
-        )),
+        workspace_root: Some(workspace_root()),
         labels: std::collections::BTreeMap::from([
             (
                 "session_id".to_string(),
@@ -172,6 +170,14 @@ fn test_context() -> CollectionContext {
             ("llm_model".to_string(), "gpt-5.4-mini".to_string()),
         ]),
     }
+}
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(4)
+        .unwrap_or_else(|| panic!("qianji manifest dir should resolve to workspace root"))
+        .to_path_buf()
 }
 
 fn live_config() -> ContractRunConfig {

@@ -18,6 +18,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 chrono = { workspace = true, features = ["clock"] }
 inventory = "0.3"
+xiuxian-memory-engine = { path = "../xiuxian-memory-engine" }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", features = ["transport"] }
 xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
@@ -27,6 +28,10 @@ xiuxian-vector = { path = "../xiuxian-vector" }
 tempfile = { workspace = true }
 insta = { workspace = true }
 serial_test = { version = "3", features = ["file_locks"] }
+async-trait = { workspace = true }
+arrow-flight = { workspace = true }
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.14.5", default-features = false, features = ["transport"] }
 
 [lints]
 workspace = true

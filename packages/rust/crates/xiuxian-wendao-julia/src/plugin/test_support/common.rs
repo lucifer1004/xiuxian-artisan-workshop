@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 
@@ -7,6 +8,40 @@ use crate::compatibility::link_graph::{
 
 pub(crate) struct ChildGuard {
     child: Child,
+}
+
+pub(crate) trait ResultTestExt<T, E> {
+    fn or_panic(self, context: &str) -> T;
+    fn err_or_panic(self, context: &str) -> E;
+}
+
+impl<T, E> ResultTestExt<T, E> for Result<T, E>
+where
+    E: Display,
+{
+    fn or_panic(self, context: &str) -> T {
+        self.unwrap_or_else(|error| panic!("{context}: {error}"))
+    }
+
+    fn err_or_panic(self, context: &str) -> E {
+        let Err(error) = self else {
+            panic!("{context}");
+        };
+        error
+    }
+}
+
+pub(crate) trait OptionTestExt<T> {
+    fn or_panic(self, context: &str) -> T;
+}
+
+impl<T> OptionTestExt<T> for Option<T> {
+    fn or_panic(self, context: &str) -> T {
+        let Some(value) = self else {
+            panic!("{context}");
+        };
+        value
+    }
 }
 
 impl ChildGuard {
@@ -41,8 +76,18 @@ impl Drop for ChildGuard {
 pub(crate) fn reserve_test_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .and_then(|listener| listener.local_addr())
-        .map(|address| address.port())
-        .unwrap_or_else(|error| panic!("reserve test port: {error}"))
+        .map_or_else(
+            |error| panic!("reserve test port: {error}"),
+            |address| address.port(),
+        )
+}
+
+pub(crate) fn assert_f64_eq(actual: f64, expected: f64) {
+    let delta = (actual - expected).abs();
+    assert!(
+        delta <= 1.0e-12,
+        "expected `{expected}` but got `{actual}` (delta: {delta})"
+    );
 }
 
 pub(crate) fn repo_root() -> PathBuf {
@@ -59,27 +104,11 @@ pub(crate) fn wendaoarrow_package_dir() -> PathBuf {
         .unwrap_or_else(|error| panic!("resolve WendaoArrow package dir: {error}"))
 }
 
-pub(crate) fn wendaoarrow_script(name: &str) -> PathBuf {
-    wendaoarrow_package_dir()
-        .join("scripts")
-        .join(name)
-        .canonicalize()
-        .unwrap_or_else(|error| panic!("resolve WendaoArrow script `{name}`: {error}"))
-}
-
 pub(crate) fn wendaoanalyzer_package_dir() -> PathBuf {
     repo_root()
         .join(DEFAULT_JULIA_ANALYZER_PACKAGE_DIR)
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve WendaoAnalyzer package dir: {error}"))
-}
-
-pub(crate) fn wendaoanalyzer_script(name: &str) -> PathBuf {
-    wendaoanalyzer_package_dir()
-        .join("scripts")
-        .join(name)
-        .canonicalize()
-        .unwrap_or_else(|error| panic!("resolve WendaoAnalyzer script `{name}`: {error}"))
 }
 
 pub(crate) fn wendaosearch_package_dir() -> PathBuf {

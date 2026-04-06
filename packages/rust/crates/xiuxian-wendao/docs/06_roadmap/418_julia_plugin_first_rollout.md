@@ -90,6 +90,160 @@ Avoid this implementation pattern:
 4. transitional compatibility wrappers that are explicitly scheduled for
    retirement
 
+## Memory-Family Julia Compute Boundary
+
+The memory-family Julia lane follows the same plugin-first rule, but it is
+stricter about ownership:
+
+1. `WendaoMemory.jl` owns compute kernels only
+2. `xiuxian-wendao-julia` owns Julia-specific memory ABI logic: typed rows,
+   request and response batches, manifest projection, schema validation,
+   decoding, route defaults, and plugin-owned host-adapter helpers over Rust
+   memory-engine read models or evidence
+3. `xiuxian-wendao` consumes that plugin-owned seam directly instead of
+   keeping a second local host-adapter namespace
+4. `xiuxian-memory-engine` and the Rust host remain authoritative for memory
+   state, lifecycle, fallback, audit, and final mutation decisions
+
+For this lane, do not add new memory-family profile semantics, schema
+fragments, manifest rules, decoder logic, or Julia-specific validation logic
+to `xiuxian-wendao`. If the work is Julia ABI meaning rather than host-domain
+adaptation, it belongs in `xiuxian-wendao-julia`.
+
+## Landed Slice: Thin Memory Host Bridge
+
+The next bounded ownership move makes the host-facing memory entry explicit
+without pulling Julia profile logic back into the product crate.
+
+`xiuxian-wendao` now keeps:
+
+1. the feature-gated namespace `xiuxian_wendao::memory::julia`
+2. a thin set of re-exported host-facing memory Julia types and downcall entry
+   points
+3. no local profile shaping, validation, transport, or decode logic
+
+`xiuxian-wendao-julia` still keeps:
+
+1. typed memory-family Arrow contracts
+2. host staging over Rust read models and evidence
+3. runtime-facing Flight transport
+4. composed profile downcalls
+
+This slice matters because it turns the approved RFC layering into a readable
+crate boundary: host consumers can enter through `xiuxian_wendao::memory::julia`,
+but the Julia-specific implementation remains plugin-owned.
+
+## Landed Slice: Memory Runtime Resolution
+
+The next bounded move makes the memory-family bridge useful to the host
+without pushing Julia ABI logic back into the product crate.
+
+`xiuxian-wendao` now keeps:
+
+1. one crate-private merged-settings seam shared by `link_graph` and `memory`
+2. `xiuxian_wendao::memory::julia::resolve_memory_julia_compute_runtime()`
+3. `xiuxian_wendao::memory::julia::resolve_memory_julia_compute_bindings()`
+
+`xiuxian-wendao` still does not keep:
+
+1. Julia memory profile contracts
+2. Julia memory transport logic
+3. Julia memory host staging logic
+4. Julia memory response decoding
+
+This slice matters because it creates the first real host runtime assembly path
+for the memory-family Julia lane: merged Wendao settings now flow through a
+Wendao-owned bridge into plugin-owned binding materialization, instead of
+leaving `memory::julia` as a pure re-export shell.
+
+## Landed Slice: Runtime-Resolved Memory Downcalls
+
+The next bounded move makes the host-facing memory bridge directly callable
+without making `xiuxian-wendao` own a second downcall layer.
+
+`xiuxian-wendao` now keeps:
+
+1. runtime-resolved async wrappers under `xiuxian_wendao::memory::julia::*`
+2. the host-facing re-export surface for input and output types required by
+   those wrappers
+3. no local request shaping, Flight transport, or response decode logic
+
+`xiuxian-wendao-julia` still keeps:
+
+1. memory-family host staging over read models and evidence
+2. the composed downcall logic that still accepts explicit runtime config
+3. the actual Arrow Flight transport and typed response decoding
+
+This slice matters because host callers can now enter through
+`xiuxian_wendao::memory::julia::*` with domain inputs only, while the product
+crate still delegates every Julia-specific step below runtime resolution into
+`xiuxian-wendao-julia`.
+
+## Landed Slice: Memory Host Client
+
+The next bounded move cleans up the host-facing seam into a proper feature
+folder and one configured client surface.
+
+`xiuxian-wendao` now keeps:
+
+1. `packages/rust/crates/xiuxian-wendao/src/memory/julia/` as a feature folder
+2. interface-only `mod.rs` plus separated runtime and client submodules
+3. `xiuxian_wendao::memory::julia::ComputeClient` as the primary configured
+   host entry for memory-family Julia compute
+
+`xiuxian-wendao` still does not keep:
+
+1. Julia-specific host staging
+2. Julia-specific Arrow transport
+3. Julia-specific response decoding
+4. a product-local second compute implementation layer
+
+This slice matters because the host-facing seam is now both thinner and more
+usable: callers can construct one configured client inside the product crate,
+while the actual compute lane still belongs below the seam in
+`xiuxian-wendao-julia`.
+
+## Landed Slice: Memory Public Surface Thinning
+
+The next bounded move removes helper leakage from the product-crate bridge.
+
+`xiuxian-wendao` now keeps:
+
+1. `xiuxian_wendao::memory::julia::ComputeClient` as the primary host-facing
+   entry
+2. runtime and binding resolution helpers
+3. only the minimum typed DTOs needed to call the configured client
+
+`xiuxian-wendao` no longer re-exports:
+
+1. raw runtime-resolved downcall free functions
+2. plugin-owned runtime-to-binding builder helpers
+3. gate-evidence builder helpers that belong under
+   `xiuxian-wendao-julia::memory::host::*`
+
+This slice matters because it makes the boundary harder to drift: host callers
+can still enter through the product crate, but helper-heavy Julia ABI details
+are no longer presented as part of the Wendao product surface.
+
+## Landed Slice: Memory Host-Adapter Extraction
+
+The next bounded ownership move removes the last local memory Julia helper
+namespace from `xiuxian-wendao`.
+
+`xiuxian-wendao-julia` now keeps:
+
+1. the memory-family typed Arrow contracts
+2. the plugin-owned host-adapter helpers under `memory::host::*`
+3. the focused tests that prove Rust memory-engine projections and evidence can
+   be turned into staged Julia request batches inside the plugin crate
+
+`xiuxian-wendao` no longer keeps:
+
+1. `src/memory/julia/`
+2. a crate-local memory Julia adapter namespace
+3. a direct `xiuxian-memory-engine` dependency just to stage Julia memory
+   request batches
+
 ## Parser Interpretation
 
 The parser rule is intentionally split:

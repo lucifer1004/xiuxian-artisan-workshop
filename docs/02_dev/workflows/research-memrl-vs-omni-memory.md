@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "MemRL vs Omni-Dev-Fusion: Research Analysis"
+title: "MemRL vs xiuxian-artisan-workshop: Research Analysis"
 category: "workflows"
 tags:
   - workflows
@@ -8,10 +8,10 @@ tags:
 saliency_base: 6.0
 decay_rate: 0.05
 metadata:
-  title: "MemRL vs Omni-Dev-Fusion: Research Analysis"
+  title: "MemRL vs xiuxian-artisan-workshop: Research Analysis"
 ---
 
-# MemRL vs Omni-Dev-Fusion: Research Analysis
+# MemRL vs xiuxian-artisan-workshop: Research Analysis
 
 > **Paper**: [MemRL: Self-Evolving Agents via Runtime Reinforcement Learning on Episodic Memory](https://arxiv.org/abs/2601.03192) (arXiv:2601.03192)  
 > **Purpose**: Extract learning points, advantages, and adoptable ideas for the current project.
@@ -89,7 +89,7 @@ metadata:
 
 ## 6. Summary
 
-| Dimension    | MemRL                               | Omni-Dev-Fusion                                   |
+| Dimension    | MemRL                               | xiuxian-artisan-workshop                          |
 | ------------ | ----------------------------------- | ------------------------------------------------- |
 | Memory type  | Episodic (trajectories, outcomes)   | Semantic learnings + knowledge graph + ADR        |
 | Retrieval    | Two-phase (recall + utility filter) | Hybrid (LinkGraph + vector); no utility phase yet |

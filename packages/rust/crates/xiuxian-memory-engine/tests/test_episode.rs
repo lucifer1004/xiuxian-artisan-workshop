@@ -14,8 +14,10 @@ fn test_episode_creation() {
 
     assert_eq!(episode.id, "ep-001");
     assert!((episode.q_value - 0.5).abs() < f32::EPSILON);
+    assert_eq!(episode.retrieval_count, 0);
     assert_eq!(episode.success_count, 0);
     assert_eq!(episode.failure_count, 0);
+    assert_eq!(episode.created_at, episode.updated_at);
 }
 
 #[test]
@@ -32,8 +34,11 @@ fn test_utility_calculation() {
     assert!(initial_util > 0.0);
 
     episode.mark_success();
+    assert_eq!(episode.retrieval_count, 1);
     assert_eq!(episode.success_count, 1);
 
     episode.mark_failure();
+    assert_eq!(episode.retrieval_count, 2);
     assert_eq!(episode.failure_count, 1);
+    assert_eq!(episode.total_uses(), 2);
 }

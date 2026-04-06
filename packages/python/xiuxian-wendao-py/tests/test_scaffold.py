@@ -23,6 +23,8 @@ from xiuxian_wendao_py.scaffold import (
     write_scaffold_project,
 )
 
+SDK_SRC = Path(__file__).resolve().parents[1] / "src"
+
 
 def test_manifest_renders_stable_toml() -> None:
     manifest = WendaoAnalyzerPluginManifest(
@@ -411,11 +413,8 @@ def test_scaffolded_project_cli_runs_in_mock_flight_mode(tmp_path: Path) -> None
     )
 
     package_src = project_root / "src"
-    sdk_src = Path(
-        "/Users/guangtao/projects/xiuxian-artisan-workshop/packages/python/xiuxian-wendao-py/src"
-    )
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
-    pythonpath_parts = [str(package_src), str(sdk_src)]
+    pythonpath_parts = [str(package_src), str(SDK_SRC)]
     if existing_pythonpath:
         pythonpath_parts.append(existing_pythonpath)
 
@@ -468,11 +467,8 @@ def test_scaffolded_project_cli_uses_manifest_route_as_single_source_of_truth(
     )
 
     package_src = project_root / "src"
-    sdk_src = Path(
-        "/Users/guangtao/projects/xiuxian-artisan-workshop/packages/python/xiuxian-wendao-py/src"
-    )
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join([str(package_src), str(sdk_src)])
+    env["PYTHONPATH"] = os.pathsep.join([str(package_src), str(SDK_SRC)])
     env["WENDAO_MOCK_FLIGHT"] = "1"
 
     completed = subprocess.run(

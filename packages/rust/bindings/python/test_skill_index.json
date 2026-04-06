@@ -7,7 +7,7 @@
     "tools": [],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -26,7 +26,7 @@
     "tools": [],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -62,7 +62,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": false,
@@ -81,7 +81,7 @@
     "tools": [],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -145,7 +145,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -261,7 +261,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": false,
@@ -293,7 +293,7 @@
     ],
     "routing_keywords": ["template", "new skill", "create skill", "scaffold"],
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -353,7 +353,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -385,7 +385,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -404,7 +404,7 @@
     "tools": [],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -440,7 +440,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -512,7 +512,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -540,7 +540,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -644,7 +644,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": false,
@@ -672,7 +672,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -1056,7 +1056,7 @@
     ],
     "routing_keywords": [],
     "intents": "",
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,
@@ -1084,7 +1084,7 @@
     ],
     "routing_keywords": "",
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docs_available": {
       "skill_md": true,
       "readme": true,

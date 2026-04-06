@@ -2,13 +2,68 @@
 
 `xiuxian-wendao-julia` is the external Julia Repo Intelligence plugin crate for `xiuxian-wendao`.
 
+## Verification Status
+
+- crate-wide strict clippy is green again under
+  `direnv exec . cargo clippy -p xiuxian-wendao-julia --all-targets --all-features -- -D warnings`
+- the graph-structural plugin and test baseline now closes without lint
+  suppressions by using shared test-support panic helpers, moving the
+  `entry.rs` test module behind production items, and keeping the staged
+  graph-structural transport fixture aligned with the current request contract
+- the targeted transport regression proof is green under
+  `direnv exec . cargo test -p xiuxian-wendao-julia plugin::graph_structural_transport::tests::validate_graph_structural_request_batches_accepts_staged_shapes -- --exact --nocapture`
+- the full crate test gate now completes again under
+  `direnv exec . cargo test -p xiuxian-wendao-julia`; the current full pass is
+  `147 passed` in `226.16s` after the slow solver-demo manifest-discovery
+  graph-structural live proofs were regrouped so one `multi_route` Julia
+  service lifecycle now covers multiple rerank or filter assertions instead of
+  repeatedly re-spawning the same live service
+- the graph-structural live proof surface has since been tightened again:
+  the remaining `demo` and `solver_demo` pair or generic-topology live proofs
+  now consolidate onto `multi_route` services, and the plugin test-support
+  launches the Julia example services through explicit `julia --project=...`
+  commands rather than repo-level `direnv` wrappers
+- the remaining repeated `demo` capability-manifest live proofs are now also
+  consolidated into one grouped test that covers manifest fetch, manifest
+  preflight, graph-structural binding discovery, transport fallback, and
+  plugin preflight against one live `WendaoSearch.jl` endpoint
+- the current canonical full crate pass is now `139 passed` in `136.25s`,
+  while preserving explicit transport, manifest-discovery, and grouped
+  capability-manifest live coverage across the plugin lane
+- the host consumer still checks cleanly under
+  `direnv exec . cargo check -p xiuxian-wendao --lib --features julia`
+
 ## Ownership Boundary
 
 - `xiuxian-wendao-runtime` owns the reusable Arrow Flight runtime client and negotiation seam.
 - `xiuxian-wendao-julia` owns Julia-specific interpretation of repository plugin options and translates them into the runtime-owned Flight binding.
+- `xiuxian-wendao-julia` also owns the runtime-level memory-family thin compat
+  surface under `src/memory/`, including staged memory profile metadata,
+  manifest projection for the RFC `memory` family entry shape,
+  runtime-to-binding normalization for `memory.julia_compute`, one optional
+  family-level `health_route` propagation path, and typed `episodic_recall`,
+  `memory_gate_score`, `memory_plan_tuning`, `memory_calibration`, and
+  manifest Arrow request or response validation and decoding.
+- `xiuxian-wendao-julia` now also owns the plugin-side host-adapter helpers
+  under `src/memory/host/`, including the Rust-memory-engine projection or
+  evidence inputs that build staged `episodic_recall`, `memory_gate_score`,
+  `memory_plan_tuning`, and `memory_calibration` request rows or batches.
+- `xiuxian-wendao-julia` also owns the runtime-facing memory-family transport
+  seam under `src/memory/transport/`, including runtime-config-driven Flight
+  client construction, request or response validation dispatch, roundtrip
+  execution, and typed fetch helpers for the four staged memory profiles.
+- `xiuxian-wendao-julia` also owns the plugin-side memory-family composition
+  seam under `src/memory/downcall/`, which combines `src/memory/host/` input
+  staging with `src/memory/transport/` Flight execution so host consumers can
+  call one thin plugin-owned downcall surface instead of manually stitching
+  those layers together in `xiuxian-wendao`.
 - `xiuxian-wendao-julia` owns the Julia Arrow rerank exchange seam only where it stays Julia-specific: repository plugin-option interpretation, remote fetch helpers, and plugin-local loopback tests.
 - `xiuxian-wendao-julia` also owns Julia-specific graph-structural transport option parsing, route-kind dispatch defaults, and staged request or response validation for promoted structural-search downcalls.
 - `xiuxian-wendao-julia` also owns manifest-driven graph-structural binding fallback, so graph-structural client construction can derive route bindings from the live Julia capability manifest when explicit graph-structural transport config is absent.
+- `xiuxian-wendao-julia` also owns one grouped same-endpoint capability-manifest
+  live proof that fetches the manifest, validates plugin preflight, derives
+  graph-structural bindings, and builds manifest-fallback transport clients
+  without re-spawning redundant `demo` services.
 - `xiuxian-wendao-julia` also owns the plugin-side proof that one live `WendaoSearch.jl` endpoint can advertise the capability manifest and immediately serve graph-structural downcalls discovered from that same manifest.
 - `xiuxian-wendao-julia` also owns the plugin-side proof that the same live
   `WendaoSearch.jl` endpoint can serve both heuristic `demo` and bounded
@@ -53,6 +108,19 @@
 - `register_into`
 - `build_julia_flight_transport_client`
 - `process_julia_flight_batches`
+- `memory::*` for memory-family profile metadata, manifest projection helpers,
+  runtime binding builders, and typed `episodic_recall`, `memory_gate_score`,
+  `memory_plan_tuning`, and `memory_calibration` Arrow request or response
+  helpers
+- `memory::host::*` for plugin-owned host-adapter helpers over
+  `xiuxian-memory-engine` read models, gate evidence, recall tuning inputs,
+  and calibration job inputs
+- `memory::transport::*` for memory-family Flight client construction,
+  request or response validation dispatch, roundtrip execution, and typed
+  fetch helpers for the four staged memory profiles
+- `memory::downcall::*` for plugin-owned composition helpers that turn Rust
+  memory-engine projection, evidence, tuning, or calibration inputs into one
+  staged Julia downcall plus typed result rows
 - `GraphStructuralRouteKind`
 - `JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION`
 - `graph_structural_route_kind`

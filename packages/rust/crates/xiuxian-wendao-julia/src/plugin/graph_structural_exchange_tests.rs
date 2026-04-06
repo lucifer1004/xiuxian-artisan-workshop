@@ -15,12 +15,11 @@ use crate::{
     build_graph_structural_keyword_overlap_query_inputs,
     build_graph_structural_keyword_overlap_raw_candidate_inputs,
     graph_structural_pair_candidate_id,
+    julia_plugin_test_support::common::ResultTestExt,
     julia_plugin_test_support::official_examples::{
+        LIVE_REQUEST_TIMEOUT_SECS, LIVE_SERVICE_STARTUP_TIMEOUT_SECS, await_live_step,
         reserve_real_service_port, spawn_real_wendaosearch_demo_multi_route_service,
-        spawn_real_wendaosearch_demo_structural_rerank_service,
-        spawn_real_wendaosearch_solver_demo_constraint_filter_service,
         spawn_real_wendaosearch_solver_demo_multi_route_service,
-        spawn_real_wendaosearch_solver_demo_structural_rerank_service,
         wait_for_service_ready_with_attempts,
     },
 };
@@ -60,7 +59,7 @@ fn build_graph_structural_rerank_request_batch_uses_contract_columns() {
         candidate_edge_destinations: vec!["node-2".to_string()],
         candidate_edge_kinds: vec!["depends_on".to_string()],
     }])
-    .expect("rerank request batch");
+    .or_panic("rerank request batch");
 
     assert_eq!(
         batch.schema().field(0).name(),
@@ -97,7 +96,7 @@ fn build_graph_structural_filter_request_batch_rejects_misaligned_anchors() {
         candidate_edge_destinations: vec!["node-2".to_string()],
         candidate_edge_kinds: vec!["depends_on".to_string()],
     }])
-    .expect_err("misaligned anchors must fail");
+    .err_or_panic("misaligned anchors must fail");
 
     assert!(
         error
@@ -110,7 +109,7 @@ fn build_graph_structural_filter_request_batch_rejects_misaligned_anchors() {
 #[test]
 fn decode_graph_structural_rerank_score_rows_materializes_values() {
     let rows = decode_graph_structural_rerank_score_rows(&[rerank_response_batch()])
-        .expect("rerank decode");
+        .or_panic("rerank decode");
 
     assert_eq!(
         rows.get("candidate-a"),
@@ -128,7 +127,7 @@ fn decode_graph_structural_rerank_score_rows_materializes_values() {
 #[test]
 fn decode_graph_structural_filter_score_rows_materializes_values() {
     let rows = decode_graph_structural_filter_score_rows(&[filter_response_batch()])
-        .expect("filter decode");
+        .or_panic("filter decode");
 
     assert_eq!(
         rows.get("candidate-a"),
@@ -173,11 +172,11 @@ async fn fetch_graph_structural_rerank_rows_for_repository_rejects_missing_trans
         candidate_edge_destinations: vec!["node-2".to_string()],
         candidate_edge_kinds: vec!["depends_on".to_string()],
     }])
-    .expect("rerank request batch");
+    .or_panic("rerank request batch");
 
     let error = fetch_graph_structural_rerank_rows_for_repository(&repository, &[batch])
         .await
-        .expect_err("missing graph-structural transport must fail");
+        .err_or_panic("missing graph-structural transport must fail");
     assert!(
         error.to_string().contains("/graph/structural/rerank"),
         "unexpected error: {error}"
@@ -226,7 +225,7 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
         ],
     )
     .await
-    .expect_err("missing graph-structural transport must fail");
+    .err_or_panic("missing graph-structural transport must fail");
     assert!(
         error.to_string().contains("/graph/structural/rerank"),
         "unexpected error: {error}"
@@ -272,7 +271,7 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
             )],
         )
         .await
-        .expect_err("missing graph-structural transport must fail");
+        .err_or_panic("missing graph-structural transport must fail");
     assert!(
         error.to_string().contains("/graph/structural/rerank"),
         "unexpected error: {error}"
@@ -308,25 +307,19 @@ async fn fetch_graph_structural_filter_rows_for_repository_rejects_missing_trans
         candidate_edge_destinations: vec!["node-2".to_string()],
         candidate_edge_kinds: vec!["depends_on".to_string()],
     }])
-    .expect("filter request batch");
+    .or_panic("filter request batch");
 
     let error = fetch_graph_structural_filter_rows_for_repository(&repository, &[batch])
         .await
-        .expect_err("missing graph-structural transport must fail");
+        .err_or_panic("missing graph-structural transport must fail");
     assert!(
         error.to_string().contains("/graph/structural/filter"),
         "unexpected error: {error}"
     );
 }
 
-#[tokio::test]
-#[serial_test::serial(julia_live)]
-async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_demo_service()
- {
-    let port = reserve_real_service_port();
-    let base_url = format!("http://127.0.0.1:{port}");
-    let mut service = spawn_real_wendaosearch_demo_structural_rerank_service(port);
-    let repository = RegisteredRepository {
+fn graph_structural_explicit_rerank_repository(base_url: &str) -> RegisteredRepository {
+    RegisteredRepository {
         id: "demo".to_string(),
         path: None,
         url: None,
@@ -344,17 +337,13 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
                 }
             }),
         }],
-    };
+    }
+}
 
-    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-        .await
-        .unwrap_or_else(|error| {
-            panic!("wait for real WendaoSearch structural Flight service: {error}")
-        });
-
-    let rows =
+async fn assert_demo_multi_route_rerank_rows(repository: &RegisteredRepository) {
+    let rows = await_live_step(
         fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
-            &repository,
+            repository,
             &build_graph_structural_keyword_overlap_query_inputs(
                 "query-live",
                 0,
@@ -374,14 +363,17 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
                 0.6,
                 true,
             )],
-        )
-        .await
-        .unwrap_or_else(|error| {
-            panic!("real WendaoSearch graph-structural rerank should succeed: {error}")
-        });
+        ),
+        LIVE_REQUEST_TIMEOUT_SECS,
+        "real WendaoSearch graph-structural rerank",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("real WendaoSearch graph-structural rerank should succeed: {error}")
+    });
 
     let candidate_id =
-        graph_structural_pair_candidate_id("node-1", "node-2").expect("stable pair candidate id");
+        graph_structural_pair_candidate_id("node-1", "node-2").or_panic("stable pair candidate id");
     let row = rows
         .get(&candidate_id)
         .unwrap_or_else(|| panic!("missing candidate `{candidate_id}` in live response"));
@@ -397,128 +389,57 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
         row.explanation,
         "demo feasible candidate with 2 nodes and 1 edge kinds"
     );
+}
 
-    service.kill();
+fn graph_structural_manifest_repository(base_url: &str) -> RegisteredRepository {
+    RegisteredRepository {
+        id: "demo".to_string(),
+        path: None,
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Config {
+            id: "julia".to_string(),
+            options: serde_json::json!({
+                "capability_manifest_transport": {
+                    "base_url": base_url,
+                    "route": "/plugin/capabilities",
+                    "schema_version": "v0-draft"
+                }
+            }),
+        }],
+    }
 }
 
 #[tokio::test]
 #[serial_test::serial(julia_live)]
-async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_via_manifest_discovery_against_real_wendaosearch_multi_route_service()
+async fn fetch_graph_structural_demo_rerank_rows_for_repository_against_real_wendaosearch_multi_route_service()
  {
     let port = reserve_real_service_port();
     let base_url = format!("http://127.0.0.1:{port}");
     let mut service = spawn_real_wendaosearch_demo_multi_route_service(port);
-    let repository = RegisteredRepository {
-        id: "demo".to_string(),
-        path: None,
-        url: None,
-        git_ref: None,
-        refresh: RepositoryRefreshPolicy::Fetch,
-        plugins: vec![RepositoryPluginConfig::Config {
-            id: "julia".to_string(),
-            options: serde_json::json!({
-                "capability_manifest_transport": {
-                    "base_url": base_url,
-                    "route": "/plugin/capabilities",
-                    "schema_version": "v0-draft"
-                }
-            }),
-        }],
-    };
+    let explicit_repository = graph_structural_explicit_rerank_repository(&base_url);
+    let manifest_repository = graph_structural_manifest_repository(&base_url);
 
-    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-        .await
-        .unwrap_or_else(|error| {
-            panic!("wait for real WendaoSearch multi-route Flight service: {error}")
-        });
+    await_live_step(
+        wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600),
+        LIVE_SERVICE_STARTUP_TIMEOUT_SECS,
+        "wait for real WendaoSearch multi-route Flight service",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("wait for real WendaoSearch multi-route Flight service: {error}")
+    });
 
-    let rows =
-        fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
-            &repository,
-            &build_graph_structural_keyword_overlap_query_inputs(
-                "query-live",
-                0,
-                2,
-                vec!["alpha".to_string()],
-                vec!["depends_on".to_string()],
-            ),
-            &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
-                    "node-1",
-                    "node-2",
-                    vec!["depends_on".to_string()],
-                    vec!["alpha".to_string(), "core".to_string()],
-                    vec!["core".to_string()],
-                ),
-                0.7,
-                0.6,
-                true,
-            )],
-        )
-        .await
-        .unwrap_or_else(|error| {
-            panic!(
-                "manifest-discovered real WendaoSearch graph-structural rerank should succeed: {error}"
-            )
-        });
-
-    let candidate_id =
-        graph_structural_pair_candidate_id("node-1", "node-2").expect("stable pair candidate id");
-    let row = rows
-        .get(&candidate_id)
-        .unwrap_or_else(|| panic!("missing candidate `{candidate_id}` in live response"));
-    assert_eq!(row.candidate_id, candidate_id);
-    assert!(row.feasible);
-    assert!((row.structural_score - 0.935).abs() < 1e-12);
-    assert!((row.final_score - 1.035).abs() < 1e-12);
-    assert_eq!(
-        row.pin_assignment,
-        vec!["node-1".to_string(), "node-2".to_string()]
-    );
-    assert_eq!(
-        row.explanation,
-        "demo feasible candidate with 2 nodes and 1 edge kinds"
-    );
-
+    assert_demo_multi_route_rerank_rows(&explicit_repository).await;
+    assert_demo_multi_route_rerank_rows(&manifest_repository).await;
     service.kill();
 }
 
-#[tokio::test]
-#[serial_test::serial(julia_live)]
-async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_solver_demo_service()
- {
-    let port = reserve_real_service_port();
-    let base_url = format!("http://127.0.0.1:{port}");
-    let mut service = spawn_real_wendaosearch_solver_demo_structural_rerank_service(port);
-    let repository = RegisteredRepository {
-        id: "demo".to_string(),
-        path: None,
-        url: None,
-        git_ref: None,
-        refresh: RepositoryRefreshPolicy::Fetch,
-        plugins: vec![RepositoryPluginConfig::Config {
-            id: "julia".to_string(),
-            options: serde_json::json!({
-                "graph_structural_transport": {
-                    "base_url": base_url,
-                    "structural_rerank": {
-                        "route": "/graph/structural/rerank",
-                        "schema_version": "v0-draft"
-                    }
-                }
-            }),
-        }],
-    };
-
-    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-        .await
-        .unwrap_or_else(|error| {
-            panic!("wait for real WendaoSearch solver-demo structural Flight service: {error}")
-        });
-
-    let rows =
+async fn assert_solver_demo_explicit_rerank_rows(repository: &RegisteredRepository) {
+    let rows = await_live_step(
         fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
-            &repository,
+            repository,
             &build_graph_structural_keyword_overlap_query_inputs(
                 "query-live",
                 0,
@@ -538,16 +459,19 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
                 0.6,
                 true,
             )],
-        )
-        .await
-        .unwrap_or_else(|error| {
-            panic!("real WendaoSearch solver-demo graph-structural rerank should succeed: {error}")
-        });
+        ),
+        LIVE_REQUEST_TIMEOUT_SECS,
+        "real WendaoSearch solver-demo graph-structural rerank",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("real WendaoSearch solver-demo graph-structural rerank should succeed: {error}")
+    });
 
     let candidate_id =
-        graph_structural_pair_candidate_id("node-1", "node-2").expect("stable pair candidate id");
+        graph_structural_pair_candidate_id("node-1", "node-2").or_panic("stable pair candidate id");
     let row = rows.get(&candidate_id).unwrap_or_else(|| {
-        panic!("missing candidate `{candidate_id}` in solver-demo live response")
+        panic!("missing candidate `{candidate_id}` in solver-demo explicit response")
     });
     assert_eq!(row.candidate_id, candidate_id);
     assert!(row.feasible);
@@ -560,99 +484,10 @@ async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_
         "unexpected explanation: {}",
         row.explanation
     );
-
-    service.kill();
 }
 
-#[tokio::test]
-#[serial_test::serial(julia_live)]
-async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
- {
-    let port = reserve_real_service_port();
-    let base_url = format!("http://127.0.0.1:{port}");
-    let mut service = spawn_real_wendaosearch_solver_demo_multi_route_service(port);
-    let repository = RegisteredRepository {
-        id: "demo".to_string(),
-        path: None,
-        url: None,
-        git_ref: None,
-        refresh: RepositoryRefreshPolicy::Fetch,
-        plugins: vec![RepositoryPluginConfig::Config {
-            id: "julia".to_string(),
-            options: serde_json::json!({
-                "capability_manifest_transport": {
-                    "base_url": base_url,
-                    "route": "/plugin/capabilities",
-                    "schema_version": "v0-draft"
-                }
-            }),
-        }],
-    };
-
-    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-        .await
-        .unwrap_or_else(|error| {
-            panic!("wait for real WendaoSearch solver-demo multi-route Flight service: {error}")
-        });
-
-    let rows =
-        fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
-            &repository,
-            &build_graph_structural_keyword_overlap_query_inputs(
-                "query-live",
-                0,
-                2,
-                vec!["alpha".to_string()],
-                vec!["depends_on".to_string()],
-            ),
-            &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
-                    "node-1",
-                    "node-2",
-                    vec!["depends_on".to_string()],
-                    vec!["alpha".to_string(), "core".to_string()],
-                    vec!["core".to_string()],
-                ),
-                0.7,
-                0.6,
-                true,
-            )],
-        )
-        .await
-        .unwrap_or_else(|error| {
-            panic!(
-                "manifest-discovered real WendaoSearch solver-demo rerank should succeed: {error}"
-            )
-        });
-
-    let candidate_id =
-        graph_structural_pair_candidate_id("node-1", "node-2").expect("stable pair candidate id");
-    let row = rows.get(&candidate_id).unwrap_or_else(|| {
-        panic!("missing candidate `{candidate_id}` in solver-demo multi-route response")
-    });
-    assert_eq!(row.candidate_id, candidate_id);
-    assert!(row.feasible);
-    assert!(row.structural_score > 0.0);
-    assert!(row.final_score > row.structural_score);
-    assert_eq!(row.pin_assignment, vec!["node-1".to_string()]);
-    assert!(
-        row.explanation
-            .contains("solver_demo feasible candidate via rydberg solve"),
-        "unexpected explanation: {}",
-        row.explanation
-    );
-
-    service.kill();
-}
-
-#[tokio::test]
-#[serial_test::serial(julia_live)]
-async fn fetch_graph_structural_filter_rows_for_repository_against_real_wendaosearch_solver_demo_constraint_filter_service()
- {
-    let port = reserve_real_service_port();
-    let base_url = format!("http://127.0.0.1:{port}");
-    let mut service = spawn_real_wendaosearch_solver_demo_constraint_filter_service(port);
-    let repository = RegisteredRepository {
+fn graph_structural_explicit_filter_repository(base_url: &str) -> RegisteredRepository {
+    RegisteredRepository {
         id: "demo".to_string(),
         path: None,
         url: None,
@@ -670,16 +505,62 @@ async fn fetch_graph_structural_filter_rows_for_repository_against_real_wendaose
                 }
             }),
         }],
-    };
+    }
+}
 
-    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-        .await
-        .unwrap_or_else(|error| {
-            panic!("wait for real WendaoSearch solver-demo filter Flight service: {error}")
-        });
+async fn assert_solver_demo_multi_route_rerank_rows(repository: &RegisteredRepository) {
+    let rows = await_live_step(
+        fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
+            repository,
+            &build_graph_structural_keyword_overlap_query_inputs(
+                "query-live",
+                0,
+                2,
+                vec!["alpha".to_string()],
+                vec!["depends_on".to_string()],
+            ),
+            &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
+                build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                    "node-1",
+                    "node-2",
+                    vec!["depends_on".to_string()],
+                    vec!["alpha".to_string(), "core".to_string()],
+                    vec!["core".to_string()],
+                ),
+                0.7,
+                0.6,
+                true,
+            )],
+        ),
+        LIVE_REQUEST_TIMEOUT_SECS,
+        "manifest-discovered real WendaoSearch solver-demo rerank",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("manifest-discovered real WendaoSearch solver-demo rerank should succeed: {error}")
+    });
 
     let candidate_id =
-        graph_structural_pair_candidate_id("node-1", "node-2").expect("stable pair candidate id");
+        graph_structural_pair_candidate_id("node-1", "node-2").or_panic("stable pair candidate id");
+    let row = rows.get(&candidate_id).unwrap_or_else(|| {
+        panic!("missing candidate `{candidate_id}` in solver-demo multi-route response")
+    });
+    assert_eq!(row.candidate_id, candidate_id);
+    assert!(row.feasible);
+    assert!(row.structural_score > 0.0);
+    assert!(row.final_score > row.structural_score);
+    assert_eq!(row.pin_assignment, vec!["node-1".to_string()]);
+    assert!(
+        row.explanation
+            .contains("solver_demo feasible candidate via rydberg solve"),
+        "unexpected explanation: {}",
+        row.explanation
+    );
+}
+
+async fn assert_solver_demo_explicit_filter_rows(repository: &RegisteredRepository) {
+    let candidate_id =
+        graph_structural_pair_candidate_id("node-1", "node-2").or_panic("stable pair candidate id");
     let batch = build_graph_structural_filter_request_batch(&[GraphStructuralFilterRequestRow {
         query_id: "query-live".to_string(),
         candidate_id: candidate_id.clone(),
@@ -695,13 +576,17 @@ async fn fetch_graph_structural_filter_rows_for_repository_against_real_wendaose
         candidate_edge_destinations: vec!["node-2".to_string()],
         candidate_edge_kinds: vec!["depends_on".to_string()],
     }])
-    .expect("solver-demo filter request batch");
+    .or_panic("solver-demo filter request batch");
 
-    let rows = fetch_graph_structural_filter_rows_for_repository(&repository, &[batch])
-        .await
-        .unwrap_or_else(|error| {
-            panic!("real WendaoSearch solver-demo graph-structural filter should succeed: {error}")
-        });
+    let rows = await_live_step(
+        fetch_graph_structural_filter_rows_for_repository(repository, &[batch]),
+        LIVE_REQUEST_TIMEOUT_SECS,
+        "real WendaoSearch solver-demo graph-structural filter",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("real WendaoSearch solver-demo graph-structural filter should succeed: {error}")
+    });
 
     let row = rows.get(&candidate_id).unwrap_or_else(|| {
         panic!("missing candidate `{candidate_id}` in solver-demo filter response")
@@ -711,43 +596,11 @@ async fn fetch_graph_structural_filter_rows_for_repository_against_real_wendaose
     assert!(row.structural_score > 0.0);
     assert_eq!(row.pin_assignment, vec!["node-1".to_string()]);
     assert_eq!(row.rejection_reason, "");
-
-    service.kill();
 }
 
-#[tokio::test]
-#[serial_test::serial(julia_live)]
-async fn fetch_graph_structural_filter_rows_for_repository_via_manifest_discovery_against_real_wendaosearch_solver_demo_multi_route_service()
- {
-    let port = reserve_real_service_port();
-    let base_url = format!("http://127.0.0.1:{port}");
-    let mut service = spawn_real_wendaosearch_solver_demo_multi_route_service(port);
-    let repository = RegisteredRepository {
-        id: "demo".to_string(),
-        path: None,
-        url: None,
-        git_ref: None,
-        refresh: RepositoryRefreshPolicy::Fetch,
-        plugins: vec![RepositoryPluginConfig::Config {
-            id: "julia".to_string(),
-            options: serde_json::json!({
-                "capability_manifest_transport": {
-                    "base_url": base_url,
-                    "route": "/plugin/capabilities",
-                    "schema_version": "v0-draft"
-                }
-            }),
-        }],
-    };
-
-    wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
-        .await
-        .unwrap_or_else(|error| {
-            panic!("wait for real WendaoSearch solver-demo multi-route Flight service: {error}")
-        });
-
+async fn assert_solver_demo_multi_route_filter_rows(repository: &RegisteredRepository) {
     let candidate_id =
-        graph_structural_pair_candidate_id("node-1", "node-2").expect("stable pair candidate id");
+        graph_structural_pair_candidate_id("node-1", "node-2").or_panic("stable pair candidate id");
     let batch = build_graph_structural_filter_request_batch(&[GraphStructuralFilterRequestRow {
         query_id: "query-live".to_string(),
         candidate_id: candidate_id.clone(),
@@ -763,15 +616,17 @@ async fn fetch_graph_structural_filter_rows_for_repository_via_manifest_discover
         candidate_edge_destinations: vec!["node-2".to_string()],
         candidate_edge_kinds: vec!["depends_on".to_string()],
     }])
-    .expect("solver-demo manifest filter request batch");
+    .or_panic("solver-demo manifest filter request batch");
 
-    let rows = fetch_graph_structural_filter_rows_for_repository(&repository, &[batch])
-        .await
-        .unwrap_or_else(|error| {
-            panic!(
-                "manifest-discovered real WendaoSearch solver-demo filter should succeed: {error}"
-            )
-        });
+    let rows = await_live_step(
+        fetch_graph_structural_filter_rows_for_repository(repository, &[batch]),
+        LIVE_REQUEST_TIMEOUT_SECS,
+        "manifest-discovered real WendaoSearch solver-demo filter",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("manifest-discovered real WendaoSearch solver-demo filter should succeed: {error}")
+    });
 
     let row = rows.get(&candidate_id).unwrap_or_else(|| {
         panic!("missing candidate `{candidate_id}` in solver-demo manifest filter response")
@@ -781,7 +636,33 @@ async fn fetch_graph_structural_filter_rows_for_repository_via_manifest_discover
     assert!(row.structural_score > 0.0);
     assert_eq!(row.pin_assignment, vec!["node-1".to_string()]);
     assert_eq!(row.rejection_reason, "");
+}
 
+#[tokio::test]
+#[serial_test::serial(julia_live)]
+async fn fetch_graph_structural_solver_demo_rows_for_repository_via_manifest_discovery_against_real_wendaosearch_multi_route_service()
+ {
+    let port = reserve_real_service_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let mut service = spawn_real_wendaosearch_solver_demo_multi_route_service(port);
+    let explicit_rerank_repository = graph_structural_explicit_rerank_repository(&base_url);
+    let explicit_filter_repository = graph_structural_explicit_filter_repository(&base_url);
+    let manifest_repository = graph_structural_manifest_repository(&base_url);
+
+    await_live_step(
+        wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600),
+        LIVE_SERVICE_STARTUP_TIMEOUT_SECS,
+        "wait for real WendaoSearch solver-demo multi-route Flight service",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("wait for real WendaoSearch solver-demo multi-route Flight service: {error}")
+    });
+
+    assert_solver_demo_explicit_rerank_rows(&explicit_rerank_repository).await;
+    assert_solver_demo_explicit_filter_rows(&explicit_filter_repository).await;
+    assert_solver_demo_multi_route_rerank_rows(&manifest_repository).await;
+    assert_solver_demo_multi_route_filter_rows(&manifest_repository).await;
     service.kill();
 }
 
@@ -816,7 +697,7 @@ fn rerank_response_batch() -> RecordBatch {
             Arc::new(StringArray::from(vec!["accepted"])),
         ],
     )
-    .expect("rerank response batch")
+    .or_panic("rerank response batch")
 }
 
 fn filter_response_batch() -> RecordBatch {
@@ -848,7 +729,7 @@ fn filter_response_batch() -> RecordBatch {
             Arc::new(StringArray::from(vec!["missing boundary"])),
         ],
     )
-    .expect("filter response batch")
+    .or_panic("filter response batch")
 }
 
 fn list_utf8_array(values: Vec<Vec<&str>>) -> ListArray {

@@ -20,6 +20,47 @@ The Wendao package family now has three ownership layers:
 `xiuxian-wendao` is therefore the product crate, not the place for every new
 shared type or runtime helper.
 
+When the `julia` feature is enabled, `xiuxian-wendao` now exposes one thin
+memory-family bridge at `xiuxian_wendao::memory::julia`, while
+`xiuxian-wendao-julia` continues to own the actual Julia-specific memory ABI
+surface behind it. The product crate does not keep a second host-local profile
+implementation layer, but it can now resolve the current
+`memory.julia_compute` runtime and generic capability bindings through that
+thin bridge.
+
+### Memory-Family Julia Layering
+
+The memory-family Julia lane follows the same ownership rule as the RFC:
+
+1. `WendaoMemory.jl` owns high-performance memory compute only
+2. `xiuxian-wendao-julia` owns the Julia-specific ABI surface: typed rows,
+   request/response batches, manifest projection, schema validation, decoding,
+   route defaults, and plugin-owned host-adapter helpers over Rust memory
+   read models or evidence
+3. `xiuxian-wendao` exposes only a thin host-facing bridge and delegates the
+   actual Julia memory ABI work into `xiuxian-wendao-julia`
+4. `xiuxian-memory-engine` and the Rust host remain authoritative for memory
+   state, lifecycle, fallback, audit, and final mutation decisions
+
+That means new memory-family profile semantics, schema fragments, manifest
+logic, decoder logic, or Julia-specific validation rules should land in
+`xiuxian-wendao-julia`, not in `xiuxian-wendao`.
+
+The product crate's side of that boundary is now explicit:
+`xiuxian_wendao::memory::julia` is the host-facing seam for
+
+1. resolving merged `memory.julia_compute` runtime state,
+2. materializing generic capability bindings from that runtime, and
+3. constructing one configured `ComputeClient`, and
+4. exposing only the minimum typed DTOs needed to call that client.
+
+Host callers that only want configured memory-family Julia compute should stay
+on `xiuxian_wendao::memory::julia::*`, with
+`xiuxian_wendao::memory::julia::ComputeClient` as the primary host-facing
+entry. Raw downcall helpers, runtime-to-binding builders, and gate-evidence
+builder helpers remain plugin-owned in `xiuxian-wendao-julia` and are no
+longer re-exported from the product crate.
+
 Use `xiuxian-wendao` for:
 
 - knowledge graph and link-graph behavior
@@ -496,9 +537,16 @@ transport helpers now live in the plugin crate instead of under
 `xiuxian-wendao::analyzers`.
 
 `xiuxian-wendao` still re-exports the common WendaoArrow request or response
-column-name constants and shared Arrow schema builders, but host callers should
-import Julia-specific helper APIs directly from `xiuxian-wendao-julia` rather
-than through `xiuxian-wendao`.
+column-name constants and shared Arrow schema builders. For the memory-family
+Julia lane, host callers should prefer the thin bridge at
+`xiuxian_wendao::memory::julia`; anything below that bridge still belongs in
+`xiuxian-wendao-julia`.
+
+The memory-family Julia compute lane follows the same rule. Julia-specific
+memory profile contracts, manifest semantics, validators, decoders, route
+defaults, host staging, transport, and composed downcalls belong in
+`xiuxian-wendao-julia`. `xiuxian-wendao` now keeps only the thin
+`memory::julia` bridge that points at those plugin-owned surfaces.
 
 For link-graph semantic retrieval, `VectorStoreSemanticIgnition` now also
 provides `build_julia_rerank_request_batch(...)`, which reuses anchor ids as

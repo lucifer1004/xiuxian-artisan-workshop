@@ -30,7 +30,7 @@ fn scoped_recall_excludes_other_sessions() -> TestResult {
         embedding_a.clone(),
         "session a response".to_string(),
         "completed".to_string(),
-        SCOPE_A.to_string(),
+        SCOPE_A,
     ))?;
     store.store(Episode::new_scoped(
         "ep-b".to_string(),
@@ -38,7 +38,7 @@ fn scoped_recall_excludes_other_sessions() -> TestResult {
         embedding_b,
         "session b response".to_string(),
         "completed".to_string(),
-        SCOPE_B.to_string(),
+        SCOPE_B,
     ))?;
 
     let scoped = store.two_phase_recall_with_embedding_for_scope(SCOPE_A, &embedding_a, 8, 8, 0.0);
@@ -68,7 +68,7 @@ fn store_for_scope_overrides_episode_scope() -> TestResult {
             embedding,
             "experience".to_string(),
             "completed".to_string(),
-            WRONG_SCOPE.to_string(),
+            WRONG_SCOPE,
         ),
     )?;
 

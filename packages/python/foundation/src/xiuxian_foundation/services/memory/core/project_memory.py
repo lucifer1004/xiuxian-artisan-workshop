@@ -17,13 +17,10 @@ log = structlog.get_logger("xiuxian_foundation.memory")
 
 
 def _get_memory_dir() -> Path:
-    """Get memory directory from PRJ_CACHE."""
-    try:
-        from xiuxian_foundation import prj_dirs
+    """Get memory directory from PRJ_CACHE_HOME."""
+    from xiuxian_foundation.config.dirs import PRJ_CACHE
 
-        return prj_dirs.PRJ_CACHE("memory")
-    except Exception:
-        return Path(".cache/xiuxian-artisan-workshop/memory")
+    return PRJ_CACHE("memory")
 
 
 MEMORY_DIR = _get_memory_dir()

@@ -54,7 +54,9 @@ fn write_file(path: PathBuf, content: &str) {
 fn discord_acl_overrides_build_from_structured_acl() {
     let tmp = TempDir::new().expect("tempdir");
     let system = tmp.path().join("packages/conf/settings.yaml");
-    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+    let user = tmp
+        .path()
+        .join(".config/xiuxian-artisan-workshop/settings.yaml");
 
     write_file(
         system.clone(),
@@ -176,7 +178,9 @@ discord:
 fn discord_acl_overrides_use_merged_role_aliases_from_user_settings() {
     let tmp = TempDir::new().expect("tempdir");
     let system = tmp.path().join("packages/conf/settings.yaml");
-    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+    let user = tmp
+        .path()
+        .join(".config/xiuxian-artisan-workshop/settings.yaml");
 
     write_file(
         system.clone(),
@@ -214,7 +218,9 @@ discord:
 fn discord_acl_overrides_reject_invalid_control_rule_with_field_path() {
     let tmp = TempDir::new().expect("tempdir");
     let system = tmp.path().join("packages/conf/settings.yaml");
-    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+    let user = tmp
+        .path()
+        .join(".config/xiuxian-artisan-workshop/settings.yaml");
 
     write_file(
         system.clone(),
@@ -232,7 +238,8 @@ discord:
 
     let settings = load_runtime_settings_from_paths(
         &system,
-        &tmp.path().join(".config/omni-dev-fusion/settings.yaml"),
+        &tmp.path()
+            .join(".config/xiuxian-artisan-workshop/settings.yaml"),
     );
     let error =
         build_discord_acl_overrides(&settings).expect_err("invalid command selector should fail");

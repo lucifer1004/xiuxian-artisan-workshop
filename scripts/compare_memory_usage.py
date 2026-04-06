@@ -7,8 +7,17 @@ import subprocess
 import sys
 import time
 import os
+from pathlib import Path
 
 RSS_SCALE_FACTOR = 5
+
+
+def resolve_prj_root() -> Path:
+    """Resolve the project root from PRJ_ROOT or the script location."""
+    raw_prj_root = os.environ.get("PRJ_ROOT")
+    if raw_prj_root:
+        return Path(raw_prj_root).expanduser().resolve()
+    return Path(__file__).resolve().parent.parent
 
 
 def get_process_rss_kb(pid: int) -> int:
@@ -126,9 +135,19 @@ def run_with_memory_monitor(cmd, label, max_rss_gb=15):
 
 
 def main():
-    model_root = "/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion/.data/models/dots-ocr"
-    test_image = "/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion/.run/tmp/ocr-smoke.png"
-    cli_path = "/Users/guangtao/.cargo/git/checkouts/deepseek-ocr.rs-83df09b3ffdef775/02b933d/target/release/deepseek-ocr-cli"
+    prj_root = resolve_prj_root()
+    model_root = prj_root / ".data/models/dots-ocr"
+    test_image = prj_root / ".run/tmp/ocr-smoke.png"
+    cli_path = os.environ.get(
+        "DEEPSEEK_OCR_CLI",
+        str(
+            Path.home()
+            / ".cargo/git/checkouts/deepseek-ocr.rs-83df09b3ffdef775/02b933d/target/release/deepseek-ocr-cli"
+        ),
+    )
+
+    print(f"Project root: {prj_root}")
+    print(f"Model root: {model_root}")
 
     # Run upstream CLI with --model flag to select dots-ocr-q6k
     cmd = [
@@ -140,7 +159,7 @@ def main():
         "--prompt",
         "<image>\n<|grounding|>Convert this image to markdown.",
         "--image",
-        test_image,
+        str(test_image),
     ]
 
     returncode, peak = run_with_memory_monitor(cmd, "Upstream CLI (Metal)", max_rss_gb=15)

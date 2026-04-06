@@ -1,7 +1,7 @@
 """
 errors.py - Error Code System
 
-Comprehensive error code system for Omni-Dev-Fusion following architecture
+Comprehensive error code system for xiuxian-artisan-workshop following architecture
 improvements (Items 4 & 5).
 
 Error Code Structure:
@@ -64,7 +64,7 @@ def _infer_category_from_code(code: str) -> ErrorCategory:
 
 
 class CoreErrorCode(str, Enum):
-    """Core error codes for Omni-Dev-Fusion.
+    """Core error codes for xiuxian-artisan-workshop.
 
     Format: Category letter + 3-digit sequence
     - 1xxx: Validation errors
@@ -131,7 +131,7 @@ class CoreErrorCode(str, Enum):
 
 
 class OmniError(Exception):
-    """Base exception for Omni-Dev-Fusion errors.
+    """Base exception for xiuxian-artisan-workshop errors.
 
     All project-specific exceptions should inherit from this class.
     Provides structured error information with code, category, and details.

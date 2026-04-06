@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 from pathlib import Path
 
 _MODULE_PATH = Path(__file__).resolve().with_name("render_wendao_gateway_perf_summary.py")
@@ -76,7 +77,7 @@ def _report_payload(
         },
         "sample_latency_ms": [p95_ms],
         "metadata": metadata,
-        "report_path": str(Path("/tmp") / f"{case}-{captured_at_unix_ms}.json"),
+        "report_path": str(Path(tempfile.gettempdir()) / f"{case}-{captured_at_unix_ms}.json"),
     }
 
 

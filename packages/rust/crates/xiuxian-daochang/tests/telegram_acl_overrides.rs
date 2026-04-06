@@ -48,7 +48,9 @@ fn write_file(path: PathBuf, content: &str) {
 fn telegram_acl_overrides_build_from_structured_acl() {
     let tmp = TempDir::new().expect("tempdir");
     let system = tmp.path().join("packages/conf/settings.yaml");
-    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+    let user = tmp
+        .path()
+        .join(".config/xiuxian-artisan-workshop/settings.yaml");
 
     write_file(
         system.clone(),
@@ -158,7 +160,9 @@ telegram:
 fn telegram_acl_overrides_use_user_settings_for_acl_merge() {
     let tmp = TempDir::new().expect("tempdir");
     let system = tmp.path().join("packages/conf/settings.yaml");
-    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+    let user = tmp
+        .path()
+        .join(".config/xiuxian-artisan-workshop/settings.yaml");
 
     write_file(
         system.clone(),
@@ -200,7 +204,9 @@ telegram:
 fn telegram_acl_overrides_reject_invalid_control_rule_with_field_path() {
     let tmp = TempDir::new().expect("tempdir");
     let system = tmp.path().join("packages/conf/settings.yaml");
-    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+    let user = tmp
+        .path()
+        .join(".config/xiuxian-artisan-workshop/settings.yaml");
 
     write_file(
         system.clone(),
@@ -218,7 +224,8 @@ telegram:
 
     let settings = load_runtime_settings_from_paths(
         &system,
-        &tmp.path().join(".config/omni-dev-fusion/settings.yaml"),
+        &tmp.path()
+            .join(".config/xiuxian-artisan-workshop/settings.yaml"),
     );
     let error = build_telegram_acl_overrides(&settings)
         .expect_err("invalid command selector should fail fast");

@@ -512,8 +512,8 @@ test-rust-llm-smoke:
 # Live provider smoke test from xiuxian.toml (real LLM network calls).
 # Example:
 #   just llm-provider-smoke
-#   just llm-provider-smoke ".config/xiuxian-artisan-workshop/xiuxian.toml" "all" "" "60" "" "" ""
-#   just llm-provider-smoke ".config/xiuxian-artisan-workshop/xiuxian.toml" "all" "" "90" "https://example.com/a.png" "responses" "flower|bloom|hibiscus,red|hibiscus"
+#   just llm-provider-smoke "$PRJ_CONFIG_HOME/xiuxian-artisan-workshop/xiuxian.toml" "all" "" "60" "" "" ""
+#   just llm-provider-smoke "$PRJ_CONFIG_HOME/xiuxian-artisan-workshop/xiuxian.toml" "all" "" "90" "https://example.com/a.png" "responses" "flower|bloom|hibiscus,red|hibiscus"
 # image:
 #   - empty string => text-only test
 #   - file path / URL / data URI => text + image test
@@ -522,9 +522,15 @@ test-rust-llm-smoke:
 #   - chat_completions | responses => force override
 # image_contains:
 #   - comma-separated semantic expectation groups; every group must match, use | for alternatives
-llm-provider-smoke config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" provider="all" model_override="" timeout_secs="60" image="" wire_api="" image_contains="":
+llm-provider-smoke config_path="" provider="all" model_override="" timeout_secs="60" image="" wire_api="" image_contains="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    resolved_config_path="{{config_path}}"
+    if [ -z "$resolved_config_path" ]; then
+      resolved_config_path="${PRJ_CONFIG_HOME:-.config}/xiuxian-artisan-workshop/xiuxian.toml"
+    fi
     uv run python scripts/llm_provider_smoke.py \
-      --config-path "{{config_path}}" \
+      --config-path "$resolved_config_path" \
       --provider "{{provider}}" \
       --model-override "{{model_override}}" \
       --timeout-secs "{{timeout_secs}}" \
@@ -533,25 +539,24 @@ llm-provider-smoke config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" p
       --image-contains "{{image_contains}}"
 
 # Live smoke test for all configured providers (text only).
-llm-provider-smoke-all config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" model_override="" timeout_secs="60" wire_api="":
-    uv run python scripts/llm_provider_smoke.py \
-      --config-path "{{config_path}}" \
-      --provider "all" \
-      --model-override "{{model_override}}" \
-      --timeout-secs "{{timeout_secs}}" \
-      --wire-api "{{wire_api}}"
+llm-provider-smoke-all config_path="" model_override="" timeout_secs="60" wire_api="":
+    just llm-provider-smoke "{{config_path}}" "all" "{{model_override}}" "{{timeout_secs}}" "" "{{wire_api}}" ""
 
 # Live smoke test for all configured providers (text + image).
 # image must be a file path, URL, or data URI.
-llm-provider-smoke-image config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" model_override="" timeout_secs="90" image="" wire_api="" image_contains="":
+llm-provider-smoke-image config_path="" model_override="" timeout_secs="90" image="" wire_api="" image_contains="":
     #!/usr/bin/env bash
     set -euo pipefail
+    resolved_config_path="{{config_path}}"
+    if [ -z "$resolved_config_path" ]; then
+      resolved_config_path="${PRJ_CONFIG_HOME:-.config}/xiuxian-artisan-workshop/xiuxian.toml"
+    fi
     if [ -z "{{image}}" ]; then
       echo "Error: image argument is required for llm-provider-smoke-image" >&2
       exit 2
     fi
     uv run python scripts/llm_provider_smoke.py \
-      --config-path "{{config_path}}" \
+      --config-path "$resolved_config_path" \
       --provider "all" \
       --model-override "{{model_override}}" \
       --timeout-secs "{{timeout_secs}}" \
@@ -561,7 +566,7 @@ llm-provider-smoke-image config_path=".config/xiuxian-artisan-workshop/xiuxian.t
 
 # Canonical semantic image smoke using a known flower JPEG.
 # Fails providers that return unrelated image descriptions.
-llm-provider-smoke-image-semantic config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" provider="all" model_override="" timeout_secs="90" image="https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg" wire_api="" image_contains="flower|bloom|hibiscus,red|hibiscus":
+llm-provider-smoke-image-semantic config_path="" provider="all" model_override="" timeout_secs="90" image="https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg" wire_api="" image_contains="flower|bloom|hibiscus,red|hibiscus":
     just llm-provider-smoke "{{config_path}}" "{{provider}}" "{{model_override}}" "{{timeout_secs}}" "{{image}}" "{{wire_api}}" "{{image_contains}}"
 
 # ==============================================================================
@@ -686,7 +691,7 @@ agent-bump type="auto":
 
 # Live LLM pre-release gate (protocol smoke + real provider smoke).
 # Default scope is all configured providers and canonical semantic flower image.
-llm-provider-release-gate config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" provider="all" model_override="" text_timeout_secs="60" image_timeout_secs="90" wire_api="" image="https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg" image_contains="flower|bloom|hibiscus,red|hibiscus":
+llm-provider-release-gate config_path="" provider="all" model_override="" text_timeout_secs="60" image_timeout_secs="90" wire_api="" image="https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg" image_contains="flower|bloom|hibiscus,red|hibiscus":
     just test-rust-llm-smoke
     just llm-provider-smoke "{{config_path}}" "{{provider}}" "{{model_override}}" "{{text_timeout_secs}}" "" "{{wire_api}}" ""
     just llm-provider-smoke-image-semantic "{{config_path}}" "{{provider}}" "{{model_override}}" "{{image_timeout_secs}}" "{{image}}" "{{wire_api}}" "{{image_contains}}"
@@ -766,7 +771,7 @@ agent-focus spec_path:
     @grep -i "$(basename {{spec_path}} .md)" Backlog.md 2>/dev/null || echo "  No matching backlog entry found"
     @echo ""
     @echo "💡 INSTRUCTION: Review the Spec above. Create a PLAN in 'SCRATCHPAD.md' before modifying any code."
-    @echo "SCRATCHPAD Location: .cache/xiuxian-artisan-workshop/.memory/active_context/SCRATCHPAD.md"
+    @echo "SCRATCHPAD Location: ${PRJ_CACHE_HOME:-.cache}/xiuxian-artisan-workshop/.memory/active_context/SCRATCHPAD.md"
 
 # Quick create new Spec from template
 # Usage: just spec-new "feature_name" "Feature description..."

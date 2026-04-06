@@ -17,7 +17,7 @@ use xiuxian_wendao_builtin::{
     linked_builtin_julia_deployment_artifact_selector,
     linked_builtin_julia_rerank_provider_selector,
 };
-use xiuxian_wendao_runtime::runtime_config::{
+use xiuxian_wendao_runtime::config::{
     DEFAULT_LINK_GRAPH_COACTIVATION_HOP_DECAY_SCALE, DEFAULT_LINK_GRAPH_COACTIVATION_MAX_HOPS,
     DEFAULT_LINK_GRAPH_COACTIVATION_MAX_NEIGHBORS_PER_DIRECTION,
     DEFAULT_LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH,

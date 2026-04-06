@@ -1,11 +1,11 @@
-//! 3-in-1 memory gate: retain / obsolete / promote.
+//! 3-in-1 memory gate: retain / obsolete / promote out of episodic memory.
 //!
 //! This module provides a deterministic utility ledger and gate policy that
 //! can be replayed for audits.
 
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
-pub use xiuxian_types::{MemoryGateDecision, MemoryGateVerdict};
+pub use xiuxian_types::{MemoryGateDecision, MemoryGateVerdict, MemoryPromotionTarget};
 
 use crate::Episode;
 
@@ -27,7 +27,7 @@ pub enum MemoryLifecycleState {
     RevalidatePending,
     /// Episode was purged by gate policy.
     Purged,
-    /// Episode was promoted by gate policy.
+    /// Episode was promoted out of episodic memory by gate policy.
     Promoted,
 }
 
@@ -80,14 +80,16 @@ impl MemoryUtilityLedger {
         let usage_count_f32 = u32_to_f32(usage_count);
         let success = u32_to_f32(episode.success_count);
         let failure = u32_to_f32(episode.failure_count);
-        let failure_rate = if usage_count == 0 {
+        let feedback_count = episode.feedback_count();
+        let feedback_count_f32 = u32_to_f32(feedback_count);
+        let failure_rate = if feedback_count == 0 {
             if episode.outcome.eq_ignore_ascii_case("error") {
                 1.0
             } else {
                 0.0
             }
         } else {
-            (failure / usage_count_f32).clamp(0.0, 1.0)
+            (failure / feedback_count_f32).clamp(0.0, 1.0)
         };
 
         let q_value = episode.q_value.clamp(0.0, 1.0);
@@ -228,6 +230,10 @@ impl MemoryGatePolicy {
             omega_factors,
             reason,
             next_action: verdict.as_str().to_string(),
+            promotion_target: match verdict {
+                MemoryGateVerdict::Promote => Some(MemoryPromotionTarget::WorkingKnowledge),
+                _ => None,
+            },
         }
     }
 }

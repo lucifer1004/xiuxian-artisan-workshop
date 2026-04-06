@@ -22,9 +22,11 @@ fn episode_to_json(episode: &Episode) -> serde_json::Value {
         "experience": episode.experience,
         "outcome": episode.outcome,
         "q_value": episode.q_value,
+        "retrieval_count": episode.retrieval_count,
         "success_count": episode.success_count,
         "failure_count": episode.failure_count,
         "created_at": episode.created_at,
+        "updated_at": episode.updated_at,
         "scope": episode.scope,
     })
 }
@@ -97,6 +99,11 @@ impl PyEpisode {
     }
 
     #[getter]
+    fn retrieval_count(&self) -> u32 {
+        self.inner.retrieval_count
+    }
+
+    #[getter]
     fn failure_count(&self) -> u32 {
         self.inner.failure_count
     }
@@ -104,6 +111,11 @@ impl PyEpisode {
     #[getter]
     fn created_at(&self) -> i64 {
         self.inner.created_at
+    }
+
+    #[getter]
+    fn updated_at(&self) -> i64 {
+        self.inner.updated_at
     }
 
     #[getter]
@@ -200,7 +212,9 @@ impl PyIntentEncoder {
     }
 
     fn cosine_similarity(&self, a: Vec<f32>, b: Vec<f32>) -> f32 {
-        self.inner.cosine_similarity(&a, &b)
+        let a = a.into_boxed_slice();
+        let b = b.into_boxed_slice();
+        self.inner.cosine_similarity(a.as_ref(), b.as_ref())
     }
 
     fn dimension(&self) -> usize {
@@ -321,12 +335,12 @@ impl PyTwoPhaseSearch {
         encoder: Option<PyRef<'_, PyIntentEncoder>>,
         config: Option<PyTwoPhaseConfig>,
     ) -> Self {
-        let q_table = q_table
-            .map(|table| Arc::clone(&table.inner))
-            .unwrap_or_else(|| Arc::new(QTable::new()));
-        let encoder = encoder
-            .map(|encoder| Arc::clone(&encoder.inner))
-            .unwrap_or_else(|| Arc::new(IntentEncoder::default()));
+        let q_table =
+            q_table.map_or_else(|| Arc::new(QTable::new()), |table| Arc::clone(&table.inner));
+        let encoder = encoder.map_or_else(
+            || Arc::new(IntentEncoder::default()),
+            |encoder| Arc::clone(&encoder.inner),
+        );
         let config = config.map(Into::into).unwrap_or_default();
         Self {
             inner: TwoPhaseSearch::new(q_table, encoder, config),
@@ -368,7 +382,7 @@ impl PyEpisodeStore {
     #[new]
     #[pyo3(signature = (config=None))]
     fn new(config: Option<PyStoreConfig>) -> Self {
-        let config = config.map(Into::into).unwrap_or_else(StoreConfig::default);
+        let config = config.map(Into::into).unwrap_or_default();
         Self {
             inner: EpisodeStore::new(config),
         }
@@ -456,6 +470,7 @@ impl PyEpisodeStore {
 /// Create a Python episode wrapper from raw episode fields.
 #[pyfunction]
 #[pyo3(signature = (id, intent, intent_embedding, experience, outcome, scope=None))]
+#[must_use]
 pub fn create_episode(
     id: String,
     intent: String,
@@ -470,6 +485,7 @@ pub fn create_episode(
 /// Create a Python episode wrapper and derive its embedding with an encoder.
 #[pyfunction]
 #[pyo3(signature = (id, intent, experience, outcome, encoder=None, scope=None))]
+#[must_use]
 pub fn create_episode_with_embedding(
     id: String,
     intent: String,
@@ -478,9 +494,10 @@ pub fn create_episode_with_embedding(
     encoder: Option<PyRef<'_, PyIntentEncoder>>,
     scope: Option<String>,
 ) -> PyEpisode {
-    let encoder = encoder
-        .map(|encoder| Arc::clone(&encoder.inner))
-        .unwrap_or_else(|| Arc::new(IntentEncoder::default()));
+    let encoder = encoder.map_or_else(
+        || Arc::new(IntentEncoder::default()),
+        |encoder| Arc::clone(&encoder.inner),
+    );
     let embedding = encoder.encode(&intent);
     PyEpisode::new(id, intent, embedding, experience, outcome, scope)
 }
@@ -488,6 +505,7 @@ pub fn create_episode_with_embedding(
 /// Create a Python episode store wrapper.
 #[pyfunction]
 #[pyo3(signature = (config=None))]
+#[must_use]
 pub fn create_episode_store(config: Option<PyStoreConfig>) -> PyEpisodeStore {
     PyEpisodeStore::new(config)
 }
@@ -495,6 +513,7 @@ pub fn create_episode_store(config: Option<PyStoreConfig>) -> PyEpisodeStore {
 /// Create a Python intent encoder wrapper.
 #[pyfunction]
 #[pyo3(signature = (dimension=384))]
+#[must_use]
 pub fn create_intent_encoder(dimension: usize) -> PyIntentEncoder {
     PyIntentEncoder::new(dimension)
 }
@@ -502,6 +521,7 @@ pub fn create_intent_encoder(dimension: usize) -> PyIntentEncoder {
 /// Create a Python Q-table wrapper.
 #[pyfunction]
 #[pyo3(signature = (learning_rate=None, discount_factor=None))]
+#[must_use]
 pub fn create_q_table(learning_rate: Option<f32>, discount_factor: Option<f32>) -> PyQTable {
     PyQTable::new(learning_rate, discount_factor)
 }
@@ -509,6 +529,7 @@ pub fn create_q_table(learning_rate: Option<f32>, discount_factor: Option<f32>) 
 /// Create a Python two-phase search wrapper.
 #[pyfunction]
 #[pyo3(signature = (q_table=None, encoder=None, config=None))]
+#[must_use]
 pub fn create_two_phase_search(
     q_table: Option<PyRef<'_, PyQTable>>,
     encoder: Option<PyRef<'_, PyIntentEncoder>>,
@@ -519,11 +540,17 @@ pub fn create_two_phase_search(
 
 /// Calculate the blended semantic and Q-value score.
 #[pyfunction]
+#[must_use]
 pub fn calculate_score(similarity: f32, q_value: f32, lambda: f32) -> f32 {
     crate::calculate_score(similarity, q_value, lambda)
 }
 
 /// Register memory engine Python bindings into a Python module.
+///
+/// # Errors
+///
+/// Returns an error when one of the classes or functions cannot be registered
+/// with the provided Python module.
 pub fn register_memory_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyEpisode>()?;
     module.add_class::<PyEpisodeStore>()?;

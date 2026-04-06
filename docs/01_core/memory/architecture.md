@@ -21,6 +21,32 @@ metadata:
 
 This document describes the implementation of **xiuxian-memory-engine**, a Rust-based self-evolving memory engine inspired by the [MemRL paper](https://arxiv.org/abs/2601.03192).
 
+## Boundary Status
+
+This document describes `xiuxian-memory-engine` as the episodic operational
+memory layer only. The formal cross-layer boundary between runtime cache,
+episodic memory, working knowledge, and durable knowledge is governed by
+[RFC: Wendao Memory Layer Boundaries](../../rfcs/2026-04-05-wendao-memory-layer-boundaries-rfc.md).
+
+The Julia compute ABI for the memory family is governed separately by
+[RFC: Arrow Schema-First Julia Compute ABI for the Wendao Memory Family](../../rfcs/2026-04-06-arrow-schema-first-julia-compute-abi-for-wendao-memory-family.md).
+That RFC keeps Julia on the compute side of the boundary: read-only host
+projections flow into Julia compute services, while Rust retains state,
+lifecycle, fallback, audit, and final mutation authority.
+
+Within the Wendao package split, that means `WendaoMemory.jl` owns memory
+compute kernels, `xiuxian-wendao-julia` owns the Julia-specific ABI surface
+plus plugin-owned host-adapter helpers, `xiuxian-wendao` consumes that seam
+without keeping a second local memory namespace, and `xiuxian-memory-engine`
+remains the authoritative memory-state owner.
+
+Current hygiene notes:
+
+- `retrieval_count` is distinct from `success_count` and `failure_count`
+- `created_at` is distinct from `updated_at`
+- memory-gate promotion must name a target layer instead of implying direct
+  durable publication
+
 ### Core Features
 
 | Feature             | Status | Description                                   |

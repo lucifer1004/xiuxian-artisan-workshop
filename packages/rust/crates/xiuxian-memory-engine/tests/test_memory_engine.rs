@@ -226,10 +226,12 @@ fn test_episode_utility_calculation() {
     // After successes
     episode.mark_success();
     episode.mark_success();
+    assert_eq!(episode.retrieval_count, 2);
     assert_eq!(episode.success_count, 2);
 
     // After failure
     episode.mark_failure();
+    assert_eq!(episode.retrieval_count, 3);
     assert_eq!(episode.failure_count, 1);
 
     // Utility should reflect the success rate
@@ -484,13 +486,15 @@ fn test_incremental_update_episode() -> TestResult {
     let store = EpisodeStore::new(config);
 
     // Add episode
-    let ep = Episode::new(
+    let mut ep = Episode::new(
         "ep-1".to_string(),
         "debug api".to_string(),
         store.encoder().encode("debug api"),
         "Solution v1".to_string(),
         "failure".to_string(),
     );
+    ep.created_at = 123;
+    ep.updated_at = 123;
     store.store(ep)?;
 
     // Verify initial state
@@ -499,6 +503,8 @@ fn test_incremental_update_episode() -> TestResult {
         .ok_or_else(|| std::io::Error::other("ep-1 should exist before update"))?;
     assert_eq!(retrieved.experience, "Solution v1");
     assert_eq!(retrieved.outcome, "failure");
+    assert_eq!(retrieved.created_at, 123);
+    assert_eq!(retrieved.updated_at, 123);
 
     // Update episode
     let updated = store.update_episode("ep-1", "Solution v2 - fixed", "success");
@@ -510,6 +516,8 @@ fn test_incremental_update_episode() -> TestResult {
         .ok_or_else(|| std::io::Error::other("ep-1 should exist after update"))?;
     assert_eq!(retrieved.experience, "Solution v2 - fixed");
     assert_eq!(retrieved.outcome, "success");
+    assert_eq!(retrieved.created_at, 123);
+    assert!(retrieved.updated_at >= 123);
     Ok(())
 }
 
@@ -589,6 +597,7 @@ fn test_incremental_mark_accessed() -> TestResult {
     let retrieved = store
         .get("ep-1")
         .ok_or_else(|| std::io::Error::other("ep-1 should exist before mark_accessed"))?;
+    assert_eq!(retrieved.retrieval_count, 0);
     assert_eq!(retrieved.success_count, 0);
 
     // Mark as accessed multiple times
@@ -600,7 +609,11 @@ fn test_incremental_mark_accessed() -> TestResult {
     let retrieved = store
         .get("ep-1")
         .ok_or_else(|| std::io::Error::other("ep-1 should exist after mark_accessed"))?;
-    assert_eq!(retrieved.success_count, 3, "Should have 3 access counts");
+    assert_eq!(retrieved.retrieval_count, 3, "Should have 3 access counts");
+    assert_eq!(
+        retrieved.success_count, 0,
+        "Access should not imply success"
+    );
     Ok(())
 }
 

@@ -1,6 +1,6 @@
 //! Focused coverage for the formal-audit advisory executor bridge.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::json;
@@ -64,13 +64,19 @@ fn advisory_request() -> AdvisoryAuditRequest {
         collection_context: CollectionContext {
             suite_id: "contracts".to_string(),
             crate_name: Some("xiuxian-wendao".to_string()),
-            workspace_root: Some(PathBuf::from(
-                "/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion",
-            )),
+            workspace_root: Some(workspace_root()),
             labels,
         },
         requested_roles: vec!["strict_teacher".to_string(), "artisan-engineer".to_string()],
     }
+}
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(4)
+        .unwrap_or_else(|| panic!("qianji manifest dir should resolve to workspace root"))
+        .to_path_buf()
 }
 
 fn must_ok<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {

@@ -782,6 +782,42 @@ mod tests {
     use arrow::record_batch::RecordBatch;
     use std::sync::Arc;
 
+    use crate::julia_plugin_test_support::common::ResultTestExt;
+
+    struct StructuralRerankRequestBatchInputs<'a> {
+        query_ids: Vec<&'a str>,
+        candidate_ids: Vec<&'a str>,
+        retrieval_layers: Vec<i32>,
+        query_max_layers: Vec<i32>,
+        semantic_scores: Vec<f64>,
+        dependency_scores: Vec<f64>,
+        keyword_scores: Vec<f64>,
+        tag_scores: Vec<f64>,
+        anchor_planes: Vec<Vec<&'a str>>,
+        anchor_values: Vec<Vec<&'a str>>,
+        edge_constraint_kinds: Vec<Vec<&'a str>>,
+        candidate_node_ids: Vec<Vec<&'a str>>,
+        candidate_edge_sources: Vec<Vec<&'a str>>,
+        candidate_edge_destinations: Vec<Vec<&'a str>>,
+        candidate_edge_kinds: Vec<Vec<&'a str>>,
+    }
+
+    struct StructuralFilterRequestBatchInputs<'a> {
+        query_ids: Vec<&'a str>,
+        candidate_ids: Vec<&'a str>,
+        retrieval_layers: Vec<i32>,
+        query_max_layers: Vec<i32>,
+        constraint_kinds: Vec<&'a str>,
+        required_boundary_sizes: Vec<i32>,
+        anchor_planes: Vec<Vec<&'a str>>,
+        anchor_values: Vec<Vec<&'a str>>,
+        edge_constraint_kinds: Vec<Vec<&'a str>>,
+        candidate_node_ids: Vec<Vec<&'a str>>,
+        candidate_edge_sources: Vec<Vec<&'a str>>,
+        candidate_edge_destinations: Vec<Vec<&'a str>>,
+        candidate_edge_kinds: Vec<Vec<&'a str>>,
+    }
+
     #[test]
     fn graph_structural_route_staging_resolves_canonical_paths() {
         assert_eq!(
@@ -810,45 +846,45 @@ mod tests {
 
     #[test]
     fn structural_rerank_request_batch_validation_accepts_staged_shape() {
-        let batch = structural_rerank_request_batch(
-            vec!["query-1"],
-            vec!["candidate-1"],
-            vec![1],
-            vec![3],
-            vec![0.9],
-            vec![0.4],
-            vec![0.2],
-            vec![0.1],
-            vec![vec!["semantic"]],
-            vec![vec!["graph retrieval"]],
-            vec![vec!["depends_on"]],
-            vec![vec!["node-a", "node-b"]],
-            vec![vec!["node-a"]],
-            vec![vec!["node-b"]],
-            vec![vec!["depends_on"]],
-        );
+        let batch = structural_rerank_request_batch(StructuralRerankRequestBatchInputs {
+            query_ids: vec!["query-1"],
+            candidate_ids: vec!["candidate-1"],
+            retrieval_layers: vec![1],
+            query_max_layers: vec![3],
+            semantic_scores: vec![0.9],
+            dependency_scores: vec![0.4],
+            keyword_scores: vec![0.2],
+            tag_scores: vec![0.1],
+            anchor_planes: vec![vec!["semantic"]],
+            anchor_values: vec![vec!["graph retrieval"]],
+            edge_constraint_kinds: vec![vec!["depends_on"]],
+            candidate_node_ids: vec![vec!["node-a", "node-b"]],
+            candidate_edge_sources: vec![vec!["node-a"]],
+            candidate_edge_destinations: vec![vec!["node-b"]],
+            candidate_edge_kinds: vec![vec!["depends_on"]],
+        });
         assert!(validate_graph_structural_rerank_request_batch(&batch).is_ok());
     }
 
     #[test]
     fn structural_rerank_request_batch_validation_rejects_misaligned_anchor_lists() {
-        let batch = structural_rerank_request_batch(
-            vec!["query-1"],
-            vec!["candidate-1"],
-            vec![1],
-            vec![3],
-            vec![0.9],
-            vec![0.4],
-            vec![0.2],
-            vec![0.1],
-            vec![vec!["semantic", "keyword"]],
-            vec![vec!["graph retrieval"]],
-            vec![vec!["depends_on"]],
-            vec![vec!["node-a", "node-b"]],
-            vec![vec!["node-a"]],
-            vec![vec!["node-b"]],
-            vec![vec!["depends_on"]],
-        );
+        let batch = structural_rerank_request_batch(StructuralRerankRequestBatchInputs {
+            query_ids: vec!["query-1"],
+            candidate_ids: vec!["candidate-1"],
+            retrieval_layers: vec![1],
+            query_max_layers: vec![3],
+            semantic_scores: vec![0.9],
+            dependency_scores: vec![0.4],
+            keyword_scores: vec![0.2],
+            tag_scores: vec![0.1],
+            anchor_planes: vec![vec!["semantic", "keyword"]],
+            anchor_values: vec![vec!["graph retrieval"]],
+            edge_constraint_kinds: vec![vec!["depends_on"]],
+            candidate_node_ids: vec![vec!["node-a", "node-b"]],
+            candidate_edge_sources: vec![vec!["node-a"]],
+            candidate_edge_destinations: vec![vec!["node-b"]],
+            candidate_edge_kinds: vec![vec!["depends_on"]],
+        });
         assert_eq!(
             validate_graph_structural_rerank_request_batch(&batch),
             Err(
@@ -879,21 +915,21 @@ mod tests {
 
     #[test]
     fn structural_filter_request_batch_validation_accepts_staged_shape() {
-        let batch = structural_filter_request_batch(
-            vec!["query-1"],
-            vec!["candidate-1"],
-            vec![0],
-            vec![2],
-            vec!["pin_assignment"],
-            vec![2],
-            vec![vec!["semantic"]],
-            vec![vec!["graph retrieval"]],
-            vec![vec!["depends_on"]],
-            vec![vec!["node-a", "node-b"]],
-            vec![vec!["node-a"]],
-            vec![vec!["node-b"]],
-            vec![vec!["depends_on"]],
-        );
+        let batch = structural_filter_request_batch(StructuralFilterRequestBatchInputs {
+            query_ids: vec!["query-1"],
+            candidate_ids: vec!["candidate-1"],
+            retrieval_layers: vec![0],
+            query_max_layers: vec![2],
+            constraint_kinds: vec!["pin_assignment"],
+            required_boundary_sizes: vec![2],
+            anchor_planes: vec![vec!["semantic"]],
+            anchor_values: vec![vec!["graph retrieval"]],
+            edge_constraint_kinds: vec![vec!["depends_on"]],
+            candidate_node_ids: vec![vec!["node-a", "node-b"]],
+            candidate_edge_sources: vec![vec!["node-a"]],
+            candidate_edge_destinations: vec![vec!["node-b"]],
+            candidate_edge_kinds: vec![vec!["depends_on"]],
+        });
         assert!(validate_graph_structural_filter_request_batch(&batch).is_ok());
     }
 
@@ -934,21 +970,7 @@ mod tests {
     }
 
     fn structural_rerank_request_batch(
-        query_ids: Vec<&str>,
-        candidate_ids: Vec<&str>,
-        retrieval_layers: Vec<i32>,
-        query_max_layers: Vec<i32>,
-        semantic_scores: Vec<f64>,
-        dependency_scores: Vec<f64>,
-        keyword_scores: Vec<f64>,
-        tag_scores: Vec<f64>,
-        anchor_planes: Vec<Vec<&str>>,
-        anchor_values: Vec<Vec<&str>>,
-        edge_constraint_kinds: Vec<Vec<&str>>,
-        candidate_node_ids: Vec<Vec<&str>>,
-        candidate_edge_sources: Vec<Vec<&str>>,
-        candidate_edge_destinations: Vec<Vec<&str>>,
-        candidate_edge_kinds: Vec<Vec<&str>>,
+        inputs: StructuralRerankRequestBatchInputs<'_>,
     ) -> RecordBatch {
         RecordBatch::try_new(
             Arc::new(Schema::new(vec![
@@ -969,24 +991,24 @@ mod tests {
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
             ])),
             vec![
-                Arc::new(StringArray::from(query_ids)) as ArrayRef,
-                Arc::new(StringArray::from(candidate_ids)) as ArrayRef,
-                Arc::new(Int32Array::from(retrieval_layers)) as ArrayRef,
-                Arc::new(Int32Array::from(query_max_layers)) as ArrayRef,
-                Arc::new(Float64Array::from(semantic_scores)) as ArrayRef,
-                Arc::new(Float64Array::from(dependency_scores)) as ArrayRef,
-                Arc::new(Float64Array::from(keyword_scores)) as ArrayRef,
-                Arc::new(Float64Array::from(tag_scores)) as ArrayRef,
-                Arc::new(list_utf8_array(anchor_planes)) as ArrayRef,
-                Arc::new(list_utf8_array(anchor_values)) as ArrayRef,
-                Arc::new(list_utf8_array(edge_constraint_kinds)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_node_ids)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_edge_sources)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_edge_destinations)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_edge_kinds)) as ArrayRef,
+                Arc::new(StringArray::from(inputs.query_ids)) as ArrayRef,
+                Arc::new(StringArray::from(inputs.candidate_ids)) as ArrayRef,
+                Arc::new(Int32Array::from(inputs.retrieval_layers)) as ArrayRef,
+                Arc::new(Int32Array::from(inputs.query_max_layers)) as ArrayRef,
+                Arc::new(Float64Array::from(inputs.semantic_scores)) as ArrayRef,
+                Arc::new(Float64Array::from(inputs.dependency_scores)) as ArrayRef,
+                Arc::new(Float64Array::from(inputs.keyword_scores)) as ArrayRef,
+                Arc::new(Float64Array::from(inputs.tag_scores)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.anchor_planes)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.anchor_values)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.edge_constraint_kinds)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_node_ids)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_edge_sources)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_edge_destinations)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_edge_kinds)) as ArrayRef,
             ],
         )
-        .expect("structural rerank request batch should build")
+        .or_panic("structural rerank request batch should build")
     }
 
     fn structural_rerank_response_batch(
@@ -1015,23 +1037,11 @@ mod tests {
                 Arc::new(StringArray::from(explanations)) as ArrayRef,
             ],
         )
-        .expect("structural rerank response batch should build")
+        .or_panic("structural rerank response batch should build")
     }
 
     fn structural_filter_request_batch(
-        query_ids: Vec<&str>,
-        candidate_ids: Vec<&str>,
-        retrieval_layers: Vec<i32>,
-        query_max_layers: Vec<i32>,
-        constraint_kinds: Vec<&str>,
-        required_boundary_sizes: Vec<i32>,
-        anchor_planes: Vec<Vec<&str>>,
-        anchor_values: Vec<Vec<&str>>,
-        edge_constraint_kinds: Vec<Vec<&str>>,
-        candidate_node_ids: Vec<Vec<&str>>,
-        candidate_edge_sources: Vec<Vec<&str>>,
-        candidate_edge_destinations: Vec<Vec<&str>>,
-        candidate_edge_kinds: Vec<Vec<&str>>,
+        inputs: StructuralFilterRequestBatchInputs<'_>,
     ) -> RecordBatch {
         RecordBatch::try_new(
             Arc::new(Schema::new(vec![
@@ -1050,22 +1060,22 @@ mod tests {
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
             ])),
             vec![
-                Arc::new(StringArray::from(query_ids)) as ArrayRef,
-                Arc::new(StringArray::from(candidate_ids)) as ArrayRef,
-                Arc::new(Int32Array::from(retrieval_layers)) as ArrayRef,
-                Arc::new(Int32Array::from(query_max_layers)) as ArrayRef,
-                Arc::new(StringArray::from(constraint_kinds)) as ArrayRef,
-                Arc::new(Int32Array::from(required_boundary_sizes)) as ArrayRef,
-                Arc::new(list_utf8_array(anchor_planes)) as ArrayRef,
-                Arc::new(list_utf8_array(anchor_values)) as ArrayRef,
-                Arc::new(list_utf8_array(edge_constraint_kinds)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_node_ids)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_edge_sources)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_edge_destinations)) as ArrayRef,
-                Arc::new(list_utf8_array(candidate_edge_kinds)) as ArrayRef,
+                Arc::new(StringArray::from(inputs.query_ids)) as ArrayRef,
+                Arc::new(StringArray::from(inputs.candidate_ids)) as ArrayRef,
+                Arc::new(Int32Array::from(inputs.retrieval_layers)) as ArrayRef,
+                Arc::new(Int32Array::from(inputs.query_max_layers)) as ArrayRef,
+                Arc::new(StringArray::from(inputs.constraint_kinds)) as ArrayRef,
+                Arc::new(Int32Array::from(inputs.required_boundary_sizes)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.anchor_planes)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.anchor_values)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.edge_constraint_kinds)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_node_ids)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_edge_sources)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_edge_destinations)) as ArrayRef,
+                Arc::new(list_utf8_array(inputs.candidate_edge_kinds)) as ArrayRef,
             ],
         )
-        .expect("structural filter request batch should build")
+        .or_panic("structural filter request batch should build")
     }
 
     fn structural_filter_response_batch(
@@ -1091,7 +1101,7 @@ mod tests {
                 Arc::new(StringArray::from(rejection_reasons)) as ArrayRef,
             ],
         )
-        .expect("structural filter response batch should build")
+        .or_panic("structural filter response batch should build")
     }
 
     fn utf8_field(name: &str) -> Field {

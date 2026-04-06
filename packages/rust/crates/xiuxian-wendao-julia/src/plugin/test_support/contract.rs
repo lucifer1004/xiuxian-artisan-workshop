@@ -26,7 +26,7 @@ pub(crate) fn request_batch() -> RecordBatch {
             )),
         ],
     )
-    .expect("request batch");
+    .unwrap_or_else(|error| panic!("request batch: {error}"));
     attach_record_batch_metadata(
         &batch,
         [(
@@ -34,11 +34,12 @@ pub(crate) fn request_batch() -> RecordBatch {
             DEFAULT_FLIGHT_SCHEMA_VERSION,
         )],
     )
-    .expect("attach request schema metadata")
+    .unwrap_or_else(|error| panic!("attach request schema metadata: {error}"))
 }
 
 pub(crate) fn request_batch_with_trace_id(trace_id: &str) -> RecordBatch {
-    attach_record_batch_trace_id(&request_batch(), trace_id).expect("attach trace metadata")
+    attach_record_batch_trace_id(&request_batch(), trace_id)
+        .unwrap_or_else(|error| panic!("attach trace metadata: {error}"))
 }
 
 fn fixed_size_vector_array(vector_dim: i32, values: Vec<f32>) -> FixedSizeListArray {
@@ -48,5 +49,5 @@ fn fixed_size_vector_array(vector_dim: i32, values: Vec<f32>) -> FixedSizeListAr
         Arc::new(Float32Array::from(values)),
         None,
     )
-    .expect("fixed-size vector array")
+    .unwrap_or_else(|error| panic!("fixed-size vector array: {error}"))
 }

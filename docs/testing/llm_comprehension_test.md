@@ -13,7 +13,7 @@ metadata:
 
 # LLM Comprehension Test: Omega Architecture
 
-This document contains a set of questions and expected answers to verify if an LLM (after reading the documentation in `docs/llm/` and `docs/human/architecture/`) has a correct understanding of the Omni-Dev-Fusion system.
+This document contains a set of questions and expected answers to verify if an LLM (after reading the documentation in `docs/llm/` and `docs/human/architecture/`) has a correct understanding of the `xiuxian-artisan-workshop` system.
 
 ## Test Case 1: Core Metaphors
 

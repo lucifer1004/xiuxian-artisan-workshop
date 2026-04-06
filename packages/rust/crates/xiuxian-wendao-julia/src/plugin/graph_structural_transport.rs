@@ -470,11 +470,8 @@ mod tests {
     };
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
-    use tokio::runtime::Builder;
     use xiuxian_wendao_core::{
-        repo_intelligence::{
-            RegisteredRepository, RepositoryPluginConfig, RepositoryRefreshPolicy,
-        },
+        repo_intelligence::{RegisteredRepository, RepositoryPluginConfig},
         transport::PluginTransportKind,
     };
     use xiuxian_wendao_runtime::transport::FLIGHT_SCHEMA_VERSION_METADATA_KEY;
@@ -485,24 +482,22 @@ mod tests {
     };
     use crate::plugin::graph_structural::{
         GRAPH_STRUCTURAL_ACCEPTED_COLUMN, GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN,
-        GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
-        GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN,
-        GRAPH_STRUCTURAL_CONSTRAINT_KIND_COLUMN, GRAPH_STRUCTURAL_DEPENDENCY_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN, GRAPH_STRUCTURAL_EXPLANATION_COLUMN,
-        GRAPH_STRUCTURAL_FEASIBLE_COLUMN, GRAPH_STRUCTURAL_FILTER_ROUTE,
-        GRAPH_STRUCTURAL_FINAL_SCORE_COLUMN, GRAPH_STRUCTURAL_KEYWORD_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN, GRAPH_STRUCTURAL_QUERY_ID_COLUMN,
-        GRAPH_STRUCTURAL_QUERY_MAX_LAYERS_COLUMN, GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN,
-        GRAPH_STRUCTURAL_REQUIRED_BOUNDARY_SIZE_COLUMN, GRAPH_STRUCTURAL_RERANK_ROUTE,
-        GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN, GRAPH_STRUCTURAL_SEMANTIC_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN, GRAPH_STRUCTURAL_TAG_SCORE_COLUMN,
-        GraphStructuralRouteKind, JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION,
+        GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
+        GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
+        GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN,
+        GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN, GRAPH_STRUCTURAL_CONSTRAINT_KIND_COLUMN,
+        GRAPH_STRUCTURAL_DEPENDENCY_SCORE_COLUMN, GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN,
+        GRAPH_STRUCTURAL_EXPLANATION_COLUMN, GRAPH_STRUCTURAL_FEASIBLE_COLUMN,
+        GRAPH_STRUCTURAL_FILTER_ROUTE, GRAPH_STRUCTURAL_FINAL_SCORE_COLUMN,
+        GRAPH_STRUCTURAL_KEYWORD_SCORE_COLUMN, GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN,
+        GRAPH_STRUCTURAL_QUERY_ID_COLUMN, GRAPH_STRUCTURAL_QUERY_MAX_LAYERS_COLUMN,
+        GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN, GRAPH_STRUCTURAL_REQUIRED_BOUNDARY_SIZE_COLUMN,
+        GRAPH_STRUCTURAL_RERANK_ROUTE, GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN,
+        GRAPH_STRUCTURAL_SEMANTIC_SCORE_COLUMN, GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN,
+        GRAPH_STRUCTURAL_TAG_SCORE_COLUMN, GraphStructuralRouteKind,
+        JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION,
     };
-    use crate::plugin::test_support::official_examples::{
-        reserve_real_service_port, spawn_real_wendaosearch_demo_capability_manifest_service,
-        wait_for_service_ready_with_attempts,
-    };
-
+    use crate::plugin::test_support::common::ResultTestExt;
     #[test]
     fn build_graph_structural_flight_transport_client_returns_none_without_config() {
         let repository = RegisteredRepository {
@@ -652,60 +647,6 @@ mod tests {
     }
 
     #[test]
-    fn build_graph_structural_flight_transport_client_falls_back_to_capability_manifest() {
-        let port = reserve_real_service_port();
-        let base_url = format!("http://127.0.0.1:{port}");
-        let _service = spawn_real_wendaosearch_demo_capability_manifest_service(port);
-        Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap_or_else(|error| panic!("build wait runtime: {error}"))
-            .block_on(wait_for_service_ready_with_attempts(
-                &format!("http://127.0.0.1:{port}"),
-                600,
-            ))
-            .unwrap_or_else(|error| {
-                panic!("wait for real WendaoSearch capability-manifest service: {error}")
-            });
-
-        let repository = RegisteredRepository {
-            id: "repo-julia".to_string(),
-            path: None,
-            url: None,
-            git_ref: None,
-            refresh: RepositoryRefreshPolicy::Fetch,
-            plugins: vec![RepositoryPluginConfig::Config {
-                id: "julia".to_string(),
-                options: serde_json::json!({
-                    "capability_manifest_transport": {
-                        "base_url": base_url,
-                        "route": "/plugin/capabilities",
-                        "schema_version": "v0-draft"
-                    }
-                }),
-            }],
-        };
-
-        let rerank_client = build_graph_structural_flight_transport_client(
-            &repository,
-            GraphStructuralRouteKind::StructuralRerank,
-        )
-        .unwrap_or_else(|error| panic!("manifest fallback should parse rerank route: {error}"))
-        .unwrap_or_else(|| panic!("manifest fallback rerank client should exist"));
-        let filter_client = build_graph_structural_flight_transport_client(
-            &repository,
-            GraphStructuralRouteKind::ConstraintFilter,
-        )
-        .unwrap_or_else(|error| panic!("manifest fallback should parse filter route: {error}"))
-        .unwrap_or_else(|| panic!("manifest fallback filter client should exist"));
-
-        assert_eq!(rerank_client.flight_base_url(), base_url);
-        assert_eq!(rerank_client.flight_route(), GRAPH_STRUCTURAL_RERANK_ROUTE);
-        assert_eq!(filter_client.flight_base_url(), base_url);
-        assert_eq!(filter_client.flight_route(), GRAPH_STRUCTURAL_FILTER_ROUTE);
-    }
-
-    #[test]
     fn validate_graph_structural_request_batches_accepts_staged_shapes() {
         let rerank = structural_rerank_request_batch();
         let filter = constraint_filter_request_batch();
@@ -753,7 +694,7 @@ mod tests {
             GraphStructuralRouteKind::ConstraintFilter,
             &[structural_rerank_response_batch()],
         )
-        .unwrap_err();
+        .err_or_panic("wrong graph-structural response shape must fail");
         assert!(
             error
                 .to_string()
@@ -777,6 +718,8 @@ mod tests {
                 list_utf8_field(GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
             ])),
             vec![
@@ -792,6 +735,8 @@ mod tests {
                 Arc::new(list_utf8_array(vec![vec!["symbol:foo", "symbol:bar"]])),
                 Arc::new(list_utf8_array(vec![vec!["depends_on"]])),
                 Arc::new(list_utf8_array(vec![vec!["n1", "n2"]])),
+                Arc::new(list_utf8_array(vec![vec!["n1"]])),
+                Arc::new(list_utf8_array(vec![vec!["n2"]])),
                 Arc::new(list_utf8_array(vec![vec!["depends_on"]])),
             ],
         )
@@ -812,6 +757,8 @@ mod tests {
                 list_utf8_field(GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_SOURCES_COLUMN),
+                list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN),
             ])),
             vec![
@@ -825,6 +772,8 @@ mod tests {
                 Arc::new(list_utf8_array(vec![vec!["symbol:foo", "tag:core"]])),
                 Arc::new(list_utf8_array(vec![vec!["depends_on"]])),
                 Arc::new(list_utf8_array(vec![vec!["n1", "n2"]])),
+                Arc::new(list_utf8_array(vec![vec!["n1"]])),
+                Arc::new(list_utf8_array(vec![vec!["n2"]])),
                 Arc::new(list_utf8_array(vec![vec!["depends_on"]])),
             ],
         )

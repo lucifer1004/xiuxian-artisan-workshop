@@ -2,7 +2,7 @@
 
 use xiuxian_memory_engine::{
     Episode, MemoryGateEvent, MemoryGatePolicy, MemoryGateVerdict, MemoryLifecycleState,
-    MemoryUtilityLedger,
+    MemoryPromotionTarget, MemoryUtilityLedger,
 };
 
 fn episode_with_stats(
@@ -20,6 +20,7 @@ fn episode_with_stats(
         outcome.to_string(),
     );
     episode.q_value = q_value;
+    episode.retrieval_count = success_count + failure_count;
     episode.success_count = success_count;
     episode.failure_count = failure_count;
     episode
@@ -47,6 +48,10 @@ fn gate_policy_promote_decision_is_deterministic() {
     assert_eq!(decision_a, decision_b);
     assert_eq!(decision_a.verdict, MemoryGateVerdict::Promote);
     assert_eq!(decision_a.next_action, "promote");
+    assert_eq!(
+        decision_a.promotion_target,
+        Some(MemoryPromotionTarget::WorkingKnowledge)
+    );
     assert!(decision_a.confidence >= 0.55);
 }
 
@@ -65,6 +70,7 @@ fn gate_policy_obsolete_requires_threshold_and_min_usage() {
     let fresh_ledger = MemoryUtilityLedger::from_episode(&fresh_episode, 0.10, 0.18, 0.12);
     let fresh_decision = policy.evaluate(&fresh_ledger, vec![], vec![], vec![]);
     assert_eq!(fresh_decision.verdict, MemoryGateVerdict::Retain);
+    assert_eq!(fresh_decision.promotion_target, None);
 }
 
 #[test]
@@ -86,7 +92,9 @@ fn gate_event_matches_contract_shape() {
         decision,
     );
 
-    let value = serde_json::to_value(&event).expect("serialize memory gate event");
+    let value = serde_json::to_value(&event).unwrap_or_else(|error| {
+        panic!("serialize memory gate event: {error}");
+    });
     assert_eq!(value["session_id"], "telegram:1304799691:1304799691");
     assert_eq!(value["turn_id"], 42);
     assert_eq!(value["state_before"], "active");
@@ -97,4 +105,5 @@ fn gate_event_matches_contract_shape() {
             | MemoryLifecycleState::Promoted
     ));
     assert!(value["decision"]["next_action"].is_string());
+    assert_eq!(value["decision"]["promotion_target"], "working_knowledge");
 }

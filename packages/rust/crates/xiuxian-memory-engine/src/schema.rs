@@ -7,6 +7,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::Episode;
+
 /// Error when episode metadata fails schema validation.
 #[derive(Debug, Error)]
 pub enum EpisodeMetadataError {
@@ -23,7 +25,7 @@ pub enum EpisodeMetadataError {
     InvalidQValue(f32),
 
     /// Count fields must be non-negative.
-    #[error("success_count or failure_count must be >= 0")]
+    #[error("retrieval_count, success_count, and failure_count must be >= 0")]
     InvalidCount,
 }
 
@@ -40,38 +42,37 @@ pub struct EpisodeMetadata {
     /// Current Q-value (learned utility). Must be in [0.0, 1.0].
     #[schemars(range(min = 0.0, max = 1.0))]
     pub q_value: f32,
+    /// Number of retrieval or access events.
+    pub retrieval_count: u32,
     /// Number of successful retrievals.
     pub success_count: u32,
     /// Number of failed retrievals.
     pub failure_count: u32,
     /// Creation timestamp (Unix milliseconds).
     pub created_at: i64,
+    /// Last update timestamp (Unix milliseconds).
+    pub updated_at: i64,
 }
 
 impl EpisodeMetadata {
-    /// Validate and create from an episode's fields.
+    /// Validate and create from an [`Episode`].
     ///
     /// # Errors
     ///
     /// Returns an error if `q_value` is outside `[0.0, 1.0]`.
-    pub fn from_episode(
-        experience: &str,
-        outcome: &str,
-        q_value: f32,
-        success_count: u32,
-        failure_count: u32,
-        created_at: i64,
-    ) -> Result<Self, EpisodeMetadataError> {
-        if !(0.0..=1.0).contains(&q_value) {
-            return Err(EpisodeMetadataError::InvalidQValue(q_value));
+    pub fn from_episode(episode: &Episode) -> Result<Self, EpisodeMetadataError> {
+        if !(0.0..=1.0).contains(&episode.q_value) {
+            return Err(EpisodeMetadataError::InvalidQValue(episode.q_value));
         }
         Ok(Self {
-            experience: experience.to_string(),
-            outcome: outcome.to_string(),
-            q_value,
-            success_count,
-            failure_count,
-            created_at,
+            experience: episode.experience.clone(),
+            outcome: episode.outcome.clone(),
+            q_value: episode.q_value,
+            retrieval_count: episode.retrieval_count,
+            success_count: episode.success_count,
+            failure_count: episode.failure_count,
+            created_at: episode.created_at,
+            updated_at: episode.updated_at,
         })
     }
 
@@ -109,9 +110,11 @@ impl Default for EpisodeMetadata {
             experience: String::new(),
             outcome: String::new(),
             q_value: 0.5,
+            retrieval_count: 0,
             success_count: 0,
             failure_count: 0,
             created_at: 0,
+            updated_at: 0,
         }
     }
 }

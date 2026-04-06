@@ -63,7 +63,7 @@
         #     };
         #   };
         # };
-        "xiuxian-wendao" = {
+        "xiuxian-vector" = {
           depsDrvConfig = {
             mkDerivation.buildInputs = [ pkgs.protobuf ];
           };

@@ -3,9 +3,12 @@
 
 set -e
 
-CLI_PATH="/Users/guangtao/.cargo/git/checkouts/deepseek-ocr.rs-83df09b3ffdef775/02b933d/target/release/deepseek-ocr-cli"
-TEST_IMAGE="/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion/.run/tmp/ocr-smoke.png"
-MODEL_ROOT="/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion/.data/models/dots-ocr"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRJ_ROOT="${PRJ_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+CLI_PATH="${DEEPSEEK_OCR_CLI:-$HOME/.cargo/git/checkouts/deepseek-ocr.rs-83df09b3ffdef775/02b933d/target/release/deepseek-ocr-cli}"
+TEST_IMAGE="$PRJ_ROOT/.run/tmp/ocr-smoke.png"
+MODEL_ROOT="$PRJ_ROOT/.data/models/dots-ocr"
 PROMPT="<image>\n<|grounding|>Convert this image to markdown."
 
 echo "=== Testing Upstream CLI Memory Usage ==="

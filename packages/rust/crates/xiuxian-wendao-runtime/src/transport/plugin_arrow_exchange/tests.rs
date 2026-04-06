@@ -85,6 +85,13 @@ fn tempdir_or_panic() -> tempfile::TempDir {
     tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"))
 }
 
+fn err_or_panic<T, E>(result: Result<T, E>, failure_message: &str) -> E {
+    match result {
+        Ok(_) => panic!("{failure_message}"),
+        Err(error) => error,
+    }
+}
+
 #[test]
 fn build_plugin_arrow_request_batch_uses_contract_columns() {
     let batch = build_plugin_arrow_request_batch(
@@ -133,15 +140,17 @@ fn plugin_arrow_response_schema_optionally_includes_trace_id() {
 
 #[test]
 fn build_plugin_arrow_request_batch_rejects_dimension_mismatch() {
-    let error = build_plugin_arrow_request_batch(
-        &[PluginArrowRequestRow {
-            doc_id: "doc-1".to_string(),
-            vector_score: 0.3,
-            embedding: vec![1.0, 2.0],
-        }],
-        &[9.0, 8.0, 7.0],
-    )
-    .expect_err("dimension mismatch should fail");
+    let error = err_or_panic(
+        build_plugin_arrow_request_batch(
+            &[PluginArrowRequestRow {
+                doc_id: "doc-1".to_string(),
+                vector_score: 0.3,
+                embedding: vec![1.0, 2.0],
+            }],
+            &[9.0, 8.0, 7.0],
+        ),
+        "dimension mismatch should fail",
+    );
 
     assert!(
         error.to_string().contains("embedding dimension mismatch"),
@@ -183,15 +192,17 @@ fn build_plugin_arrow_request_batch_from_embeddings_uses_candidate_ids_as_doc_id
 
 #[test]
 fn build_plugin_arrow_request_batch_from_embeddings_rejects_missing_embeddings() {
-    let error = build_plugin_arrow_request_batch_from_embeddings(
-        &[PluginArrowScoredCandidate {
-            doc_id: "doc-1#alpha",
-            vector_score: 0.31,
-        }],
-        &BTreeMap::new(),
-        &[9.0, 8.0, 7.0],
-    )
-    .expect_err("missing embedding should fail");
+    let error = err_or_panic(
+        build_plugin_arrow_request_batch_from_embeddings(
+            &[PluginArrowScoredCandidate {
+                doc_id: "doc-1#alpha",
+                vector_score: 0.31,
+            }],
+            &BTreeMap::new(),
+            &[9.0, 8.0, 7.0],
+        ),
+        "missing embedding should fail",
+    );
 
     assert!(matches!(
         error,
@@ -356,13 +367,15 @@ async fn prepare_plugin_arrow_request_rows_from_vector_store_rejects_missing_emb
         .await
         .unwrap_or_else(|error| panic!("seed vector table: {error}"));
 
-    let error = prepare_plugin_arrow_request_rows_from_vector_store(
-        &store,
-        "anchors",
-        [("doc-1#alpha".to_string(), 0.31)],
-    )
-    .await
-    .expect_err("missing embedding should fail");
+    let error = err_or_panic(
+        prepare_plugin_arrow_request_rows_from_vector_store(
+            &store,
+            "anchors",
+            [("doc-1#alpha".to_string(), 0.31)],
+        )
+        .await,
+        "missing embedding should fail",
+    );
 
     assert!(matches!(
         error,
@@ -443,8 +456,10 @@ fn decode_plugin_arrow_score_rows_materializes_doc_scores() {
 
 #[test]
 fn decode_plugin_arrow_score_rows_rejects_missing_columns() {
-    let error = decode_plugin_arrow_score_rows(&[invalid_response_missing_analyzer_score_batch()])
-        .expect_err("decode should fail");
+    let error = err_or_panic(
+        decode_plugin_arrow_score_rows(&[invalid_response_missing_analyzer_score_batch()]),
+        "decode should fail",
+    );
     assert!(
         error
             .to_string()
@@ -461,9 +476,10 @@ fn validate_plugin_arrow_response_batches_accepts_v1_shape() {
 
 #[test]
 fn validate_plugin_arrow_response_batches_rejects_duplicates_and_missing_columns() {
-    let duplicate_error =
-        validate_plugin_arrow_response_batches(&[response_batch_with_duplicates()])
-            .expect_err("duplicate doc_id must fail");
+    let duplicate_error = err_or_panic(
+        validate_plugin_arrow_response_batches(&[response_batch_with_duplicates()]),
+        "duplicate doc_id must fail",
+    );
     assert!(
         duplicate_error
             .to_string()
@@ -471,9 +487,10 @@ fn validate_plugin_arrow_response_batches_rejects_duplicates_and_missing_columns
         "unexpected duplicate error: {duplicate_error}"
     );
 
-    let missing_error =
-        validate_plugin_arrow_response_batches(&[invalid_response_missing_analyzer_score_batch()])
-            .expect_err("missing analyzer_score must fail");
+    let missing_error = err_or_panic(
+        validate_plugin_arrow_response_batches(&[invalid_response_missing_analyzer_score_batch()]),
+        "missing analyzer_score must fail",
+    );
     assert!(
         missing_error
             .to_string()
@@ -494,12 +511,14 @@ async fn roundtrip_plugin_arrow_score_rows_with_binding_reports_negotiation_erro
     )
     .unwrap_or_else(|error| panic!("request batch should build: {error}"));
 
-    let error = roundtrip_plugin_arrow_score_rows_with_binding(
-        &sample_binding(Some("not a url")),
-        &request_batch,
-    )
-    .await
-    .expect_err("invalid base_url should fail");
+    let error = err_or_panic(
+        roundtrip_plugin_arrow_score_rows_with_binding(
+            &sample_binding(Some("not a url")),
+            &request_batch,
+        )
+        .await,
+        "invalid base_url should fail",
+    );
 
     assert_eq!(error.selection, None);
     assert!(

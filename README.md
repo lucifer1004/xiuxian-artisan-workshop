@@ -12,6 +12,7 @@ metadata:
 
 CyberXiuXian Artisan Workshop (赛博修仙创意工坊) is a **High-Performance AI Operating System Kernel**
 designed for the next generation of autonomous intelligent agents.
+The repository is published as `xiuxian-artisan-workshop`.
 It bridges the gap between LLM reasoning and system-level execution via a **Zero-copy Native Memory Bus**, self-evolving **Synaptic Workflows**, and a distributed **Valkey Synapse** for real-time state orchestration.
 
 ---
@@ -63,9 +64,9 @@ flowchart TB
 
 ---
 
-## 💎 Why Omni-Dev Fusion V2?
+## 💎 Why `xiuxian-artisan-workshop`?
 
-| Feature         | The Legacy AI Way                  | **The Omni-Fusion Way (V2)**                |
+| Feature         | The Legacy AI Way                  | **The `xiuxian-artisan-workshop` Way**      |
 | :-------------- | :--------------------------------- | :------------------------------------------ |
 | **Execution**   | External Microservices (HTTP/JSON) | **Native In-Process Calls (Rust Pointers)** |
 | **Latency**     | 50ms - 500ms (Serialization Tax)   | **< 1ms (Zero-Copy Dispatch)**              |

@@ -299,6 +299,7 @@ fn plugin_config_type_error(
 #[cfg(test)]
 mod tests {
     use arrow::array::{Float64Array, StringArray};
+    use arrow::record_batch::RecordBatch;
     use xiuxian_wendao_core::{
         capabilities::{ContractVersion, PluginCapabilityBinding},
         repo_intelligence::{
@@ -325,6 +326,26 @@ mod tests {
         spawn_real_wendaoarrow_service, wait_for_service_ready,
         wait_for_service_ready_with_attempts,
     };
+
+    fn string_column<'a>(batch: &'a RecordBatch, name: &str) -> &'a StringArray {
+        let Some(column) = batch
+            .column_by_name(name)
+            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
+        else {
+            panic!("missing StringArray column `{name}`");
+        };
+        column
+    }
+
+    fn float64_column<'a>(batch: &'a RecordBatch, name: &str) -> &'a Float64Array {
+        let Some(column) = batch
+            .column_by_name(name)
+            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
+        else {
+            panic!("missing Float64Array column `{name}`");
+        };
+        column
+    }
 
     #[test]
     fn build_julia_flight_transport_client_returns_none_without_inline_config() {
@@ -388,9 +409,8 @@ mod tests {
             ..RegisteredRepository::default()
         };
 
-        let error = match build_julia_flight_transport_client(&repository) {
-            Ok(_) => panic!("expected invalid timeout type to fail"),
-            Err(error) => error,
+        let Err(error) = build_julia_flight_transport_client(&repository) else {
+            panic!("expected invalid timeout type to fail");
         };
         assert!(
             error
@@ -453,9 +473,9 @@ mod tests {
                 panic!("wait for real WendaoArrow bad-response Flight service: {error}")
             });
 
-        let error = process_julia_flight_batches(&client, &[request_batch()])
-            .await
-            .expect_err("invalid remote response must fail");
+        let Err(error) = process_julia_flight_batches(&client, &[request_batch()]).await else {
+            panic!("invalid remote response must fail");
+        };
         assert!(
             error.to_string().contains("analyzer_score")
                 || error.to_string().contains("Arrow Flight request failed"),
@@ -508,9 +528,11 @@ mod tests {
             ..RegisteredRepository::default()
         };
 
-        let error = process_julia_flight_batches_for_repository(&repository, &[request_batch()])
-            .await
-            .expect_err("missing inline transport must fail");
+        let Err(error) =
+            process_julia_flight_batches_for_repository(&repository, &[request_batch()]).await
+        else {
+            panic!("missing inline transport must fail");
+        };
         assert!(
             error
                 .to_string()
@@ -538,18 +560,9 @@ mod tests {
 
         assert_eq!(response_batches.len(), 1);
         let batch = &response_batches[0];
-        let doc_id = batch
-            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
-            .expect("doc_id column");
-        let analyzer_score = batch
-            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
-            .expect("analyzer_score column");
-        let final_score = batch
-            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
-            .expect("final_score column");
+        let doc_id = string_column(batch, JULIA_ARROW_DOC_ID_COLUMN);
+        let analyzer_score = float64_column(batch, JULIA_ARROW_ANALYZER_SCORE_COLUMN);
+        let final_score = float64_column(batch, JULIA_ARROW_FINAL_SCORE_COLUMN);
 
         assert_eq!(doc_id.value(0), "doc-a");
         assert_eq!(doc_id.value(1), "doc-b");
@@ -577,14 +590,11 @@ mod tests {
         let batches =
             process_julia_flight_batches(&client, &[request_batch_with_trace_id("trace-123")])
                 .await
-                .expect("metadata Flight request");
+                .unwrap_or_else(|error| panic!("metadata Flight request: {error}"));
         assert_eq!(batches.len(), 1);
 
         let batch = &batches[0];
-        let trace_id = batch
-            .column_by_name(JULIA_ARROW_TRACE_ID_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
-            .expect("trace_id column");
+        let trace_id = string_column(batch, JULIA_ARROW_TRACE_ID_COLUMN);
         assert_eq!(trace_id.value(0), "trace-123");
         assert_eq!(trace_id.value(1), "trace-123");
 
@@ -604,33 +614,21 @@ mod tests {
 
         let batches = process_julia_flight_batches(&client, &[request_batch()])
             .await
-            .expect("linear blend Flight request");
+            .unwrap_or_else(|error| panic!("linear blend Flight request: {error}"));
         assert_eq!(batches.len(), 1);
 
         let batch = &batches[0];
-        let doc_id = batch
-            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
-            .expect("doc_id column");
-        let analyzer_score = batch
-            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
-            .expect("analyzer_score column");
-        let final_score = batch
-            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
-            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
-            .expect("final_score column");
-        let ranking_reason = batch
-            .column_by_name("ranking_reason")
-            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
-            .expect("ranking_reason column");
+        let doc_id = string_column(batch, JULIA_ARROW_DOC_ID_COLUMN);
+        let analyzer_score = float64_column(batch, JULIA_ARROW_ANALYZER_SCORE_COLUMN);
+        let final_score = float64_column(batch, JULIA_ARROW_FINAL_SCORE_COLUMN);
+        let ranking_reason = string_column(batch, "ranking_reason");
 
         assert_eq!(doc_id.value(0), "doc-a");
         assert_eq!(doc_id.value(1), "doc-b");
-        assert!((analyzer_score.value(0) - 0.92847663).abs() < 1e-8);
-        assert!((analyzer_score.value(1) - 0.97993666).abs() < 1e-8);
-        assert!((final_score.value(0) - 0.7435098105669022).abs() < 1e-12);
-        assert!((final_score.value(1) - 0.8819588285684585).abs() < 1e-12);
+        assert!((analyzer_score.value(0) - 0.928_476_63).abs() < 1e-8);
+        assert!((analyzer_score.value(1) - 0.979_936_66).abs() < 1e-8);
+        assert!((final_score.value(0) - 0.743_509_810_566_902_2).abs() < 1e-12);
+        assert!((final_score.value(1) - 0.881_958_828_568_458_5).abs() < 1e-12);
         assert_eq!(
             ranking_reason.value(0),
             "final_score=0.35*vector_score+0.65*cosine_similarity"

@@ -20,7 +20,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Expr};
+use syn::{Expr, parse_macro_input};
 
 mod zhenfa_tool;
 
@@ -257,7 +257,7 @@ pub fn crate_resources_dir(input: TokenStream) -> TokenStream {
 ///
 /// Expansion order:
 /// 1. `<PRJ_ROOT>/packages/conf/<file>`
-/// 2. `<PRJ_CONFIG_HOME>/omni-dev-fusion/<file>` (`.config` when unset)
+/// 2. `<PRJ_CONFIG_HOME>/xiuxian-artisan-workshop/<file>` (`.config` when unset)
 /// 3. `$<explicit_env>` when set and non-empty
 #[proc_macro]
 pub fn project_config_paths(input: TokenStream) -> TokenStream {
@@ -340,7 +340,7 @@ pub fn project_config_paths(input: TokenStream) -> TokenStream {
 
             let mut candidates = vec![
                 project_root.join(concat!("packages/conf/", #file_name)),
-                config_home.join(concat!("omni-dev-fusion/", #file_name)),
+                config_home.join(concat!("xiuxian-artisan-workshop/", #file_name)),
             ];
 
             if let Ok(raw) = std::env::var(#explicit_env_var) {

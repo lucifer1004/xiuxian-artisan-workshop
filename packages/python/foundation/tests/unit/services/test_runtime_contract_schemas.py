@@ -52,6 +52,7 @@ def test_memory_gate_event_schema_accepts_contract_payload() -> None:
             "omega_factors": ["utility_trend=up"],
             "reason": "High utility and repeated revalidation success",
             "next_action": "promote",
+            "promotion_target": "working_knowledge",
         },
     }
     _validate("xiuxian.memory.gate_event.v1.schema.json", payload)

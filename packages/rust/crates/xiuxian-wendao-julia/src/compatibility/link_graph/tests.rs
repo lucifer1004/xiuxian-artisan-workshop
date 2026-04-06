@@ -102,13 +102,13 @@ fn deployment_artifact_round_trips_plugin_artifact_payload() {
     };
 
     let payload: PluginArtifactPayload = artifact.clone().into();
+    let Some(payload_launch) = payload.launch.clone() else {
+        panic!("payload launch should exist");
+    };
 
     assert_eq!(payload.plugin_id.0, JULIA_PLUGIN_ID);
     assert_eq!(payload.artifact_id.0, JULIA_DEPLOYMENT_ARTIFACT_ID);
-    assert_eq!(
-        payload.launch.unwrap().launcher_path,
-        artifact.launch.launcher_path
-    );
+    assert_eq!(payload_launch.launcher_path, artifact.launch.launcher_path);
 
     let roundtrip = LinkGraphJuliaDeploymentArtifact::from(PluginArtifactPayload {
         plugin_id: payload.plugin_id,
@@ -191,6 +191,9 @@ fn runtime_config_builds_provider_binding_and_artifact_payload() {
     let Some(direct_binding) = runtime.rerank_provider_binding() else {
         panic!("direct binding");
     };
+    let Some(binding_launch) = binding.launch.clone() else {
+        panic!("launch");
+    };
     assert_eq!(direct_binding, binding);
     assert_eq!(binding.selector, julia_rerank_provider_selector());
     assert_eq!(
@@ -202,7 +205,7 @@ fn runtime_config_builds_provider_binding_and_artifact_payload() {
         xiuxian_wendao_core::transport::PluginTransportKind::ArrowFlight
     );
     assert_eq!(
-        binding.launch.expect("launch").launcher_path,
+        binding_launch.launcher_path,
         DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
     );
 

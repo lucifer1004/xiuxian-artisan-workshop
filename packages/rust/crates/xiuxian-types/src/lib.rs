@@ -460,7 +460,8 @@ pub enum MemoryGateVerdict {
     Retain,
     /// Remove the episode from memory storage.
     Obsolete,
-    /// Promote the episode to long-term knowledge workflows.
+    /// Promote the episode out of episodic memory. Consult `promotion_target`
+    /// for the destination layer.
     Promote,
 }
 
@@ -472,6 +473,24 @@ impl MemoryGateVerdict {
             Self::Retain => "retain",
             Self::Obsolete => "obsolete",
             Self::Promote => "promote",
+        }
+    }
+}
+
+/// Explicit destination for memory promotion decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryPromotionTarget {
+    /// Promote into the short-term working-knowledge layer.
+    WorkingKnowledge,
+}
+
+impl MemoryPromotionTarget {
+    /// String form used in contracts/logs.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::WorkingKnowledge => "working_knowledge",
         }
     }
 }
@@ -493,6 +512,9 @@ pub struct MemoryGateDecision {
     pub reason: String,
     /// Next action command.
     pub next_action: String,
+    /// Explicit promotion target for `promote` verdicts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub promotion_target: Option<MemoryPromotionTarget>,
 }
 
 /// Vector search result (Arrow-native fields preferred; metadata kept for filter/extra keys).

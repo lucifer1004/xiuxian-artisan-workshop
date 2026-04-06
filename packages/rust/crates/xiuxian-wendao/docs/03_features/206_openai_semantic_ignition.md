@@ -86,9 +86,9 @@ the request just because `query_vector` is empty.
 ## Validation Target
 
 - `direnv exec . cargo test -p xiuxian-wendao --lib link_graph::runtime_config::tests::`
-- `CARGO_TARGET_DIR=/tmp/omni-dev-fusion-codex-semantic-ignition-target direnv exec . cargo test -p xiuxian-wendao --test planned_search_semantic_ignition`
-- `CARGO_TARGET_DIR=/tmp/omni-dev-fusion-codex-semantic-ignition-target direnv exec . cargo test -p xiuxian-wendao --test quantum_fusion_openai_ignition`
-- `CARGO_TARGET_DIR=/tmp/omni-dev-fusion-codex-semantic-ignition-target direnv exec . cargo clippy -p xiuxian-wendao --tests -- -D warnings`
+- `CARGO_TARGET_DIR=/tmp/xiuxian-artisan-workshop-codex-semantic-ignition-target direnv exec . cargo test -p xiuxian-wendao --test planned_search_semantic_ignition`
+- `CARGO_TARGET_DIR=/tmp/xiuxian-artisan-workshop-codex-semantic-ignition-target direnv exec . cargo test -p xiuxian-wendao --test quantum_fusion_openai_ignition`
+- `CARGO_TARGET_DIR=/tmp/xiuxian-artisan-workshop-codex-semantic-ignition-target direnv exec . cargo clippy -p xiuxian-wendao --tests -- -D warnings`
 
 :RELATIONS:
 :LINKS: [[03_features/203_agentic_navigation]], [[03_features/205_semantic_auditor]]

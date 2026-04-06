@@ -1,7 +1,7 @@
 """
 responses.py - Unified Tool Response Format
 
-Standardized response format for all tools following Omni-Dev-Fusion
+Standardized response format for all tools following xiuxian-artisan-workshop
 architecture improvements (Items 4 & 5).
 
 Usage:

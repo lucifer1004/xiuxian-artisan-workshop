@@ -6,7 +6,7 @@ metadata:
 
 # Scripts Directory
 
-This directory contains utility scripts for the Omni-Dev Fusion project.
+This directory contains utility scripts for the `xiuxian-artisan-workshop` project.
 
 ## Available Scripts
 

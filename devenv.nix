@@ -114,6 +114,9 @@ in
       export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
     ''}
   '';
+
+  cachix.pull = [ "tao3k" ];
+  cachix.push = "tao3k";
   # https://devenv.sh/tests/
   enterTest = "";
 

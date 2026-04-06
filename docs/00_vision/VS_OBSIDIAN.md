@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "Omni-Dev-Fusion vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine"
+title: "xiuxian-artisan-workshop vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine"
 category: "vision"
 tags:
   - architecture
@@ -12,10 +12,10 @@ tags:
 saliency_base: 8.0
 decay_rate: 0.02
 metadata:
-  title: "Omni-Dev-Fusion vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine"
+  title: "xiuxian-artisan-workshop vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine"
 ---
 
-# Omni-Dev-Fusion vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine
+# xiuxian-artisan-workshop vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine
 
 This document articulates the fundamental differences between our architecture (`xiuxian-artisan-workshop` / `xiuxian-wendao`) and traditional Personal Knowledge Management (PKM) tools like **Obsidian**.
 
@@ -27,7 +27,7 @@ It answers the core question: **Why build a custom Rust-based Knowledge Graph (`
 
 Obsidian is built around a **Document-Centric Paradigm**. Its core unit of computation is a Markdown file. Links (`[[link]]`) are essentially glorified string matching used to draw a visual D3.js force-directed graph for humans to look at.
 
-Omni-Dev-Fusion, powered by `xiuxian-wendao`, is built around an **Entity-Centric, Computable Graph Paradigm**. Its core unit is an `Entity` node within a `KnowledgeGraph`, persisting in Valkey (Redis). Markdown files are merely _one_ possible projection (or "manifestation") of the underlying graph state.
+`xiuxian-artisan-workshop`, powered by `xiuxian-wendao`, is built around an **Entity-Centric, Computable Graph Paradigm**. Its core unit is an `Entity` node within a `KnowledgeGraph`, persisting in Valkey (Redis). Markdown files are merely _one_ possible projection (or "manifestation") of the underlying graph state.
 
 ---
 

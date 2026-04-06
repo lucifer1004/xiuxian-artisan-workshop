@@ -34,9 +34,9 @@
 
 use xiuxian_daochang::{
     DiscoverConfidence, DiscoverMatch, GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind,
-    GraphWorkflowMode, MemoryGateDecision, MemoryGateVerdict, OmegaDecision, OmegaFallbackPolicy,
-    OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass, RouteTrace, RouteTraceGraphStep,
-    RouteTraceInjection,
+    GraphWorkflowMode, MemoryGateDecision, MemoryGateVerdict, MemoryPromotionTarget, OmegaDecision,
+    OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass, RouteTrace,
+    RouteTraceGraphStep, RouteTraceInjection,
 };
 
 #[test]
@@ -73,6 +73,7 @@ fn memory_gate_decision_roundtrip_stays_stable() {
         omega_factors: vec!["runtime_utility_trend=up".to_string()],
         reason: "Repeatedly validated high-value pattern.".to_string(),
         next_action: "promote".to_string(),
+        promotion_target: Some(MemoryPromotionTarget::WorkingKnowledge),
     };
 
     let raw = serde_json::to_string(&decision).unwrap_or_else(|error| {
@@ -84,6 +85,10 @@ fn memory_gate_decision_roundtrip_stays_stable() {
 
     assert_eq!(decoded.verdict, MemoryGateVerdict::Promote);
     assert_eq!(decoded.next_action, "promote");
+    assert_eq!(
+        decoded.promotion_target,
+        Some(MemoryPromotionTarget::WorkingKnowledge)
+    );
     assert_eq!(decoded.react_evidence_refs.len(), 1);
 }
 

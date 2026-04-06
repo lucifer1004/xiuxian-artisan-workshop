@@ -177,7 +177,7 @@ mod test_project_config_paths {
         );
         assert_eq!(
             paths[1],
-            PathBuf::from("/tmp/omni-macro-conf/omni-dev-fusion/qianji.toml")
+            PathBuf::from("/tmp/omni-macro-conf/xiuxian-artisan-workshop/qianji.toml")
         );
         assert_eq!(paths[2], PathBuf::from("/tmp/custom/qianji.toml"));
     }

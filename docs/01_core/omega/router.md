@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "Router Architecture - Omni-Dev-Fusion"
+title: "Router Architecture - xiuxian-artisan-workshop"
 category: "architecture"
 tags:
   - routing
@@ -10,10 +10,10 @@ tags:
 saliency_base: 8.0
 decay_rate: 0.01
 metadata:
-  title: "Router Architecture - Omni-Dev-Fusion"
+  title: "Router Architecture - xiuxian-artisan-workshop"
 ---
 
-# Router Architecture - Omni-Dev-Fusion
+# Router Architecture - xiuxian-artisan-workshop
 
 > Semantic Routing System (The Cortex)
 > Last Updated: 2026-01-27

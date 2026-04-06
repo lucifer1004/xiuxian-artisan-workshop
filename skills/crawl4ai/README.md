@@ -6,7 +6,7 @@ metadata:
 
 # crawl4ai
 
-High-performance web crawler with intelligent chunking for Omni-Dev-Fusion.
+High-performance web crawler with intelligent chunking for `xiuxian-artisan-workshop`.
 
 ## Quick Start
 

@@ -1,10 +1,12 @@
-//! Episode storage using `LanceDB` for vector similarity search.
+//! Episode storage for episodic memory recall and state persistence.
 //!
-//! Provides persistent storage for episodes with vector search capabilities.
+//! The current production path uses in-memory search plus JSON or Valkey-backed
+//! state persistence. Direct `LanceDB` persistence remains deferred.
 
 use crate::encoder::IntentEncoder;
 use crate::episode::Episode;
 use crate::persistence::atomic_write_text;
+use crate::projection::{MemoryProjectionFilter, MemoryProjectionRow};
 use crate::q_table::QTable;
 use crate::recall_feedback::normalize_feedback_bias;
 use anyhow::{Result, bail};
@@ -37,7 +39,7 @@ pub struct MemoryStateSnapshot {
 /// Episode store configuration.
 #[derive(Debug, Clone)]
 pub struct StoreConfig {
-    /// Path to the `LanceDB` database.
+    /// State-store root path for persisted episodic memory snapshots.
     pub path: String,
     /// Embedding dimension for intent vectors.
     pub embedding_dim: usize,
@@ -74,7 +76,7 @@ fn default_memory_store_path() -> String {
     data_home.join("omni-memory").to_string_lossy().to_string()
 }
 
-/// Episode store with `LanceDB` persistence and Q-learning.
+/// Episode store with episodic persistence and Q-learning.
 ///
 /// Provides:
 /// - Vector search for semantic recall
@@ -158,6 +160,7 @@ impl EpisodeStore {
     }
 
     fn normalize_episode_scope(episode: &mut Episode) {
+        episode.normalize_tracking_fields();
         let normalized = Episode::normalize_scope(&episode.scope);
         if normalized == crate::episode::GLOBAL_EPISODE_SCOPE
             && let Some(inferred_scope) = Self::infer_scope_from_agent_episode_id(&episode.id)
@@ -261,6 +264,30 @@ impl EpisodeStore {
     #[must_use]
     pub fn get_all(&self) -> Vec<Episode> {
         self.read_episodes().clone()
+    }
+
+    /// Materialize a read-only host projection for Julia compute lanes.
+    ///
+    /// Rows preserve store insertion order after optional scope filtering.
+    #[must_use]
+    pub fn memory_projection_rows(
+        &self,
+        filter: &MemoryProjectionFilter,
+    ) -> Vec<MemoryProjectionRow> {
+        let normalized_scope = filter.normalized_scope();
+        let limit = filter.limit.unwrap_or(usize::MAX);
+        self.read_episodes()
+            .iter()
+            .filter(|episode| match normalized_scope.as_deref() {
+                Some(scope) => episode.scope_key() == scope,
+                None => true,
+            })
+            .take(limit)
+            .map(|episode| {
+                let q_value = self.q_table.get_q(&episode.id);
+                MemoryProjectionRow::from_episode(episode, q_value)
+            })
+            .collect()
     }
 
     /// Update Q-value for an episode.
@@ -537,8 +564,7 @@ impl EpisodeStore {
         if let Some(ep) = episodes.iter_mut().find(|e| e.id == episode_id) {
             ep.experience = experience.to_string();
             ep.outcome = outcome.to_string();
-            // Update timestamp
-            ep.created_at = chrono::Utc::now().timestamp_millis();
+            ep.updated_at = chrono::Utc::now().timestamp_millis();
             return true;
         }
         false
@@ -568,7 +594,7 @@ impl EpisodeStore {
     pub fn mark_accessed(&self, episode_id: &str) {
         let mut episodes = self.write_episodes();
         if let Some(ep) = episodes.iter_mut().find(|e| e.id == episode_id) {
-            ep.success_count += 1;
+            ep.mark_accessed();
         }
     }
 
@@ -582,9 +608,9 @@ impl EpisodeStore {
         let mut episodes = self.write_episodes();
         if let Some(ep) = episodes.iter_mut().find(|e| e.id == episode_id) {
             if success {
-                ep.success_count = ep.success_count.saturating_add(1);
+                ep.mark_success();
             } else {
-                ep.failure_count = ep.failure_count.saturating_add(1);
+                ep.mark_failure();
             }
             ep.q_value = self.q_table.get_q(&ep.id);
             return true;

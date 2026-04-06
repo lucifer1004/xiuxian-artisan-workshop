@@ -1,1 +1,1 @@
-pub(crate) use xiuxian_wendao_runtime::runtime_config::LinkGraphRelatedRuntimeConfig;
+pub(crate) use xiuxian_wendao_runtime::config::LinkGraphRelatedRuntimeConfig;

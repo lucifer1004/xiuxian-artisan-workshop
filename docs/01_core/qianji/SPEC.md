@@ -128,7 +128,7 @@ When deciding whether to permanently etch a short-term workaround into Wendao:
 2. **[Node: Critic]**: Injects the `Strict Architecture Auditor` persona. It attacks the summary: "Is this a hack? Does it break Dependency Inversion?"
 3. **[Edge: Probabilistic Feedback]**: Only workarounds that survive the Auditor's critique are allowed to pass to the `Wendao_Ingester` node.
 
-By embedding Qianhuan's template and persona injection directly into the Qianji Node's execution state machine (`Transmuting` phase), we achieve highly structured, self-correcting cognitive loops that can be plugged into _any_ part of the Omni-Dev-Fusion system as an adversarial sub-graph.
+By embedding Qianhuan's template and persona injection directly into the Qianji Node's execution state machine (`Transmuting` phase), we achieve highly structured, self-correcting cognitive loops that can be plugged into _any_ part of the `xiuxian-artisan-workshop` system as an adversarial sub-graph.
 
 ### 6.3 Context Window Management
 

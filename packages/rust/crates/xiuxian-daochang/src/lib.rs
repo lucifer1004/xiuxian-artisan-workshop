@@ -76,9 +76,9 @@ pub use config::{
 };
 pub use contracts::{
     DiscoverConfidence, DiscoverMatch, GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind,
-    GraphWorkflowMode, MemoryGateDecision, MemoryGateVerdict, OmegaDecision, OmegaFallbackPolicy,
-    OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass, RouteTrace, RouteTraceGraphStep,
-    RouteTraceInjection, WorkflowBridgeMode,
+    GraphWorkflowMode, MemoryGateDecision, MemoryGateVerdict, MemoryPromotionTarget, OmegaDecision,
+    OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass, RouteTrace,
+    RouteTraceGraphStep, RouteTraceInjection, WorkflowBridgeMode,
 };
 pub use embedding::EmbeddingClient;
 pub use gateway::{

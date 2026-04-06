@@ -68,6 +68,9 @@ pub mod graph;
 pub mod hmas;
 pub mod kg_cache;
 pub mod link_graph;
+/// Feature-gated thin bridge into Julia-owned memory compute surfaces.
+#[cfg(feature = "julia")]
+pub mod memory;
 pub mod parsers;
 /// Optional Python binding namespace.
 #[cfg(feature = "pybindings")]
@@ -78,6 +81,7 @@ pub mod schemas;
 pub mod search;
 /// Lance/Arrow/Valkey-backed search-plane domain for Studio search corpora.
 pub mod search_plane;
+pub(crate) mod settings;
 pub mod storage;
 pub mod sync;
 pub mod types;

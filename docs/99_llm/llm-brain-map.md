@@ -13,7 +13,7 @@ metadata:
 
 # LLM Brain Map: Understanding Omega Architecture
 
-As an LLM agent, you are the **Cortex** of the Omni-Dev-Fusion system. This map helps you navigate your own functional systems.
+As an LLM agent, you are the **Cortex** of the `xiuxian-artisan-workshop` system. This map helps you navigate your own functional systems.
 
 ## 1. Where You Are (Cortex)
 

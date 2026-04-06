@@ -1,1 +1,1 @@
-pub use xiuxian_wendao_runtime::runtime_config::LinkGraphCoactivationRuntimeConfig;
+pub use xiuxian_wendao_runtime::config::LinkGraphCoactivationRuntimeConfig;

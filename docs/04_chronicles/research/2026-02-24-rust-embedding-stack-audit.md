@@ -20,7 +20,7 @@ This audit is based on:
 
 - Workspace code under `packages/rust/crates/*`
 - Local Cargo source cache for `litellm-rs`:
-  - `/Users/guangtao/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/litellm-rs-0.3.1/`
+  - `$HOME/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/litellm-rs-0.3.1/`
 - Local benchmark artifacts:
   - `/tmp/omni_embed_bench_nocache_1771964244.json`
   - `/tmp/omni_embed_bench_1771964165.json` (cache-affected, not used for final conclusion)
@@ -139,8 +139,8 @@ This is incompatible with generic placeholder-key strategy unless caller bypasse
 ### 3.6 `litellm-rs` Mistral provider is API-provider integration, not `mistralrs` runtime embedding
 
 - `litellm-rs` has a dedicated Mistral provider module:
-  - `/Users/guangtao/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/litellm-rs-0.3.1/src/core/providers/mistral/mod.rs`
-  - `/Users/guangtao/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/litellm-rs-0.3.1/src/core/providers/mistral/embedding.rs`
+  - `$HOME/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/litellm-rs-0.3.1/src/core/providers/mistral/mod.rs`
+  - `$HOME/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/litellm-rs-0.3.1/src/core/providers/mistral/embedding.rs`
 - The provider config defaults to `https://api.mistral.ai/v1` and requires a Mistral API key:
   - `.../providers/mistral/mod.rs:47`
   - `.../providers/mistral/mod.rs:59`

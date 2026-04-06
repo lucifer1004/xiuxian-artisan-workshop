@@ -18,7 +18,7 @@
 //!                             ▼
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                    Rust Layer (Performance Core)           │
-//! │  - Episode Store (LanceDB)                                │
+//! │  - Episode Store (episodic state backend)                 │
 //! │  - Q-Table (Q-Learning)                                   │
 //! │  - Two-Phase Search                                       │
 //! │  - Intent Encoding                                        │
@@ -60,6 +60,7 @@ mod encoder;
 mod episode;
 mod gate;
 mod persistence;
+mod projection;
 mod q_table;
 mod recall_feedback;
 mod schema;
@@ -82,8 +83,9 @@ pub use encoder::IntentEncoder;
 pub use episode::Episode;
 pub use gate::{
     MemoryGateDecision, MemoryGateEvent, MemoryGatePolicy, MemoryGateVerdict, MemoryLifecycleState,
-    MemoryUtilityLedger,
+    MemoryPromotionTarget, MemoryUtilityLedger,
 };
+pub use projection::{MemoryProjectionFilter, MemoryProjectionRow};
 pub use q_table::QTable;
 pub use recall_feedback::{
     RecallFeedbackOutcome, RecallPlanTuning, apply_feedback_to_plan_tuning,
