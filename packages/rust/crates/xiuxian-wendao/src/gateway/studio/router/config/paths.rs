@@ -8,6 +8,23 @@ pub fn studio_wendao_toml_path(config_root: &Path) -> PathBuf {
     config_root.join("wendao.toml")
 }
 
+/// Returns the path to the Studio overlay TOML for the given config root.
+#[must_use]
+pub fn studio_wendao_overlay_toml_path(config_root: &Path) -> PathBuf {
+    config_root.join("wendao.studio.overlay.toml")
+}
+
+/// Returns the effective Wendao TOML path for Studio-aware loading.
+#[must_use]
+pub fn studio_effective_wendao_toml_path(config_root: &Path) -> PathBuf {
+    let overlay_path = studio_wendao_overlay_toml_path(config_root);
+    if overlay_path.is_file() {
+        overlay_path
+    } else {
+        studio_wendao_toml_path(config_root)
+    }
+}
+
 /// Resolves the studio config root directory.
 #[must_use]
 pub fn resolve_studio_config_root(project_root: &Path) -> PathBuf {

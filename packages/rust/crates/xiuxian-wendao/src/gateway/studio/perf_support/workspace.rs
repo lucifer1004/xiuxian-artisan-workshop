@@ -7,9 +7,11 @@ use tokio::time::{Instant, sleep};
 use crate::analyzers::{
     analyze_registered_repository_with_registry, load_repo_intelligence_config,
 };
-use crate::gateway::studio::repo_index::RepoCodeDocument;
-use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
-use crate::gateway::studio::router::{GatewayState, configured_repositories};
+use crate::gateway::studio::router::{
+    GatewayState, configured_repositories, studio_effective_wendao_toml_path,
+};
+use crate::repo_index::RepoCodeDocument;
+use crate::repo_index::RepoIndexStatusResponse;
 
 use crate::gateway::studio::perf_support::root::real_workspace_ready_timeout;
 
@@ -71,7 +73,7 @@ pub(crate) async fn publish_code_search_snapshot(
     state: &Arc<GatewayState>,
     repo_id: &str,
 ) -> Result<()> {
-    let config_path = state.studio.config_root.join("wendao.toml");
+    let config_path = studio_effective_wendao_toml_path(state.studio.config_root.as_path());
     let config = load_repo_intelligence_config(
         Some(config_path.as_path()),
         state.studio.config_root.as_path(),

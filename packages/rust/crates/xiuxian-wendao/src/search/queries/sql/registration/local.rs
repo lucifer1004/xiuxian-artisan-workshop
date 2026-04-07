@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 use xiuxian_vector::SearchEngineContext;
 
 use super::{RegisteredSqlTable, naming};

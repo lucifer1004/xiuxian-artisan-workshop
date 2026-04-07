@@ -8,7 +8,7 @@ use crate::gateway::studio::search::handlers::code_search::{
 };
 use crate::gateway::studio::search::handlers::test_prelude::SearchQuery;
 use crate::search::repo_search::{collect_repo_search_targets, repo_search_parallelism};
-use crate::search_plane::{RepoSearchAvailability, RepoSearchPublicationState};
+use crate::search::{RepoSearchAvailability, RepoSearchPublicationState};
 
 #[test]
 fn parse_code_search_query_extracts_repo_lang_and_kind_filters() {

@@ -12,8 +12,6 @@ mod pathing;
 #[cfg(all(feature = "zhenfa-router", feature = "performance"))]
 pub mod perf_support;
 #[cfg(feature = "zhenfa-router")]
-pub mod repo_index;
-#[cfg(feature = "zhenfa-router")]
 pub mod router;
 #[cfg(feature = "zhenfa-router")]
 pub(crate) mod search;
@@ -23,7 +21,11 @@ pub mod symbol_index;
 mod vfs;
 
 #[cfg(feature = "zhenfa-router")]
-pub use router::{GatewayState, StudioState, studio_router, studio_routes};
+pub use router::{
+    GatewayState, StudioState, load_ui_config_from_wendao_toml, persist_ui_config_to_wendao_toml,
+    resolve_studio_config_root, studio_effective_wendao_toml_path, studio_router, studio_routes,
+    studio_wendao_overlay_toml_path, studio_wendao_toml_path,
+};
 #[cfg(all(feature = "zhenfa-router", test))]
 pub(crate) use search::build_ast_index;
 #[cfg(feature = "zhenfa-router")]

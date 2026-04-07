@@ -23,7 +23,7 @@ use crate::query_core::operators::{
 };
 use crate::query_core::telemetry::WendaoExplainSink;
 use crate::query_core::types::{WendaoQueryCoreError, WendaoRelation};
-use crate::search_plane::{
+use crate::search::{
     SearchPlaneService, search_repo_entity_example_results, search_repo_entity_import_results,
     search_repo_entity_module_results, search_repo_entity_symbol_results,
 };

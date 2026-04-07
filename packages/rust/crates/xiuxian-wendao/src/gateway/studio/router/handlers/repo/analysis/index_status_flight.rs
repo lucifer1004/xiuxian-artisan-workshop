@@ -9,9 +9,9 @@ use xiuxian_wendao_runtime::transport::{
     AnalysisFlightRouteResponse, RepoIndexStatusFlightRouteProvider,
 };
 
-use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
 use crate::gateway::studio::router::GatewayState;
 use crate::gateway::studio::router::handlers::repo::command_service::run_repo_index_status;
+use crate::repo_index::RepoIndexStatusResponse;
 
 #[derive(Clone)]
 pub(crate) struct StudioRepoIndexStatusFlightRouteProvider {
@@ -138,7 +138,7 @@ pub(crate) fn build_repo_index_status_flight_metadata(
         max_concurrency: usize,
         sync_concurrency_limit: usize,
         current_repo_id: Option<String>,
-        repos: &'a [crate::gateway::studio::repo_index::RepoIndexEntryStatus],
+        repos: &'a [crate::repo_index::RepoIndexEntryStatus],
     }
 
     serde_json::to_vec(&RepoIndexStatusFlightMetadata {
@@ -168,7 +168,7 @@ fn encode_i32(value: usize, field: &str) -> Result<i32, String> {
 mod tests {
     use xiuxian_vector::LanceArray;
 
-    use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
+    use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 
     use super::*;
 

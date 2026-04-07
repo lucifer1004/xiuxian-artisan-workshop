@@ -12,7 +12,7 @@ use crate::query_core::operators::{
     GraphDirection, GraphNeighborsOp, PayloadFetchOp, RetrievalCorpus, VectorSearchOp,
 };
 use crate::query_core::types::{WendaoQueryCoreError, WendaoRelation};
-use crate::search_plane::SearchPlaneService;
+use crate::search::SearchPlaneService;
 
 /// Retrieval backend that delegates to the existing Wendao search plane.
 pub struct SearchPlaneRetrievalBackend {

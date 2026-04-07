@@ -4,7 +4,6 @@ use log::info;
 use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::analyzers::registry::PluginRegistry;
-use crate::gateway::studio::repo_index::RepoIndexCoordinator;
 use crate::gateway::studio::router::config::{
     load_ui_config_from_wendao_toml, resolve_studio_config_root,
 };
@@ -12,9 +11,10 @@ use crate::gateway::studio::router::state::types::{GatewayState, StudioState};
 use crate::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use crate::gateway::studio::types::UiConfig;
 use crate::link_graph::LinkGraphIndex;
-use crate::search_plane::SearchPlaneService;
+use crate::repo_index::start_repo_index_coordinator;
+use crate::search::SearchPlaneService;
 #[cfg(test)]
-use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace};
+use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace};
 
 const GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING_ENV: &str =
     "XIUXIAN_WENDAO_GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING";
@@ -49,16 +49,16 @@ impl StudioState {
         search_plane: SearchPlaneService,
         bootstrap_background_indexing: bool,
     ) -> Self {
-        let repo_index = Arc::new(RepoIndexCoordinator::new(
+        let repo_index = start_repo_index_coordinator(
             project_root.clone(),
             Arc::clone(&plugin_registry),
             search_plane.clone(),
-        ));
+        );
         let symbol_index_coordinator = Arc::new(SymbolIndexCoordinator::new(
             project_root.clone(),
             config_root.clone(),
         ));
-        let state = Self {
+        Self {
             project_root,
             config_root,
             bootstrap_background_indexing,
@@ -76,9 +76,7 @@ impl StudioState {
             vfs_scan: Arc::new(std::sync::RwLock::new(None)),
             repo_index,
             plugin_registry,
-        };
-        state.repo_index.start();
-        state
+        }
     }
 
     /// Create a new `StudioState` with default configuration.

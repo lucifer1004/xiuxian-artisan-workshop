@@ -1,3 +1,4 @@
+use super::env::ImportPathContext;
 use super::merge::merge_values;
 use crate::{ArrayMergeStrategy, ConfigCoreError};
 use std::path::{Path, PathBuf};
@@ -5,18 +6,25 @@ use std::path::{Path, PathBuf};
 pub(super) fn load_file_with_imports(
     path: &Path,
     array_merge_strategy: ArrayMergeStrategy,
+    import_context: &ImportPathContext,
 ) -> Result<toml::Value, ConfigCoreError> {
-    let content = std::fs::read_to_string(path).map_err(|source| ConfigCoreError::ReadFile {
+    let raw_toml = std::fs::read_to_string(path).map_err(|source| ConfigCoreError::ReadFile {
         path: path.display().to_string(),
         source,
     })?;
     let value =
-        toml::from_str::<toml::Value>(&content).map_err(|source| ConfigCoreError::ParseFile {
+        toml::from_str::<toml::Value>(&raw_toml).map_err(|source| ConfigCoreError::ParseFile {
             path: path.display().to_string(),
             source,
         })?;
     let mut stack = Vec::new();
-    load_value_with_imports(value, Some(path), array_merge_strategy, &mut stack)
+    load_value_with_imports(
+        value,
+        Some(path),
+        array_merge_strategy,
+        &mut stack,
+        import_context,
+    )
 }
 
 pub(super) fn load_embedded_with_imports(
@@ -24,6 +32,7 @@ pub(super) fn load_embedded_with_imports(
     embedded_toml: &str,
     embedded_source_path: Option<&Path>,
     array_merge_strategy: ArrayMergeStrategy,
+    context: &ImportPathContext,
 ) -> Result<toml::Value, ConfigCoreError> {
     let value = toml::from_str::<toml::Value>(embedded_toml).map_err(|source| {
         ConfigCoreError::ParseEmbedded {
@@ -37,6 +46,7 @@ pub(super) fn load_embedded_with_imports(
         embedded_source_path,
         array_merge_strategy,
         &mut stack,
+        context,
     )
 }
 
@@ -47,7 +57,34 @@ pub(super) fn load_embedded_with_imports(
 /// Returns [`ConfigCoreError`] when the file cannot be read, parsed, or when
 /// import resolution fails.
 pub fn load_toml_value_with_imports(path: &Path) -> Result<toml::Value, ConfigCoreError> {
-    load_file_with_imports(path, ArrayMergeStrategy::Overwrite)
+    let context = ImportPathContext::from_process_environment();
+    load_file_with_imports(path, ArrayMergeStrategy::Overwrite, &context)
+}
+
+/// Load one TOML file and recursively resolve any nested `imports` with
+/// explicit project/config-home path context.
+///
+/// # Errors
+///
+/// Returns [`ConfigCoreError`] when the file cannot be read, parsed, or when
+/// import resolution fails.
+pub fn load_toml_value_with_imports_and_paths(
+    path: &Path,
+    project_root: Option<&Path>,
+    config_home: Option<&Path>,
+) -> Result<toml::Value, ConfigCoreError> {
+    let context = ImportPathContext::from_paths(project_root, config_home);
+    load_file_with_imports(path, ArrayMergeStrategy::Overwrite, &context)
+}
+
+/// Merge one TOML overlay into an existing TOML value using the shared config
+/// merge semantics.
+pub fn merge_toml_values(
+    base: &mut toml::Value,
+    overlay: toml::Value,
+    array_merge_strategy: ArrayMergeStrategy,
+) {
+    merge_values(base, overlay, array_merge_strategy);
 }
 
 fn load_value_with_imports(
@@ -55,10 +92,11 @@ fn load_value_with_imports(
     source_path: Option<&Path>,
     array_merge_strategy: ArrayMergeStrategy,
     stack: &mut Vec<PathBuf>,
+    context: &ImportPathContext,
 ) -> Result<toml::Value, ConfigCoreError> {
     match value {
         toml::Value::Table(table) => {
-            load_table_with_imports(table, source_path, array_merge_strategy, stack)
+            load_table_with_imports(table, source_path, array_merge_strategy, stack, context)
         }
         toml::Value::Array(values) => {
             let mut resolved = Vec::with_capacity(values.len());
@@ -68,6 +106,7 @@ fn load_value_with_imports(
                     source_path,
                     array_merge_strategy,
                     stack,
+                    context,
                 )?);
             }
             Ok(toml::Value::Array(resolved))
@@ -81,18 +120,21 @@ fn load_table_with_imports(
     source_path: Option<&Path>,
     array_merge_strategy: ArrayMergeStrategy,
     stack: &mut Vec<PathBuf>,
+    context: &ImportPathContext,
 ) -> Result<toml::Value, ConfigCoreError> {
-    let import_paths = extract_import_paths(&mut table, source_path)?;
+    let import_paths = extract_import_paths(&mut table, source_path, context)?;
     let mut merged = toml::Value::Table(toml::map::Map::new());
 
     for import_path in import_paths {
-        let imported = load_imported_value(import_path.as_path(), array_merge_strategy, stack)?;
+        let imported =
+            load_imported_value(import_path.as_path(), array_merge_strategy, stack, context)?;
         merge_values(&mut merged, imported, array_merge_strategy);
     }
 
     let mut resolved_table = toml::map::Map::new();
     for (key, value) in table {
-        let resolved = load_value_with_imports(value, source_path, array_merge_strategy, stack)?;
+        let resolved =
+            load_value_with_imports(value, source_path, array_merge_strategy, stack, context)?;
         resolved_table.insert(key, resolved);
     }
     merge_values(
@@ -107,6 +149,7 @@ fn load_table_with_imports(
 fn extract_import_paths(
     table: &mut toml::map::Map<String, toml::Value>,
     source_path: Option<&Path>,
+    context: &ImportPathContext,
 ) -> Result<Vec<PathBuf>, ConfigCoreError> {
     let Some(imports_value) = table.remove("imports") else {
         return Ok(Vec::new());
@@ -147,28 +190,18 @@ fn extract_import_paths(
             continue;
         }
 
-        let resolved = resolve_import_path(source_path, trimmed);
+        let resolved = context.resolve_import_path(source_path, trimmed)?;
         import_paths.push(resolved);
     }
 
     Ok(import_paths)
 }
 
-fn resolve_import_path(source_path: Option<&Path>, import_path: &str) -> PathBuf {
-    let candidate = Path::new(import_path);
-    if candidate.is_absolute() {
-        return candidate.to_path_buf();
-    }
-
-    source_path
-        .and_then(Path::parent)
-        .map_or_else(|| candidate.to_path_buf(), |base| base.join(candidate))
-}
-
 fn load_imported_value(
     path: &Path,
     array_merge_strategy: ArrayMergeStrategy,
     stack: &mut Vec<PathBuf>,
+    import_context: &ImportPathContext,
 ) -> Result<toml::Value, ConfigCoreError> {
     let normalized_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if stack.contains(&normalized_path) {
@@ -183,16 +216,22 @@ fn load_imported_value(
     }
 
     stack.push(normalized_path);
-    let content = std::fs::read_to_string(path).map_err(|source| ConfigCoreError::ReadFile {
+    let raw_toml = std::fs::read_to_string(path).map_err(|source| ConfigCoreError::ReadFile {
         path: path.display().to_string(),
         source,
     })?;
     let value =
-        toml::from_str::<toml::Value>(&content).map_err(|source| ConfigCoreError::ParseFile {
+        toml::from_str::<toml::Value>(&raw_toml).map_err(|source| ConfigCoreError::ParseFile {
             path: path.display().to_string(),
             source,
         })?;
-    let resolved = load_value_with_imports(value, Some(path), array_merge_strategy, stack);
+    let resolved = load_value_with_imports(
+        value,
+        Some(path),
+        array_merge_strategy,
+        stack,
+        import_context,
+    );
     stack.pop();
     resolved
 }

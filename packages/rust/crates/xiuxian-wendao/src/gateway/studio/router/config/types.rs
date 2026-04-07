@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct WendaoTomlConfig {
     #[serde(default)]
+    pub(crate) imports: Vec<String>,
+    #[serde(default)]
     pub(crate) gateway: WendaoTomlGatewayConfig,
     #[serde(default)]
     pub(crate) link_graph: WendaoTomlLinkGraphConfig,

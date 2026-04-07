@@ -45,9 +45,10 @@ The **Qianji** engine is derived from the synthesis of four foundational researc
 
 ---
 
-## 3. The "Rust-Hard, Python-Thin" Philosophy
+## 3. The "Rust-Hard, Host-Thin" Philosophy
 
-In the Qianji architecture, Python is reduced to a "thin slice" glue layer.
+In the Qianji architecture, host integrations are reduced to a thin glue layer.
+The `xiuxian-qianji` crate no longer exposes an in-crate PyO3 module surface.
 
 ### 3.1 Responsibilities
 
@@ -56,9 +57,10 @@ In the Qianji architecture, Python is reduced to a "thin slice" glue layer.
   - Compiles the `petgraph` execution DAG.
   - Manages parallel `tokio` execution of Knowledge (Wendao) and Annotation (Qianhuan) nodes.
   - Performs LTL Safety Audits to prevent deadlocks and infinite loops.
-- **Python (The Glue):**
-  - Calls `qianji.run(context_json)`.
-  - Handles final UI presentation of the results.
+- **Host Integrations (The Glue):**
+  - Launch the native Qianji runtime through the CLI or higher-level host
+    adapters.
+  - Handle final UI presentation of the results.
 
 ---
 

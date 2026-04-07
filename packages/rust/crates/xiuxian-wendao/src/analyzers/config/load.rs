@@ -1,7 +1,7 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::analyzers::errors::RepoIntelligenceError;
+use xiuxian_config_core::load_toml_value_with_imports;
 
 use super::parse::{
     normalize_path, parse_refresh_policy, parse_repository_plugins, parse_repository_ref,
@@ -19,14 +19,17 @@ pub fn load_repo_intelligence_config(
     cwd: &Path,
 ) -> Result<RepoIntelligenceConfig, RepoIntelligenceError> {
     let config_path = config_path.map_or_else(|| cwd.join("wendao.toml"), Path::to_path_buf);
-    let contents =
-        fs::read_to_string(&config_path).map_err(|error| RepoIntelligenceError::ConfigLoad {
+    let merged = load_toml_value_with_imports(config_path.as_path()).map_err(|error| {
+        RepoIntelligenceError::ConfigLoad {
             message: format!("failed to read `{}`: {error}", config_path.display()),
-        })?;
+        }
+    })?;
     let parsed: WendaoTomlConfig =
-        toml::from_str(&contents).map_err(|error| RepoIntelligenceError::ConfigLoad {
-            message: format!("failed to parse `{}`: {error}", config_path.display()),
-        })?;
+        merged
+            .try_into()
+            .map_err(|error| RepoIntelligenceError::ConfigLoad {
+                message: format!("failed to parse `{}`: {error}", config_path.display()),
+            })?;
 
     let config_root = config_path
         .parent()

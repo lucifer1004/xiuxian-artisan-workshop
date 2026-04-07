@@ -101,16 +101,61 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - a direct `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY=1` vs `2` first-minute A/B sample now shows no material throughput regression or failure burst at the default `2` ceiling: `sync=1` reached `46 ready / 3 unsupported / 0 failed` at `t+60s`, while `sync=2` reached `45 ready / 3 unsupported / 0 failed` over the same window
   - later gateway pressure work exposed one more gap in that model: the request-path repo analysis and repo sync endpoints were still bypassing the repo-index remote-sync semaphore, so managed-remote overview/module/symbol/example/page requests could add extra upstream fetch pressure on top of the background lane
   - the request path now shares the same remote-sync semaphore through `RepoIndexCoordinator`, so managed-remote repo overview/search/sync traffic and the background repo-index lane are capped by one common concurrency budget instead of two unrelated ones
-  - the default remote-sync ceiling is now aligned with the more conservative real-workspace result: `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY` still overrides the budget, but the default baseline is now `1` rather than `2` to prioritize GitHub transport stability and ready-ratio recovery under heavy mixed gateway load
+  - the default remote-sync ceiling was temporarily reduced to `1` while transport pressure and stuck-sync recovery were still unsettled, but `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY` continued to override that budget for explicit operator tuning
+  - repo-index implementation ownership now lives at `src/repo_index/`, and
+    the transport layer no longer owns coordinator startup either:
+    `GatewayState` and performance helpers now consume a crate-level
+    repo-index bootstrap seam instead of calling
+    `RepoIndexCoordinator::new(...).start()` directly under `src/gateway/studio/`
   - the next live `96`-concurrency gateway pressure run shifted the dominant failure mode again: local-corpus cold starts were largely gone, but repo sync and managed git access started failing with `Too many open files`, `failed to resolve address`, and upstream socket exhaustion instead
   - repo-index retry classification now treats descriptor pressure and resolver transport failures as retryable even when they arrive through `InvalidRepositoryPath` wrappers, which keeps one bounded retry path available for `Too many open files` and DNS-resolution spikes instead of immediately pinning the repo in `Failed`
   - managed checkout lock acquisition now treats `EMFILE` / `Too many open files` as transient pressure, waiting within the existing bounded lock window instead of failing immediately when the process briefly exhausts descriptors
   - managed mirror/opened-checkout bootstrap now also retries `Repository::open_bare(...)` and `Repository::open(...)` for descriptor-pressure failures with a short bounded backoff, which hardens the exact repo-intelligence path that the pressure benchmark surfaced
   - the remaining three `unsupported` rows (`StokesDiffEq.jl`, `SundialsBuilder`, `TensorFlowDiffEq.jl`) now consistently classify as expected Julia-layout misses with `missing Project.toml`, not transient sync/network failures
   - the `177` live repo-index total against `.data/wendao-frontend/wendao.toml` is now explained: the config contains `179` `link_graph.projects.*` entries, but `kernel` and `main` are link-graph-only local projects with `plugins = []`, so they are intentionally excluded from repo-index registration
+  - the new real-workspace live audit surface now confirms the current short-window bottleneck is no longer an immediate transport-failure burst: with both `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY=1` and `=2`, the first `15s` sample window stayed at `failed=0` while all `177` audited repos classified as `managed_remote`
+  - that same audit also exposed why throughput was collapsing: startup fanout briefly reached multi-repo activity, but `targetConcurrency` dropped back to `1` within the first `5s` because unsupported Julia-layout repos were still feeding the same adaptive failure path as true runtime pressure
+  - the repo-index task lane now routes scheduler success feedback through a dedicated sync/admission `control_elapsed` metric and ignores structural repo failures such as `UnsupportedRepositoryLayout` when adjusting adaptive concurrency, so long indexing tasks and expected `missing Project.toml` rows no longer count as transport pressure
+  - the corresponding real-workspace follow-up audit now holds `targetConcurrency=4`, `active=4`, and `indexing=4` by `t+10s` on `.data/wendao-frontend`, draining `queued` from `174` to `157` instead of collapsing back to one long-lived `Sundials.jl` worker
+  - the performance audit helper now also supports a bounded full-workspace mode with per-sample live logs for `completed`, `deltaCompleted`, queue phase counts, current repo IDs, and unsupported/failed reason buckets, so large live runs no longer fail as opaque long-running tests
+  - the first full-workspace proof target `gateway_perf_audits_real_workspace_repo_index_full_run_live` completed the current `.data/wendao-frontend` `177`-repo inventory in `101s` with the then-default `syncLimit=1`, reaching terminal state with `160 ready`, `17 unsupported`, `0 failed`, and `timedOut=false`
+  - the next full-run A/B proof then showed the dedicated remote-sync budget had become the real ceiling: re-running the same `177` repos with `syncLimit=2` dropped terminal time to `61-65s` while preserving the same final result (`160 ready`, `17 unsupported`, `0 failed`)
+  - the next scaling slice then exposed the remaining admission bug: higher budgets such as `8` were not losing to `gix` transport directly, but to a Wendao-local adaptive controller heuristic that compared higher-concurrency syncs against the fastest low-concurrency baseline and misclassified ordinary large-repo variance as `io_pressure`
+  - repo-index performance telemetry now records controller-side `reference_limit`, `io_pressure_streak`, last adjustment reason, and control-timing snapshots in the live audit output, so large ignored live tests now explain whether throughput loss comes from true transport pressure or Wendao-local admission logic
+  - the adaptive controller now resets its baseline when it moves to a new concurrency tier and requires sustained I/O-pressure observations before halving concurrency, which removes the earlier false `contracted_io_pressure` collapse under `syncLimit=8`
+  - the new scaling matrix on the real `.data/wendao-frontend` `177`-repo inventory is now:
+    `syncLimit=1 -> 101s`, `syncLimit=2 -> 61-65s`,
+    `syncLimit=8 -> 55-56s`, `syncLimit=16 -> 66s`
+  - the repo-index default sync ceiling is therefore now machine-aware rather than a frozen literal: Wendao derives `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY` from `available_parallelism()` with a bounded policy, which still yields the empirically best `8` on the current `12`-core host while preserving operator override control through the same env var
+  - the repo-index sync worker timeout is now machine-aware under the same policy surface instead of staying pinned to one static `120s` default, so higher-parallelism hosts start from a wider remote-sync budget without giving up the explicit `XIUXIAN_WENDAO_REPO_INDEX_SYNC_TIMEOUT_SECS` override
+  - the remaining repo-index policy knobs are now machine-aware too: analysis timeout no longer stays pinned to a fixed `45s`, and retryable sync failures no longer stop after one frozen requeue by default; the current `12`-core host now resolves to `analysisTimeout=60s` and `syncRetryBudget=2`, while `XIUXIAN_WENDAO_REPO_INDEX_ANALYSIS_TIMEOUT_SECS` and `XIUXIAN_WENDAO_REPO_INDEX_SYNC_REQUEUE_ATTEMPTS` remain explicit operator overrides
+  - the full real-workspace proof stays healthy after closing those last static defaults: with the current default machine-aware policy surface, the `177` managed repos in `.data/wendao-frontend` now again reach terminal state in `66s` with `160 ready`, `17 unsupported`, `0 failed`, and the live audit logs now print `analysisTimeout=60s`, `syncTimeout=120s`, and `syncRetryBudget=2` at run start and completion
   - repo-index phase reporting now marks repositories as `Syncing` only after a sync permit is acquired, so `/api/repo/index/status` no longer overstates concurrent remote sync pressure while tasks are still waiting in the coordinator
+  - `xiuxian-git-repo` managed remote clone/fetch/probe paths now run through a dedicated `gix` interrupt watchdog, and the default watchdog budget also scales with host parallelism instead of staying pinned to one static `45s` literal; transport stalls still surface as deterministic `timed out` sync failures, and `XIUXIAN_GIT_REPO_REMOTE_OPERATION_TIMEOUT_SECS` remains the highest-precedence operator override
+  - the remaining fixed substrate retry/open defaults are now machine-aware too: `xiuxian-git-repo` derives managed remote retry attempts, git-open retry attempts, git-open retry delay, and checkout-lock retry delay from host parallelism instead of frozen literals, while preserving explicit operator control through `XIUXIAN_GIT_REPO_MANAGED_REMOTE_RETRY_ATTEMPTS`, `XIUXIAN_GIT_REPO_MANAGED_GIT_OPEN_RETRY_ATTEMPTS`, `XIUXIAN_GIT_REPO_MANAGED_GIT_OPEN_RETRY_DELAY_MS`, and `XIUXIAN_GIT_REPO_CHECKOUT_LOCK_RETRY_DELAY_MS`
+  - the current `12`-core host therefore keeps the already-proven substrate defaults (`remoteRetries=3`, `gitOpenRetries=5`, `gitOpenRetryDelay=100ms`, `checkoutLockRetryDelay=100ms`) without baking those numbers back into code, while smaller and larger hosts now scale to lighter or heavier retry/open defaults through the same policy seam
+  - the Studio repo-index runtime now also applies `XIUXIAN_WENDAO_REPO_INDEX_SYNC_TIMEOUT_SECS` (default `120`) as a final worker-level guard and releases active repo ownership when a sync worker times out or panics, so one wedged managed remote no longer leaves the queue frozen at one long-lived `Syncing` repo with the remaining inventory stuck in `Queued`
+  - the bounded-recovery lane now also has fast unit coverage for the normal success path on both helpers, proving the watchdog and sync-completion guards return well before their timeout budgets instead of quietly adding steady-state latency
+  - repo-index restart warm-start is now backed by persisted repo-corpus state instead of in-process memory only: bootstrap recovery now checks in-memory rows first, then the Valkey snapshot, then the local JSON snapshot, then Valkey per-repo records, and finally local JSON per-repo records before it falls back to re-enqueue
+  - managed-remote restart hydration is now publication-first when the persisted repo-backed rows are still readable: if both corpora already expose readable Parquet publications, repo-index restores `Ready` without forcing an immediate requeue just because the current mirror or checkout assets are missing or stale
+  - repo-search/query cache reuse is already Valkey-backed through `SearchPlaneCache`, and that runtime now resolves `search.cache.*` from merged `wendao.toml` before it falls back to `XIUXIAN_WENDAO_SEARCH_PLANE_VALKEY_URL`, `XIUXIAN_WENDAO_KNOWLEDGE_VALKEY_URL`, `VALKEY_URL`, or `REDIS_URL`; the real `.data/wendao-frontend/wendao.toml` now declares `search.cache.valkey_url`, so live gateway proofs no longer depend on ad-hoc shell env wiring just to enable cross-restart cache hits
+  - repo-index ownership no longer sits under `src/gateway/studio/`: the implementation tree now lives under `src/repo_index/`, while Studio router/state code consumes the crate-owned module instead of declaring itself the owner of queue coordination, sync orchestration, and repo status synthesis
   - `/api/repo/index/status` now also exposes `syncConcurrencyLimit`, so Studio and live debugging can distinguish the dedicated remote-sync semaphore from the broader adaptive `targetConcurrency` used for indexing work
   - the bundled gateway route inventory and `OpenAPI` artifact now explicitly document both `POST /api/repo/index` and `GET /api/repo/index/status`, so repo-index status payload changes no longer sit outside the checked-in contract surface
+  - the coordinator lifecycle now composes `tokio_util::sync::CancellationToken` and `tokio_util::task::TaskTracker` instead of hand-rolled `AtomicBool + JoinHandle` shutdown ownership, keeping queue semantics stable while moving cancellation/task tracking onto mature runtime primitives
+  - the repo-index and performance-support targets stay green after that lifecycle cut, and the latest two full live proofs on the real `.data/wendao-frontend` `177`-repo inventory still terminate cleanly in `63s` and `67s` with `160 ready`, `17 unsupported`, and `0 failed`
+  - that newer evidence sharpened the next performance target, and the first bounded follow-up is now landed: search-plane cache persists revision-scoped repo publication rows keyed by `(corpus, repo, source_revision)`, and repo-index currentness now consults that revision-scoped Valkey path before deciding a managed remote must be reindexed
+  - the new revision-scoped reuse proof now covers the case where the latest repo/corpus row has already advanced from `rev-1` to `rev-2`: a later managed-remote sync at `rev-1` can still reuse the older readable publication instead of being forced into a full fresh index just because the latest pointer moved forward
+  - that revision-keyed cache seam is now bounded instead of append-only: search-plane keeps a retained revision index per `(corpus, repo)`, trims older revision-scoped publication rows with `XIUXIAN_WENDAO_SEARCH_PLANE_REPO_REVISION_RETENTION` (default `32`), and clears retained revision entries through the same repo-publication cache maintenance path
+  - the new retention regressions now prove both the cache and repo-index sides of that maintenance path: revision-scoped entries disappear after retention overflow, and repo-index currentness no longer reuses a revision once it has been evicted from the retained cache window
+  - repo-index currentness now also prefers the latest readable repo-corpus record before falling back to retained revision-scoped publication rows, so cold revision-cache state can still short-circuit directly on the persisted Parquet publication that already matches the synced git revision
+  - the newest focused regressions cover the full fast-path seam: one repo-index runtime test proves managed remotes reuse the latest persisted publication even after the revision cache is cleared, one publication/cache test proves readable publication lookup can recover from the latest record alone, and one cache-level test proves deleting revision-scoped entries does not wipe the latest repo-corpus record
+  - analyzer cache identity is now also narrower than raw git revision identity: `RepositoryAnalysisCacheKey` keeps checkout/mirror/tracking revisions as observational metadata, but cache equality and Valkey lookup now hinge on a conservative `analysis_identity` fingerprint for analysis-affecting inputs
+  - that fingerprint is mode-aware instead of hashing the whole checkout blindly: Julia `Project.toml` and `src/**/*.jl` participate by contents, Julia `README*`, `docs/**/*.md`, `examples/**/*.jl`, and `test/**/*.jl` participate by path only; Modelica `.mo` and `package.order` participate by contents, while `README*` and UsersGuide text docs participate by path only
+  - the new cache/service regressions now prove the intended incremental shape: non-affecting revision churn can reuse cached analysis across commits, while Julia source changes still invalidate the analyzer cache and trigger a fresh analysis pass
+  - repo-index now also consumes real git revision diffs through `xiuxian-git-repo` instead of treating every new revision as full-reindex work: non-code churn can advance repo-backed publication revisions without reanalysis, non-analysis-affecting code/doc churn can reuse the previous cached analysis snapshot, and only conflict-like diffs still force a full reindex
+  - the first bounded partial-analysis path is intentionally conservative and Julia-only: safe leaf edits under `src/**/*.jl` now merge into the previous analysis base, while deleted analysis-affecting paths, missing cached bases, mixed-plugin repos, and import/include/module-shape edits still fall back to full reindex
+  - focused runtime/publication proofs now pin those three outcomes directly: `RefreshOnly` for non-code churn, cached-analysis reuse for example churn, and partial Julia merge for safe leaf-source changes
   - the same `repo sync` payload is now exposed through the studio gateway at `GET /api/repo/sync?repo=<id>&mode=<ensure|refresh|status>`, and the bundled OpenAPI artifact now documents that route for downstream consumers
   - `repo overview` is now also exposed through the studio gateway at `GET /api/repo/overview?repo=<id>`, so external agent callers can consume the normalized overview counts without shelling out to the CLI
   - `repo module-search` is now also exposed through the studio gateway at `GET /api/repo/module-search?repo=<id>&query=<text>&limit=<n>`, returning normalized module rows from the existing Repo Intelligence service path
@@ -203,7 +248,7 @@ active performance-landing ExecPlan rather than this persistent roadmap note.
 
 Its execution contract is:
 
-- keep repo gateway search on the current analyzer path for this slice instead of migrating onto `search_plane`
+- keep repo gateway search on the current analyzer path for this slice instead of widening the owner-path migration
 - add reusable analyzer-derived `RepositorySearchArtifacts` and per-endpoint query caches so `/api/repo/module-search`, `/api/repo/symbol-search`, `/api/repo/example-search`, and `/api/repo/projected-page-search` stop rebuilding Tantivy indexes per request
 - upgrade the shared Tantivy search layer toward multi-field exact/prefix/fuzzy recall, code-aware tokenization, lightweight hit rehydration, and bounded rescoring
 - preserve the current repo gateway HTTP contracts while aligning semantic search assumptions with the canonical Flight contract `/search/intent`
@@ -224,14 +269,17 @@ Initial execution for that slice is now landed:
   `RepositorySearchArtifacts` once per cached analysis identity and then reuse
   those search indexes plus a second-layer query-result cache for repeated
   requests
-- the semantic search lane stayed on the current `search_plane` path for that
+- the semantic search lane stayed on the current `search` runtime path for that
   slice, but the long-term contract is now the Flight route `/search/intent`
   rather than a Studio HTTP search endpoint
 - the blocking modularity regressions in
-  `src/search_plane/service/tests/mod.rs` and
+  `src/search/service/tests/mod.rs` and
   `src/zhenfa_router/native/semantic_check/docs_governance/tests/mod.rs` were
   cleaned up by moving helper logic into dedicated `support.rs` modules and
   keeping `mod.rs` interface-only
+- the owner-path cut is now also landed: `src/search/` is the sole search
+  implementation root, `src/search_plane/` is gone, and repo-index/query-core/
+  gateway callers now import `crate::search`
 - the gateway perf suite now uses runner-aware warm-cache budgets instead of
   placeholder thresholds. The current workstation-safe local profile is:
   - `repo_module_search`: `p95 <= 1.25ms`, `qps >= 500`
@@ -322,6 +370,27 @@ rust-wendao-performance-gate` expands into
   a single wall-clock sample, which keeps `cargo test --lib` and
   `cargo nextest` stable under normal concurrent test scheduling while still
   enforcing the bootstrap budget
+- real-workspace repo-index perf support now also owns a mixed gateway-load
+  proof under `tests/performance/support/repo_index_audit/`, so the `177+`
+  repo workspace can be audited while concurrent repo-backed gateway queries
+  are in flight instead of treating repo-index status as the whole system
+- that mixed-load proof first probes candidate repo-backed URIs and only
+  replays the ones that return `200 OK`, while logging skipped probes
+  explicitly. This prevents fixed `409 Conflict` capability mismatches from
+  being misclassified as transport or queue regressions during the stress run
+- the latest real `.data/wendao-frontend` mixed-load proof completed in `62s`
+  with `177 total`, `160 ready`, `17 unsupported`, `0 failed`, while
+  `6` query workers at `6ms` pause issued `291` successful gateway requests
+  against the accepted query mix
+- the same proof also exposed one real product-shape constraint: the bootstrap
+  probe for
+  `/api/repo/projected-page-search?repo=TestPackage&query=solve&kind=reference&limit=5`
+  returned `409 Conflict`, so the route is now logged as a skipped mixed-load
+  candidate instead of polluting the gateway query failure count
+- per-sample live logs now include gateway-side query totals, `p95`/max
+  latency, busiest URI, and last error alongside repo-index queue progress, so
+  the next optimization slice can distinguish transport pressure from query
+  latency pressure without another ad hoc probe pass
 
 ## Open Constraint
 

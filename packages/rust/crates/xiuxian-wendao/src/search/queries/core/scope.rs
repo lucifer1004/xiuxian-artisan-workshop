@@ -1,7 +1,7 @@
 use xiuxian_vector::SearchEngineContext;
 
+use crate::search::SearchPlaneService;
 use crate::search::queries::sql::registration::{SqlQuerySurface, register_sql_query_surface};
-use crate::search_plane::SearchPlaneService;
 
 /// Shared request-scoped query core over the visible search-plane data.
 pub(crate) struct QueryCore {

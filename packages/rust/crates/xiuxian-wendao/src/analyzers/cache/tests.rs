@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
 use std::path::PathBuf;
 
 use super::{
     RepositoryAnalysisCacheKey, RepositorySearchArtifacts, RepositorySearchQueryCacheKey,
-    build_repository_analysis_cache_key, load_cached_repository_search_artifacts,
-    load_cached_repository_search_result, store_cached_repository_search_artifacts,
+    build_repository_analysis_cache_key, load_cached_repository_analysis_for_revision,
+    load_cached_repository_search_artifacts, load_cached_repository_search_result,
+    store_cached_repository_analysis, store_cached_repository_search_artifacts,
     store_cached_repository_search_result,
 };
 use crate::analyzers::config::{
@@ -30,6 +32,7 @@ fn sample_analysis_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
     RepositoryAnalysisCacheKey {
         repo_id: repo_id.to_string(),
         checkout_root: format!("/virtual/{repo_id}"),
+        analysis_identity: format!("analysis:{repo_id}"),
         checkout_revision: Some("rev-1".to_string()),
         mirror_revision: Some("mirror-1".to_string()),
         tracking_revision: Some("tracking-1".to_string()),
@@ -88,7 +91,128 @@ fn build_repository_analysis_cache_key_sorts_and_deduplicates_plugin_ids() {
         key.plugin_ids,
         vec!["plugin-a".to_string(), "plugin-z".to_string()]
     );
+    assert!(!key.analysis_identity.is_empty());
     assert_eq!(key.checkout_revision, Some("rev-1".to_string()));
+}
+
+#[test]
+fn build_repository_analysis_cache_key_reuses_julia_identity_for_non_affecting_churn() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::write(
+        tempdir.path().join("Project.toml"),
+        "name = \"CacheKeyDemo\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write Project.toml: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/CacheKeyDemo.jl"),
+        "module CacheKeyDemo\nend\n",
+    )
+    .unwrap_or_else(|error| panic!("write Julia source: {error}"));
+    fs::write(tempdir.path().join("notes.txt"), "first note\n")
+        .unwrap_or_else(|error| panic!("write notes: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("julia".to_string())],
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_metadata = Some(LocalCheckoutMetadata {
+        revision: Some("rev-1".to_string()),
+        remote_url: None,
+    });
+    let first_key =
+        build_repository_analysis_cache_key(&repository, &source, first_metadata.as_ref());
+
+    fs::write(
+        tempdir.path().join("notes.txt"),
+        "second note that should stay non-affecting\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite notes: {error}"));
+    let second_metadata = Some(LocalCheckoutMetadata {
+        revision: Some("rev-2".to_string()),
+        remote_url: None,
+    });
+    let second_key =
+        build_repository_analysis_cache_key(&repository, &source, second_metadata.as_ref());
+
+    assert_eq!(first_key.analysis_identity, second_key.analysis_identity);
+    assert_eq!(first_key, second_key);
+    assert_ne!(first_key.checkout_revision, second_key.checkout_revision);
+}
+
+#[test]
+fn build_repository_analysis_cache_key_invalidates_on_julia_source_change() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::write(
+        tempdir.path().join("Project.toml"),
+        "name = \"CacheKeyDemo\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write Project.toml: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/CacheKeyDemo.jl");
+    fs::write(&source_path, "module CacheKeyDemo\nend\n")
+        .unwrap_or_else(|error| panic!("write Julia source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-change".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("julia".to_string())],
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &source_path,
+        "module CacheKeyDemo\nconst CACHE_KEY_VERSION = 2\nend\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Julia source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_ne!(first_key.analysis_identity, second_key.analysis_identity);
 }
 
 #[test]
@@ -107,6 +231,36 @@ fn repository_search_artifacts_cache_roundtrip_uses_analysis_identity() {
     );
 
     assert!(std::sync::Arc::ptr_eq(&stored, &loaded));
+}
+
+#[test]
+fn repository_analysis_cache_can_recover_previous_revision_base() {
+    let key = sample_analysis_key("revision-base-roundtrip");
+    let analysis = crate::analyzers::RepositoryAnalysisOutput {
+        modules: vec![crate::analyzers::ModuleRecord {
+            repo_id: key.repo_id.clone(),
+            module_id: "module:alpha".to_string(),
+            qualified_name: "Alpha".to_string(),
+            path: "src/lib.rs".to_string(),
+        }],
+        ..crate::analyzers::RepositoryAnalysisOutput::default()
+    };
+
+    ok_or_panic(
+        store_cached_repository_analysis(key.clone(), &analysis),
+        "store analysis cache",
+    );
+    let loaded = ok_or_panic(
+        load_cached_repository_analysis_for_revision(
+            key.repo_id.as_str(),
+            key.checkout_root.as_str(),
+            key.plugin_ids.as_slice(),
+            "rev-1",
+        ),
+        "load analysis cache by revision",
+    );
+
+    assert_eq!(loaded, Some(analysis));
 }
 
 #[test]

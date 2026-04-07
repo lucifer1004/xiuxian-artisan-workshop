@@ -36,6 +36,7 @@ jobs:
 
       - uses: ./.github/actions/common-setup
         with:
+          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
@@ -58,6 +59,7 @@ jobs:
 
       - uses: ./.github/actions/common-setup
         with:
+          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
@@ -80,6 +82,7 @@ jobs:
 
       - uses: ./.github/actions/common-setup
         with:
+          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
@@ -102,6 +105,7 @@ jobs:
 
       - uses: ./.github/actions/common-setup
         with:
+          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
@@ -171,6 +175,7 @@ jobs:
 
       - uses: ./.github/actions/common-setup
         with:
+          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 
@@ -407,6 +412,7 @@ jobs:
 
       - uses: ./.github/actions/common-setup
         with:
+          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
 

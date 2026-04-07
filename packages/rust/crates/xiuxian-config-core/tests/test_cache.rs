@@ -51,10 +51,10 @@ fn resolve_skills_applies_user_overlay() {
     write_text(
         root.join(".config/xiuxian-artisan-workshop/skills.toml")
             .as_path(),
-        r#"
+        r"
 [validation]
 strict_mode = false
-"#,
+",
     );
 
     let merged = resolve_skills(&root, skills_spec());

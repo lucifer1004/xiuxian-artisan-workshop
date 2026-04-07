@@ -10,7 +10,7 @@ use crate::search::queries::sql::tests::fixtures::{
     bool_column_values, fixture_service, nullable_string_column_values, publish_reference_hits,
     sample_hit, string_column_values, u64_column_values,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 #[tokio::test]
 async fn studio_sql_flight_provider_exposes_registered_tables_catalog() {

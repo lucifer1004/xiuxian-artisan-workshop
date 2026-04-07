@@ -9,5 +9,8 @@ mod tests;
 mod types;
 
 pub use load::load_ui_config_from_wendao_toml;
-pub use paths::{resolve_studio_config_root, studio_wendao_toml_path};
+pub use paths::{
+    resolve_studio_config_root, studio_effective_wendao_toml_path, studio_wendao_overlay_toml_path,
+    studio_wendao_toml_path,
+};
 pub use persist::persist_ui_config_to_wendao_toml;

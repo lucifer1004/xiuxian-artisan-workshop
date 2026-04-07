@@ -7,10 +7,10 @@ use xiuxian_wendao_runtime::transport::{
 };
 
 use super::service::build_studio_search_flight_service_with_repo_provider;
-use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::repo_index::RepoCodeDocument;
+use crate::search::SearchPlaneService;
 use crate::search::repo_search::search_repo_content_batch;
-use crate::search_plane::SearchPlaneService;
 
 /// Runtime-backed repo-search Flight provider that reads from the Wendao search plane.
 #[derive(Clone)]
@@ -325,14 +325,12 @@ mod tests {
         build_studio_flight_service_for_roots,
     };
     use crate::analyzers::bootstrap_builtin_registry;
-    use crate::gateway::studio::repo_index::RepoCodeDocument;
     use crate::gateway::studio::router::{GatewayState, StudioState};
     use crate::gateway::studio::search::build_symbol_index;
     use crate::gateway::studio::test_support::init_git_repository;
     use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
-    use crate::search_plane::{
-        SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
-    };
+    use crate::repo_index::RepoCodeDocument;
+    use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
     #[cfg(feature = "julia")]
     use xiuxian_wendao_runtime::transport::{
         ANALYSIS_CODE_AST_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_REPO_HEADER,

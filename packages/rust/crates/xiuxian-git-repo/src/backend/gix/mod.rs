@@ -3,10 +3,12 @@ mod clone;
 mod constants;
 mod error;
 mod fetch;
+mod interrupt;
 mod open;
 mod probe;
 mod remote;
 mod retry;
+mod tuning;
 mod types;
 
 #[cfg(test)]

@@ -15,11 +15,44 @@ use crate::gateway::studio::perf_support::workspace::{
     publish_code_search_snapshot, warm_real_workspace_search_plane,
 };
 use crate::gateway::studio::router::studio_router;
+use crate::repo_index::repo_index_policy_debug_snapshot;
 
 /// Prepared Studio gateway fixture for performance tests.
 pub struct GatewayPerfFixture {
     root: GatewayPerfRoot,
     state: Arc<crate::gateway::studio::router::GatewayState>,
+}
+
+/// One controller-side concurrency snapshot captured alongside repo-index
+/// performance audit samples.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GatewayRepoIndexControllerDebugSnapshot {
+    /// Current controller target concurrency.
+    pub target_concurrency: usize,
+    /// Maximum controller ceiling derived from host parallelism.
+    pub max_concurrency: usize,
+    /// Number of successive stable completions at the current limit.
+    pub success_streak: usize,
+    /// Concurrency limit currently used by the baseline reference.
+    pub reference_limit: usize,
+    /// Number of consecutive I/O pressure observations at the current limit.
+    pub io_pressure_streak: usize,
+    /// Exponential moving average of sync control elapsed time in milliseconds.
+    pub ema_elapsed_ms: Option<u64>,
+    /// Rolling baseline used to detect sustained sync I/O pressure.
+    pub baseline_elapsed_ms: Option<u64>,
+    /// Most recent sync control elapsed time in milliseconds.
+    pub last_elapsed_ms: Option<u64>,
+    /// Ratio between current and previous efficiency, expressed as a percent.
+    pub last_efficiency_ratio_pct: Option<u64>,
+    /// Last controller adjustment reason recorded by the adaptive loop.
+    pub last_adjustment: String,
+    /// Effective analysis timeout used by the repo-index runtime.
+    pub analysis_timeout_secs: u64,
+    /// Effective sync timeout used by the repo-index runtime.
+    pub sync_timeout_secs: u64,
+    /// Effective retry budget for retryable sync failures.
+    pub sync_retry_budget: usize,
 }
 
 impl GatewayPerfFixture {
@@ -32,6 +65,28 @@ impl GatewayPerfFixture {
     #[must_use]
     pub fn state(&self) -> Arc<crate::gateway::studio::router::GatewayState> {
         Arc::clone(&self.state)
+    }
+
+    /// Return one repo-index controller debug snapshot for performance probes.
+    #[must_use]
+    pub fn repo_index_controller_debug_snapshot(&self) -> GatewayRepoIndexControllerDebugSnapshot {
+        let snapshot = self.state.studio.repo_index.controller_debug_snapshot();
+        let policy = repo_index_policy_debug_snapshot();
+        GatewayRepoIndexControllerDebugSnapshot {
+            target_concurrency: snapshot.current_limit,
+            max_concurrency: snapshot.max_limit,
+            success_streak: snapshot.success_streak,
+            reference_limit: snapshot.reference_limit,
+            io_pressure_streak: snapshot.io_pressure_streak,
+            ema_elapsed_ms: snapshot.ema_elapsed_ms,
+            baseline_elapsed_ms: snapshot.baseline_elapsed_ms,
+            last_elapsed_ms: snapshot.last_elapsed_ms,
+            last_efficiency_ratio_pct: snapshot.last_efficiency_ratio_pct,
+            last_adjustment: snapshot.last_adjustment.as_str().to_string(),
+            analysis_timeout_secs: policy.analysis_timeout_secs,
+            sync_timeout_secs: policy.sync_timeout_secs,
+            sync_retry_budget: policy.sync_retry_budget,
+        }
     }
 
     /// Return the temporary project root backing this fixture.

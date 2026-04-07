@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use tokio::task::JoinSet;
 
 use crate::gateway::studio::types::SearchHit;
-use crate::search_plane::SearchPlaneService;
+use crate::search::SearchPlaneService;
 
 use super::dispatch::{RepoSearchTarget, repo_search_parallelism};
 use super::entity::search_repo_entity_hits_for_query;
@@ -26,7 +26,7 @@ use crate::query_core::{
     InMemoryWendaoExplainSink, RepoCodeQueryRequest, RetrievalCorpus, query_repo_code_relation,
 };
 #[cfg(test)]
-use crate::search_plane::SearchCorpusKind;
+use crate::search::SearchCorpusKind;
 
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

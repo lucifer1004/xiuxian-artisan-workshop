@@ -16,10 +16,10 @@ use crate::analyzers::{
     ExampleRecord, ImportKind, ImportRecord, ModuleRecord, RepoSymbolKind,
     RepositoryAnalysisOutput, SymbolRecord,
 };
-use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::gateway::studio::types::{AstSearchHit, ReferenceSearchHit, StudioNavigationTarget};
+use crate::repo_index::RepoCodeDocument;
 use crate::search::queries::sql::provider::metadata::StudioSqlFlightMetadata;
-use crate::search_plane::{
+use crate::search::{
     BeginBuildDecision, SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace,
     SearchPlaneService, reference_occurrence_batches, reference_occurrence_schema,
 };

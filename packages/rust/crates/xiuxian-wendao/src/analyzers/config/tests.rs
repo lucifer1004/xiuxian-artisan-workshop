@@ -112,3 +112,33 @@ plugins = ["julia"]
     );
     Ok(())
 }
+
+#[test]
+fn load_repo_intelligence_config_reads_overlay_importing_base() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = temp.path().join("repos").join("sample");
+    fs::create_dir_all(&repo_dir)?;
+    let config_path = temp.path().join("wendao.toml");
+    let overlay_path = temp.path().join("wendao.studio.overlay.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.projects.sample]
+root = "repos/sample"
+plugins = ["julia"]
+"#,
+    )?;
+    fs::write(
+        &overlay_path,
+        r#"imports = ["wendao.toml"]
+
+[link_graph.projects.sample]
+refresh = "manual"
+"#,
+    )?;
+
+    let config = load_repo_intelligence_config(Some(&overlay_path), temp.path())?;
+    assert_eq!(config.repos.len(), 1);
+    assert_eq!(config.repos[0].refresh, RepositoryRefreshPolicy::Manual);
+    assert_eq!(config.repos[0].path.as_deref(), Some(repo_dir.as_path()));
+    Ok(())
+}

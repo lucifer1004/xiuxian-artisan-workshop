@@ -8,7 +8,7 @@ use crate::search::queries::sql::tests::fixtures::{
     fixture_service, nullable_string_column_values, publish_repo_entities, string_column_values,
     u64_column_values,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 #[tokio::test]
 async fn studio_sql_flight_provider_queries_repo_entity_logical_view_across_repos() {

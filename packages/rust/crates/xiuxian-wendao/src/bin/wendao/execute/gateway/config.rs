@@ -1,44 +1,52 @@
 //! Gateway configuration resolution.
 
-use std::fs;
-use std::io::Read;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use log::info;
+use serde::Deserialize;
+use xiuxian_config_core::load_toml_value_with_imports;
+use xiuxian_wendao::gateway::studio::studio_effective_wendao_toml_path;
 use xiuxian_zhenfa::WebhookConfig;
 
 use crate::execute::gateway::shared::DEFAULT_PORT;
 
-/// Resolve the config file from CLI override, local project file, or `PRJ_ROOT`.
+/// Resolve the effective config file from CLI override, local project file, or
+/// `PRJ_ROOT`.
 pub(crate) fn resolve_config_path(cli_config: Option<&Path>) -> Option<PathBuf> {
+    let project_root = std::env::var_os("PRJ_ROOT").map(PathBuf::from);
+    resolve_config_path_with_project_root(cli_config, project_root.as_deref())
+}
+
+fn resolve_config_path_with_project_root(
+    cli_config: Option<&Path>,
+    project_root: Option<&Path>,
+) -> Option<PathBuf> {
     if let Some(path) = cli_config {
-        return Some(path.to_path_buf());
+        return Some(resolve_effective_config_path(path));
     }
 
     let local_config = Path::new("wendao.toml");
     if local_config.exists() {
-        return Some(local_config.to_path_buf());
+        return Some(resolve_effective_config_path(local_config));
     }
 
-    let config_path = std::env::var("PRJ_ROOT")
-        .ok()
-        .map(|root| Path::new(&root).join("wendao.toml"))?;
-    config_path.exists().then_some(config_path)
+    let config_path = project_root.map(|root| root.join("wendao.toml"))?;
+    config_path
+        .exists()
+        .then(|| resolve_effective_config_path(config_path.as_path()))
 }
 
 /// Resolve the port from CLI arg, config file, or default.
 pub(crate) fn resolve_port(cli_port: Option<u16>, config_path: Option<&Path>) -> u16 {
-    // CLI arg takes highest priority
     if let Some(port) = cli_port {
         return port;
     }
 
-    // Try config file
     if let Some(config_port) = get_port_from_config(config_path) {
         return config_port;
     }
 
-    // Default
     DEFAULT_PORT
 }
 
@@ -49,36 +57,16 @@ pub(crate) fn get_port_from_config(config_path: Option<&Path>) -> Option<u16> {
 
 /// Parse port from a TOML config file.
 pub(crate) fn parse_port_from_toml(path: &Path) -> Option<u16> {
-    let mut file = fs::File::open(path).ok()?;
-    let mut content = String::new();
-    file.read_to_string(&mut content).ok()?;
-
-    // Parse [gateway] section for port
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with("port") {
-            // Parse: port = 9517 or port = "9517"
-            if let Some(eq_pos) = line.find('=') {
-                let value = line[eq_pos + 1..].trim().trim_matches('"');
-                if let Ok(port) = value.parse::<u16>() {
-                    return Some(port);
-                }
-            }
-        }
-    }
-
-    None
+    load_gateway_toml(path).and_then(|config| config.gateway.port())
 }
 
 /// Resolve webhook config with priority: TOML > env var > defaults.
 pub(crate) fn resolve_webhook_config(config_path: Option<&Path>) -> WebhookConfig {
-    // Try TOML config first (highest priority)
     if let Some(config) = get_webhook_from_config(config_path) {
         info!("Gateway: Using webhook config from wendao.toml");
         return config;
     }
 
-    // Fall back to environment variables
     let url = std::env::var("WENDAO_WEBHOOK_URL").unwrap_or_default();
     if !url.is_empty() {
         info!("Gateway: Using webhook config from WENDAO_WEBHOOK_URL env var");
@@ -99,64 +87,150 @@ pub(crate) fn get_webhook_from_config(config_path: Option<&Path>) -> Option<Webh
 
 /// Parse webhook config from a TOML config file.
 pub(crate) fn parse_webhook_from_toml(path: &Path) -> Option<WebhookConfig> {
-    let mut file = fs::File::open(path).ok()?;
-    let mut content = String::new();
-    file.read_to_string(&mut content).ok()?;
+    load_gateway_toml(path).and_then(|config| config.gateway.webhook_config())
+}
 
-    let mut url = None;
-    let mut secret = None;
-    let mut enabled = true;
-
-    // Parse [gateway] section for webhook settings
-    let mut in_gateway_section = false;
-    for line in content.lines() {
-        let line = line.trim();
-
-        // Track section
-        if line == "[gateway]" {
-            in_gateway_section = true;
-            continue;
-        } else if line.starts_with('[') && line.ends_with(']') {
-            in_gateway_section = false;
-            continue;
-        }
-
-        if !in_gateway_section {
-            continue;
-        }
-
-        // Parse settings
-        if line.starts_with("webhook_url") {
-            if let Some(eq_pos) = line.find('=') {
-                let value = line[eq_pos + 1..].trim().trim_matches('"');
-                if !value.is_empty() && !value.starts_with('#') {
-                    url = Some(value.to_string());
-                }
-            }
-        } else if line.starts_with("webhook_secret") {
-            if let Some(eq_pos) = line.find('=') {
-                let value = line[eq_pos + 1..].trim().trim_matches('"');
-                if !value.is_empty() {
-                    secret = Some(value.to_string());
-                }
-            }
-        } else if line.starts_with("webhook_enabled")
-            && let Some(eq_pos) = line.find('=')
-        {
-            let value = line[eq_pos + 1..].trim();
-            enabled = value.eq_ignore_ascii_case("true");
-        }
+fn resolve_effective_config_path(path: &Path) -> PathBuf {
+    let Some(file_name) = path.file_name() else {
+        return path.to_path_buf();
+    };
+    if file_name != "wendao.toml" {
+        return path.to_path_buf();
     }
 
-    if !enabled {
-        return None;
+    let Some(config_root) = path.parent() else {
+        return path.to_path_buf();
+    };
+    let effective_path = studio_effective_wendao_toml_path(config_root);
+    if effective_path.is_file() {
+        effective_path
+    } else {
+        path.to_path_buf()
+    }
+}
+
+fn load_gateway_toml(path: &Path) -> Option<GatewayTomlConfig> {
+    let merged = load_toml_value_with_imports(path).ok()?;
+    merged.try_into().ok()
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct GatewayTomlConfig {
+    #[serde(default)]
+    gateway: GatewayTomlSection,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct GatewayTomlSection {
+    #[serde(default)]
+    bind: Option<String>,
+    #[serde(default)]
+    port: Option<u16>,
+    #[serde(default)]
+    webhook_url: Option<String>,
+    #[serde(default)]
+    webhook_secret: Option<String>,
+    #[serde(default)]
+    webhook_enabled: Option<bool>,
+}
+
+impl GatewayTomlSection {
+    fn port(&self) -> Option<u16> {
+        self.port
+            .or_else(|| self.bind.as_deref().and_then(parse_bind_port))
     }
 
-    // Only return config if URL was found
-    url.map(|u| WebhookConfig {
-        url: u,
-        secret,
-        timeout_secs: 10,
-        retry_on_failure: true,
-    })
+    fn webhook_config(&self) -> Option<WebhookConfig> {
+        if self.webhook_enabled == Some(false) {
+            return None;
+        }
+
+        self.webhook_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|url| WebhookConfig {
+                url: url.to_string(),
+                secret: self
+                    .webhook_secret
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string),
+                timeout_secs: 10,
+                retry_on_failure: true,
+            })
+    }
+}
+
+fn parse_bind_port(bind: &str) -> Option<u16> {
+    bind.parse::<SocketAddr>()
+        .ok()
+        .map(|address| address.port())
+        .or_else(|| {
+            bind.rsplit_once(':')
+                .and_then(|(_, port)| port.trim().parse::<u16>().ok())
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        parse_port_from_toml, parse_webhook_from_toml, resolve_config_path,
+        resolve_config_path_with_project_root,
+    };
+    use std::fs;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn resolve_config_path_prefers_studio_overlay_when_present() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let base_path = temp.path().join("wendao.toml");
+        let overlay_path = temp.path().join("wendao.studio.overlay.toml");
+        fs::write(&base_path, "[gateway]\nport = 9517\n")?;
+        fs::write(
+            &overlay_path,
+            "imports = [\"wendao.toml\"]\n[gateway]\nport = 9610\n",
+        )?;
+
+        let resolved = resolve_config_path(Some(base_path.as_path()))
+            .unwrap_or_else(|| panic!("effective config path should resolve"));
+        assert_eq!(resolved, overlay_path);
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_config_path_falls_back_to_prj_root_wendao_toml() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace_path = temp.path();
+        let base_path = workspace_path.join("wendao.toml");
+        fs::write(&base_path, "[gateway]\nport = 9517\n")?;
+
+        let resolved = resolve_config_path_with_project_root(None, Some(workspace_path))
+            .unwrap_or_else(|| panic!("PRJ_ROOT config path should resolve"));
+        assert_eq!(resolved, base_path);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_gateway_config_from_overlay_imports() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let base_path = temp.path().join("wendao.toml");
+        let overlay_path = temp.path().join("wendao.studio.overlay.toml");
+        fs::write(
+            &base_path,
+            "[gateway]\nport = 9517\nwebhook_url = \"http://127.0.0.1:9000/base\"\n",
+        )?;
+        fs::write(
+            &overlay_path,
+            "imports = [\"wendao.toml\"]\n[gateway]\nport = 9610\nwebhook_url = \"http://127.0.0.1:9000/overlay\"\n",
+        )?;
+
+        assert_eq!(parse_port_from_toml(&overlay_path), Some(9610));
+        let webhook = parse_webhook_from_toml(&overlay_path)
+            .unwrap_or_else(|| panic!("webhook config should resolve from overlay"));
+        assert_eq!(webhook.url, "http://127.0.0.1:9000/overlay");
+        Ok(())
+    }
 }

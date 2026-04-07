@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 use crate::gateway::studio::search::handlers::code_search::search::build_code_search_response_with_budget;
 use crate::gateway::studio::search::handlers::tests::{
     publish_repo_entity_index, sample_repo_analysis, test_studio_state,
 };
+use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 
 #[tokio::test]
 async fn build_code_search_response_marks_partial_when_repo_wide_budget_expires() {

@@ -283,11 +283,11 @@ mod tests {
     use std::fs;
     use std::sync::Arc;
 
-    use crate::gateway::studio::repo_index::{
-        RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
-    };
     use crate::gateway::studio::search::handlers::tests::{
         publish_repo_content_chunk_index, test_studio_state,
+    };
+    use crate::repo_index::{
+        RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
     };
     use xiuxian_vector::LanceStringArray;
     use xiuxian_wendao_runtime::transport::{SEARCH_INTENT_ROUTE, SearchFlightRouteProvider};

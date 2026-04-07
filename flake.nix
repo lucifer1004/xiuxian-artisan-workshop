@@ -55,7 +55,7 @@
               };
           }
           inputs.nci.flakeModule
-          ./nix/modules/flake-parts/xiuxian-core-rs.nix
+          ./nix/modules/flake-parts/xiuxian-artisan-workshop-py.nix
           ./nix/modules/flake-parts/xiuxian-artisan-workshop.nix
         ];
       };

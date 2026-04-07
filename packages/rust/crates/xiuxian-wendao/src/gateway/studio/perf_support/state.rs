@@ -7,23 +7,24 @@ use crate::analyzers::{
     RegisteredRepository, RepositoryPluginConfig, RepositoryRef, RepositoryRefreshPolicy,
     bootstrap_builtin_registry, load_repo_intelligence_config,
 };
-use crate::gateway::studio::repo_index::RepoIndexCoordinator;
-use crate::gateway::studio::router::{GatewayState, StudioState, load_ui_config_from_wendao_toml};
+use crate::gateway::studio::router::{
+    GatewayState, StudioState, load_ui_config_from_wendao_toml, studio_effective_wendao_toml_path,
+};
 use crate::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
-use crate::search_plane::SearchPlaneService;
+use crate::repo_index::start_repo_index_coordinator;
+use crate::search::SearchPlaneService;
 
 pub(crate) fn gateway_state_for_project(project_root: &Path) -> Result<Arc<GatewayState>> {
     let config_root = project_root.to_path_buf();
     let ui_config = gateway_ui_config_for_project(config_root.as_path())?;
     let plugin_registry = Arc::new(bootstrap_builtin_registry()?);
     let search_plane = SearchPlaneService::new(project_root.to_path_buf());
-    let repo_index = Arc::new(RepoIndexCoordinator::new(
+    let repo_index = start_repo_index_coordinator(
         project_root.to_path_buf(),
         Arc::clone(&plugin_registry),
         search_plane.clone(),
-    ));
-    repo_index.start();
+    );
 
     let state = Arc::new(GatewayState {
         index: None,
@@ -56,10 +57,8 @@ pub(crate) fn gateway_ui_config_for_project(config_root: &Path) -> Result<UiConf
         return Ok(ui_config);
     }
 
-    let config = load_repo_intelligence_config(
-        Some(config_root.join("wendao.toml").as_path()),
-        config_root,
-    )?;
+    let effective_config_path = studio_effective_wendao_toml_path(config_root);
+    let config = load_repo_intelligence_config(Some(effective_config_path.as_path()), config_root)?;
     ui_config.repo_projects = config
         .repos
         .into_iter()

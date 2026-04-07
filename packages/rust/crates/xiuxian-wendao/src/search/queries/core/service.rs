@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
+use crate::search::SearchPlaneService;
 use crate::search::queries::core::scope::{QueryCore, open_query_core};
-use crate::search_plane::SearchPlaneService;
 
 /// Canonical shared-query service owner above the request-scoped query core.
 #[derive(Clone)]

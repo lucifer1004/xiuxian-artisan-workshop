@@ -6,13 +6,13 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::gateway::studio::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 use crate::gateway::studio::router::handlers::repo::command_service::{
     run_repo_index, run_repo_index_status,
 };
 use crate::gateway::studio::router::{
     GatewayState, StudioApiError, StudioBootstrapBackgroundIndexingTelemetry,
 };
+use crate::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 
 use super::query::RepoIndexStatusApiQuery;
 

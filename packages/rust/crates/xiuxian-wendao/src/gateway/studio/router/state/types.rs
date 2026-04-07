@@ -4,11 +4,11 @@ use std::sync::{Arc, RwLock};
 use serde::Serialize;
 
 use crate::analyzers::registry::PluginRegistry;
-use crate::gateway::studio::repo_index::RepoIndexCoordinator;
 use crate::gateway::studio::symbol_index::{SymbolIndexCoordinator, timestamp_now};
 use crate::gateway::studio::types::UiConfig;
 use crate::link_graph::LinkGraphIndex;
-use crate::search_plane::SearchPlaneService;
+use crate::repo_index::RepoIndexCoordinator;
+use crate::search::SearchPlaneService;
 use crate::unified_symbol::UnifiedSymbolIndex;
 
 use crate::gateway::studio::types::VfsScanResult;

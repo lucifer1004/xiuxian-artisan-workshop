@@ -3,10 +3,10 @@ use std::future::Future;
 use crate::analyzers::cache::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};
 use crate::gateway::studio::router::StudioApiError;
 use crate::search::FuzzySearchOptions;
-use crate::search_plane::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
+use crate::search::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
 
 pub(crate) async fn with_cached_repo_search_result<T, F, Fut>(
-    search_plane: &crate::search_plane::SearchPlaneService,
+    search_plane: &crate::search::SearchPlaneService,
     scope: &'static str,
     repo_id: &str,
     query: &str,
@@ -34,7 +34,7 @@ where
 }
 
 async fn repo_search_cache_key(
-    search_plane: &crate::search_plane::SearchPlaneService,
+    search_plane: &crate::search::SearchPlaneService,
     scope: &'static str,
     repo_id: &str,
     query: &str,

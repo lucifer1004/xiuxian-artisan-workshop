@@ -4,6 +4,7 @@ use gix::remote::Direction;
 use crate::spec::RevisionSelector;
 
 use super::error::{BackendError, error_message};
+use super::interrupt::run_interruptible_remote_operation;
 use super::retry::retry_remote_operation;
 use super::types::RepositoryHandle;
 
@@ -22,22 +23,25 @@ fn probe_remote_target_revision_once(
         return Ok(Some(sha.clone()));
     }
 
-    let remote = repository.find_remote("origin").map_err(error_message)?;
-    let connection = remote.connect(Direction::Fetch).map_err(error_message)?;
-    let (ref_map, _handshake) = connection
-        .ref_map(gix::progress::Discard, remote_probe_options(revision)?)
-        .map_err(error_message)?;
+    run_interruptible_remote_operation("probe remote target revision", |_should_interrupt| {
+        let remote = repository.find_remote("origin").map_err(error_message)?;
+        let connection = remote.connect(Direction::Fetch).map_err(error_message)?;
+        let (ref_map, _handshake) = connection
+            .ref_map(gix::progress::Discard, remote_probe_options(revision)?)
+            .map_err(error_message)?;
 
-    Ok(match revision {
-        Some(RevisionSelector::Branch(branch)) => remote_ref_target_revision(
-            &ref_map.remote_refs,
-            format!("refs/heads/{branch}").as_str(),
-        ),
-        Some(RevisionSelector::Tag(tag)) => {
-            remote_ref_target_revision(&ref_map.remote_refs, format!("refs/tags/{tag}").as_str())
-        }
-        None => default_remote_head_revision(&ref_map.remote_refs),
-        Some(RevisionSelector::Commit(_)) => unreachable!("commit revisions return early"),
+        Ok(match revision {
+            Some(RevisionSelector::Branch(branch)) => remote_ref_target_revision(
+                &ref_map.remote_refs,
+                format!("refs/heads/{branch}").as_str(),
+            ),
+            Some(RevisionSelector::Tag(tag)) => remote_ref_target_revision(
+                &ref_map.remote_refs,
+                format!("refs/tags/{tag}").as_str(),
+            ),
+            None => default_remote_head_revision(&ref_map.remote_refs),
+            Some(RevisionSelector::Commit(_)) => unreachable!("commit revisions return early"),
+        })
     })
 }
 

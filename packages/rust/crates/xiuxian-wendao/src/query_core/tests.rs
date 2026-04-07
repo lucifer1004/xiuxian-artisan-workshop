@@ -9,7 +9,6 @@ use tempfile::tempdir;
 use crate::analyzers::{
     ExampleRecord, ModuleRecord, RepoSymbolKind, RepositoryAnalysisOutput, SymbolRecord,
 };
-use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::gateway::studio::test_support::{assert_wendao_json_snapshot, round_f64};
 use crate::link_graph::LinkGraphIndex;
 use crate::query_core::context::{GraphBackend, RetrievalBackend, WendaoExecutionContext};
@@ -30,7 +29,8 @@ use crate::query_core::{
     WendaoBackendKind, WendaoExplainEvent, WendaoOperatorKind, WendaoQueryCoreError,
     WendaoRelation, explain_events_summary,
 };
-use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
+use crate::repo_index::RepoCodeDocument;
+use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
 
 fn tempdir_or_panic(context: &str) -> tempfile::TempDir {
     tempdir().unwrap_or_else(|error| panic!("{context}: {error}"))

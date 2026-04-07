@@ -1,7 +1,7 @@
 use crate::gateway::studio::types::search_index::{
     SearchIndexQueryTelemetrySource, SearchIndexStatusResponse,
 };
-use crate::search_plane::{
+use crate::search::{
     SearchCorpusKind, SearchCorpusStatus, SearchMaintenanceStatus, SearchPlanePhase,
     SearchPlaneStatusSnapshot, SearchQueryTelemetry, SearchQueryTelemetrySource,
 };

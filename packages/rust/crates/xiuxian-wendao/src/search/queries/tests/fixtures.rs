@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 use crate::gateway::studio::types::{ReferenceSearchHit, StudioNavigationTarget};
-use crate::search_plane::{
+use crate::search::{
     BeginBuildDecision, SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace,
     SearchPlaneService, reference_occurrence_batches, reference_occurrence_schema,
 };

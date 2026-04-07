@@ -1,13 +1,13 @@
 use std::fs;
 use std::sync::Arc;
 
-use crate::gateway::studio::repo_index::{
-    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
-};
 use crate::gateway::studio::search::handlers::code_search::search::build_code_search_response;
 use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
     test_studio_state,
+};
+use crate::repo_index::{
+    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
 };
 
 #[tokio::test]

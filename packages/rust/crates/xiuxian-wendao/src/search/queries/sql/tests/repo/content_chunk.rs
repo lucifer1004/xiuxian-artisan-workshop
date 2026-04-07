@@ -9,7 +9,7 @@ use crate::search::queries::sql::tests::fixtures::{
     fixture_service, nullable_string_column_values, publish_repo_content_chunks, repo_document,
     string_column_values, u64_column_values,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 #[tokio::test]
 async fn studio_sql_flight_provider_queries_repo_content_chunk_with_stable_repo_alias() {

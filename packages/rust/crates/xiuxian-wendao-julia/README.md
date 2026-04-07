@@ -554,6 +554,13 @@ The corresponding test support is now split under `tests/support/plugin/`
 plus `tests/support/memory.rs`, mirroring the same semantic split used by
 `xiuxian-wendao` integration support while keeping helper code out of the
 production `src/` tree.
+The custom WendaoArrow scoring helper in `integration_support/custom_service.rs`
+now also emits its temporary Julia source files under project-cache ownership
+rooted at `PRJ_CACHE_HOME`, and the cache-local namespace under that root is
+declared in
+`resources/integration_support/wendaoarrow_custom_service.toml` instead of
+being hard-coded into the helper itself. It no longer writes numbered scripts
+into the `WendaoArrow.jl` package git tree.
 That official-example layer now includes real `WendaoSearch.jl` structural
 launchers for both `demo` and `solver_demo`, so plugin-owned
 graph-structural fetch helpers can be proven against a live Search child

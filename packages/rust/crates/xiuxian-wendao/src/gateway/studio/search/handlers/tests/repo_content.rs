@@ -1,9 +1,9 @@
-use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::gateway::studio::search::handlers::code_search::search::build_repo_content_search_hits;
 use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, test_studio_state,
 };
-use crate::search_plane::{SearchCorpusKind, SearchQueryTelemetrySource};
+use crate::repo_index::RepoCodeDocument;
+use crate::search::{SearchCorpusKind, SearchQueryTelemetrySource};
 use std::sync::Arc;
 
 #[tokio::test]

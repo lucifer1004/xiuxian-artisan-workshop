@@ -4,6 +4,7 @@ mod analysis;
 mod bootstrap;
 mod cached;
 mod helpers;
+mod incremental;
 mod julia_transport;
 mod merge;
 mod projection;
@@ -27,6 +28,9 @@ pub(crate) use helpers::{
     hierarchy_segments_from_path, import_match_score, infer_ecosystem, module_match_score,
     normalized_rank_score, projection_page_lookup, projection_pages_for, record_hierarchical_uri,
     related_modules_for_example, related_symbols_for_example, symbol_match_score,
+};
+pub(crate) use incremental::{
+    IncrementalApplyContext, analyze_changed_files, apply_incremental_plugin_outputs,
 };
 pub use julia_transport::{
     JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_EMBEDDING_COLUMN,

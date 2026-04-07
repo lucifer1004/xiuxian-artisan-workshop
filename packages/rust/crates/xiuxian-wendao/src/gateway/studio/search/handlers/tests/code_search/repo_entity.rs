@@ -1,8 +1,5 @@
 use std::sync::Arc;
 
-use crate::gateway::studio::repo_index::{
-    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
-};
 use crate::gateway::studio::search::handlers::code_search::search::{
     build_code_search_response, build_repo_entity_search_hits,
 };
@@ -10,7 +7,10 @@ use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
     test_studio_state,
 };
-use crate::search_plane::{SearchCorpusKind, SearchQueryTelemetrySource};
+use crate::repo_index::{
+    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
+};
+use crate::search::{SearchCorpusKind, SearchQueryTelemetrySource};
 
 #[tokio::test]
 async fn build_code_search_response_returns_repo_entity_hits_from_search_plane() {

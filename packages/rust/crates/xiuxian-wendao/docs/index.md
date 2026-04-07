@@ -46,6 +46,7 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 - [[03_features/211_graphql_query_surface]]: First DataFusion-aligned GraphQL table-query adapter over the shared SQL surface.
 - [[03_features/212_flightsql_query_surface]]: First FlightSQL statement-query and sql-info adapter over the shared SQL surface.
 - [[03_features/213_rest_query_surface]]: First thin REST-style request/response adapter over the shared query service.
+- [[03_features/214_config_import_overlay]]: Canonical import-based config merge model for Wendao runtime settings, gateway startup config, and Studio UI overlays.
 
 ## 📁 05_research: Theoretical Hardening
 
@@ -90,5 +91,5 @@ documentation surface.
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-04-05
+:LAST_SYNC: 2026-04-06
 :END:

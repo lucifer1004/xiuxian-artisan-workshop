@@ -22,7 +22,7 @@ pub(crate) fn test_studio_state() -> crate::gateway::studio::router::StudioState
 pub(crate) async fn publish_repo_content_chunk_index(
     studio: &crate::gateway::studio::router::StudioState,
     repo_id: &str,
-    documents: Vec<crate::gateway::studio::repo_index::RepoCodeDocument>,
+    documents: Vec<crate::repo_index::RepoCodeDocument>,
 ) {
     studio
         .search_plane
@@ -77,9 +77,9 @@ pub(crate) fn sample_repo_analysis(repo_id: &str) -> crate::analyzers::Repositor
     }
 }
 
-pub(crate) fn sample_repo_documents() -> Vec<crate::gateway::studio::repo_index::RepoCodeDocument> {
+pub(crate) fn sample_repo_documents() -> Vec<crate::repo_index::RepoCodeDocument> {
     vec![
-        crate::gateway::studio::repo_index::RepoCodeDocument {
+        crate::repo_index::RepoCodeDocument {
             path: "src/BaseModelica.jl".to_string(),
             language: Some("julia".to_string()),
             contents: Arc::<str>::from(
@@ -88,7 +88,7 @@ pub(crate) fn sample_repo_documents() -> Vec<crate::gateway::studio::repo_index:
             size_bytes: 61,
             modified_unix_ms: 10,
         },
-        crate::gateway::studio::repo_index::RepoCodeDocument {
+        crate::repo_index::RepoCodeDocument {
             path: "examples/reexport.jl".to_string(),
             language: Some("julia".to_string()),
             contents: Arc::<str>::from("using BaseModelica\nreexport()\n"),

@@ -83,6 +83,7 @@ fn projected_page_search_with_artifacts_preserves_ranked_results() {
     let cache_key = RepositoryAnalysisCacheKey {
         repo_id: "projection".to_string(),
         checkout_root: "/virtual/repos/projection".to_string(),
+        analysis_identity: "analysis:projection".to_string(),
         checkout_revision: Some("fixture".to_string()),
         mirror_revision: None,
         tracking_revision: None,

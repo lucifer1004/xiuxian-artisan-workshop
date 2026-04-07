@@ -1,5 +1,5 @@
 use crate::gateway::studio::types::search_index::SearchIndexStatusResponse;
-use crate::search_plane::{
+use crate::search::{
     SearchCorpusKind, SearchCorpusStatus, SearchMaintenanceStatus, SearchPlanePhase,
     SearchPlaneStatusSnapshot,
 };

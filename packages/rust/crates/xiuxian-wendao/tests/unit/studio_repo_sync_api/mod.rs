@@ -20,14 +20,14 @@ use xiuxian_wendao::analyzers::{
     load_repo_intelligence_config, repo_projected_page_index_trees_from_config,
     repo_projected_pages_from_config,
 };
-use xiuxian_wendao::gateway::studio::repo_index::RepoCodeDocument;
-use xiuxian_wendao::gateway::studio::repo_index::{RepoIndexCoordinator, RepoIndexRequest};
 use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::{
     add_git_remote, assert_studio_json_snapshot, commit_all, init_git_repository,
 };
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
-use xiuxian_wendao::search_plane::{SearchPlaneService, publish_repo_entities};
+use xiuxian_wendao::repo_index::RepoCodeDocument;
+use xiuxian_wendao::repo_index::{RepoIndexCoordinator, RepoIndexRequest};
+use xiuxian_wendao::search::{SearchPlaneService, publish_repo_entities};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -3750,7 +3750,7 @@ fn gateway_state_for_project_with_options(
     let repo_index = Arc::new(RepoIndexCoordinator::new(
         project_root.to_path_buf(),
         Arc::clone(&plugin_registry),
-        xiuxian_wendao::search_plane::SearchPlaneService::new(project_root.to_path_buf()),
+        xiuxian_wendao::search::SearchPlaneService::new(project_root.to_path_buf()),
     ));
     if start_repo_index {
         repo_index.start();

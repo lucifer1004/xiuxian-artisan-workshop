@@ -9,7 +9,7 @@ use crate::query_core::{
     InMemoryWendaoExplainSink, RepoRetrievalQuery, WendaoExplainEvent, WendaoOperatorKind,
     WendaoRelation, query_repo_entity_relation,
 };
-use crate::search_plane::{
+use crate::search::{
     SearchCorpusKind, SearchPlaneService, SearchQueryTelemetry, SearchQueryTelemetrySource,
 };
 

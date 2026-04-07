@@ -29,6 +29,31 @@ pub fn load_cached_repository_analysis(
         .map(|cache| cache.get(key).cloned())
 }
 
+/// Loads a cached analysis result by revision lookup when the analysis
+/// identity has already changed.
+///
+/// # Errors
+///
+/// Returns an error when the in-memory cache lock is poisoned.
+pub fn load_cached_repository_analysis_for_revision(
+    repo_id: &str,
+    checkout_root: &str,
+    plugin_ids: &[String],
+    revision: &str,
+) -> Result<Option<RepositoryAnalysisOutput>, RepoIntelligenceError> {
+    repository_analysis_cache()
+        .lock()
+        .map_err(|_| RepoIntelligenceError::AnalysisFailed {
+            message: "repository analysis cache lock is poisoned".to_string(),
+        })
+        .map(|cache| {
+            cache.iter().find_map(|(key, output)| {
+                key.matches_revision_lookup(repo_id, checkout_root, plugin_ids, revision)
+                    .then_some(output.clone())
+            })
+        })
+}
+
 /// Stores an analysis result in the cache.
 ///
 /// # Errors

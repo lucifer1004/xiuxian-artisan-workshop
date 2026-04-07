@@ -1,5 +1,6 @@
 pub(crate) mod gateway;
 mod link_graph;
+pub(crate) mod repo_index_audit;
 
 pub(crate) use link_graph::{
     RELATED_LIMIT, RELATED_MAX_DISTANCE, build_index, default_ppr_options, env_f64, env_u64,

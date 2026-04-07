@@ -1,6 +1,7 @@
 { __inputs__, ... }:
 let
-  gatewayConfig = "packages/rust/crates/xiuxian-wendao/wendao.toml";
+  gatewayConfig = "wendao.toml";
+  gatewayPortResolver = "scripts/channel/resolve_wendao_gateway_port.py";
   gatewayTargetDir = ".cache/cargo-target/wendao-gateway-process-compose";
   gatewayRuntimeDir = ".run/wendao-gateway";
   gatewayPidFile = "${gatewayRuntimeDir}/wendao.pid";
@@ -8,6 +9,8 @@ let
   gatewayStdoutLog = "${gatewayLogDir}/wendao-gateway.stdout.log";
   gatewayStderrLog = "${gatewayLogDir}/wendao-gateway.stderr.log";
   sentinelTargetDir = ".cache/cargo-target/wendao-sentinel-process-compose";
+  sentinelRuntimeDir = ".run/wendao-sentinel";
+  sentinelPidFile = "${sentinelRuntimeDir}/wendao-sentinel.pid";
   valkeyDataDir = ".data/valkey";
   valkeyRuntimeDir = ".run/valkey";
   valkeyPidFile = "${valkeyRuntimeDir}/valkey.pid";
@@ -16,10 +19,8 @@ let
   wendaosearchRuntimeDir = ".run/wendaosearch";
   wendaosearchLogDir = ".run/logs";
   wendaosearchSolverDemoConfig = ".data/WendaoSearch.jl/config/live/solver_demo.toml";
-  wendaosearchSolverDemoStdoutLog =
-    "${wendaosearchLogDir}/wendaosearch-solver-demo.stdout.log";
-  wendaosearchSolverDemoStderrLog =
-    "${wendaosearchLogDir}/wendaosearch-solver-demo.stderr.log";
+  wendaosearchSolverDemoStdoutLog = "${wendaosearchLogDir}/wendaosearch-solver-demo.stdout.log";
+  wendaosearchSolverDemoStderrLog = "${wendaosearchLogDir}/wendaosearch-solver-demo.stderr.log";
 in
 {
   packages = [
@@ -70,12 +71,14 @@ in
     # Wendao Phase 7.6 Integrated Services
     wendao-gateway = {
       exec = ''
+        ROOT_DIR="$PRJ_ROOT"
+        GATEWAY_CONFIG="$ROOT_DIR/${gatewayConfig}"
         mkdir -p ${gatewayRuntimeDir} ${gatewayLogDir}
         rm -f ${gatewayPidFile}
         export CARGO_TARGET_DIR=${gatewayTargetDir}
         export VALKEY_URL=redis://127.0.0.1:6379/0
         cargo build -p xiuxian-wendao --bin wendao --locked
-        ${gatewayTargetDir}/debug/wendao --conf ${gatewayConfig} gateway start \
+        ${gatewayTargetDir}/debug/wendao --conf "$GATEWAY_CONFIG" gateway start \
           > >(tee -a ${gatewayStdoutLog}) \
           2> >(tee -a ${gatewayStderrLog} >&2) &
         GATEWAY_CHILD_PID=$!
@@ -90,31 +93,18 @@ in
         };
         readiness_probe = {
           exec.command = ''
-            PIDFILE=${gatewayPidFile}
+            ROOT_DIR="$PRJ_ROOT"
+            PIDFILE="$ROOT_DIR/${gatewayPidFile}"
             if [ ! -s "$PIDFILE" ]; then
               exit 1
             fi
-
-            EXPECTED_PID="$(cat "$PIDFILE")"
-            PORT=$(awk -F= '/^[[:space:]]*port[[:space:]]*=/{gsub(/[[:space:]"]/, "", $2); print $2; exit}' ${gatewayConfig})
-            if [ -z "$PORT" ]; then
-              PORT=9517
-            fi
-
-            RESPONSE="$(
-              curl -sS --max-time 2 -D - -o /dev/null "http://127.0.0.1:$PORT/api/health"
-            )" || exit 1
-
-            HTTP_STATUS="$(printf '%s\n' "$RESPONSE" | awk 'NR == 1 { print $2; exit }')"
-            ACTUAL_PID="$(printf '%s\n' "$RESPONSE" | awk -F': ' 'tolower($1) == "x-wendao-process-id" { gsub(/[[:space:]\r]/, "", $2); print $2; exit }')"
-            FLIGHT_STATUS="$(
-              curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -X POST \
-                "http://127.0.0.1:$PORT/arrow.flight.protocol.FlightService/GetFlightInfo"
-            )" || exit 1
-
-            if [ "$HTTP_STATUS" != "200" ] || [ -z "$ACTUAL_PID" ] || [ "$ACTUAL_PID" != "$EXPECTED_PID" ] || [ "$FLIGHT_STATUS" = "404" ] || [ "$FLIGHT_STATUS" = "000" ]; then
-              exit 1
-            fi
+            GATEWAY_CONFIG="$ROOT_DIR/${gatewayConfig}"
+            PORT="$(python3 "$ROOT_DIR/${gatewayPortResolver}" --config "$GATEWAY_CONFIG")" || exit 1
+            python3 "$ROOT_DIR/scripts/channel/check_wendao_gateway_health.py" \
+              --host 127.0.0.1 \
+              --port "$PORT" \
+              --pidfile "$PIDFILE" \
+              --timeout-secs 2 >/dev/null
           '';
           initial_delay_seconds = 60;
           period_seconds = 5;
@@ -125,10 +115,40 @@ in
     };
 
     wendao-sentinel = {
-      exec = "CARGO_TARGET_DIR=${sentinelTargetDir} VALKEY_URL=redis://127.0.0.1:6379/0 cargo run -p xiuxian-wendao -- --conf ${gatewayConfig} sentinel watch";
+      exec = ''
+        ROOT_DIR="$PRJ_ROOT"
+        GATEWAY_CONFIG="$ROOT_DIR/${gatewayConfig}"
+        SENTINEL_RUNTIME_DIR="$ROOT_DIR/${sentinelRuntimeDir}"
+        SENTINEL_PIDFILE="$ROOT_DIR/${sentinelPidFile}"
+        mkdir -p "$SENTINEL_RUNTIME_DIR"
+        rm -f "$SENTINEL_PIDFILE"
+        export CARGO_TARGET_DIR=${sentinelTargetDir}
+        export VALKEY_URL=redis://127.0.0.1:6379/0
+        cargo build -p xiuxian-wendao --bin wendao --locked
+        ${sentinelTargetDir}/debug/wendao --conf "$GATEWAY_CONFIG" sentinel watch &
+        SENTINEL_CHILD_PID=$!
+        printf '%s\n' "$SENTINEL_CHILD_PID" > "$SENTINEL_PIDFILE"
+        trap 'kill "$SENTINEL_CHILD_PID" 2>/dev/null || true' TERM INT
+        wait "$SENTINEL_CHILD_PID"
+      '';
       process-compose = {
         depends_on = {
           wendao-gateway.condition = "process_healthy";
+        };
+        readiness_probe = {
+          exec.command = ''
+            ROOT_DIR="$PRJ_ROOT"
+            GATEWAY_CONFIG="$ROOT_DIR/${gatewayConfig}"
+            SENTINEL_PIDFILE="$ROOT_DIR/${sentinelPidFile}"
+            python3 "$ROOT_DIR/scripts/channel/check_wendao_sentinel_health.py" \
+              --project-root "$ROOT_DIR" \
+              --config "$GATEWAY_CONFIG" \
+              --pidfile "$SENTINEL_PIDFILE" >/dev/null
+          '';
+          initial_delay_seconds = 10;
+          period_seconds = 5;
+          timeout_seconds = 2;
+          failure_threshold = 12;
         };
       };
     };

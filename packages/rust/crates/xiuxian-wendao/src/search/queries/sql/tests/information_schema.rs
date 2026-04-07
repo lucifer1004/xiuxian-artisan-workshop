@@ -7,7 +7,7 @@ use crate::search::queries::sql::registration::{
 use crate::search::queries::sql::tests::fixtures::{
     fixture_service, publish_reference_hits, sample_hit, string_column_values,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 #[tokio::test]
 async fn studio_sql_flight_provider_supports_information_schema_tables() {

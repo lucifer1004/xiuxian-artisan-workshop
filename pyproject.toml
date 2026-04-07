@@ -1,5 +1,5 @@
 [project]
-name = "xiuxian-artisan-workshop"
+name = "xiuxian-artisan-workshop-py"
 description = "Native agentic OS kernel: orchestrator, executor, and tool runtime"
 readme = "README.md"
 requires-python = ">=3.13"

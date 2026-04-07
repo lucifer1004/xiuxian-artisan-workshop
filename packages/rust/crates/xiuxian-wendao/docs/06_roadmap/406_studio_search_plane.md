@@ -8,7 +8,7 @@ Replace Studio request-path search hot spots with a background-built search plan
 
 - unify Lance and Arrow dependency ownership under `xiuxian-vector`
 - add reusable columnar table APIs in `xiuxian-vector`
-- introduce `xiuxian_wendao::search_plane`
+- consolidate the search-plane runtime under `xiuxian_wendao::search`
 - expose Studio search index lifecycle through `/api/search/index/status`
 - migrate Studio search handlers away from direct AST cache construction
 
@@ -33,9 +33,9 @@ Replace Studio request-path search hot spots with a background-built search plan
   Flight-only business contracts
 - `analyzers/config.rs` is now split into `analyzers/config/` with dedicated types, TOML schema, parse, load, and tests modules, while the repo-intelligence config surface remains unchanged; the next bounded target is `search/tantivy/index.rs`
 - `search/tantivy/index.rs` is now split into `search/tantivy/index/` with dedicated core, exact, prefix, fuzzy, and helper modules, while the shared Tantivy search surface remains unchanged; the next bounded target is `analyzers/service/helpers/tests.rs`
-- `analyzers/service/helpers/tests.rs` is now split into `analyzers/service/helpers/tests/` with dedicated fixture and themed assertion modules, while the helpers test surface remains unchanged; the next bounded target is `search_plane/local_symbol/query/shared.rs`
-- `search_plane/reference_occurrence/query.rs` is now split into `search_plane/reference_occurrence/query/` with dedicated search, candidates, decode, and tests modules, while the reference-occurrence search surface remains unchanged; the next bounded target is `search_plane/repo_entity/build/tests.rs`
-- `search_plane/service/core/construction.rs` is now split into `search_plane/service/core/construction/` with dedicated runtime, paths, concurrency, and tests modules, while the public `SearchPlaneService` construction surface remains unchanged; the next bounded target is `gateway/studio/router/handlers/repo/analysis/search.rs`
+- `analyzers/service/helpers/tests.rs` is now split into `analyzers/service/helpers/tests/` with dedicated fixture and themed assertion modules, while the helpers test surface remains unchanged; the next bounded target is `search/local_symbol/query/shared.rs`
+- `search/reference_occurrence/query.rs` is now split into `search/reference_occurrence/query/` with dedicated search, candidates, decode, and tests modules, while the reference-occurrence search surface remains unchanged; the next bounded target is `search/repo_entity/build/tests.rs`
+- `search/service/core/construction.rs` is now split into `search/service/core/construction/` with dedicated runtime, paths, concurrency, and tests modules, while the public `SearchPlaneService` construction surface remains unchanged; the next bounded target is `gateway/studio/router/handlers/repo/analysis/search.rs`
 - `gateway/studio/router/handlers/repo/analysis/search.rs` is now split into `gateway/studio/router/handlers/repo/analysis/search/` with dedicated cache, publication, module, symbol, example, and tests modules, while the repo-analysis handler surface remains unchanged; the next bounded target is `zhenfa_router/native/section_create.rs`
 - `zhenfa_router/native/section_create.rs` is now split into `zhenfa_router/native/section_create/` with dedicated types, insertion, building, and tests modules, while the section-creation surface remains unchanged; the next bounded target is `analyzers/query/docs/planner.rs`
 - `gateway/studio/router/code_ast.rs` is now split into `gateway/studio/router/code_ast/` with dedicated response, resolve, blocks, and atoms modules, while the public code-AST router surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/knowledge/intent.rs`
@@ -52,7 +52,10 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `knowledge_section` now backs `search_knowledge` and non-code `search_intent`, with note body and section text materialized into Lance `search_text`
 - non-code `search_intent` now merges `knowledge_section`, `local_symbol`, and repo-content hits into a single hybrid response path instead of treating intent as a pure knowledge lookup
 - code-biased Studio search now queries `repo_entity` before repo-content fallback, and hybrid intent merges repo-entity hits into the same ranked response path
-- `search_plane::cache` now fronts repeat autocomplete, knowledge, non-repo intent, repo-scoped code search, and code-biased hybrid intent requests with corpus-aware Valkey keys and silent fallback to direct Lance reads when Valkey is unavailable
+- `search::cache` now fronts repeat autocomplete, knowledge, non-repo intent, repo-scoped code search, and code-biased hybrid intent requests with corpus-aware Valkey keys and silent fallback to direct Lance reads when Valkey is unavailable
+- the owner-path retirement is now landed too: `src/search/` is the sole
+  implementation root for the search plane runtime, and the old
+  `src/search_plane/` module has been removed
 - backend-issued markdown display-math atoms now flow through `gateway/studio/analysis/markdown/compile.rs` into `math:block` retrieval atoms, and the markdown waterfall math-slot path is green
 - `gateway/studio/types/search_index.rs` is now split into `gateway/studio/types/search_index/` with dedicated definitions, conversions, status rollups, and a split `tests/` tree (`counts.rs`, `reason.rs`, `mapping.rs`, `summary.rs`), while the public Studio search-index DTO façade remains unchanged
 - `search_plane/service/core/status.rs` is now split into `search_plane/service/core/status/` with dedicated runtime, compaction, repo-status synthesis, and tests, while the public `SearchPlaneService` surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
@@ -731,3 +734,8 @@ Replace Studio request-path search hot spots with a background-built search plan
   explicitly re-applied, and `/api/repo/index/status` now seeds deferred repo
   indexing on first access instead of remaining stuck at `total = 0` with a
   populated repo-project config
+- Studio UI config persistence now also has a stable on-disk contract. The
+  handler persists `UiConfig` into `wendao.studio.overlay.toml`, that wrapper
+  imports the base `wendao.toml`, and gateway bootstrap plus Studio bootstrap
+  both prefer the effective overlay path when it exists. This keeps live UI
+  updates restart-stable without mutating unrelated base gateway settings.

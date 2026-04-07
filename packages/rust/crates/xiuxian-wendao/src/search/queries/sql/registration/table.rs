@@ -1,6 +1,6 @@
 use arrow::datatypes::{DataType, Field};
 
-use crate::search_plane::SearchCorpusKind;
+use crate::search::SearchCorpusKind;
 
 pub(crate) const STUDIO_SQL_CATALOG_TABLE_NAME: &str = "wendao_sql_tables";
 pub(crate) const STUDIO_SQL_COLUMNS_CATALOG_TABLE_NAME: &str = "wendao_sql_columns";

@@ -1,3 +1,4 @@
+use crate::search::SearchCorpusKind;
 use crate::search::queries::SearchQueryService;
 use crate::search::queries::sql::execute_sql_query;
 use crate::search::queries::sql::registration::{
@@ -7,7 +8,6 @@ use crate::search::queries::sql::registration::{
 use crate::search::queries::sql::tests::fixtures::{
     fixture_service, publish_reference_hits, sample_hit,
 };
-use crate::search_plane::SearchCorpusKind;
 
 #[tokio::test]
 async fn sql_query_execution_returns_transport_neutral_payload() {

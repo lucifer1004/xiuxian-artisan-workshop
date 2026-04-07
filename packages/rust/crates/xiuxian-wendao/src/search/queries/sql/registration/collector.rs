@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::search_plane::SearchPlaneService;
+use crate::search::SearchPlaneService;
 use xiuxian_vector::SearchEngineContext;
 
 use super::catalog::{

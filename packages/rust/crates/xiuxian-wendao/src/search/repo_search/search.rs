@@ -4,7 +4,7 @@ use xiuxian_wendao_runtime::transport::RepoSearchFlightRequest;
 use super::batch::repo_search_batch_from_hits;
 use crate::gateway::studio::types::SearchHit;
 use crate::parsers::search::repo_code_query::parse_repo_code_search_query;
-use crate::search_plane::{RepoContentChunkSearchFilters, SearchPlaneService};
+use crate::search::{RepoContentChunkSearchFilters, SearchPlaneService};
 
 pub(crate) async fn search_repo_content_hits_for_query(
     search_plane: &SearchPlaneService,

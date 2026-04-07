@@ -20,8 +20,9 @@ pub use paths::{
     resolve_data_home, resolve_project_root, resolve_project_root_or_cwd,
 };
 pub use resolve::{
-    load_toml_value_with_imports, resolve_and_load, resolve_and_load_with_paths,
-    resolve_and_merge_toml, resolve_and_merge_toml_with_paths,
+    load_toml_value_with_imports, load_toml_value_with_imports_and_paths, merge_toml_values,
+    resolve_and_load, resolve_and_load_with_paths, resolve_and_merge_toml,
+    resolve_and_merge_toml_with_paths,
 };
 pub use spec::{ArrayMergeStrategy, ConfigCascadeSpec};
 pub use test_support::resolve_home_from_value;

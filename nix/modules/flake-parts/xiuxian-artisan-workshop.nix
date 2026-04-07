@@ -1,105 +1,89 @@
-{
-  inputs,
-  workspaceRoot,
-  self,
-  ...
-}:
-
-let
-  inherit (inputs)
-    uv2nix
-    nix-filter
-    pyproject-nix
-    pyproject-build-systems
-    ;
-in
+{ workspaceRoot, inputs, ... }:
 {
   perSystem =
     {
       pkgs,
+      config,
       lib,
-      system,
       ...
     }:
     let
-      workspace = uv2nix.lib.workspace.loadWorkspace { inherit workspaceRoot; };
+      # The dumped Metal toolchain
+      apple-metal-toolchain =
+        pkgs.callPackage ../../packages/apple-metal-toolchain.nix
+          { };
 
-      overlay = workspace.mkPyprojectOverlay {
-        sourcePreference = "wheel";
+      # The native Nixpkgs SDK
+      apple-sdk = pkgs.apple-sdk_15;
+
+      # Combine them into a single directory that looks like /Applications/Xcode.app/Contents/Developer
+      xcode-combined = pkgs.symlinkJoin {
+        name = "xcode-combined";
+        paths = [
+          apple-metal-toolchain
+          apple-sdk
+        ];
       };
-
-      pythonSets =
-        let
-
-          hacks = pkgs.callPackage pyproject-nix.build.hacks { };
-          python = pkgs.python3;
-          hack-overlay = final: prev: {
-            torch = hacks.nixpkgsPrebuilt {
-              from = pkgs.python3Packages.torchWithoutCuda;
-              prev = prev.torch;
-            };
-            xiuxian-core-rs = hacks.nixpkgsPrebuilt {
-              from = self.packages.${system}.xiuxian-core-rs-python-bindings;
-              prev = prev.xiuxian-core-rs;
-            };
-            # Use nixpkgs version of nvidia-cufile-cu12 instead of building from source
-            # This avoids RDMA dependency issues in CI
-            # nvidia-cufile-cu12 = hacks.nixpkgsPrebuilt {
-            #   from = pkgs.python3Packages.nvidia-cufile-cu12;
-            #   prev = prev.nvidia-cufile-cu12;
-            # };
-          };
-        in
-        (pkgs.callPackage pyproject-nix.build.packages {
-          inherit python;
-        }).overrideScope
-          (
-            lib.composeManyExtensions [
-              pyproject-build-systems.overlays.wheel
-              overlay
-              hack-overlay
-              (final: prev: {
-                # Fix pypika build with setuptools
-                pypika = prev.pypika.overrideAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                    final.setuptools
-                  ];
-                });
-                antlr4-python3-runtime = prev.antlr4-python3-runtime.overrideAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                    final.setuptools
-                  ];
-                });
-                pylatexenc = prev.pylatexenc.overrideAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                    final.setuptools
-                  ];
-                });
-                raganything = prev.raganything.overrideAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                    final.setuptools
-                  ];
-                });
-                hatchling = prev.hatchling.overrideAttrs (old: {
-                  propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [
-                    final.editables
-                  ];
-                });
-              })
-            ]
-          );
     in
     {
-      packages.default = self.packages.${system}.xiuxian-artisan-workshop;
-      packages.xiuxian-artisan-workshop =
-        (pythonSets.mkVirtualEnv "xiuxian-artisan-workshop" workspace.deps.default)
-        .overrideAttrs
-          (old: {
-            venvIgnoreCollisions = [ "*" ];
-            # venvIgnoreCollisions = [
-            #   "lib/python${pkgs.python3.pythonVersion}/site-packages/doclayout-yolo-*"
-            #   "lib/python${pkgs.python3.pythonVersion}/site-packages/ultralytics-*"
-            # ];
-          });
+      _module.args.apple-metal-toolchain = apple-metal-toolchain;
+
+      nci.projects."xiuxian-core-rs" = {
+        path = workspaceRoot;
+        export = true;
+        depsDrvConfig = {
+          mkDerivation = {
+            buildInputs = [
+              pkgs.pkg-config
+              pkgs.openssl
+            ];
+          };
+          env = {
+            PROTOC = "${pkgs.protobuf}/bin/protoc";
+          };
+        };
+      };
+      # configure crates
+      nci.crates = {
+        # "xiuxian-llm" = {
+        #   depsDrvConfig = {
+        #     mkDerivation.nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+        #       apple-metal-toolchain
+        #       pkgs.xcbuild
+        #     ];
+        #     mkDerivation.buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+        #       apple-sdk
+        #     ];
+        #     env = lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+        #       MISTRALRS_METAL_PRECOMPILE = "1";
+        #       # Point DEVELOPER_DIR to the combined symlink forest
+        #       DEVELOPER_DIR = "${xcode-combined}";
+        #       # Point SDKROOT to the macOS SDK within that forest
+        #       SDKROOT = "${xcode-combined}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
+        #     };
+        #   };
+        # };
+        "qianji" = {
+          depsDrvConfig = {
+            mkDerivation = {
+              buildInputs = [ ];
+            };
+          };
+        };
+        "xiuxian-vector" = {
+          depsDrvConfig = {
+            mkDerivation.buildInputs = [ pkgs.protobuf ];
+          };
+        };
+      };
+
+      packages.xiuxian-core-rs-python-bindings =
+        pkgs.callPackage ../../packages/xiuxian-core-rs.nix
+          {
+            inherit workspaceRoot;
+            cargoDeps =
+              config.nci.outputs."xiuxian-core-rs".packages.release.config.rust-cargo-vendor.vendoredSources;
+            version = config.nci.outputs."xiuxian-core-rs".packages.release.config.version;
+          };
     };
 }

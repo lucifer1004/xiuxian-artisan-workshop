@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use xiuxian_config_core::{
     ConfigCascadeSpec, ConfigCoreError, load_toml_value_with_imports,
-    resolve_and_merge_toml_with_paths,
+    load_toml_value_with_imports_and_paths, resolve_and_merge_toml_with_paths,
 };
 
 fn write_text(path: &Path, content: &str) {
@@ -86,8 +86,10 @@ imports = "base.toml"
 "#,
     );
 
-    let error = load_toml_value_with_imports(config_path.as_path())
-        .expect_err("expected invalid imports error");
+    let error = match load_toml_value_with_imports(config_path.as_path()) {
+        Ok(value) => panic!("expected invalid imports error, got {value:?}"),
+        Err(error) => error,
+    };
 
     match error {
         ConfigCoreError::InvalidImports { path, message } => {
@@ -121,8 +123,10 @@ name = "beta"
 "#,
     );
 
-    let error = load_toml_value_with_imports(root.join("a.toml").as_path())
-        .expect_err("expected import cycle error");
+    let error = match load_toml_value_with_imports(root.join("a.toml").as_path()) {
+        Ok(value) => panic!("expected import cycle error, got {value:?}"),
+        Err(error) => error,
+    };
 
     match error {
         ConfigCoreError::ImportCycle { chain } => {
@@ -143,7 +147,7 @@ fn embedded_imports_are_resolved_with_source_path() {
     write_text(
         embedded_source
             .parent()
-            .unwrap()
+            .unwrap_or_else(|| panic!("embedded source should have a parent directory"))
             .join("shared.toml")
             .as_path(),
         r#"
@@ -201,13 +205,86 @@ mode = "hybrid"
 }
 
 #[test]
+fn load_toml_value_with_imports_and_paths_expands_prj_root_variables() {
+    let (_temp, root) = temp_workspace();
+    let config_path = root.join("config.toml");
+
+    write_text(
+        root.join("imports/shared.toml").as_path(),
+        r#"
+[llm]
+default_model = "root-import"
+"#,
+    );
+    write_text(
+        config_path.as_path(),
+        r#"
+imports = ["${PRJ_ROOT}/imports/shared.toml"]
+
+[llm]
+default_provider = "kernel"
+"#,
+    );
+
+    let value = load_toml_value_with_imports_and_paths(
+        config_path.as_path(),
+        Some(root.as_path()),
+        Some(root.join(".config").as_path()),
+    )
+    .unwrap_or_else(|error| panic!("load env-aware imported config: {error}"));
+
+    assert_eq!(
+        string_at(&value, &["llm", "default_model"]),
+        Some("root-import")
+    );
+    assert_eq!(
+        string_at(&value, &["llm", "default_provider"]),
+        Some("kernel")
+    );
+}
+
+#[test]
+fn load_toml_value_with_imports_and_paths_rejects_missing_env_variables() {
+    let (_temp, root) = temp_workspace();
+    let config_path = root.join("config.toml");
+
+    write_text(
+        config_path.as_path(),
+        r#"
+imports = ["${WENDAO_UNKNOWN_IMPORT_ROOT}/shared.toml"]
+"#,
+    );
+
+    let error = match load_toml_value_with_imports_and_paths(
+        config_path.as_path(),
+        Some(root.as_path()),
+        Some(root.join(".config").as_path()),
+    ) {
+        Ok(value) => panic!("expected unresolved environment variable error, got {value:?}"),
+        Err(error) => error,
+    };
+
+    match error {
+        ConfigCoreError::UnresolvedEnvironmentVariable { path, variable } => {
+            assert_eq!(path, config_path.display().to_string());
+            assert_eq!(variable, "WENDAO_UNKNOWN_IMPORT_ROOT");
+        }
+        other => panic!("expected UnresolvedEnvironmentVariable, got {other}"),
+    }
+}
+
+#[test]
 fn empty_namespace_merges_the_whole_root_config() {
     let (_temp, root) = temp_workspace();
     let config_home = root.join(".config");
     let xiuxian_path = config_home.join("xiuxian-artisan-workshop/xiuxian.toml");
 
     write_text(
-        xiuxian_path.parent().unwrap().join("shared.toml").as_path(),
+        xiuxian_path
+            .parent()
+            .unwrap_or_else(|| panic!("xiuxian config path should have a parent directory"))
+            .join("shared.toml")
+            .as_path(),
         r#"
 [llm]
 default_model = "imported"

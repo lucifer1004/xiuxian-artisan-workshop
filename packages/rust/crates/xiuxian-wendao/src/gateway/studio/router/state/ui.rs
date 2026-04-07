@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
 use crate::gateway::studio::router::repository::configured_repositories;
 use crate::gateway::studio::router::sanitization::{sanitize_projects, sanitize_repo_projects};
 use crate::gateway::studio::router::state::helpers::supported_code_kinds;
@@ -9,6 +8,7 @@ use crate::gateway::studio::router::state::types::StudioState;
 use crate::gateway::studio::types::{
     UiCapabilities, UiConfig, UiProjectConfig, UiRepoProjectConfig,
 };
+use crate::repo_index::RepoIndexStatusResponse;
 
 impl StudioState {
     pub(crate) fn ui_config(&self) -> UiConfig {

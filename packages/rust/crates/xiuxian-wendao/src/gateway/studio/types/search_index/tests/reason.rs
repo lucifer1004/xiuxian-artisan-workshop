@@ -2,7 +2,7 @@ use crate::gateway::studio::types::search_index::{
     SearchIndexStatusAction, SearchIndexStatusReasonCode, SearchIndexStatusResponse,
     SearchIndexStatusSeverity,
 };
-use crate::search_plane::{
+use crate::search::{
     SearchCorpusKind, SearchCorpusStatus, SearchCorpusStatusAction, SearchCorpusStatusReason,
     SearchCorpusStatusReasonCode, SearchCorpusStatusSeverity, SearchMaintenanceStatus,
     SearchPlanePhase, SearchPlaneStatusSnapshot,

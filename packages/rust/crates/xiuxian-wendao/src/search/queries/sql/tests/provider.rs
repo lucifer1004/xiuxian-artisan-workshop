@@ -9,7 +9,7 @@ use crate::search::queries::sql::registration::{
 use crate::search::queries::sql::tests::fixtures::{
     fixture_service, publish_reference_hits, sample_hit,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 #[tokio::test]
 async fn studio_sql_flight_provider_queries_registered_reference_occurrence_table() {

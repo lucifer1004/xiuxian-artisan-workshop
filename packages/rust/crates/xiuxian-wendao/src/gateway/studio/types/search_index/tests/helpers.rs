@@ -2,7 +2,7 @@ use crate::gateway::studio::types::search_index::{
     SearchIndexAggregateStatusReason, SearchIndexIssueSummary, SearchIndexStatusReason,
     SearchIndexStatusResponse,
 };
-use crate::search_plane::{
+use crate::search::{
     SearchCorpusIssue, SearchCorpusIssueCode, SearchCorpusIssueFamily, SearchCorpusKind,
     SearchCorpusStatus, SearchCorpusStatusAction, SearchCorpusStatusReason,
     SearchCorpusStatusReasonCode, SearchCorpusStatusSeverity, SearchMaintenanceStatus,
@@ -79,7 +79,7 @@ pub(super) fn degraded_repo_entity_status() -> SearchCorpusStatus {
         published_revision: Some("rev-1".to_string()),
         message: "alpha/repo drifted".to_string(),
     });
-    repo_entity.issue_summary = Some(crate::search_plane::SearchCorpusIssueSummary {
+    repo_entity.issue_summary = Some(crate::search::SearchCorpusIssueSummary {
         family: SearchCorpusIssueFamily::Revision,
         primary_code: SearchCorpusIssueCode::PublishedRevisionMismatch,
         issue_count: 1,

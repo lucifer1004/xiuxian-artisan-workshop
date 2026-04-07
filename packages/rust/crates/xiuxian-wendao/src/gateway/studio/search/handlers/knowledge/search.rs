@@ -7,7 +7,7 @@ use crate::gateway::studio::search::handlers::knowledge::intent::flight::{
     search_hit_batch_from_hits, search_response_flight_app_metadata,
 };
 use crate::gateway::studio::types::SearchResponse;
-use crate::search_plane::{SearchCorpusKind, SearchPlaneCacheTtl};
+use crate::search::{SearchCorpusKind, SearchPlaneCacheTtl};
 
 pub(crate) async fn build_knowledge_search_response(
     studio: &StudioState,

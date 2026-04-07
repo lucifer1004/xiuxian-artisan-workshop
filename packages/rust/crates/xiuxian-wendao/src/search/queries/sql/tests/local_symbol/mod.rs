@@ -1,5 +1,6 @@
 use xiuxian_wendao_runtime::transport::SqlFlightRouteProvider;
 
+use crate::search::SearchCorpusKind;
 use crate::search::queries::sql::provider::StudioSqlFlightRouteProvider;
 use crate::search::queries::sql::provider::metadata::StudioSqlFlightMetadata;
 use crate::search::queries::sql::registration::{
@@ -9,7 +10,6 @@ use crate::search::queries::sql::tests::fixtures::{
     fixture_service, nullable_string_column_values, publish_local_symbol_hits,
     sample_local_symbol_hit, string_column_values, u64_column_values,
 };
-use crate::search_plane::SearchCorpusKind;
 
 #[tokio::test]
 async fn studio_sql_flight_provider_queries_local_symbol_logical_view() {

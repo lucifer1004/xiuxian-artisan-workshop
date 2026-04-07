@@ -10,7 +10,6 @@ publish = false
 [features]
 default = []
 llm = ["dep:xiuxian-llm", "dep:reqwest"]
-pyo3 = ["dep:pyo3"]
 
 [dependencies]
 petgraph = { workspace = true }
@@ -40,7 +39,6 @@ xiuxian-llm = { path = "../xiuxian-llm", optional = true }
 xiuxian-window = { path = "../xiuxian-window" }
 xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
-pyo3 = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 
 [dev-dependencies]

@@ -1,3 +1,4 @@
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::Duration;
@@ -61,6 +62,21 @@ pub(crate) fn repo_root() -> PathBuf {
         .join("../../../../")
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve repo root: {error}"))
+}
+
+pub(crate) fn project_cache_dir() -> PathBuf {
+    let configured = env::var_os("PRJ_CACHE_HOME").unwrap_or_else(|| {
+        panic!("PRJ_CACHE_HOME must be set; run Julia integration support via `direnv exec . ...`")
+    });
+    let configured = PathBuf::from(configured);
+    if configured.is_absolute() {
+        configured
+    } else {
+        panic!(
+            "PRJ_CACHE_HOME must be absolute in the project environment, got `{}`",
+            configured.display()
+        )
+    }
 }
 
 pub(crate) fn wendaoarrow_package_dir() -> PathBuf {

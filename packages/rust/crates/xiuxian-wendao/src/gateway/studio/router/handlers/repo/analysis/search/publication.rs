@@ -1,5 +1,5 @@
 use crate::gateway::studio::router::GatewayState;
-use crate::search_plane::SearchCorpusKind;
+use crate::search::SearchCorpusKind;
 
 pub(crate) async fn repo_entity_publication_ready(
     state: &std::sync::Arc<GatewayState>,

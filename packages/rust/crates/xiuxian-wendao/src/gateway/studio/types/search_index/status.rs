@@ -2,10 +2,8 @@ use std::collections::BTreeMap;
 
 use super::definitions as search_index;
 
-impl From<&crate::search_plane::SearchPlaneStatusSnapshot>
-    for search_index::SearchIndexStatusResponse
-{
-    fn from(value: &crate::search_plane::SearchPlaneStatusSnapshot) -> Self {
+impl From<&crate::search::SearchPlaneStatusSnapshot> for search_index::SearchIndexStatusResponse {
+    fn from(value: &crate::search::SearchPlaneStatusSnapshot) -> Self {
         let corpora = value
             .corpora
             .iter()

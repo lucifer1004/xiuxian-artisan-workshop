@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::search_plane::{RepoSearchAvailability, RepoSearchPublicationState, SearchPlaneService};
+use crate::search::{RepoSearchAvailability, RepoSearchPublicationState, SearchPlaneService};
 
 #[derive(Debug, Clone)]
 pub(crate) struct RepoSearchTarget {

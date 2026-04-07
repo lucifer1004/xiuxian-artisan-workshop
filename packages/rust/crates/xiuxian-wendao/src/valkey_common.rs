@@ -18,6 +18,7 @@ where
     })
 }
 
+#[cfg(test)]
 #[must_use]
 fn open_optional_client(valkey_url: Option<String>) -> Option<redis::Client> {
     valkey_url.and_then(|value| open_client(value.as_str()).ok())
@@ -42,12 +43,6 @@ pub(crate) fn normalize_key_prefix(candidate: &str, default_prefix: &str) -> Str
     } else {
         normalized.to_string()
     }
-}
-
-/// Open a Valkey client from a precedence-ordered environment list.
-#[must_use]
-pub(crate) fn resolve_optional_client_from_env(names: &[&str]) -> Option<redis::Client> {
-    open_optional_client(first_non_empty_env(names))
 }
 
 #[cfg(test)]

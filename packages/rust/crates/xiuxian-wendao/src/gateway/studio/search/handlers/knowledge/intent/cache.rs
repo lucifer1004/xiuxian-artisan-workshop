@@ -2,7 +2,7 @@ use crate::gateway::studio::router::{
     StudioApiError, StudioState, configured_repositories, configured_repository,
     map_repo_intelligence_error,
 };
-use crate::search_plane::{RepoSearchQueryCacheKeyInput, SearchCorpusKind};
+use crate::search::{RepoSearchQueryCacheKeyInput, SearchCorpusKind};
 
 pub(crate) async fn build_intent_cache_key(
     studio: &StudioState,

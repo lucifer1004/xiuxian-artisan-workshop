@@ -6,8 +6,9 @@ use crate::analyzers::plugin::RepositoryAnalysisOutput;
 
 use super::runtime::{ValkeyAnalysisCacheRuntime, resolve_valkey_analysis_cache_runtime};
 use super::storage::{
-    decode_analysis_payload, decode_search_query_payload, encode_analysis_payload,
-    encode_search_query_payload, valkey_analysis_key, valkey_search_query_key,
+    decode_analysis_payload, decode_analysis_payload_for_revision, decode_search_query_payload,
+    encode_analysis_payload, encode_search_query_payload, valkey_analysis_key,
+    valkey_analysis_revision_key, valkey_search_query_key,
 };
 
 #[derive(Debug, Clone)]
@@ -38,7 +39,7 @@ impl ValkeyAnalysisCache {
     /// Retrieves a cached analysis result.
     #[must_use]
     pub fn get(&self, cache_key: &RepositoryAnalysisCacheKey) -> Option<RepositoryAnalysisOutput> {
-        let storage_key = valkey_analysis_key(cache_key, self.runtime.key_prefix.as_str())?;
+        let storage_key = valkey_analysis_key(cache_key, self.runtime.key_prefix.as_str());
         #[cfg(test)]
         if self.runtime.client.is_none() {
             return self
@@ -57,21 +58,79 @@ impl ValkeyAnalysisCache {
         decode_analysis_payload(cache_key, payload.as_str())
     }
 
+    /// Retrieves a cached analysis result by revision lookup.
+    #[must_use]
+    pub fn get_for_revision(
+        &self,
+        repo_id: &str,
+        checkout_root: &str,
+        plugin_ids: &[String],
+        revision: &str,
+    ) -> Option<RepositoryAnalysisOutput> {
+        let storage_key = valkey_analysis_revision_key(
+            repo_id,
+            checkout_root,
+            plugin_ids,
+            revision,
+            self.runtime.key_prefix.as_str(),
+        );
+        #[cfg(test)]
+        if self.runtime.client.is_none() {
+            return self
+                .shadow
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&storage_key)
+                .and_then(|payload| {
+                    decode_analysis_payload_for_revision(
+                        repo_id,
+                        checkout_root,
+                        plugin_ids,
+                        revision,
+                        payload,
+                    )
+                });
+        }
+        let client = self.runtime.client.as_ref()?;
+        let mut connection = client.get_connection().ok()?;
+        let payload = redis::cmd("GET")
+            .arg(&storage_key)
+            .query::<Option<String>>(&mut connection)
+            .ok()??;
+        decode_analysis_payload_for_revision(
+            repo_id,
+            checkout_root,
+            plugin_ids,
+            revision,
+            payload.as_str(),
+        )
+    }
+
     /// Stores an analysis result in the cache.
     pub fn set(&self, cache_key: &RepositoryAnalysisCacheKey, analysis: &RepositoryAnalysisOutput) {
-        let Some(storage_key) = valkey_analysis_key(cache_key, self.runtime.key_prefix.as_str())
-        else {
-            return;
-        };
+        let storage_key = valkey_analysis_key(cache_key, self.runtime.key_prefix.as_str());
+        let revision_key = cache_key.revision().map(|revision| {
+            valkey_analysis_revision_key(
+                cache_key.repo_id.as_str(),
+                cache_key.checkout_root.as_str(),
+                cache_key.plugin_ids.as_slice(),
+                revision,
+                self.runtime.key_prefix.as_str(),
+            )
+        });
         let Some(payload) = encode_analysis_payload(cache_key, analysis) else {
             return;
         };
         #[cfg(test)]
         if self.runtime.client.is_none() {
-            self.shadow
+            let mut shadow = self
+                .shadow
                 .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(storage_key, payload);
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            shadow.insert(storage_key, payload.clone());
+            if let Some(revision_key) = revision_key {
+                shadow.insert(revision_key, payload);
+            }
             return;
         }
         let Some(client) = self.runtime.client.as_ref() else {
@@ -86,12 +145,25 @@ impl ValkeyAnalysisCache {
                 .arg(ttl_seconds)
                 .arg(&payload)
                 .query::<()>(&mut connection);
+            if let Some(revision_key) = revision_key {
+                let _ = redis::cmd("SETEX")
+                    .arg(&revision_key)
+                    .arg(ttl_seconds)
+                    .arg(&payload)
+                    .query::<()>(&mut connection);
+            }
             return;
         }
         let _ = redis::cmd("SET")
             .arg(&storage_key)
             .arg(&payload)
             .query::<()>(&mut connection);
+        if let Some(revision_key) = revision_key {
+            let _ = redis::cmd("SET")
+                .arg(&revision_key)
+                .arg(&payload)
+                .query::<()>(&mut connection);
+        }
     }
 
     /// Retrieves a cached repo-search endpoint payload.
@@ -100,7 +172,7 @@ impl ValkeyAnalysisCache {
     where
         T: serde::de::DeserializeOwned,
     {
-        let storage_key = valkey_search_query_key(cache_key, self.runtime.key_prefix.as_str())?;
+        let storage_key = valkey_search_query_key(cache_key, self.runtime.key_prefix.as_str());
         #[cfg(test)]
         if self.runtime.client.is_none() {
             return self
@@ -124,11 +196,7 @@ impl ValkeyAnalysisCache {
     where
         T: serde::Serialize,
     {
-        let Some(storage_key) =
-            valkey_search_query_key(cache_key, self.runtime.key_prefix.as_str())
-        else {
-            return;
-        };
+        let storage_key = valkey_search_query_key(cache_key, self.runtime.key_prefix.as_str());
         let Some(payload) = encode_search_query_payload(cache_key, value) else {
             return;
         };

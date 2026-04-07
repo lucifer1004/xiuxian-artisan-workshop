@@ -242,6 +242,7 @@ fn sample_cache_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
     RepositoryAnalysisCacheKey {
         repo_id: repo_id.to_string(),
         checkout_root: format!("/virtual/repos/{repo_id}"),
+        analysis_identity: format!("analysis:{repo_id}"),
         checkout_revision: Some("fixture".to_string()),
         mirror_revision: Some("fixture".to_string()),
         tracking_revision: Some("fixture".to_string()),

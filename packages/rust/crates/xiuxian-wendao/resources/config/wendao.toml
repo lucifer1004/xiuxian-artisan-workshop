@@ -1,6 +1,9 @@
 # =============================================================================
 # Wendao (LinkGraph Engine) Configuration
 # =============================================================================
+#
+# Local overlays should import this file from a wrapper such as
+# `wendao.studio.overlay.toml` instead of rewriting the base config in place.
 
 [link_graph]
 # Primary graph backend (Wendao Rust engine).

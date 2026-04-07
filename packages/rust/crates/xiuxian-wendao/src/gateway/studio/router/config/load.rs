@@ -1,21 +1,40 @@
 use std::collections::HashSet;
-use std::fs;
 use std::path::Path;
 
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
+use xiuxian_config_core::load_toml_value_with_imports;
 
-use super::paths::studio_wendao_toml_path;
+use super::paths::studio_effective_wendao_toml_path;
 use super::sanitize::{
     sanitize_path_like, sanitize_path_list, sanitize_projects, sanitize_repo_projects,
 };
 use super::types::WendaoTomlConfig;
 
-/// Loads UI config from `wendao.toml` if it exists.
+/// Loads one merged Wendao TOML config from the effective Studio config path.
+///
+/// # Errors
+///
+/// Returns an error string if reading, merging, or deserializing fails.
+pub(crate) fn load_wendao_toml_config(path: &Path) -> Result<WendaoTomlConfig, String> {
+    let merged = load_toml_value_with_imports(path)
+        .map_err(|error| format!("failed to load merged TOML `{}`: {error}", path.display()))?;
+    merged.try_into().map_err(|error| {
+        format!(
+            "failed to deserialize merged TOML `{}`: {error}",
+            path.display()
+        )
+    })
+}
+
+/// Loads UI config from the effective Wendao TOML if it exists.
 #[must_use]
 pub fn load_ui_config_from_wendao_toml(config_root: &Path) -> Option<UiConfig> {
-    let config_path = studio_wendao_toml_path(config_root);
-    let contents = fs::read_to_string(config_path).ok()?;
-    let parsed: WendaoTomlConfig = toml::from_str(&contents).ok()?;
+    let config_path = studio_effective_wendao_toml_path(config_root);
+    if !config_path.is_file() {
+        return None;
+    }
+
+    let parsed = load_wendao_toml_config(config_path.as_path()).ok()?;
     Some(ui_config_from_wendao_toml(parsed))
 }
 

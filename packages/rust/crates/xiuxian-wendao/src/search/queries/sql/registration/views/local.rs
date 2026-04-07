@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use xiuxian_vector::SearchEngineContext;
 
-use crate::search_plane::SearchCorpusKind;
+use crate::search::SearchCorpusKind;
 
 use super::super::{RegisteredSqlTable, RegisteredSqlViewSource, naming};
 

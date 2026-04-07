@@ -82,16 +82,21 @@ Do not place new code here when it is better classified as:
 only Wendao-local repo bridge that remains is
 `src/analyzers/repo_source.rs`, which maps `RegisteredRepository` config and
 domain errors onto `xiuxian-git-repo` contracts. The crate itself no longer
-depends on `git2`; Wendao-owned repo fixtures now use bounded CLI git
-helpers, and repo-intelligence snapshots treat revisions as backend-neutral
-contract data instead of pinning concrete hashes. The post-migration Wendao
-done gate is also green again for this lane:
-`cargo test -p xiuxian-wendao --lib` and
-`cargo clippy -p xiuxian-wendao --lib --tests -- -D warnings` both pass after
-the repo compat-surface retirement and blocker recovery slices.
+depends on `git2`, and new generic repo substrate behavior should land in
+`xiuxian-git-repo`, not back in Wendao.
 
-For the canonical boundary matrix, see
-[`docs/06_roadmap/417_wendao_package_boundary_matrix.md`](docs/06_roadmap/417_wendao_package_boundary_matrix.md).
+Repo-index ownership is explicit too: implementation lives under
+`src/repo_index/`, and `src/gateway/studio/` only consumes crate-level
+repo-index adapters and bootstrap seams. The same owner-path rule applies to
+search: `src/search/` is the only search implementation root.
+
+Detailed repo-intelligence rollout notes, repo-index performance proofs, and
+cache/runtime evolution now belong in the package docs and GTD tracking
+surfaces instead of this README. Use
+[`docs/06_roadmap/402_repo_intelligence_mvp.md`](docs/06_roadmap/402_repo_intelligence_mvp.md)
+for the active repo-intelligence lane and
+[`docs/06_roadmap/417_wendao_package_boundary_matrix.md`](docs/06_roadmap/417_wendao_package_boundary_matrix.md)
+for the canonical boundary matrix.
 
 ---
 
@@ -460,7 +465,9 @@ with `mod.rs` acting as the seam and query-specific coverage moving into
 flat test file.
 
 The same query-folder pressure inside the search plane is now also reduced for
-local symbol retrieval. `search_plane/local_symbol/query/` no longer keeps
+local symbol retrieval. The canonical search-plane owner path is now
+`src/search/`, and the old `src/search_plane/` module has been retired.
+`search/local_symbol/query/` no longer keeps
 `autocomplete.rs`, `search.rs`, and one flat `tests.rs` beside each other.
 Instead it is split into:
 
@@ -470,7 +477,7 @@ Instead it is split into:
 - `local_symbol/query/tests/{fixtures,search,autocomplete}.rs`
 
 The same search-plane rule now also covers reference occurrences.
-`search_plane/reference_occurrence/query/` no longer mixes `candidates.rs`,
+`search/reference_occurrence/query/` no longer mixes `candidates.rs`,
 `decode.rs`, `search.rs`, and one flat `tests.rs` in the root. It is now split
 into:
 
@@ -479,7 +486,7 @@ into:
 - `reference_occurrence/query/tests/{fixtures,search}.rs`
 
 The same rule now also covers knowledge sections. The old flat
-`search_plane/knowledge_section/query/{candidates,errors,ranking,search,tests}.rs`
+`search/knowledge_section/query/{candidates,errors,ranking,search,tests}.rs`
 set is gone. It is now split into:
 
 - `knowledge_section/query/search/mod.rs`
@@ -487,7 +494,7 @@ set is gone. It is now split into:
 - `knowledge_section/query/tests/ranking.rs`
 
 The same rule now also covers attachments. The old flat
-`search_plane/attachment/query/{scan,scoring,search,types,tests}.rs` set is
+`search/attachment/query/{scan,scoring,search,types,tests}.rs` set is
 gone. It is now split into:
 
 - `attachment/query/search/mod.rs`
@@ -495,7 +502,7 @@ gone. It is now split into:
 - `attachment/query/tests/{fixtures,ranking,search}.rs`
 
 The same rule now also covers repo entities. The old flat
-`search_plane/repo_entity/query/{execution,prepare,search,types,tests}.rs` set
+`search/repo_entity/query/{execution,prepare,search,types,tests}.rs` set
 is gone. It is now split into:
 
 - `repo_entity/query/search/{mod,execution,prepare,route,types}.rs`
@@ -503,7 +510,7 @@ is gone. It is now split into:
 - `repo_entity/query/tests/{fixtures,ranking,results}.rs`
 
 The same rule now also covers repo content chunks. The old flat
-`search_plane/repo_content_chunk/query/{candidates,error,execution,helpers,scan,search,tests}.rs`
+`search/repo_content_chunk/query/{candidates,error,execution,helpers,scan,search,tests}.rs`
 set is gone. It is now split into:
 
 - `repo_content_chunk/query/search/{mod,candidates,error,execution,helpers,route,scan}.rs`

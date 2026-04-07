@@ -7,5 +7,6 @@ mod tests;
 pub(crate) mod workspace;
 
 pub use fixture::{
-    GatewayPerfFixture, prepare_gateway_perf_fixture, prepare_gateway_real_workspace_perf_fixture,
+    GatewayPerfFixture, GatewayRepoIndexControllerDebugSnapshot, prepare_gateway_perf_fixture,
+    prepare_gateway_real_workspace_perf_fixture,
 };

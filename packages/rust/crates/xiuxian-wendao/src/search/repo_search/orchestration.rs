@@ -1,5 +1,5 @@
 use crate::gateway::studio::types::SearchHit;
-use crate::search_plane::SearchPlaneService;
+use crate::search::SearchPlaneService;
 
 use super::buffered::search_repo_intent_hits_buffered;
 #[cfg(test)]

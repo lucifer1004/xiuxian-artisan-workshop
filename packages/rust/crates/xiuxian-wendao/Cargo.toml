@@ -36,6 +36,7 @@ required-features = ["performance"]
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
 tokio-stream = { version = "0.1", features = ["net"] }
+tokio-util = { workspace = true, features = ["rt"] }
 
 # Serialization
 serde = { workspace = true }
@@ -94,6 +95,7 @@ globset = { workspace = true }
 comrak = { workspace = true }
 include_dir = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true }
 dashmap = "7.0.0-rc2"
 
 # Parallel processing

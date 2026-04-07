@@ -1,4 +1,4 @@
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 pub(super) fn local_sql_table_name(
     corpus: SearchCorpusKind,

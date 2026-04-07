@@ -2,6 +2,7 @@
 //! checkout observation.
 
 mod backend;
+mod diff;
 mod error;
 mod layout;
 mod lock;
@@ -10,6 +11,9 @@ mod revision;
 mod spec;
 mod sync;
 
+pub use diff::{
+    RevisionChangeKind, RevisionDiffSummary, RevisionPathChange, diff_checkout_revisions,
+};
 pub use error::{RepoError, RepoErrorKind};
 pub use layout::{managed_checkout_root_for, managed_mirror_root_for, sanitize_repo_id};
 pub use lock::{

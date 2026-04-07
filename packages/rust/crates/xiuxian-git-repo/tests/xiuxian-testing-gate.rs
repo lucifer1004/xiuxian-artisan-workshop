@@ -2,6 +2,8 @@
 
 #![allow(clippy::expect_used)]
 
+#[path = "unit/diff.rs"]
+mod diff;
 #[path = "unit/layout.rs"]
 mod layout;
 #[path = "unit/locks.rs"]

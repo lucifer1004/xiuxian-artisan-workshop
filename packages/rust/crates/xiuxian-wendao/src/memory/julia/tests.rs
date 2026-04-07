@@ -274,9 +274,9 @@ async fn configured_compute_client_errors_when_runtime_is_disabled()
     let config_path = temp.path().join("wendao.toml");
     fs::write(
         &config_path,
-        r#"[memory.julia_compute]
+        r"[memory.julia_compute]
 enabled = false
-"#,
+",
     )?;
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
 

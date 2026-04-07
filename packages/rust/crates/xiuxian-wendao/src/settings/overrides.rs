@@ -36,3 +36,12 @@ pub(crate) fn wendao_config_file_override() -> Option<PathBuf> {
     };
     guard.clone().map(PathBuf::from)
 }
+
+#[must_use]
+pub(crate) fn wendao_config_home_override() -> Option<PathBuf> {
+    let guard = match config_home_override_store().read() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.clone().map(PathBuf::from)
+}

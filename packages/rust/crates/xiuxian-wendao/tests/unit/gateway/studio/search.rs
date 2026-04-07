@@ -1,12 +1,12 @@
 use super::test_prelude::*;
 use super::*;
 use crate::gateway::studio::build_ast_index;
-use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot};
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::search::support::strip_option;
 use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f64};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
-use crate::search_plane::SearchPlaneService;
+use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot};
+use crate::search::SearchPlaneService;
 use serde_json::json;
 use tempfile::tempdir;
 
@@ -201,7 +201,7 @@ async fn publish_knowledge_section_index(state: &Arc<GatewayState>) {
 async fn publish_repo_content_chunk_index(
     state: &Arc<GatewayState>,
     repo_id: &str,
-    documents: Vec<crate::gateway::studio::repo_index::RepoCodeDocument>,
+    documents: Vec<crate::repo_index::RepoCodeDocument>,
 ) {
     ok_or_panic(
         state
@@ -428,7 +428,7 @@ async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
     publish_repo_content_chunk_index(
         &fixture.state,
         "valid",
-        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+        vec![crate::repo_index::RepoCodeDocument {
             path: "src/ValidPkg.jl".to_string(),
             language: Some("julia".to_string()),
             contents: Arc::<str>::from(

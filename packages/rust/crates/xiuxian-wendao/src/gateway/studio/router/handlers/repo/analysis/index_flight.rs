@@ -5,12 +5,12 @@ use xiuxian_wendao_runtime::transport::{
     AnalysisFlightRouteResponse, RepoIndexFlightRouteProvider,
 };
 
-use crate::gateway::studio::repo_index::RepoIndexRequest;
 use crate::gateway::studio::router::GatewayState;
 use crate::gateway::studio::router::handlers::repo::analysis::index_status_flight::{
     build_repo_index_status_flight_batch, build_repo_index_status_flight_metadata,
 };
 use crate::gateway::studio::router::handlers::repo::command_service::run_repo_index;
+use crate::repo_index::RepoIndexRequest;
 
 #[derive(Clone)]
 pub(crate) struct StudioRepoIndexFlightRouteProvider {

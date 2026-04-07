@@ -9,14 +9,16 @@ use axum::extract::{Path, Query};
 
 use crate::analyzers::bootstrap_builtin_registry;
 use crate::analyzers::registry::PluginRegistry;
-use crate::gateway::studio::repo_index::RepoIndexPhase;
 use crate::gateway::studio::router::tests::repo_project;
-use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::gateway::studio::router::{
+    GatewayState, StudioState, load_ui_config_from_wendao_toml, studio_wendao_overlay_toml_path,
+};
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
 #[cfg(feature = "julia")]
 use crate::gateway::studio::types::UiPluginArtifact;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
-use crate::search_plane::SearchPlaneService;
+use crate::repo_index::RepoIndexPhase;
+use crate::search::SearchPlaneService;
 #[cfg(feature = "julia")]
 use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
@@ -129,7 +131,7 @@ async fn set_ui_config_still_eagerly_enqueues_background_indexes() {
 }
 
 #[tokio::test]
-async fn set_ui_config_handler_updates_runtime_without_overwriting_wendao_toml() {
+async fn set_ui_config_handler_persists_overlay_without_overwriting_base_wendao_toml() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let project_root = temp.path().join("project");
     let config_root = temp.path().join("config");
@@ -173,7 +175,8 @@ dirs = ["docs"]
         State(Arc::clone(&state)),
         Json(pushed_config.clone()),
     )
-    .await;
+    .await
+    .unwrap_or_else(|error| panic!("set_ui_config should persist overlay: {error:?}"));
 
     assert_eq!(response.0, pushed_config);
     assert_eq!(state.studio.ui_config(), pushed_config);
@@ -181,6 +184,18 @@ dirs = ["docs"]
         fs::read_to_string(&config_path).unwrap_or_else(|error| panic!("read config: {error}")),
         original_toml
     );
+    let overlay_path = studio_wendao_overlay_toml_path(config_root.as_path());
+    let overlay = fs::read_to_string(&overlay_path)
+        .unwrap_or_else(|error| panic!("read overlay config: {error}"));
+    assert!(
+        overlay.contains("imports = [\"wendao.toml\"]"),
+        "overlay should import the base wendao.toml"
+    );
+
+    let Some(effective_config) = load_ui_config_from_wendao_toml(config_root.as_path()) else {
+        panic!("effective UI config should reload from overlay");
+    };
+    assert_eq!(effective_config, pushed_config);
 }
 
 #[tokio::test]

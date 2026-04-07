@@ -59,4 +59,12 @@ pub enum ConfigCoreError {
         /// Validation message.
         message: String,
     },
+    /// One import path referenced an environment variable that was not available.
+    #[error("failed to expand import path in {path}: missing environment variable `{variable}`")]
+    UnresolvedEnvironmentVariable {
+        /// File or embedded source path where expansion failed.
+        path: String,
+        /// Missing environment variable name.
+        variable: String,
+    },
 }

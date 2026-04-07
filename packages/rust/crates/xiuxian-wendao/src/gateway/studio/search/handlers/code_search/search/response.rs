@@ -6,7 +6,7 @@ use crate::gateway::studio::router::{
 };
 use crate::gateway::studio::types::SearchResponse;
 use crate::search::repo_search::search_repo_code_outcome;
-use crate::search_plane::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
+use crate::search::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
 
 use crate::gateway::studio::search::handlers::code_search::query::{
     infer_repo_hint_from_query, parse_code_search_query, repo_search_result_limits,

@@ -6,7 +6,7 @@ use crate::gateway::studio::types::{
     AstSearchHit, AttachmentSearchHit, AutocompleteSuggestion, ReferenceSearchHit, SearchHit,
 };
 use crate::link_graph::LinkGraphAttachmentKind;
-use crate::search_plane::{SearchCorpusKind, SearchPlanePhase};
+use crate::search::{SearchCorpusKind, SearchPlanePhase};
 
 const LOCAL_CORPUS_READY_WAIT_ENV: &str = "XIUXIAN_WENDAO_LOCAL_CORPUS_READY_WAIT_MS";
 const DEFAULT_LOCAL_CORPUS_READY_WAIT_MS: u64 = 15_000;
@@ -93,7 +93,7 @@ impl StudioState {
             .await
         {
             Ok(hits) => Ok(hits),
-            Err(crate::search_plane::KnowledgeSectionSearchError::NotReady) => {
+            Err(crate::search::KnowledgeSectionSearchError::NotReady) => {
                 Err(StudioApiError::index_not_ready("knowledge_section"))
             }
             Err(error) => Err(StudioApiError::internal(
@@ -111,7 +111,7 @@ impl StudioState {
     ) -> Result<Vec<AstSearchHit>, StudioApiError> {
         match self.search_plane.search_local_symbols(query, limit).await {
             Ok(hits) => Ok(hits),
-            Err(crate::search_plane::LocalSymbolSearchError::NotReady) => {
+            Err(crate::search::LocalSymbolSearchError::NotReady) => {
                 Err(StudioApiError::index_not_ready("local_symbol"))
             }
             Err(error) => Err(StudioApiError::internal(
@@ -133,7 +133,7 @@ impl StudioState {
             .await
         {
             Ok(suggestions) => Ok(suggestions),
-            Err(crate::search_plane::LocalSymbolSearchError::NotReady) => {
+            Err(crate::search::LocalSymbolSearchError::NotReady) => {
                 Err(StudioApiError::index_not_ready("local_symbol"))
             }
             Err(error) => Err(StudioApiError::internal(
@@ -180,7 +180,7 @@ impl StudioState {
             .await
         {
             Ok(hits) => Ok(hits),
-            Err(crate::search_plane::AttachmentSearchError::NotReady) => {
+            Err(crate::search::AttachmentSearchError::NotReady) => {
                 Err(StudioApiError::index_not_ready("attachment"))
             }
             Err(error) => Err(StudioApiError::internal(
@@ -226,7 +226,7 @@ impl StudioState {
             .await
         {
             Ok(hits) => Ok(hits),
-            Err(crate::search_plane::ReferenceOccurrenceSearchError::NotReady) => {
+            Err(crate::search::ReferenceOccurrenceSearchError::NotReady) => {
                 Err(StudioApiError::index_not_ready("reference_occurrence"))
             }
             Err(error) => Err(StudioApiError::internal(

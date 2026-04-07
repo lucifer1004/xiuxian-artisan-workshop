@@ -129,6 +129,7 @@ fn projected_page_search_with_artifacts_matches_direct_search() {
             &RepositoryAnalysisCacheKey {
                 repo_id: "projection-artifacts".to_string(),
                 checkout_root: "/virtual/repos/projection-artifacts".to_string(),
+                analysis_identity: "analysis:projection-artifacts".to_string(),
                 checkout_revision: Some("fixture".to_string()),
                 mirror_revision: Some("fixture".to_string()),
                 tracking_revision: Some("fixture".to_string()),

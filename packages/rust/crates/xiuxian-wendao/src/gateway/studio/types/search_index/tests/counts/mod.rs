@@ -1,7 +1,7 @@
 mod assertions;
 
 use crate::gateway::studio::types::search_index::SearchIndexStatusResponse;
-use crate::search_plane::SearchPlaneStatusSnapshot;
+use crate::search::SearchPlaneStatusSnapshot;
 
 use super::helpers::{
     compacting_local_symbol_status, degraded_repo_entity_status, telemetry_attachment_status,

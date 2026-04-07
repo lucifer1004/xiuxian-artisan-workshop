@@ -1,8 +1,9 @@
 use super::ValkeyAnalysisCache;
 use super::runtime::resolve_valkey_analysis_cache_runtime_with_lookup;
 use super::storage::{
-    decode_analysis_payload, decode_search_query_payload, encode_analysis_payload,
-    encode_search_query_payload, stable_revision, valkey_analysis_key, valkey_search_query_key,
+    decode_analysis_payload, decode_analysis_payload_for_revision, decode_search_query_payload,
+    encode_analysis_payload, encode_search_query_payload, valkey_analysis_key,
+    valkey_analysis_revision_key, valkey_search_query_key,
 };
 use crate::analyzers::cache::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
@@ -12,6 +13,7 @@ fn sample_cache_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
     RepositoryAnalysisCacheKey {
         repo_id: repo_id.to_string(),
         checkout_root: format!("/virtual/{repo_id}"),
+        analysis_identity: format!("analysis:{repo_id}"),
         checkout_revision: Some("rev-1".to_string()),
         mirror_revision: Some("mirror-1".to_string()),
         tracking_revision: Some("tracking-1".to_string()),
@@ -66,24 +68,22 @@ fn runtime_resolution_rejects_invalid_ttl() {
 }
 
 #[test]
-fn stable_revision_prefers_checkout_revision() {
-    let key = sample_cache_key("stable-revision");
-    assert_eq!(stable_revision(&key), Some("rev-1"));
-}
-
-#[test]
-fn valkey_analysis_key_is_none_without_stable_revision() {
+fn valkey_analysis_key_uses_analysis_identity_even_without_revision() {
     let key = RepositoryAnalysisCacheKey {
         repo_id: "no-revision".to_string(),
         checkout_root: "/tmp/no-revision".to_string(),
+        analysis_identity: "analysis:no-revision".to_string(),
         checkout_revision: None,
         mirror_revision: None,
         tracking_revision: None,
         plugin_ids: vec!["plugin-a".to_string()],
     };
 
-    assert!(valkey_analysis_key(&key, "xiuxian:test").is_none());
-    assert!(encode_analysis_payload(&key, &RepositoryAnalysisOutput::default()).is_none());
+    assert_eq!(
+        valkey_analysis_key(&key, "xiuxian:test"),
+        valkey_analysis_key(&key, "xiuxian:test")
+    );
+    assert!(encode_analysis_payload(&key, &RepositoryAnalysisOutput::default()).is_some());
 }
 
 #[test]
@@ -102,8 +102,17 @@ fn payload_roundtrip_preserves_analysis_output() {
         encode_analysis_payload(&key, &analysis).unwrap_or_else(|| panic!("payload should encode"));
     let decoded = decode_analysis_payload(&key, payload.as_str())
         .unwrap_or_else(|| panic!("payload should decode"));
+    let decoded_by_revision = decode_analysis_payload_for_revision(
+        key.repo_id.as_str(),
+        key.checkout_root.as_str(),
+        key.plugin_ids.as_slice(),
+        "rev-1",
+        payload.as_str(),
+    )
+    .unwrap_or_else(|| panic!("payload should decode by revision"));
 
     assert_eq!(decoded, analysis);
+    assert_eq!(decoded_by_revision, analysis);
 }
 
 #[test]
@@ -124,8 +133,27 @@ fn cache_roundtrip_uses_test_shadow_when_no_live_client_is_bound() {
     let loaded = cache
         .get(&key)
         .unwrap_or_else(|| panic!("cached analysis should load"));
+    let revision_loaded = cache
+        .get_for_revision(
+            key.repo_id.as_str(),
+            key.checkout_root.as_str(),
+            key.plugin_ids.as_slice(),
+            "rev-1",
+        )
+        .unwrap_or_else(|| panic!("cached analysis should load by revision"));
 
     assert_eq!(loaded, analysis);
+    assert_eq!(revision_loaded, analysis);
+    assert!(
+        !valkey_analysis_revision_key(
+            key.repo_id.as_str(),
+            key.checkout_root.as_str(),
+            key.plugin_ids.as_slice(),
+            "rev-1",
+            "xiuxian:test:repo-analysis",
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -138,8 +166,8 @@ fn search_query_payload_roundtrip_preserves_value() {
 
     assert_eq!(decoded, vec!["projected-hit".to_string()]);
     assert!(
-        valkey_search_query_key(&key, "xiuxian:test:repo-analysis").is_some(),
-        "query cache key should exist when revision is stable"
+        !valkey_search_query_key(&key, "xiuxian:test:repo-analysis").is_empty(),
+        "query cache key should exist when analysis identity is stable"
     );
 }
 

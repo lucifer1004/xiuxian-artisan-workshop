@@ -77,10 +77,12 @@ pub mod parsers;
 pub mod pybindings;
 /// Internal query-core skeleton for RFC-driven Wendao execution adapters.
 pub mod query_core;
+/// Repo-intelligence ingestion runtime and status coordination.
+#[cfg(feature = "zhenfa-router")]
+pub mod repo_index;
 pub mod schemas;
+/// Wendao search infrastructure, corpora, query adapters, and shared primitives.
 pub mod search;
-/// Lance/Arrow/Valkey-backed search-plane domain for Studio search corpora.
-pub mod search_plane;
 pub(crate) mod settings;
 pub mod storage;
 pub mod sync;

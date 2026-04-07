@@ -38,6 +38,13 @@ Current implementation note:
   instead of operator-specific absolute paths
 - the internal `gix` backend now lives under `src/backend/gix/` as a
   responsibility-sliced feature folder instead of one monolithic backend file
+- remote clone/fetch/probe paths now also share
+  `src/backend/gix/interrupt.rs`, which drives a bounded interrupt watchdog for
+  managed remote operations and returns deterministic timeout errors through
+  `XIUXIAN_GIT_REPO_REMOTE_OPERATION_TIMEOUT_SECS` (default `45`)
+- the watchdog unit suite now also proves the fast success path returns well
+  before the configured timeout budget, keeping this reliability guard
+  performance-cheap for normal remote operations
 - no production native `git` command bridge remains in `xiuxian-git-repo`
 - `xiuxian-wendao` no longer carries `src/git/` compatibility models; callers
   now consume this crate through a minimal registered-repository adapter under

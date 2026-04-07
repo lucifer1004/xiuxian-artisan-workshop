@@ -7,7 +7,7 @@ use crate::gateway::studio::perf_support::root::{
 };
 use crate::gateway::studio::perf_support::state::gateway_ui_config_for_project;
 use crate::gateway::studio::perf_support::workspace::real_workspace_status_is_query_ready;
-use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
+use crate::repo_index::RepoIndexStatusResponse;
 
 #[test]
 fn resolve_real_workspace_root_prefers_explicit_env_override() {

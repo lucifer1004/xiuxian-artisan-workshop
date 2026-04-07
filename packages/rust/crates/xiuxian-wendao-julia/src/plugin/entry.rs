@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use xiuxian_ast::{
-    JuliaDocAttachment, JuliaDocTargetKind, JuliaImport, JuliaParseError, JuliaSourceSummary,
-    JuliaSymbol, JuliaSymbolKind as AstJuliaSymbolKind, TreeSitterJuliaParser,
+    JuliaDocAttachment, JuliaDocTargetKind, JuliaFileSummary, JuliaImport, JuliaSymbol,
+    JuliaSymbolKind as AstJuliaSymbolKind, TreeSitterJuliaParser,
 };
 use xiuxian_wendao_core::repo_intelligence::{
     AnalysisContext, DocRecord, ModuleRecord, PluginAnalysisOutput, PluginLinkContext,
@@ -63,30 +63,36 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
         context: &AnalysisContext,
         file: &RepoSourceFile,
     ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
-        let summary = parse_julia_source_summary(&file.contents, &file.path)?;
-        let module_id = format!(
-            "repo:{}:module:{}",
-            context.repository.id, summary.module_name
-        );
+        let summary = parse_julia_file_summary(context, file)?;
+        let module_name = summary.module_name.clone().unwrap_or_else(|| {
+            load_project_metadata(&context.repository.id, context.repository_root.as_path())
+                .map_or_else(|_| context.repository.id.clone(), |metadata| metadata.name)
+        });
+        let module_id = format!("repo:{}:module:{}", context.repository.id, module_name);
         let symbols = build_symbol_records(
             &context.repository.id,
             &file.path,
-            &summary.module_name,
+            &module_name,
             &summary.exports,
             &summary.symbols,
         );
         Ok(PluginAnalysisOutput {
-            modules: vec![ModuleRecord {
-                repo_id: context.repository.id.clone(),
-                module_id,
-                qualified_name: summary.module_name.clone(),
-                path: file.path.clone(),
-            }],
+            modules: summary
+                .module_name
+                .as_ref()
+                .map(|qualified_name| ModuleRecord {
+                    repo_id: context.repository.id.clone(),
+                    module_id,
+                    qualified_name: qualified_name.clone(),
+                    path: file.path.clone(),
+                })
+                .into_iter()
+                .collect(),
             symbols: symbols.clone(),
             docs: build_docstring_records(
                 &context.repository.id,
                 &file.path,
-                &summary.module_name,
+                &module_name,
                 &symbols,
                 &summary.docstrings,
             ),
@@ -224,15 +230,32 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
     }
 }
 
-fn parse_julia_source_summary(
-    contents: &str,
-    root_path: &str,
-) -> Result<JuliaSourceSummary, RepoIntelligenceError> {
+fn parse_julia_file_summary(
+    context: &AnalysisContext,
+    file: &RepoSourceFile,
+) -> Result<JuliaFileSummary, RepoIntelligenceError> {
     let mut parser =
-        TreeSitterJuliaParser::new().map_err(map_julia_parse_error(root_path.to_string()))?;
-    parser
-        .parse_summary(contents)
-        .map_err(map_julia_parse_error(root_path.to_string()))
+        TreeSitterJuliaParser::new().map_err(|error| RepoIntelligenceError::AnalysisFailed {
+            message: format!("failed to parse Julia source `{}`: {error}", file.path),
+        })?;
+    if let Ok(summary) = parser.parse_summary(&file.contents) {
+        return Ok(JuliaFileSummary {
+            module_name: Some(summary.module_name),
+            exports: summary.exports,
+            imports: summary.imports,
+            symbols: summary.symbols,
+            docstrings: summary.docstrings,
+            includes: summary.includes,
+        });
+    }
+    parser.parse_file_summary(&file.contents).map_err(|error| {
+        RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "failed to parse Julia file `{}` in repo `{}` for incremental analysis: {error}",
+                file.path, context.repository.id
+            ),
+        }
+    })
 }
 
 fn collect_symbol_records(
@@ -255,14 +278,6 @@ fn collect_symbol_records(
     }
 
     symbol_map.into_values().collect()
-}
-
-fn map_julia_parse_error(
-    root_path: String,
-) -> impl FnOnce(JuliaParseError) -> RepoIntelligenceError {
-    move |error| RepoIntelligenceError::AnalysisFailed {
-        message: format!("failed to parse Julia source `{root_path}`: {error}"),
-    }
 }
 
 fn build_symbol_records(

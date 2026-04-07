@@ -1,6 +1,7 @@
 use serde_json::json;
 use xiuxian_wendao_runtime::transport::SqlFlightRouteProvider;
 
+use crate::search::SearchCorpusKind;
 use crate::search::queries::sql::provider::StudioSqlFlightRouteProvider;
 use crate::search::queries::sql::registration::{
     STUDIO_SQL_CATALOG_TABLE_NAME, STUDIO_SQL_COLUMNS_CATALOG_TABLE_NAME,
@@ -12,7 +13,6 @@ use crate::search::queries::sql::tests::fixtures::{
     sample_local_symbol_hit, sql_response_snapshot,
 };
 use crate::search::queries::tests::snapshots::assert_query_json_snapshot;
-use crate::search_plane::SearchCorpusKind;
 
 #[tokio::test]
 async fn sql_flight_provider_snapshots_query_surface() {

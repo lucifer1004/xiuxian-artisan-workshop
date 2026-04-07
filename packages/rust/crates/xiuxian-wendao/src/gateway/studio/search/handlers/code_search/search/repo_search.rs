@@ -1,10 +1,10 @@
 use crate::gateway::studio::router::StudioApiError;
 use crate::gateway::studio::types::SearchHit;
+use crate::search::SearchPlaneService;
 use crate::search::repo_search::{
     search_repo_content_hits_for_query as shared_search_repo_content_hits_for_query,
     search_repo_entity_hits_for_query as shared_search_repo_entity_hits_for_query,
 };
-use crate::search_plane::SearchPlaneService;
 
 /// Search repo entity rows for a repo-scoped code query.
 ///

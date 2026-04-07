@@ -13,7 +13,6 @@ use crate::analyzers::{
     RepositoryAnalysisOutput, SymbolRecord, bootstrap_builtin_registry,
     resolve_registered_repository_source,
 };
-use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::gateway::studio::router::StudioApiError;
 use crate::gateway::studio::router::configured_repository;
 use crate::gateway::studio::router::handlers::repo::analysis::search::cache::with_cached_repo_search_result;
@@ -27,7 +26,8 @@ use crate::query_core::{
     query_repo_entity_example_results_if_published, query_repo_entity_import_results_if_published,
     query_repo_entity_module_results_if_published, query_repo_entity_symbol_results_if_published,
 };
-use crate::search_plane::{
+use crate::repo_index::RepoCodeDocument;
+use crate::search::{
     SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService, publish_repo_entities,
 };
 use xiuxian_git_repo::{SyncMode, discover_checkout_metadata};

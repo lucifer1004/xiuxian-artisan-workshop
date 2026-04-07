@@ -4,11 +4,11 @@ use crate::analyzers::{
     RefineEntityDocRequest, RefineEntityDocResponse, RepoSyncMode, RepoSyncQuery, RepoSyncResult,
     repo_sync_for_registered_repository,
 };
-use crate::gateway::studio::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 use crate::gateway::studio::router::handlers::repo::shared::{
     repo_index_repositories, with_repo_analysis, with_repository,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
+use crate::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 
 pub(crate) async fn run_repo_index(
     state: Arc<GatewayState>,

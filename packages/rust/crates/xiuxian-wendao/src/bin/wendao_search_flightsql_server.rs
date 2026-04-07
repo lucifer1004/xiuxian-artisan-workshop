@@ -28,9 +28,9 @@ use tonic_web::GrpcWebLayer;
 #[cfg(feature = "julia")]
 use xiuxian_wendao::gateway::studio::bootstrap_sample_repo_search_content;
 #[cfg(feature = "julia")]
-use xiuxian_wendao::search::queries::flightsql::build_studio_flightsql_service;
+use xiuxian_wendao::search::SearchPlaneService;
 #[cfg(feature = "julia")]
-use xiuxian_wendao::search_plane::SearchPlaneService;
+use xiuxian_wendao::search::queries::flightsql::build_studio_flightsql_service;
 
 #[cfg(feature = "julia")]
 #[tokio::main]

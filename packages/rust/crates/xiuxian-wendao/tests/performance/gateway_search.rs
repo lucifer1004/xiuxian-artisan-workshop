@@ -21,6 +21,11 @@ use crate::performance::support::gateway::{
     describe_repo_read_pressure, describe_search_index_status_payload, formal_gateway_perf_budget,
     formal_gateway_perf_config, maintenance_summary, query_telemetry_scope, repo_read_pressure,
 };
+use crate::performance::support::repo_index_audit::{
+    RepoIndexLiveAuditConfig, RepoIndexMixedLoadAuditConfig, audit_real_workspace_repo_index,
+    audit_real_workspace_repo_index_under_query_load, describe_repo_index_live_audit_report,
+    describe_repo_index_mixed_load_report,
+};
 
 const SUITE: &str = "xiuxian-wendao/perf-gateway";
 const REAL_WORKSPACE_SUITE: &str = "xiuxian-wendao/perf-gateway-real-workspace";
@@ -516,4 +521,142 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
 async fn gateway_perf_reports_real_workspace_scale_real_workspace() -> Result<()> {
     let fixture = prepare_gateway_real_workspace_perf_fixture().await?;
     assert_real_workspace_repo_index_status_sample(&fixture).await
+}
+
+#[tokio::test]
+#[ignore = "manual large-workspace repo-index live audit"]
+#[file_serial(formal_gateway_search_perf)]
+async fn gateway_perf_audits_real_workspace_repo_index_distinctions_live() -> Result<()> {
+    let fixture = prepare_gateway_real_workspace_perf_fixture().await?;
+    let report =
+        audit_real_workspace_repo_index(&fixture, &RepoIndexLiveAuditConfig::default()).await?;
+    let diagnostics = describe_repo_index_live_audit_report(&report);
+    eprintln!("{diagnostics}");
+
+    if report.expected_repositories == 0 {
+        return Err(anyhow!(
+            "real-workspace repo-index audit found no configured repositories"
+        ));
+    }
+    if report.final_status.total < report.expected_repositories {
+        return Err(anyhow!(
+            "repo-index audit should report all configured repositories (expected={}, got={}); diagnostics={diagnostics}",
+            report.expected_repositories,
+            report.final_status.total
+        ));
+    }
+    if report.final_status.ready == 0 {
+        return Err(anyhow!(
+            "repo-index audit should retain at least one ready repository; diagnostics={diagnostics}"
+        ));
+    }
+    if let Some(stall_reason) = &report.stall_reason {
+        return Err(anyhow!(
+            "repo-index audit detected a live stall signature: {stall_reason}; diagnostics={diagnostics}"
+        ));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "manual large-workspace repo-index full live audit"]
+#[file_serial(formal_gateway_search_perf)]
+async fn gateway_perf_audits_real_workspace_repo_index_full_run_live() -> Result<()> {
+    let fixture = prepare_gateway_real_workspace_perf_fixture().await?;
+    let report =
+        audit_real_workspace_repo_index(&fixture, &RepoIndexLiveAuditConfig::full_run()).await?;
+    let diagnostics = describe_repo_index_live_audit_report(&report);
+    eprintln!("{diagnostics}");
+
+    if report.expected_repositories == 0 {
+        return Err(anyhow!(
+            "real-workspace repo-index full audit found no configured repositories"
+        ));
+    }
+    if report.final_status.total < report.expected_repositories {
+        return Err(anyhow!(
+            "repo-index full audit should report all configured repositories (expected={}, got={}); diagnostics={diagnostics}",
+            report.expected_repositories,
+            report.final_status.total
+        ));
+    }
+    if let Some(stall_reason) = &report.stall_reason {
+        return Err(anyhow!(
+            "repo-index full audit detected a live stall signature: {stall_reason}; diagnostics={diagnostics}"
+        ));
+    }
+    if report.timed_out {
+        return Err(anyhow!(
+            "repo-index full audit hit its timeout before reaching terminal state; diagnostics={diagnostics}"
+        ));
+    }
+    if !report.reached_terminal_state {
+        return Err(anyhow!(
+            "repo-index full audit should reach a terminal state; diagnostics={diagnostics}"
+        ));
+    }
+    if report.final_status.failed > 0 {
+        return Err(anyhow!(
+            "repo-index full audit should finish without failed repositories; diagnostics={diagnostics}"
+        ));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "manual large-workspace repo-index mixed gateway load audit"]
+#[file_serial(formal_gateway_search_perf)]
+async fn gateway_perf_audits_real_workspace_repo_index_mixed_gateway_load_live() -> Result<()> {
+    let fixture = prepare_gateway_real_workspace_perf_fixture().await?;
+    let report = audit_real_workspace_repo_index_under_query_load(
+        &fixture,
+        &RepoIndexMixedLoadAuditConfig::full_run(),
+    )
+    .await?;
+    let diagnostics = describe_repo_index_mixed_load_report(&report);
+    eprintln!("{diagnostics}");
+
+    if report.audit.expected_repositories == 0 {
+        return Err(anyhow!(
+            "real-workspace repo-index mixed-load audit found no configured repositories"
+        ));
+    }
+    if report.audit.final_status.total < report.audit.expected_repositories {
+        return Err(anyhow!(
+            "repo-index mixed-load audit should report all configured repositories (expected={}, got={}); diagnostics={diagnostics}",
+            report.audit.expected_repositories,
+            report.audit.final_status.total
+        ));
+    }
+    if let Some(stall_reason) = &report.audit.stall_reason {
+        return Err(anyhow!(
+            "repo-index mixed-load audit detected a live stall signature: {stall_reason}; diagnostics={diagnostics}"
+        ));
+    }
+    if report.audit.timed_out {
+        return Err(anyhow!(
+            "repo-index mixed-load audit hit its timeout before reaching terminal state; diagnostics={diagnostics}"
+        ));
+    }
+    if !report.audit.reached_terminal_state {
+        return Err(anyhow!(
+            "repo-index mixed-load audit should reach a terminal state; diagnostics={diagnostics}"
+        ));
+    }
+    if report.audit.final_status.failed > 0 {
+        return Err(anyhow!(
+            "repo-index mixed-load audit should finish without failed repositories; diagnostics={diagnostics}"
+        ));
+    }
+    if report.query_load.total_requests == 0 {
+        return Err(anyhow!(
+            "repo-index mixed-load audit should exercise gateway queries during the run; diagnostics={diagnostics}"
+        ));
+    }
+    if report.query_load.failed_requests > 0 {
+        return Err(anyhow!(
+            "repo-index mixed-load audit should keep gateway queries successful under load; diagnostics={diagnostics}"
+        ));
+    }
+    Ok(())
 }

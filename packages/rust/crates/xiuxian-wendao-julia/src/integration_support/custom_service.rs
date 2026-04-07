@@ -1,9 +1,10 @@
 use std::fs;
+use std::path::{Component, PathBuf};
 use std::process::{Command, Stdio};
 
 use super::common::{
-    JuliaExampleServiceGuard, repo_root, reserve_service_port, wait_for_service_ready,
-    wendaoarrow_package_dir, wendaoarrow_script,
+    JuliaExampleServiceGuard, project_cache_dir, repo_root, reserve_service_port,
+    wait_for_service_ready, wendaoarrow_script,
 };
 
 /// Row-level score override for the custom Julia rerank service.
@@ -16,6 +17,9 @@ pub struct WendaoArrowScoreRow<'a> {
     pub final_score: f64,
 }
 
+const WENDAOARROW_CUSTOM_SERVICE_CONFIG_TOML: &str =
+    include_str!("../../resources/integration_support/wendaoarrow_custom_service.toml");
+
 /// Spawns a custom `WendaoArrow` scoring service from inline score rows.
 ///
 /// # Panics
@@ -27,19 +31,17 @@ pub async fn spawn_wendaoarrow_custom_scoring_service(
 ) -> (String, JuliaExampleServiceGuard) {
     let port = reserve_service_port();
     let base_url = format!("http://127.0.0.1:{port}");
-    let package_dir = wendaoarrow_package_dir();
-    let generated_dir = package_dir.join("generated");
+    let generated_dir = project_cache_dir().join(custom_service_cache_relative_dir());
     fs::create_dir_all(&generated_dir)
-        .unwrap_or_else(|error| panic!("create generated WendaoArrow example dir: {error}"));
-    let generated_relative_path = format!("generated/custom_scoring_flight_server_{port}.jl");
-    let generated_script = package_dir.join(&generated_relative_path);
+        .unwrap_or_else(|error| panic!("create WendaoArrow custom scoring cache dir: {error}"));
+    let generated_script = generated_dir.join(format!("custom_scoring_flight_server_{port}.jl"));
     fs::write(&generated_script, processor_script(rows)).unwrap_or_else(|error| {
         panic!("write generated WendaoArrow custom scoring script: {error}")
     });
 
     let child = Command::new("julia")
         .arg(wendaoarrow_script("run_flight_example.jl"))
-        .arg(generated_relative_path)
+        .arg(&generated_script)
         .arg("--port")
         .arg(port.to_string())
         .current_dir(repo_root())
@@ -57,6 +59,41 @@ pub async fn spawn_wendaoarrow_custom_scoring_service(
         });
 
     (base_url, guard)
+}
+
+fn custom_service_cache_relative_dir() -> PathBuf {
+    let parsed: toml::Value = toml::from_str(WENDAOARROW_CUSTOM_SERVICE_CONFIG_TOML)
+        .unwrap_or_else(|error| panic!("parse WendaoArrow custom service config TOML: {error}"));
+    let raw_relative_dir = parsed
+        .get("cache")
+        .and_then(toml::Value::as_table)
+        .and_then(|cache| cache.get("relative_dir"))
+        .and_then(toml::Value::as_str)
+        .map_or_else(
+            || panic!("WendaoArrow custom service config must define `cache.relative_dir`"),
+            str::trim,
+        );
+    assert!(
+        !raw_relative_dir.is_empty(),
+        "WendaoArrow custom service config `cache.relative_dir` must not be blank"
+    );
+
+    let relative_dir = PathBuf::from(raw_relative_dir);
+    if relative_dir.is_absolute()
+        || relative_dir.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        panic!(
+            "WendaoArrow custom service config `cache.relative_dir` must stay relative to PRJ_CACHE_HOME, got `{}`",
+            relative_dir.display()
+        );
+    }
+
+    relative_dir
 }
 
 fn processor_script(rows: &[WendaoArrowScoreRow<'_>]) -> String {
@@ -151,4 +188,19 @@ WendaoArrow.serve_stream_flight(
 )
 "#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::custom_service_cache_relative_dir;
+
+    #[test]
+    fn custom_service_cache_relative_dir_stays_relative() {
+        let relative_dir = custom_service_cache_relative_dir();
+        assert!(!relative_dir.is_absolute());
+        assert_eq!(
+            relative_dir,
+            std::path::PathBuf::from("xiuxian-wendao-julia/integration_support/wendaoarrow")
+        );
+    }
 }

@@ -36,10 +36,6 @@ pub mod swarm;
 /// Real-time swarm telemetry contracts and Valkey emitter.
 pub mod telemetry;
 
-#[cfg(feature = "pyo3")]
-/// Python bindings via `PyO3`.
-pub mod python_module;
-
 pub use app::{MEMORY_PROMOTION_PIPELINE_TOML, QianjiApp, RESEARCH_TRINITY_TOML};
 pub use bootcamp::{
     BootcampLlmMode, BootcampRunOptions, BootcampVfsMount, WorkflowReport, run_scenario,

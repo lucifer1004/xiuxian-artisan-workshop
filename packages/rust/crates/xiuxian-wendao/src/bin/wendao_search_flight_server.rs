@@ -36,7 +36,7 @@ use xiuxian_wendao::gateway::studio::{
 #[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::link_graph::resolve_link_graph_rerank_flight_runtime_settings;
 #[cfg(feature = "zhenfa-router")]
-use xiuxian_wendao::search_plane::SearchPlaneService;
+use xiuxian_wendao::search::SearchPlaneService;
 #[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::set_link_graph_wendao_config_override;
 #[cfg(feature = "zhenfa-router")]

@@ -60,6 +60,13 @@ It must not own:
 3. Wendao retrieval semantics
 4. plugin-specific thick implementation
 
+`xiuxian-config-core` is the canonical owner of recursive config imports,
+import-path environment expansion, and merge precedence. `runtime` and
+`wendao` may project typed runtime settings from merged TOML, but they must not
+reintroduce bespoke TOML line scanners or duplicate merge logic. The checked-in
+workspace boot config now lives at `$PRJ_ROOT/wendao.toml`, while crate-owned
+embedded defaults remain under `resources/config/wendao.toml`.
+
 ### `xiuxian-wendao`
 
 `wendao` is the domain kernel.

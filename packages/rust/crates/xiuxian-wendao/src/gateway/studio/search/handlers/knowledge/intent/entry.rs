@@ -14,7 +14,7 @@ use crate::gateway::studio::search::handlers::knowledge::intent::types::IntentSe
 #[cfg(test)]
 use crate::gateway::studio::search::handlers::queries::SearchQuery;
 use crate::gateway::studio::types::SearchResponse;
-use crate::search_plane::SearchPlaneCacheTtl;
+use crate::search::SearchPlaneCacheTtl;
 
 #[cfg(test)]
 pub(crate) async fn load_intent_search_response_with_metadata(

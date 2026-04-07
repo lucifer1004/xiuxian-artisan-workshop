@@ -10,11 +10,15 @@ use crate::error::{RepoError, RepoErrorKind};
 use crate::layout::managed_mirror_root_for;
 use crate::spec::RepoSpec;
 
-const CHECKOUT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
+const CHECKOUT_LOCK_RETRY_DELAY_ENV: &str = "XIUXIAN_GIT_REPO_CHECKOUT_LOCK_RETRY_DELAY_MS";
 const CHECKOUT_LOCK_MAX_WAIT_ENV: &str = "XIUXIAN_WENDAO_CHECKOUT_LOCK_MAX_WAIT_SECS";
 const DEFAULT_CHECKOUT_LOCK_MAX_WAIT_SECS: u64 = 20;
 const CHECKOUT_LOCK_STALE_AFTER: Duration = Duration::from_secs(120);
 const TOO_MANY_OPEN_FILES_OS_ERROR: i32 = 24;
+const MIN_CHECKOUT_LOCK_RETRY_DELAY_MS: u64 = 50;
+const MAX_CHECKOUT_LOCK_RETRY_DELAY_MS: u64 = 150;
+const CHECKOUT_LOCK_RETRY_DELAY_BASE_MS: u64 = 40;
+const CHECKOUT_LOCK_RETRY_DELAY_MS_PER_CORE: u64 = 5;
 
 /// Guard for one managed checkout lockfile.
 #[derive(Debug)]
@@ -38,14 +42,44 @@ impl Drop for ManagedCheckoutLock {
 pub fn acquire_managed_checkout_lock(spec: &RepoSpec) -> Result<ManagedCheckoutLock, RepoError> {
     acquire_managed_checkout_lock_with_policy(
         managed_lock_path_for(spec),
-        CHECKOUT_LOCK_RETRY_DELAY,
+        checkout_lock_retry_delay(),
         checkout_lock_max_wait(),
         CHECKOUT_LOCK_STALE_AFTER,
     )
 }
 
+fn checkout_lock_retry_delay() -> Duration {
+    checkout_lock_retry_delay_with_lookup(&|key| std::env::var(key).ok())
+}
+
 fn checkout_lock_max_wait() -> Duration {
     checkout_lock_max_wait_with_lookup(&|key| std::env::var(key).ok())
+}
+
+fn checkout_lock_retry_delay_with_lookup(lookup: &dyn Fn(&str) -> Option<String>) -> Duration {
+    lookup(CHECKOUT_LOCK_RETRY_DELAY_ENV)
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .map_or_else(default_checkout_lock_retry_delay, Duration::from_millis)
+}
+
+fn default_checkout_lock_retry_delay() -> Duration {
+    default_checkout_lock_retry_delay_for_parallelism(
+        std::thread::available_parallelism()
+            .map(std::num::NonZeroUsize::get)
+            .unwrap_or(1),
+    )
+}
+
+fn default_checkout_lock_retry_delay_for_parallelism(parallelism: usize) -> Duration {
+    let parallelism = u64::try_from(parallelism.max(1)).unwrap_or(u64::MAX);
+    let delay_ms = CHECKOUT_LOCK_RETRY_DELAY_BASE_MS
+        .saturating_add(parallelism.saturating_mul(CHECKOUT_LOCK_RETRY_DELAY_MS_PER_CORE))
+        .clamp(
+            MIN_CHECKOUT_LOCK_RETRY_DELAY_MS,
+            MAX_CHECKOUT_LOCK_RETRY_DELAY_MS,
+        );
+    Duration::from_millis(delay_ms)
 }
 
 /// Resolves the checkout-lock timeout using the provided lookup function.
@@ -190,4 +224,66 @@ fn lockfile_is_stale(lock_path: &Path, stale_after: Duration) -> bool {
 #[must_use]
 pub fn is_descriptor_pressure_error(error: &std::io::Error) -> bool {
     error.raw_os_error() == Some(TOO_MANY_OPEN_FILES_OS_ERROR)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::{
+        checkout_lock_retry_delay_with_lookup, default_checkout_lock_retry_delay_for_parallelism,
+    };
+
+    #[test]
+    fn checkout_lock_retry_delay_scales_with_parallelism() {
+        assert_eq!(
+            default_checkout_lock_retry_delay_for_parallelism(1),
+            Duration::from_millis(50)
+        );
+        assert_eq!(
+            default_checkout_lock_retry_delay_for_parallelism(12),
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            default_checkout_lock_retry_delay_for_parallelism(24),
+            Duration::from_millis(150)
+        );
+    }
+
+    #[test]
+    fn checkout_lock_retry_delay_defaults_when_env_is_missing() {
+        assert_eq!(
+            checkout_lock_retry_delay_with_lookup(&|_| None),
+            default_checkout_lock_retry_delay_for_parallelism(
+                std::thread::available_parallelism()
+                    .map(std::num::NonZeroUsize::get)
+                    .unwrap_or(1),
+            )
+        );
+    }
+
+    #[test]
+    fn checkout_lock_retry_delay_uses_positive_override() {
+        assert_eq!(
+            checkout_lock_retry_delay_with_lookup(&|key| {
+                (key == "XIUXIAN_GIT_REPO_CHECKOUT_LOCK_RETRY_DELAY_MS").then(|| "125".to_string())
+            }),
+            Duration::from_millis(125)
+        );
+    }
+
+    #[test]
+    fn checkout_lock_retry_delay_ignores_invalid_override() {
+        assert_eq!(
+            checkout_lock_retry_delay_with_lookup(&|key| {
+                (key == "XIUXIAN_GIT_REPO_CHECKOUT_LOCK_RETRY_DELAY_MS")
+                    .then(|| "invalid".to_string())
+            }),
+            default_checkout_lock_retry_delay_for_parallelism(
+                std::thread::available_parallelism()
+                    .map(std::num::NonZeroUsize::get)
+                    .unwrap_or(1),
+            )
+        );
+    }
 }

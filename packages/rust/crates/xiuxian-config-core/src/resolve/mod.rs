@@ -1,15 +1,21 @@
-use crate::{ConfigCascadeSpec, ConfigCoreError};
+use crate::{
+    ConfigCascadeSpec, ConfigCoreError, normalize_config_home, resolve_config_home,
+    resolve_project_root,
+};
 use serde::de::DeserializeOwned;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 mod discover;
+mod env;
 mod imports;
 mod merge;
 
 use self::discover::{existing_config_files, global_candidates, orphan_candidates};
-use self::merge::merge_values;
+use self::{env::ImportPathContext, merge::merge_values};
 
-pub use imports::load_toml_value_with_imports;
+pub use imports::{
+    load_toml_value_with_imports, load_toml_value_with_imports_and_paths, merge_toml_values,
+};
 
 /// Resolve layered files and return merged TOML value.
 ///
@@ -42,6 +48,7 @@ pub fn resolve_and_merge_toml_with_paths(
     config_home: Option<&Path>,
 ) -> Result<toml::Value, ConfigCoreError> {
     let resolved_config_home = normalize_config_home(project_root, config_home);
+    let context = ImportPathContext::from_paths(project_root, resolved_config_home.as_deref());
     let mut global_paths =
         existing_config_files(global_candidates(resolved_config_home.as_deref()));
     let mut orphan_paths = existing_config_files(orphan_candidates(
@@ -71,18 +78,25 @@ pub fn resolve_and_merge_toml_with_paths(
         spec.embedded_toml,
         embedded_source_path,
         spec.array_merge_strategy,
+        &context,
     )?;
 
     if global_paths.is_empty() {
         for orphan_path in orphan_paths {
-            let orphan_value =
-                imports::load_file_with_imports(orphan_path.as_path(), spec.array_merge_strategy)?;
+            let orphan_value = imports::load_file_with_imports(
+                orphan_path.as_path(),
+                spec.array_merge_strategy,
+                &context,
+            )?;
             merge_values(&mut merged, orphan_value, spec.array_merge_strategy);
         }
     } else {
         for path in global_paths {
-            let global_root =
-                imports::load_file_with_imports(path.as_path(), spec.array_merge_strategy)?;
+            let global_root = imports::load_file_with_imports(
+                path.as_path(),
+                spec.array_merge_strategy,
+                &context,
+            )?;
             if let Some(namespace_value) = get_nested_value(&global_root, spec.namespace) {
                 merge_values(&mut merged, namespace_value, spec.array_merge_strategy);
             }
@@ -150,61 +164,4 @@ fn get_nested_value(value: &toml::Value, dotted_path: &str) -> Option<toml::Valu
         }
     }
     Some(current.clone())
-}
-
-fn resolve_project_root() -> Option<PathBuf> {
-    if let Some(path) = std::env::var("PRJ_ROOT")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    {
-        let candidate = PathBuf::from(path);
-        if candidate.is_absolute() {
-            return Some(candidate);
-        }
-        if let Ok(current_dir) = std::env::current_dir() {
-            return Some(current_dir.join(candidate));
-        }
-        return None;
-    }
-
-    let mut cursor = std::env::current_dir().ok()?;
-    loop {
-        if cursor.join(".git").exists() {
-            return Some(cursor);
-        }
-        if !cursor.pop() {
-            break;
-        }
-    }
-    None
-}
-
-fn resolve_config_home(project_root: Option<&Path>) -> Option<PathBuf> {
-    std::env::var("PRJ_CONFIG_HOME")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .map(|path| {
-            if path.is_absolute() {
-                path
-            } else if let Some(root) = project_root {
-                root.join(path)
-            } else {
-                path
-            }
-        })
-        .or_else(|| project_root.map(|root| root.join(".config")))
-}
-
-fn normalize_config_home(
-    project_root: Option<&Path>,
-    config_home: Option<&Path>,
-) -> Option<PathBuf> {
-    match config_home {
-        Some(path) if path.is_absolute() => Some(path.to_path_buf()),
-        Some(path) => project_root.map(|root| root.join(path)),
-        None => project_root.map(|root| root.join(".config")),
-    }
 }
