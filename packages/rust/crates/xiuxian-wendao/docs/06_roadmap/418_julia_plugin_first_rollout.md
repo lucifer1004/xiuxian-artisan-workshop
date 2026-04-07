@@ -1161,6 +1161,22 @@ The landed changes are:
    broader non-Julia host `cargo check --tests` probe, which now passes beyond
    this file
 
+## Landed Slice: Process-Managed WendaoSearch Live Service
+
+This slice added one formal repo-level live smoke surface for the Julia Search
+lane without turning the product crate or the process manager into the owner
+of Search service semantics.
+
+The landed changes are:
+
+1. added one package-owned TOML live-service descriptor under `WendaoSearch.jl`
+   for the standard `solver_demo` multi-route service
+2. kept the repository `devenv` process layer as a thin launcher over that
+   package-owned config instead of hard-coding route and port semantics inside
+   `nix/modules/process.nix`
+3. kept Rust plugin and host tests on self-spawned Julia services so those
+   bounded live proofs still use isolated ports and deterministic cleanup
+
 :RELATIONS:
 :LINKS: [[index]], [[01_core/103_package_layering]], [[06_roadmap/412_core_runtime_plugin_program]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/417_wendao_package_boundary_matrix]]
 :END:

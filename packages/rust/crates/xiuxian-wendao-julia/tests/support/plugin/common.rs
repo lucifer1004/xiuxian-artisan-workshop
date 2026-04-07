@@ -118,6 +118,15 @@ pub(crate) fn wendaosearch_package_dir() -> PathBuf {
         .unwrap_or_else(|error| panic!("resolve WendaoSearch package dir: {error}"))
 }
 
+pub(crate) fn wendaosearch_config(name: &str) -> PathBuf {
+    wendaosearch_package_dir()
+        .join("config")
+        .join("live")
+        .join(name)
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve WendaoSearch config `{name}`: {error}"))
+}
+
 pub(crate) fn wendaosearch_script(name: &str) -> PathBuf {
     wendaosearch_package_dir()
         .join("scripts")

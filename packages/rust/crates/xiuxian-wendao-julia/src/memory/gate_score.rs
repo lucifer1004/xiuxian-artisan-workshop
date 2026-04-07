@@ -75,7 +75,8 @@ const MEMORY_GATE_SCORE_ALLOWED_STATES: [&str; 6] = [
     "promoted",
 ];
 
-const MEMORY_GATE_SCORE_ALLOWED_VERDICTS: [&str; 3] = ["retain", "obsolete", "promote"];
+const MEMORY_GATE_SCORE_ALLOWED_VERDICTS: [&str; 3] =
+    ["retain", "obsolete", "promote_to_working_knowledge"];
 
 /// One typed request row for the staged gate-score profile.
 #[derive(Debug, Clone, PartialEq)]
@@ -676,12 +677,12 @@ mod tests {
     fn sample_recommendation_row() -> MemoryJuliaGateScoreRecommendationRow {
         MemoryJuliaGateScoreRecommendationRow {
             memory_id: "episode-1".to_string(),
-            verdict: "promote".to_string(),
+            verdict: "promote_to_working_knowledge".to_string(),
             confidence: 0.93,
             utility_score: 0.87,
             ttl_score: 0.72,
-            next_action: "promote".to_string(),
-            reason: "utility and ttl exceed promotion threshold".to_string(),
+            next_action: "promote_to_working_knowledge".to_string(),
+            reason: "utility and ttl exceed working-knowledge promotion threshold".to_string(),
             schema_version: "v1".to_string(),
         }
     }
@@ -768,11 +769,11 @@ mod tests {
             memory_julia_gate_score_response_schema(),
             vec![
                 Arc::new(StringArray::from(vec!["episode-1"])),
-                Arc::new(StringArray::from(vec!["promote_to_working_knowledge"])),
+                Arc::new(StringArray::from(vec!["promote"])),
                 Arc::new(Float32Array::from(vec![0.82])),
                 Arc::new(Float32Array::from(vec![0.79])),
                 Arc::new(Float32Array::from(vec![0.61])),
-                Arc::new(StringArray::from(vec!["promote"])),
+                Arc::new(StringArray::from(vec!["promote_to_working_knowledge"])),
                 Arc::new(StringArray::from(vec!["promote candidate"])),
                 Arc::new(StringArray::from(vec!["v1"])),
             ],

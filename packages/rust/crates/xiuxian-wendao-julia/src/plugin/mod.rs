@@ -9,9 +9,11 @@ mod linking;
 mod project;
 mod rerank_exchange;
 mod sources;
-#[cfg(test)]
-pub(crate) mod test_support;
 mod transport;
+
+#[cfg(test)]
+#[path = "../../tests/support/plugin/mod.rs"]
+pub(crate) mod test_support;
 
 pub use capability_manifest::{
     JULIA_PLUGIN_CAPABILITY_MANIFEST_BASE_URL_COLUMN,

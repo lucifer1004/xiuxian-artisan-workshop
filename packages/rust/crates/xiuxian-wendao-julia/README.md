@@ -30,6 +30,35 @@
 - the current canonical full crate pass is now `139 passed` in `136.25s`,
   while preserving explicit transport, manifest-discovery, and grouped
   capability-manifest live coverage across the plugin lane
+- the repository now also exposes one process-managed
+  `wendaosearch-solver-demo` background service, but its route and port
+  semantics stay package-owned in `WendaoSearch.jl` TOML config and the crate
+  test suites still self-spawn Julia services for isolated live proofs; the
+  managed service now also mirrors stdout and stderr into repo-local runtime
+  log files so background failures are inspectable without attaching to the
+  live process manager UI, and absence of those files usually means the
+  background service is still running from an older process-compose generation
+  that predates the current launcher
+- Julia test support now lives under `tests/support/` instead of
+  `src/plugin/test_support/` or `src/memory/test_support.rs`, and the crate
+  now ships `tests/xiuxian-testing-gate.rs` backed by `xiuxian-testing` so the
+  test layout is checked by the same structure gate used elsewhere in the
+  workspace
+- the process-managed `WendaoSearch.jl` background service now also has one
+  opt-in Rust live proof under
+  `RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST=1 cargo test -p xiuxian-wendao-julia plugin::graph_structural_exchange::tests::fetch_graph_structural_solver_demo_rows_for_repository_against_process_managed_wendaosearch_service -- --exact --nocapture`,
+  while the existing self-spawn solver-demo proof remains the deterministic
+  isolated baseline; that opt-in proof now first checks whether
+  `wendaosearch-solver-demo` is already healthy, and otherwise starts the
+  current `devenv` generation itself through `devenv processes up -d`
+  instead of trusting an inherited `PC_CONFIG_FILES` shell variable, so the
+  same proof path also protects the managed-service log sink against stale
+  generation reuse
+- the current full crate pass is also green with that opt-in background lane
+  enabled:
+  `direnv exec . env RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST=1 cargo test -p xiuxian-wendao-julia`
+  now completes with the managed-service proof enabled alongside the existing
+  self-spawn live suites
 - the host consumer still checks cleanly under
   `direnv exec . cargo check -p xiuxian-wendao --lib --features julia`
 
@@ -44,6 +73,10 @@
   family-level `health_route` propagation path, and typed `episodic_recall`,
   `memory_gate_score`, `memory_plan_tuning`, `memory_calibration`, and
   manifest Arrow request or response validation and decoding.
+- the canonical staged defaults in that lane now use `/memory/calibration` for
+  the calibration route and `promote_to_working_knowledge` for the
+  recommendation-only working-knowledge promotion verdict in
+  `memory_gate_score`
 - `xiuxian-wendao-julia` now also owns the plugin-side host-adapter helpers
   under `src/memory/host/`, including the Rust-memory-engine projection or
   evidence inputs that build staged `episodic_recall`, `memory_gate_score`,
@@ -517,9 +550,10 @@ through the production Flight client, so the test verifies request schema
 metadata survives the real Flight API instead of only a hand-written HTTP
 fixture.
 
-The corresponding test support is now split under `src/plugin/test_support/`
-into shared child/path helpers and official-example helpers, mirroring the
-same semantic split used by `xiuxian-wendao` integration support.
+The corresponding test support is now split under `tests/support/plugin/`
+plus `tests/support/memory.rs`, mirroring the same semantic split used by
+`xiuxian-wendao` integration support while keeping helper code out of the
+production `src/` tree.
 That official-example layer now includes real `WendaoSearch.jl` structural
 launchers for both `demo` and `solver_demo`, so plugin-owned
 graph-structural fetch helpers can be proven against a live Search child
@@ -534,3 +568,6 @@ semantic scores into Julia-owned staging before live downcall.
 They now also keep the exchange implementation file lean by externalizing the
 remaining unit and live proof modules behind `#[cfg(test)] #[path = "..."]`
 without changing the green live baseline.
+The crate now also owns its own `tests/xiuxian-testing-gate.rs` structure gate,
+so moving helper modules back under `src/` will be caught by the same
+workspace-level testing policy surface.

@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(contract.request_schema_id, "memory.plan_tuning.request.v1");
         assert_eq!(
             MemoryJuliaComputeProfile::MemoryCalibration.default_route(),
-            "/memory/calibrate"
+            "/memory/calibration"
         );
     }
 }

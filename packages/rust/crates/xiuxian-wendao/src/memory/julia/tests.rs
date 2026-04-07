@@ -56,7 +56,7 @@ shadow_compare = true
 episodic_recall = "/memory/episodic_recall"
 memory_gate_score = "/memory/gate_score"
 memory_plan_tuning = "/memory/plan_tuning"
-memory_calibration = "/memory/calibrate"
+memory_calibration = "/memory/calibration"
 "#,
     )?;
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
@@ -72,7 +72,7 @@ memory_calibration = "/memory/calibrate"
     assert_eq!(runtime.routes.episodic_recall, "/memory/episodic_recall");
     assert_eq!(runtime.routes.memory_gate_score, "/memory/gate_score");
     assert_eq!(runtime.routes.memory_plan_tuning, "/memory/plan_tuning");
-    assert_eq!(runtime.routes.memory_calibration, "/memory/calibrate");
+    assert_eq!(runtime.routes.memory_calibration, "/memory/calibration");
 
     Ok(())
 }
@@ -97,7 +97,7 @@ timeout_secs = 3
 episodic_recall = "/memory/episodic_recall"
 memory_gate_score = "/memory/gate_score"
 memory_plan_tuning = "/memory/plan_tuning"
-memory_calibration = "/memory/calibrate"
+memory_calibration = "/memory/calibration"
 "#,
     )?;
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
@@ -124,7 +124,7 @@ memory_calibration = "/memory/calibrate"
     );
     assert_eq!(
         bindings[3].endpoint.route.as_deref(),
-        Some("/memory/calibrate")
+        Some("/memory/calibration")
     );
 
     Ok(())
@@ -244,7 +244,7 @@ async fn compute_client_fetches_plan_tuning_rows_from_resolved_runtime()
 #[serial]
 async fn compute_client_fetches_calibration_rows_from_resolved_runtime()
 -> Result<(), Box<dyn std::error::Error>> {
-    let route = "/memory/calibrate";
+    let route = "/memory/calibration";
     let (base_url, server) = spawn_memory_service(calibration_response_batch()).await;
     let temp = write_memory_runtime_override(&base_url, route)?;
     let config_path = temp.path().join("wendao.toml");

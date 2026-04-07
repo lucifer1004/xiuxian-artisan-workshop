@@ -470,7 +470,7 @@ mod tests {
             scenario_pack: Some("searchinfra".to_string()),
             artifact_ref: "memory://calibration/job-1".to_string(),
             summary_metrics: "{\"auc\":0.92}".to_string(),
-            recommended_thresholds: "{\"promote\":0.79}".to_string(),
+            recommended_thresholds: "{\"promote_to_working_knowledge\":0.79}".to_string(),
             recommended_weights: "{\"lambda\":0.64}".to_string(),
             schema_version: "v1".to_string(),
         }
@@ -543,7 +543,9 @@ mod tests {
                 Arc::new(StringArray::from(vec![Some("searchinfra")])),
                 Arc::new(StringArray::from(vec!["  "])),
                 Arc::new(StringArray::from(vec!["{\"auc\":0.91}"])),
-                Arc::new(StringArray::from(vec!["{\"promote\":0.8}"])),
+                Arc::new(StringArray::from(vec![
+                    "{\"promote_to_working_knowledge\":0.8}",
+                ])),
                 Arc::new(StringArray::from(vec!["{\"lambda\":0.61}"])),
                 Arc::new(StringArray::from(vec!["v1"])),
             ],

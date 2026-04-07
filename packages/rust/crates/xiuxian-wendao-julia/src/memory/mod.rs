@@ -10,10 +10,12 @@ mod manifest;
 mod plan_tuning;
 mod profile;
 mod runtime;
-#[cfg(test)]
-pub(crate) mod test_support;
 /// Runtime-facing Flight transport helpers for the memory-family Julia lane.
 pub mod transport;
+
+#[cfg(test)]
+#[path = "../../tests/support/memory.rs"]
+pub(crate) mod test_support;
 
 pub use calibration::{
     MEMORY_JULIA_CALIBRATION_ARTIFACT_REF_COLUMN, MEMORY_JULIA_CALIBRATION_DATASET_REF_COLUMN,

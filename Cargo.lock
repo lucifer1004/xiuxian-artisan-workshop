@@ -13993,6 +13993,7 @@ dependencies = [
  "walkdir",
  "xiuxian-ast",
  "xiuxian-memory-engine",
+ "xiuxian-testing",
  "xiuxian-vector",
  "xiuxian-wendao-core",
  "xiuxian-wendao-runtime",

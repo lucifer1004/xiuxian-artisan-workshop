@@ -17,8 +17,12 @@ use crate::{
     graph_structural_pair_candidate_id,
     julia_plugin_test_support::common::ResultTestExt,
     julia_plugin_test_support::official_examples::{
-        LIVE_REQUEST_TIMEOUT_SECS, LIVE_SERVICE_STARTUP_TIMEOUT_SECS, await_live_step,
-        reserve_real_service_port, spawn_real_wendaosearch_demo_multi_route_service,
+        LIVE_REQUEST_TIMEOUT_SECS, LIVE_SERVICE_STARTUP_TIMEOUT_SECS,
+        RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST_ENV, await_live_step,
+        ensure_process_managed_wendaosearch_solver_demo_service,
+        process_managed_wendaosearch_solver_demo_base_url,
+        process_managed_wendaosearch_test_enabled, reserve_real_service_port,
+        spawn_real_wendaosearch_demo_multi_route_service,
         spawn_real_wendaosearch_solver_demo_multi_route_service,
         wait_for_service_ready_with_attempts,
     },
@@ -664,6 +668,42 @@ async fn fetch_graph_structural_solver_demo_rows_for_repository_via_manifest_dis
     assert_solver_demo_multi_route_rerank_rows(&manifest_repository).await;
     assert_solver_demo_multi_route_filter_rows(&manifest_repository).await;
     service.kill();
+}
+
+#[tokio::test]
+#[serial_test::serial(julia_live)]
+async fn fetch_graph_structural_solver_demo_rows_for_repository_against_process_managed_wendaosearch_service()
+ {
+    if !process_managed_wendaosearch_test_enabled() {
+        eprintln!(
+            "skipping process-managed WendaoSearch live proof; set {RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST_ENV}=1"
+        );
+        return;
+    }
+
+    let _service = ensure_process_managed_wendaosearch_solver_demo_service()
+        .await
+        .or_panic("ensure process-managed WendaoSearch solver-demo Flight service");
+    let base_url = process_managed_wendaosearch_solver_demo_base_url()
+        .or_panic("resolve process-managed WendaoSearch solver-demo base URL");
+    let explicit_rerank_repository = graph_structural_explicit_rerank_repository(&base_url);
+    let explicit_filter_repository = graph_structural_explicit_filter_repository(&base_url);
+    let manifest_repository = graph_structural_manifest_repository(&base_url);
+
+    await_live_step(
+        wait_for_service_ready_with_attempts(&base_url, 600),
+        LIVE_SERVICE_STARTUP_TIMEOUT_SECS,
+        "wait for process-managed WendaoSearch solver-demo Flight service",
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!("wait for process-managed WendaoSearch solver-demo Flight service: {error}")
+    });
+
+    assert_solver_demo_explicit_rerank_rows(&explicit_rerank_repository).await;
+    assert_solver_demo_explicit_filter_rows(&explicit_filter_repository).await;
+    assert_solver_demo_multi_route_rerank_rows(&manifest_repository).await;
+    assert_solver_demo_multi_route_filter_rows(&manifest_repository).await;
 }
 
 fn rerank_response_batch() -> RecordBatch {

@@ -36,9 +36,9 @@ lifecycle, fallback, audit, and final mutation authority.
 
 Within the Wendao package split, that means `WendaoMemory.jl` owns memory
 compute kernels, `xiuxian-wendao-julia` owns the Julia-specific ABI surface
-plus plugin-owned host-adapter helpers, `xiuxian-wendao` consumes that seam
-without keeping a second local memory namespace, and `xiuxian-memory-engine`
-remains the authoritative memory-state owner.
+plus plugin-owned host-adapter helpers, `xiuxian-wendao` exposes only a thin
+configured host seam without keeping a second local memory namespace, and
+`xiuxian-memory-engine` remains the authoritative memory-state owner.
 
 Current hygiene notes:
 

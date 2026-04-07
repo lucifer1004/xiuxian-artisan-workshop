@@ -723,7 +723,7 @@ mod tests {
             "memory.episodic_recall.request.v1"
         );
         assert_eq!(rows[3].profile_id, "memory_calibration");
-        assert_eq!(rows[3].route, "/memory/calibrate");
+        assert_eq!(rows[3].route, "/memory/calibration");
         assert_eq!(rows[0].health_route.as_deref(), Some("/healthz"));
         assert_eq!(rows[1].scenario_pack.as_deref(), Some("searchinfra"));
         assert!(rows.iter().all(|row| row.enabled));

@@ -13,6 +13,13 @@ let
   valkeyPidFile = "${valkeyRuntimeDir}/valkey.pid";
   valkeyPort = 6379;
   valkeyHost = "127.0.0.1";
+  wendaosearchRuntimeDir = ".run/wendaosearch";
+  wendaosearchLogDir = ".run/logs";
+  wendaosearchSolverDemoConfig = ".data/WendaoSearch.jl/config/live/solver_demo.toml";
+  wendaosearchSolverDemoStdoutLog =
+    "${wendaosearchLogDir}/wendaosearch-solver-demo.stdout.log";
+  wendaosearchSolverDemoStderrLog =
+    "${wendaosearchLogDir}/wendaosearch-solver-demo.stderr.log";
 in
 {
   packages = [
@@ -122,6 +129,35 @@ in
       process-compose = {
         depends_on = {
           wendao-gateway.condition = "process_healthy";
+        };
+      };
+    };
+
+    wendaosearch-solver-demo = {
+      exec = ''
+        ROOT_DIR="$PRJ_ROOT"
+        mkdir -p "$ROOT_DIR/${wendaosearchRuntimeDir}" "$ROOT_DIR/${wendaosearchLogDir}"
+        export WENDAOSEARCH_SERVICE_NAME=wendaosearch-solver-demo
+        export WENDAOSEARCH_RUNTIME_DIR=${wendaosearchRuntimeDir}
+        export WENDAOSEARCH_CONFIG=${wendaosearchSolverDemoConfig}
+        bash "$ROOT_DIR/scripts/channel/wendaosearch-launch.sh" \
+          > >(tee -a "$ROOT_DIR/${wendaosearchSolverDemoStdoutLog}") \
+          2> >(tee -a "$ROOT_DIR/${wendaosearchSolverDemoStderrLog}" >&2)
+      '';
+      process-compose = {
+        readiness_probe = {
+          exec.command = ''
+            ROOT_DIR="$PRJ_ROOT"
+
+            export WENDAOSEARCH_SERVICE_NAME=wendaosearch-solver-demo
+            export WENDAOSEARCH_RUNTIME_DIR=${wendaosearchRuntimeDir}
+            export WENDAOSEARCH_CONFIG=${wendaosearchSolverDemoConfig}
+            bash "$ROOT_DIR/scripts/channel/wendaosearch-healthcheck.sh" >/dev/null
+          '';
+          initial_delay_seconds = 5;
+          period_seconds = 2;
+          timeout_seconds = 3;
+          failure_threshold = 90;
         };
       };
     };

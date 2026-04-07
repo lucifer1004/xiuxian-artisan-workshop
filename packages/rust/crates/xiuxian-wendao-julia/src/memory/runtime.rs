@@ -172,7 +172,7 @@ mod tests {
         runtime.routes.episodic_recall = "/memory/episodic_recall".to_string();
         runtime.routes.memory_gate_score = "/memory/gate_score".to_string();
         runtime.routes.memory_plan_tuning = "/memory/plan_tuning".to_string();
-        runtime.routes.memory_calibration = "/memory/calibrate".to_string();
+        runtime.routes.memory_calibration = "/memory/calibration".to_string();
 
         let bindings = build_memory_julia_compute_bindings(&runtime)
             .unwrap_or_else(|error| panic!("bindings should resolve: {error}"));
@@ -192,7 +192,7 @@ mod tests {
         );
         assert_eq!(
             bindings[3].endpoint.route.as_deref(),
-            Some("/memory/calibrate")
+            Some("/memory/calibration")
         );
     }
 

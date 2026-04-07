@@ -43,7 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_calibration_artifact_rows_from_inputs_roundtrips() {
-        let route = "/memory/calibrate";
+        let route = "/memory/calibration";
         let (base_url, server) = spawn_memory_service(calibration_response_batch()).await;
         let runtime = runtime_for_test(base_url, route);
 

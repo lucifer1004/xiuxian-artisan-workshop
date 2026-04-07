@@ -17,7 +17,7 @@ pub const DEFAULT_MEMORY_JULIA_COMPUTE_GATE_SCORE_ROUTE: &str = "/memory/gate_sc
 /// Default route for memory plan tuning requests.
 pub const DEFAULT_MEMORY_JULIA_COMPUTE_PLAN_TUNING_ROUTE: &str = "/memory/plan_tuning";
 /// Default route for memory calibration requests.
-pub const DEFAULT_MEMORY_JULIA_COMPUTE_CALIBRATION_ROUTE: &str = "/memory/calibrate";
+pub const DEFAULT_MEMORY_JULIA_COMPUTE_CALIBRATION_ROUTE: &str = "/memory/calibration";
 
 /// Fallback behavior for memory-family Julia compute integration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

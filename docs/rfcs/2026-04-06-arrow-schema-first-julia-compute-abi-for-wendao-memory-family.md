@@ -4,7 +4,7 @@ title: "RFC: Arrow Schema-First Julia Compute ABI for the Wendao Memory Family"
 category: "rfc"
 status: "draft"
 authors:
-  - codex
+  - "Wendao / Xiuxian maintainers"
 created: 2026-04-06
 tags:
   - rfc
@@ -20,148 +20,323 @@ metadata:
 
 # RFC: Arrow Schema-First Julia Compute ABI for the Wendao Memory Family
 
-## 1. Summary
+## Status
 
-This RFC defines the first family-level Julia compute ABI for the Wendao memory
-stack.
+Draft
+
+## Authors
+
+- Wendao / Xiuxian maintainers
+
+## Date
+
+2026-04-06
+
+## 1. Abstract
+
+This RFC defines an **Arrow Schema-First Julia Compute ABI** for the Wendao
+`memory` family.
 
 The governing principle is:
 
-**Julia owns high-performance scientific and mathematical compute only. Rust
-remains the authoritative owner of host state, lifecycle, registry, fallback,
-audit, and final mutation decisions.**
+> **Julia owns high-performance scientific and mathematical compute only. Rust
+> remains the authoritative owner of host state, lifecycle, registry,
+> fallback, audit, and final mutation decisions.**
 
-This RFC extends the existing scorer-style Arrow contract precedent into one
-`memory` family with four profiles:
+This RFC extends the existing scorer-style Arrow contract into a first
+normative family-level ABI for memory-family compute. It does **not** transfer
+memory authority to Julia. It does **not** introduce a separate
+`PluginKit.jl`. Instead, it expands `WendaoArrow.jl` into the Julia-side
+**transport + contract + authoring substrate for compute plugins only**.
 
-1. `episodic_recall`
-2. `memory_gate_score`
-3. `memory_plan_tuning`
-4. `memory_calibration`
+The existing scorer-style Arrow contract remains valid as the base precedent
+and is generalized into **family/profile** form rather than replaced from
+scratch.
 
-The primary decisions are:
+## 2. Motivation
 
-1. the lane is a `memory-family Julia compute ABI`, not a `memory-first ABI`
-2. `WendaoArrow.jl` becomes the Julia-side transport, contract, and authoring
-   substrate for compute plugins only
-3. Rust remains the authoritative owner of memory state, lifecycle, fallback,
-   audit, and final mutations
-4. memory-family Julia services consume read-only host projections rather than
-   internal Rust memory structs
-5. recommendation-producing profiles remain recommendation-only until Rust
-   explicitly commits a change
+Wendao already has a stable Rust-side memory substrate.
+`xiuxian-memory-engine` is currently a Rust-based self-evolving memory engine
+with implemented episode storage, Q/utility learning, two-phase recall,
+lifecycle control, and read-only memory projections.
 
-## 2. Alignment
+At the same time, Wendao already has a working Julia transport/contract lane:
 
-This RFC aligns with the following stable references:
+- `WendaoArrow.jl` owns the Julia-side Arrow/Flight transport and contract
+  layer and is Flight-only
+- `xiuxian-wendao-julia` already acts as an ecosystem-thin Julia bridge over a
+  runtime-owned generic Flight seam
+- `WendaoAnalyzer.jl` has already demonstrated the intended split:
+  transport/contract in `WendaoArrow.jl`, domain compute in Julia, and request
+  shaping, fallback, and validation in Rust
 
-1. [architecture.md](../01_core/memory/architecture.md)
-2. [2026-04-05-wendao-memory-layer-boundaries-rfc.md](./2026-04-05-wendao-memory-layer-boundaries-rfc.md)
-3. [SPEC.md](../01_core/wendao/SPEC.md)
+The remaining gap is not transport. The remaining gap is a **compute-only ABI**
+that lets Julia provide high-performance memory-family computation without
+inheriting host authority.
 
-This RFC also builds on the existing scorer-style Arrow schema contract
-documented by the WendaoArrow package, but canonical RFCs in this repository do
-not link directly to hidden workspace paths.
+## 3. Non-Goals
 
-The paired execution tracking for this RFC follows an active ABI blueprint and
-ExecPlan, but canonical docs do not link hidden tracking paths directly.
+This RFC does **not**:
 
-## 3. Problem Statement
+- move authoritative memory ownership to Julia
+- expose `EpisodeStore` internals directly to Julia
+- let Julia mutate host memory state directly
+- let Julia own lifecycle transitions
+- let Julia directly govern durable knowledge promotion
+- define a full all-family plugin ecosystem rewrite
+- introduce a standalone `PluginKit.jl`
+- scaffold `.data/WendaoMemory.jl` in this RFC
+- remove the current scorer-style Arrow ABI
 
-Wendao now has a clear memory ownership boundary, but it still lacks a formal
-ABI for Julia-owned compute over the memory family.
+## 4. Governing Principle
 
-Without that ABI, architecture drift is likely:
+The following principle is normative:
 
-1. Julia packages may gradually absorb host authority instead of remaining
-   compute-only
-2. Rust host code may grow one bespoke adapter per Julia package
-3. physical Arrow schemas and semantic profile meaning may drift together
-   without explicit version boundaries
-4. shadow-mode rollout may exist as a switch but not as an auditable
-   observability surface
+> **Julia compute services are compute-only. Rust host authority is
+> non-transferable.**
 
-The system already contains the correct ownership foundation:
+Concretely:
 
-1. `xiuxian-memory-engine` is an episodic operational memory core
-2. `WendaoArrow.jl` is a Julia transport and contract layer, not a host-policy
-   layer
-3. `xiuxian-wendao-runtime` owns generic Flight negotiation
-4. `xiuxian-wendao-julia` owns Julia-specific manifest discovery and thin typed
-   decoding
+- Julia may score, rerank, calibrate, optimize, estimate uncertainty, and
+  solve bounded scientific or mathematical subproblems.
+- Rust host retains final authority over:
+  - state ownership
+  - lifecycle transitions
+  - registry writes
+  - audit events
+  - fallback/degrade policy
+  - final mutation decisions
 
-This RFC formalizes how those pieces compose into a stable memory-family Julia
-compute ABI.
+## 5. Existing Boundary Alignment
 
-## 4. Allowed Julia Compute Scope
+This RFC aligns with current system boundaries:
 
-Julia compute services in the memory family MAY own:
+- `WendaoArrow.jl` already owns Julia-side transport and contract, not
+  analyzer/domain policy
+- `xiuxian-wendao-julia` already owns Julia-specific manifest discovery, route
+  defaults, typed validation/decoding, and minimal binding glue over a
+  runtime-owned generic Flight seam
+- `xiuxian-memory-engine` remains the authoritative Rust memory engine, not a
+  Julia-owned subsystem
+- the cross-layer memory boundary is already governed by
+  [RFC: Wendao Memory Layer Boundaries](./2026-04-05-wendao-memory-layer-boundaries-rfc.md)
+- the memory architecture note already points at this RFC as the compute-only
+  ABI boundary in
+  [architecture.md](../01_core/memory/architecture.md)
 
-1. scoring
-2. reranking
-3. uncertainty estimation
-4. calibration
-5. optimization
-6. threshold fitting
-7. solver and structural math
-8. scenario-specific scientific models
+## 6. High-Level Architecture
 
-Julia compute services in the memory family MUST NOT own:
+### 6.1 Rust Host
 
-1. host state mutation
-2. lifecycle transitions
-3. registry authority
-4. durable knowledge promotion
-5. fallback policy ownership
-6. final audit or event ownership
+Rust continues to own:
 
-This boundary is normative for `WendaoArrow.jl`, `WendaoMemory.jl`, and any
-future Julia memory-family package.
+- authoritative memory state
+- lifecycle transitions
+- state backend
+- fallback/local implementation
+- audit/event emission
+- final mutation decisions
 
-## 5. Target Architecture
+### 6.2 `xiuxian-wendao-runtime`
 
-### 5.1 Ownership Model
+Runtime continues to own:
 
-The target ownership model is:
+- generic Flight client
+- transport negotiation
+- timeout policy
+- route normalization
+- batch execution
 
-1. `xiuxian-memory-engine` owns authoritative memory state, lifecycle
-   transitions, state backend, event emission, and fallback/local
-   implementation
-2. `xiuxian-wendao-runtime` owns generic Flight client, route normalization,
-   timeout policy, negotiation, and batch transport
-3. `xiuxian-wendao-julia` owns only Julia-specific manifest discovery, route
-   defaults, typed validation, typed decoding, and minimal binding glue
-4. `WendaoArrow.jl` owns the reusable Julia-side transport, contract, manifest,
-   service declaration, and validation substrate for compute plugins only
-5. Julia memory-family packages own memory-family compute only
+### 6.3 `xiuxian-wendao-julia`
 
-### 5.2 `WendaoArrow.jl` Role
+The Julia bridge remains ecosystem-thin and owns only:
 
-`WendaoArrow.jl` becomes the Julia-side transport, contract, and authoring
-substrate for compute plugins.
+- Julia-specific capability-manifest discovery
+- Julia route defaults
+- typed memory-family row validation/decoding
+- minimal Julia binding glue
+- plugin-owned host-adapter helpers over Rust read-only projections and
+  evidence rows
 
-It MAY own:
+### 6.4 `WendaoArrow.jl`
 
-1. schema builders
-2. manifest builders
-3. service declaration helpers
-4. request and response validation helpers
+`WendaoArrow.jl` becomes the Julia-side:
+
+- transport
+- contract
+- authoring substrate
+
+for **compute plugins only**.
 
 It MUST NOT own:
 
-1. lifecycle policy
-2. state mutation
-3. registry authority
-4. fallback policy
-5. host governance
+- lifecycle
+- state mutation
+- registry authority
+- host policy
 
-This RFC explicitly rejects a standalone `PluginKit.jl`.
+## 7. Contract Model
 
-### 5.3 Runtime-Level Integration
+This RFC defines a three-layer ABI.
 
-The integration surface is runtime-level rather than repo-plugin-level.
+### 7.1 Physical Arrow Schema
 
-The canonical host surface is:
+Defines:
+
+- column names
+- Arrow types
+- nullability
+- additive-column rules
+- batch/stream semantics
+
+This stays aligned with the existing Arrow schema-first contract model already
+used by WendaoArrow.
+
+### 7.2 Semantic Contract
+
+Defines:
+
+- join keys
+- row-order assumptions
+- duplicate handling
+- score/verdict meaning
+- fallback triggers
+- required response semantics
+
+### 7.3 Capability Contract
+
+Defines:
+
+- `family`
+- `capability_id`
+- `profile_id`
+- `request_schema_id`
+- `response_schema_id`
+- `route`
+- `schema_version`
+- `health_route`
+- `timeout_secs`
+- `scenario_pack`
+
+## 8. First Standardized Family: `memory`
+
+The first ABI family standardized by this RFC is one umbrella `memory`
+family.
+
+### Profiles
+
+- `episodic_recall`
+- `memory_gate_score`
+- `memory_plan_tuning`
+- `memory_calibration`
+
+These are **profiles under one family**, not four unrelated families.
+
+## 9. Ownership and Mutation Invariants
+
+The following invariants are normative:
+
+1. **Julia compute services MUST NOT mutate authoritative host memory state.**
+2. **Julia compute services MUST NOT own lifecycle transitions.**
+3. **Julia compute services MUST NOT directly govern durable knowledge
+   promotion.**
+4. **Rust host MUST materialize read-only projection batches before Julia
+   compute is invoked.**
+5. **Any Julia-side result that implies a state change MUST be treated as
+   recommendation-only until Rust host commits it.**
+6. **Julia compute services MUST NOT introduce hidden host mutation channels
+   via metadata, side-channel flags, or implicit response conventions.**
+
+## 10. Allowed Julia Compute Scope
+
+Julia compute services MAY own:
+
+- scientific scoring kernels
+- reranking kernels
+- uncertainty estimation
+- calibration
+- threshold fitting
+- optimization
+- scenario-specific scientific models
+- solver-backed bounded compute
+- mathematical/statistical recommendation generation
+
+Julia compute services MUST NOT own:
+
+- state storage
+- state mutation
+- lifecycle advancement
+- registry authority
+- durable knowledge authority
+- host fallback control
+- authoritative audit emission
+
+## 11. Host Read Model
+
+Julia never consumes `EpisodeStore` internals directly.
+
+Instead:
+
+1. Rust host materializes a canonical **read-only projection batch** or
+   snapshot.
+2. That projection batch is encoded as Arrow with the appropriate schema and
+   metadata.
+3. Julia compute depends only on:
+   - Arrow schema
+   - schema metadata
+   - capability manifest
+   - family/profile contract
+
+This keeps Julia decoupled from Rust-internal memory-store implementation
+details.
+
+## 12. Minimal Compat Principle
+
+To keep `xiuxian-wendao-julia` as thin as possible, the following rules are
+normative:
+
+- Rust host MUST NOT grow one bespoke adapter per Julia package.
+- Rust host SHOULD implement **family-level adapters** only.
+- New Julia packages inside an existing family/profile SHOULD require
+  manifest/schema additions only, not new host business adapters.
+- `xiuxian-wendao-julia` MUST remain ecosystem-thin and MUST NOT grow a second
+  host-local business adapter layer.
+
+## 13. Public Julia Authoring Surface in `WendaoArrow.jl`
+
+`WendaoArrow.jl` SHOULD expose the following normative authoring surfaces:
+
+- `WendaoArrow.Capability`
+- `WendaoArrow.Manifest`
+- `WendaoArrow.Contracts`
+- `WendaoArrow.Services`
+- `WendaoArrow.Validate`
+
+These surfaces are authoring helpers for compute plugins only. They do not
+carry host policy or lifecycle ownership.
+
+## 14. Capability Manifest Contract
+
+A memory-family capability manifest entry MUST carry:
+
+- `family = "memory"`
+- `capability_id`
+- `profile_id`
+- `request_schema_id`
+- `response_schema_id`
+- `route`
+- `schema_version`
+- `enabled`
+
+It MAY also carry:
+
+- `health_route`
+- `timeout_secs`
+- `scenario_pack`
+
+## 15. Runtime Config Contract
+
+The normative host config surface is runtime-level, not repo-plugin-level.
 
 ```toml
 [memory.julia_compute]
@@ -176,300 +351,212 @@ shadow_compare = true
 episodic_recall = "/memory/episodic_recall"
 memory_gate_score = "/memory/gate_score"
 memory_plan_tuning = "/memory/plan_tuning"
-memory_calibration = "/memory/calibrate"
+memory_calibration = "/memory/calibration"
 ```
 
-This config is intentionally host-owned. It does not move authority into Julia.
+Required fields:
 
-## 6. ABI Layers
+- `enabled`
+- `base_url`
+- `schema_version`
+- `timeout_secs`
+- `fallback_mode`
+- `shadow_compare`
+- route mapping for the four memory profiles
 
-The memory-family Julia compute ABI is defined by three layers.
+Default rollout posture:
 
-### 6.1 Physical Arrow Schema
+- `fallback_mode = "rust"`
+- `shadow_compare = true`
 
-The physical layer defines:
+## 16. Profile Intent
 
-1. column names
-2. Arrow data types
-3. nullability
-4. additive-column rules
-5. batch semantics
+### 16.1 `episodic_recall`
 
-### 6.2 Semantic Contract
+This is a **retrieval profile**, not a scorer profile.
 
-The semantic layer defines:
+It operates over a Rust-owned read-only memory projection. Julia MAY perform:
 
-1. join keys
-2. row-order guarantees or lack thereof
-3. duplicate handling
-4. score, verdict, or confidence meaning
-5. fallback triggers
+- retrieval compute
+- reranking
+- uncertainty estimation
+- scenario-aware scoring
 
-### 6.3 Capability Contract
+Julia MUST NOT perform:
 
-The capability layer defines:
+- candidate persistence
+- lifecycle mutation
+- state writes
 
-1. `family`
-2. `capability_id`
-3. `profile_id`
-4. `request_schema_id`
-5. `response_schema_id`
-6. `schema_version`
-7. `route`
-8. `health_route`
-9. `timeout_secs`
-10. `scenario_pack`
+### 16.2 `memory_gate_score`
 
-## 7. Versioning Semantics
+This profile is **recommendation-only**.
 
-The ABI MUST distinguish physical transport versioning from profile semantics.
+It MAY return:
 
-Rules:
+- scoring
+- confidence
+- suggested verdict, including working-knowledge promotion recommendations only
+- suggested next action
 
-1. `schema_version` is the physical or transport contract version
-2. `profile_id + request_schema_id + response_schema_id` define the semantic
-   profile contract
-3. a semantic meaning change is breaking even when the physical columns remain
-   identical
-4. additive physical columns remain allowed only when the receiving host path
-   does not require them
+It MUST NOT trigger state transition by itself.
 
-This rule exists so a stable Arrow column shape does not conceal a semantic
-profile break.
+### 16.3 `memory_plan_tuning`
 
-## 8. Capability Manifest Shape
+This profile is **advice-only**.
 
-The first standardized family is one umbrella `memory` family.
+It MAY return:
 
-Each manifest entry MUST carry:
-
-1. `family = "memory"`
-2. `capability_id`
-3. `profile_id`
-4. `request_schema_id`
-5. `response_schema_id`
-6. `route`
-7. `schema_version`
-8. `enabled`
-
-It MAY also carry:
-
-1. `health_route`
-2. `timeout_secs`
-3. `scenario_pack`
-
-Rust host compatibility should scale by family/profile. It must not require a
-new host business adapter for every Julia package that registers a memory
-profile.
-
-## 9. Host Read Model
-
-Julia memory-family services never consume `EpisodeStore` internals directly.
-
-The canonical data path is:
-
-1. Rust host reads authoritative memory state
-2. Rust host materializes a canonical read-only projection batch or snapshot
-3. Julia compute runs only on that projection
-4. Rust host interprets results and decides whether to mutate state
-
-This read model prevents Rust internal storage details from becoming part of
-the Julia ABI.
-
-## 10. Invariants
-
-The following invariants are normative.
-
-### 10.1 Compute-Only Ownership
-
-Julia compute services MUST NOT mutate authoritative host memory state.
-
-### 10.2 Lifecycle Authority Remains in Rust
-
-Julia compute services MUST NOT own lifecycle transitions.
-
-### 10.3 No Durable Promotion Authority
-
-Julia compute services MUST NOT directly govern durable knowledge promotion.
-
-### 10.4 Read-Only Projection First
-
-Rust host MUST materialize read-only projection batches before Julia compute is
-invoked.
-
-### 10.5 Recommendation Before Mutation
-
-Any Julia-side result that implies a state change MUST be treated as
-recommendation-only until Rust host commits it.
-
-### 10.6 No Hidden Writeback Channel
-
-Julia compute results MUST NOT trigger host mutation through hidden metadata,
-side-channel flags, or implicit response conventions.
-
-## 11. Minimal Compat Principle
-
-Rust host compatibility must remain family-level rather than package-level.
-
-Therefore:
-
-1. Rust host MUST NOT add one bespoke adapter per Julia package
-2. Rust host SHOULD implement family-level adapters only
-3. new Julia packages inside an existing family/profile SHOULD require
-   manifest/schema additions only, not new host business adapters
-4. `xiuxian-wendao-julia` MUST remain ecosystem-thin and MUST NOT grow a
-   second host-local business adapter layer
-
-## 12. Memory Family Profiles
-
-### 12.1 `episodic_recall`
-
-Definition:
-retrieval profile over a Rust-owned read-only memory projection.
-
-Allowed Julia responsibilities:
-
-1. retrieval compute
-2. reranking
-3. uncertainty estimation
-4. scenario-aware ranking
-
-Forbidden Julia responsibilities:
-
-1. persistence
-2. lifecycle mutation
-3. state writes
-
-### 12.2 `memory_gate_score`
-
-Definition:
-recommendation-only gate scoring profile.
-
-It returns:
-
-1. score
-2. confidence
-3. suggested verdict
-4. reason
-
-It MUST NOT cause a lifecycle transition on its own.
-
-### 12.3 `memory_plan_tuning`
-
-Definition:
-advice-only tuning profile.
-
-It returns:
-
-1. parameter recommendations
-2. budget recommendations
-3. confidence and rationale
+- parameter recommendations
+- budget recommendations
+- tuning diagnostics
 
 It MUST NOT mutate active host config directly.
 
-### 12.4 `memory_calibration`
+### 16.4 `memory_calibration`
 
-Definition:
-artifact/recommendation-only calibration profile.
+This profile is **artifact/recommendation-only**.
 
-It returns:
+It MAY return:
 
-1. thresholds
-2. weights
-3. calibration artifacts
-4. summary metrics
+- thresholds
+- weights
+- calibration artifacts
+- metric summaries
 
 It MUST NOT auto-activate calibrated outputs.
 
-## 13. Canonical Schema Fragments
+## 17. Canonical Schema Fragments
 
-Profile schemas SHOULD be composed from canonical fragments plus additive
-profile-specific columns.
+To reduce schema duplication, the RFC standardizes reusable fragments.
 
-### 13.1 `identity_fragment`
+### 17.1 `identity_fragment`
 
-Canonical identity fields such as:
+Example fields:
 
-1. `row_id`
-2. `candidate_id`
-3. `scope`
+- `row_id`
+- `candidate_id`
+- `scope`
 
-### 13.2 `score_fragment`
+### 17.2 `score_fragment`
 
-Canonical score fields such as:
+Example fields:
 
-1. `semantic_score`
-2. `utility_score`
-3. `final_score`
-4. `confidence`
+- `semantic_score`
+- `utility_score`
+- `final_score`
+- `confidence`
 
-### 13.3 `verdict_fragment`
+### 17.3 `verdict_fragment`
 
-Canonical decision fields such as:
+Example fields:
 
-1. `verdict`
-2. `reason`
-3. `next_action`
+- `verdict`
+- `reason`
+- `next_action`
 
-### 13.4 `tuning_fragment`
+### 17.4 `tuning_fragment`
 
-Canonical tuning fields such as:
+Example fields:
 
-1. `k1`
-2. `k2`
-3. `lambda`
-4. `min_score`
-5. `max_context_chars`
+- `k1`
+- `k2`
+- `lambda`
+- `min_score`
+- `max_context_chars`
 
-### 13.5 `memory_projection_fragment`
+### 17.5 `memory_projection_fragment`
 
-Canonical read-only memory input fields such as:
+This fragment is required for read-only Rust → Julia memory projections.
 
-1. `intent_embedding`
-2. `q_value`
-3. `success_count`
-4. `failure_count`
-5. `retrieval_count`
-6. `created_at_ms`
-7. `updated_at_ms`
-8. `scope`
+Example fields:
 
-This fragment exists so memory-family profiles do not reinvent their core
-read-only episode features route by route.
+- `intent_embedding`
+- `q_value`
+- `success_count`
+- `failure_count`
+- `retrieval_count`
+- `created_at_ms`
+- `updated_at_ms`
+- `scope`
 
-## 14. Shadow Compare and Observability
+Profile schemas SHOULD be composed from these fragments plus profile-specific
+additive columns.
 
-When `shadow_compare = true`, the host path SHOULD record at minimum:
+## 18. Compatibility with Existing Scorer Contract
 
-1. recall rank drift
-2. gate verdict drift
-3. confidence drift
-4. timeout rate
-5. fallback rate
-6. schema validation failure rate
+The current scorer-style Arrow contract remains valid.
 
-The purpose of shadow compare is operational evidence, not silent replacement
-of the Rust path.
+This RFC does not discard it. Instead, it treats it as the base ABI precedent
+and generalizes it into **family/profile** form. Existing scorer-style
+capabilities remain representable under the new model.
 
-## 15. Non-Goals
+## 19. Errors, Fallback, and Shadow Compare
 
-This RFC does not:
+### 19.1 Fallback
 
-1. scaffold `.data/WendaoMemory.jl`
-2. implement runtime execution seams
-3. move authoritative memory state into Julia
-4. standardize all possible capability families in one pass
-5. create a standalone `PluginKit.jl`
+Schema mismatch, invalid rows, timeout, transport failure, or response
+validation failure MUST trigger Rust fallback.
 
-## 16. Final Decisions
+### 19.2 Shadow Compare
 
-The final decisions are:
+When `shadow_compare = true`, the host SHOULD record at least:
 
-1. the lane is a `memory-family Julia compute ABI`
-2. Julia owns compute only
-3. Rust owns authority
-4. `WendaoArrow.jl` absorbs the authoring substrate for compute plugins only
-5. memory-family services consume read-only Rust projections
-6. recommendation-producing profiles remain recommendation-only until Rust
-   commits a change
-7. compatibility grows by family/profile rather than by Julia package count
+- recall rank drift
+- gate verdict drift
+- confidence drift
+- timeout/fallback rate
+- schema validation failure rate
+
+Shadow compare MUST NOT change authoritative host decisions by itself.
+
+## 20. Documentation Sync
+
+This RFC is the primary deliverable for the current documentation slice.
+
+After landing:
+
+- keep a short pointer in [architecture.md](../01_core/memory/architecture.md)
+  to the compute-only ABI boundary
+- keep the WendaoArrow contract docs aligned so the scorer contract points to
+  this RFC as the memory-family extension
+- keep terminology aligned across:
+  - this RFC
+  - the memory architecture note
+  - the WendaoArrow contract docs
+
+## 21. Deferred Work
+
+This RFC intentionally defers:
+
+- `.data/WendaoMemory.jl` package scaffolding
+- Rust execution seams beyond minimal config/validation integration
+- non-memory families
+- wider ecosystem ABI generalization
+- direct package structure assumptions for `WendaoMemory.jl`
+
+## 22. Acceptance Criteria
+
+The RFC is accepted when:
+
+- compute-only ownership is explicit in title, summary, architecture, and
+  invariants
+- `memory_gate_score`, `memory_plan_tuning`, and `memory_calibration` are
+  recommendation-only
+- the RFC defines a read-only host projection model
+- the RFC introduces the minimal compat principle
+- the RFC introduces canonical schema fragments, including
+  `memory_projection_fragment`
+- default rollout posture remains `fallback_mode = "rust"` and
+  `shadow_compare = true`
+- terminology stays aligned across the RFC, memory architecture note, and
+  WendaoArrow docs
+- repository checks remain clean, including `git diff --check`
+
+## 23. Assumptions
+
+- `.data/WendaoMemory.jl` currently has no scaffold
+- the first ABI generalization is memory-family-first, not full
+  ecosystem-wide
+- `WendaoArrow.jl` absorbs the authoring substrate
+- no standalone `PluginKit.jl` will be proposed in this RFC
