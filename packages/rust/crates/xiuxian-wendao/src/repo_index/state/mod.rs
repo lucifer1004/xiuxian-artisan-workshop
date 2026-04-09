@@ -12,4 +12,5 @@ pub(crate) use task::{
 };
 
 #[cfg(test)]
+#[path = "../../../tests/unit/repo_index/state/mod.rs"]
 mod tests;

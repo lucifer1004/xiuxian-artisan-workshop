@@ -1,4 +1,5 @@
 use super::mounts::runtime_wendao_mounts;
+use crate::runtime_config::{resolve_process_env_path, resolve_process_project_root};
 use std::fs;
 use std::path::{Path, PathBuf};
 use xiuxian_wendao::skill_vfs::{
@@ -13,7 +14,12 @@ pub(crate) fn resolve_wendao_uri_with_zhenfa(uri: &str) -> Result<String, String
 }
 
 fn normalize_relative_path(path: &str) -> String {
-    path.trim().trim_start_matches("./").replace('\\', "/")
+    path.trim()
+        .replace('\\', "/")
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn resolve_wendao_uri_from_runtime_mounts(uri: &str) -> Option<String> {
@@ -66,7 +72,9 @@ fn resolve_wendao_uri_from_explicit_path(uri_or_path: &str) -> Option<String> {
         return fs::read_to_string(candidate).ok();
     }
 
-    let rooted = resolve_project_root().join(candidate);
+    let rooted = resolve_process_project_root()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(candidate);
     if rooted.is_file() {
         return fs::read_to_string(rooted).ok();
     }
@@ -75,7 +83,7 @@ fn resolve_wendao_uri_from_explicit_path(uri_or_path: &str) -> Option<String> {
 }
 
 fn resolve_skill_vfs_roots() -> Vec<PathBuf> {
-    let project_root = resolve_project_root();
+    let project_root = resolve_process_project_root().unwrap_or_else(|| PathBuf::from("."));
     let mut roots = discover_crate_skill_roots(
         project_root
             .join("packages")
@@ -85,11 +93,13 @@ fn resolve_skill_vfs_roots() -> Vec<PathBuf> {
     );
     roots.push(project_root.join("assets").join("skills"));
 
-    let config_home = env_path("PRJ_CONFIG_HOME", project_root.as_path())
+    let config_home = resolve_process_env_path("PRJ_CONFIG_HOME", project_root.as_path())
         .unwrap_or_else(|| project_root.join(".config"));
     roots.push(config_home.join("xiuxian-artisan-workshop").join("skills"));
 
-    if let Some(resource_root) = env_path("XIUXIAN_RESOURCE_ROOT", project_root.as_path()) {
+    if let Some(resource_root) =
+        resolve_process_env_path("XIUXIAN_RESOURCE_ROOT", project_root.as_path())
+    {
         roots.push(resource_root.join("skills"));
     }
 
@@ -103,38 +113,6 @@ fn resolve_skill_vfs_roots() -> Vec<PathBuf> {
     roots.retain(|path| path.exists() && path.is_dir());
     dedup_paths(&mut roots);
     roots
-}
-
-fn resolve_project_root() -> PathBuf {
-    if let Some(root) = std::env::var("PRJ_ROOT")
-        .ok()
-        .map(|raw| raw.trim().to_string())
-        .filter(|raw| !raw.is_empty())
-    {
-        let path = PathBuf::from(root);
-        if path.is_absolute() {
-            return path;
-        }
-        if let Ok(cwd) = std::env::current_dir() {
-            return cwd.join(path);
-        }
-        return path;
-    }
-
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-}
-
-fn env_path(key: &str, project_root: &Path) -> Option<PathBuf> {
-    let path = PathBuf::from(
-        std::env::var(key)
-            .ok()
-            .map(|raw| raw.trim().to_string())
-            .filter(|raw| !raw.is_empty())?,
-    );
-    if path.is_absolute() {
-        return Some(path);
-    }
-    Some(project_root.join(path))
 }
 
 fn discover_crate_skill_roots(crates_root: &Path) -> Vec<PathBuf> {
@@ -165,3 +143,7 @@ pub(super) fn resolve_wendao_uri_text(uri: &str) -> Option<String> {
         .or_else(|| resolve_wendao_uri_from_skill_loader(uri))
         .or_else(|| resolve_wendao_uri_from_explicit_path(uri))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/scheduler/preflight/wendao_uri.rs"]
+mod tests;

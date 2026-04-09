@@ -348,6 +348,7 @@ async fn sample_repo_entity_gateway_fixture(keyspace: &str) -> ImportGatewayFixt
     let state = Arc::new(GatewayState {
         index: None,
         signal_tx: None,
+        webhook_url: None,
         studio: Arc::new(studio),
     });
     publish_repo_entities(
@@ -433,6 +434,7 @@ end
         state: Arc::new(GatewayState {
             index: None,
             signal_tx: None,
+            webhook_url: None,
             studio: Arc::new(studio),
         }),
     }

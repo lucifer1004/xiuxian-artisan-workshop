@@ -9,12 +9,18 @@ mod discover;
 mod env;
 mod imports;
 mod merge;
+mod precedence;
 
 use self::discover::{existing_config_files, global_candidates, orphan_candidates};
 use self::{env::ImportPathContext, merge::merge_values};
 
 pub use imports::{
     load_toml_value_with_imports, load_toml_value_with_imports_and_paths, merge_toml_values,
+};
+pub use precedence::{
+    first_non_empty_lookup, first_non_empty_named_lookup, lookup_bool_flag, lookup_parsed,
+    lookup_positive_parsed, parse_bool_flag, parse_positive, parse_trimmed, toml_first_env_parsed,
+    toml_first_env_string, toml_first_named_string, trimmed_non_empty,
 };
 
 /// Resolve layered files and return merged TOML value.

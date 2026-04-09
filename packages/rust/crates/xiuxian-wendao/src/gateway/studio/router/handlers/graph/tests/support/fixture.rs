@@ -37,6 +37,7 @@ pub(crate) fn build_fixture_with_projects(
         state: Arc::new(GatewayState {
             index: None,
             signal_tx: None,
+            webhook_url: None,
             studio: Arc::new(studio_state),
         }),
         _temp_dir: temp_dir,

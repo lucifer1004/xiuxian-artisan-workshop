@@ -83,6 +83,7 @@ in
     pkgs.valkey
     pkgs.ngrok
     pkgs.nodejs
+    pkgs.tree
   ];
 
   dotenv.enable = true;

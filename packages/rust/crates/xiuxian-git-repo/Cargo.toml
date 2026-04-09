@@ -15,11 +15,11 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 url = "2.5.7"
 xiuxian-io = { path = "../xiuxian-io" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 uuid = { workspace = true }
-xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

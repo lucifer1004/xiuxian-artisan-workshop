@@ -14,7 +14,7 @@ mod runtime;
 pub mod transport;
 
 #[cfg(test)]
-#[path = "../../tests/support/memory.rs"]
+#[path = "../../tests/unit/memory/mod.rs"]
 pub(crate) mod test_support;
 
 pub use calibration::{

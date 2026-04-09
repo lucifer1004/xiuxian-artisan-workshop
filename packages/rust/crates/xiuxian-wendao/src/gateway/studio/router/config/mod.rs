@@ -5,6 +5,7 @@ mod paths;
 mod persist;
 mod sanitize;
 #[cfg(test)]
+#[path = "../../../../../tests/unit/gateway/studio/router/config/mod.rs"]
 mod tests;
 mod types;
 

@@ -61,6 +61,7 @@ xiuxian-io = { path = "../xiuxian-io" }
 
 # Omni Scanner - Skills and Knowledge scanning
 xiuxian-skills = { path = "../xiuxian-skills" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 # YAML parsing for skill manifests
 serde_yaml = { workspace = true }
@@ -79,7 +80,6 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 lance = { workspace = true }
-xiuxian-testing = { path = "../xiuxian-testing" }
 tempfile = { workspace = true }
 rand = "0.8"
 insta = { workspace = true }

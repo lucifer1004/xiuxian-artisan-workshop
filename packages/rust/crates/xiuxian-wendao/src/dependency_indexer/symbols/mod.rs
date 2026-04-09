@@ -9,4 +9,5 @@ pub use index::SymbolIndex;
 pub use model::{ExternalSymbol, SymbolKind};
 
 #[cfg(test)]
+#[path = "../../../tests/unit/dependency_indexer/symbols/mod.rs"]
 mod tests;

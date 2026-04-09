@@ -72,6 +72,7 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
         state: Arc::new(GatewayState {
             index: None,
             signal_tx: None,
+            webhook_url: None,
             studio: Arc::new(studio_state),
         }),
         temp_dir,

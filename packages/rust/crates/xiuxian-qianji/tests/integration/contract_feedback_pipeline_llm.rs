@@ -2,13 +2,14 @@
 
 #![cfg(feature = "llm")]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream;
 use serde_json::json;
+use xiuxian_config_core::resolve_project_root;
 use xiuxian_llm::llm::client::ChatStream;
 use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmError, LlmResult};
 use xiuxian_qianhuan::{PersonaRegistry, ThousandFacesOrchestrator};
@@ -173,11 +174,8 @@ fn test_context() -> CollectionContext {
 }
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(4)
-        .unwrap_or_else(|| panic!("qianji manifest dir should resolve to workspace root"))
-        .to_path_buf()
+    resolve_project_root()
+        .unwrap_or_else(|| panic!("workspace root should resolve from PRJ_ROOT or git ancestry"))
 }
 
 fn live_config() -> ContractRunConfig {
@@ -326,3 +324,5 @@ async fn live_run_and_persist_contract_feedback_flow_persists_live_entries_throu
         result.persisted_entry_ids
     );
 }
+
+xiuxian_testing::crate_test_policy_harness!();

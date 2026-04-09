@@ -242,3 +242,5 @@ async fn llm_analyzer_resolves_semantic_prompt_template_uri() {
         "semantic URI prompt should be resolved before LLM call"
     );
 }
+
+xiuxian_testing::crate_test_policy_harness!();

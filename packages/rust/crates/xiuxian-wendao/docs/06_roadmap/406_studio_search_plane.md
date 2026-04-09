@@ -53,6 +53,12 @@ Replace Studio request-path search hot spots with a background-built search plan
 - non-code `search_intent` now merges `knowledge_section`, `local_symbol`, and repo-content hits into a single hybrid response path instead of treating intent as a pure knowledge lookup
 - code-biased Studio search now queries `repo_entity` before repo-content fallback, and hybrid intent merges repo-entity hits into the same ranked response path
 - `search::cache` now fronts repeat autocomplete, knowledge, non-repo intent, repo-scoped code search, and code-biased hybrid intent requests with corpus-aware Valkey keys and silent fallback to direct Lance reads when Valkey is unavailable
+- TOML-first search cache precedence is now collapsed into
+  `xiuxian-config-core`. `search/cache/config.rs` and
+  `search/cache/runtime.rs` consume the shared `toml_first_env!` helper
+  instead of carrying local precedence parsing, while the strict gateway
+  startup-health target still treats malformed TOML as a boot-blocking
+  dependency failure instead of silently downgrading to env
 - the owner-path retirement is now landed too: `src/search/` is the sole
   implementation root for the search plane runtime, and the old
   `src/search_plane/` module has been removed
@@ -739,3 +745,9 @@ Replace Studio request-path search hot spots with a background-built search plan
   imports the base `wendao.toml`, and gateway bootstrap plus Studio bootstrap
   both prefer the effective overlay path when it exists. This keeps live UI
   updates restart-stable without mutating unrelated base gateway settings.
+- gateway boot now also enforces a fail-fast startup dependency gate before it
+  spawns background workers or binds the listener. `wendao gateway start`
+  probes the built-in plugin registry plus the TOML-owned search-cache and
+  link-graph Valkey surfaces, logs stable `connected` / `failed` status lines,
+  and aborts startup when any required dependency is missing, invalid, or
+  unreachable

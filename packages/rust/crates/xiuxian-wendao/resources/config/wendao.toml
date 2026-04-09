@@ -53,6 +53,35 @@ valkey_url = "redis://localhost:6379/0"
 key_prefix = "xiuxian_wendao:link_graph:index"
 ttl_seconds = 300
 
+# Optional repo-analysis cache backend. Leave unset to disable the Valkey-backed
+# analyzer cache and fall back to in-process behavior.
+#
+# [analyzers.cache]
+# valkey_url = "redis://127.0.0.1:6379/0"
+# key_prefix = "xiuxian_wendao:repo_analysis"
+# ttl_seconds = 3600
+
+# Optional graph snapshot persistence backend used by `KnowledgeGraph`
+# save/load helpers. Leave unset when graph persistence should stay disabled.
+#
+# [graph.persistence]
+# valkey_url = "redis://127.0.0.1:6379/0"
+# key_prefix = "xiuxian_wendao:graph"
+
+# Optional knowledge-entry storage endpoint. When unset, Wendao storage keeps
+# its existing localhost fallback.
+#
+# [storage.knowledge]
+# valkey_url = "redis://127.0.0.1/"
+
+# Optional gateway runtime knobs. Leave unset to keep machine/default plus env
+# fallback behavior.
+#
+# [gateway.runtime]
+# listen_backlog = 2048
+# studio_concurrency_limit = 64
+# studio_request_timeout_secs = 15
+
 [link_graph.related_ppr]
 max_candidates = 4096
 max_partitions = 8

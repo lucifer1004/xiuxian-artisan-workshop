@@ -1,0 +1,25 @@
+version = 1
+
+[planning]
+name = "coding-rust-blueprint-plan-demo"
+tags = ["planning", "coding", "rust", "demo"]
+
+[template]
+use = [
+  "coding as coding",
+  "rust as rust",
+  "blueprint as blueprint",
+  "plan as plan",
+]
+
+[[template.link]]
+from = "coding::task.coding-ready"
+to = "rust::task.rust-start"
+
+[[template.link]]
+from = "rust::task.constraints-ready"
+to = "blueprint::task.blueprint-start"
+
+[[template.link]]
+from = "blueprint::task.blueprint-ready"
+to = "plan::task.plan-start"

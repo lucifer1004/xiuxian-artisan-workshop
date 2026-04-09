@@ -156,6 +156,7 @@ impl VectorStore {
                 let _ = kw_index.bulk_upsert(keyword_docs);
             }
         }
+        self.invalidate_cached_table(table_name).await;
         Ok(())
     }
 
@@ -261,6 +262,7 @@ impl VectorStore {
                 let _ = kw_index.bulk_upsert(keyword_docs);
             }
         }
+        self.invalidate_cached_table(table_name).await;
         Ok(())
     }
 }

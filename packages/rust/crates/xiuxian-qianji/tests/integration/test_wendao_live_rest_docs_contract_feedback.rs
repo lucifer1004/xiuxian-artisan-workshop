@@ -1,7 +1,8 @@
-//! Integration coverage for the real Wendao bundled OpenAPI artifact.
+//! Integration coverage for the real Wendao bundled `OpenAPI` artifact.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use xiuxian_config_core::resolve_project_root;
 use xiuxian_qianji::contract_feedback::{
     build_rest_docs_collection_context, run_rest_docs_contract_feedback,
 };
@@ -13,12 +14,8 @@ fn must_ok<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
 }
 
 fn workspace_root() -> PathBuf {
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .ancestors()
-        .nth(4)
-        .unwrap_or_else(|| panic!("qianji manifest dir should resolve to workspace root"))
-        .to_path_buf()
+    resolve_project_root()
+        .unwrap_or_else(|| panic!("workspace root should resolve from PRJ_ROOT or git ancestry"))
 }
 
 #[tokio::test]
@@ -51,3 +48,5 @@ async fn wendao_bundled_openapi_rest_docs_contract_feedback_stays_clean() {
     assert!(result.knowledge_batch.entries.is_empty());
     assert!(result.knowledge_entries.is_empty());
 }
+
+xiuxian_testing::crate_test_policy_harness!();

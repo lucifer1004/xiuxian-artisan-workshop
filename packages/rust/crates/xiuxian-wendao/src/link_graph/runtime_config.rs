@@ -67,4 +67,5 @@ pub fn resolve_link_graph_rerank_flight_runtime_settings() -> LinkGraphRerankFli
 }
 
 #[cfg(test)]
+#[path = "../../tests/unit/link_graph/runtime_config.rs"]
 mod tests;

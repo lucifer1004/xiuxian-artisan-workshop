@@ -7,4 +7,5 @@ mod sources;
 pub use assemble::build_projection_inputs;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/analyzers/projection/builder/mod.rs"]
 mod tests;

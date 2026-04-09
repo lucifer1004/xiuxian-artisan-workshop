@@ -5,6 +5,7 @@ mod queue;
 mod rank;
 mod search;
 #[cfg(test)]
+#[path = "../../../../../tests/unit/analyzers/query/docs/planner/mod.rs"]
 mod tests;
 mod workset;
 

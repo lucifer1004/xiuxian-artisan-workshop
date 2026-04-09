@@ -1,0 +1,10 @@
+# Validation Failed
+{%- if header_block != "" %}
+
+{{ header_block }}
+{%- endif %}
+{%- for diagnostic in diagnostics %}
+
+## {{ diagnostic.title }}
+{{ diagnostic.body }}
+{%- endfor %}

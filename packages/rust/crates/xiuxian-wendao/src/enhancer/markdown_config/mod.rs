@@ -6,6 +6,7 @@ mod links;
 mod types;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/enhancer/markdown_config/mod.rs"]
 mod tests;
 
 pub use index::MarkdownConfigMemoryIndex;

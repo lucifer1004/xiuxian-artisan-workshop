@@ -8,6 +8,7 @@ mod query;
 mod valkey;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/analyzers/cache/mod.rs"]
 mod tests;
 
 pub use analysis::{

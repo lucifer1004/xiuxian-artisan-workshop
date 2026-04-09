@@ -11,8 +11,7 @@ mod client;
 mod runtime;
 
 #[cfg(test)]
-mod test_support;
-#[cfg(test)]
+#[path = "../../../tests/unit/memory/julia/mod.rs"]
 mod tests;
 
 pub use client::ComputeClient;

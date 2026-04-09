@@ -10,4 +10,5 @@ mod valkey;
 pub use valkey::{valkey_saliency_del, valkey_saliency_touch, valkey_saliency_touch_with_valkey};
 
 #[cfg(test)]
+#[path = "../../../../../tests/unit/link_graph/saliency/store/write/mod.rs"]
 mod tests;

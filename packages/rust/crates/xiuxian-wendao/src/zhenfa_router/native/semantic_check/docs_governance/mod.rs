@@ -25,4 +25,5 @@ pub use types::{
 };
 
 #[cfg(test)]
+#[path = "../../../../../tests/unit/zhenfa_router/native/semantic_check/docs_governance/mod.rs"]
 mod tests;

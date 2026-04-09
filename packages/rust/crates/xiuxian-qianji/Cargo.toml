@@ -29,6 +29,10 @@ rand = { workspace = true }
 regex = "1"
 md5 = { workspace = true }
 include_dir = { workspace = true }
+walkdir = { workspace = true }
+globset = { workspace = true }
+tempfile = { workspace = true }
+merman-core = "0.4"
 xiuxian-wendao = { path = "../xiuxian-wendao" }
 xiuxian-qianhuan = { path = "../xiuxian-qianhuan" }
 xiuxian-ast = { path = "../xiuxian-ast" }
@@ -42,7 +46,6 @@ xiuxian-config-core = { path = "../xiuxian-config-core" }
 reqwest = { workspace = true, optional = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 insta = { workspace = true }
 xiuxian-zhixing = { path = "../xiuxian-zhixing" }
 
@@ -93,8 +96,28 @@ name = "contract_feedback_pipeline"
 path = "tests/integration/contract_feedback_pipeline.rs"
 
 [[test]]
+name = "flowhub_contracts"
+path = "tests/integration/flowhub_contracts.rs"
+
+[[test]]
+name = "flowhub_manifest_contracts"
+path = "tests/integration/flowhub_manifest_contracts.rs"
+
+[[test]]
+name = "flowhub_materialize"
+path = "tests/integration/flowhub_materialize.rs"
+
+[[test]]
+name = "flowhub_scenario_show_check"
+path = "tests/integration/flowhub_scenario_show_check.rs"
+
+[[test]]
 name = "audit_scenario_contract"
 path = "tests/integration/test_audit_scenario_contract.rs"
+
+[[test]]
+name = "formal_audit_advisory_executor"
+path = "tests/integration/test_formal_audit_advisory_executor.rs"
 
 [[test]]
 name = "wendao_persisted_rest_docs_contract_feedback"
@@ -108,3 +131,7 @@ path = "tests/integration/test_wendao_live_rest_docs_contract_feedback.rs"
 [[test]]
 name = "unit_telemetry_events"
 path = "tests/unit/unit_telemetry_events.rs"
+
+[[test]]
+name = "workdir_contracts"
+path = "tests/integration/workdir_contracts.rs"

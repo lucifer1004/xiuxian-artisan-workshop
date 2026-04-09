@@ -7,12 +7,16 @@ use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Schema};
 
 /// Canonical rerank request `doc_id` column.
+#[cfg(feature = "transport")]
 pub const RERANK_REQUEST_DOC_ID_COLUMN: &str = "doc_id";
 /// Canonical rerank request `vector_score` column.
+#[cfg(feature = "transport")]
 pub const RERANK_REQUEST_VECTOR_SCORE_COLUMN: &str = "vector_score";
 /// Canonical rerank request `embedding` column.
+#[cfg(feature = "transport")]
 pub const RERANK_REQUEST_EMBEDDING_COLUMN: &str = "embedding";
 /// Canonical rerank request `query_embedding` column.
+#[cfg(feature = "transport")]
 pub const RERANK_REQUEST_QUERY_EMBEDDING_COLUMN: &str = "query_embedding";
 
 /// Validate the stable rerank request schema for one expected embedding dimension.

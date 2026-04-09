@@ -6,6 +6,7 @@ pub(crate) mod reason;
 pub(crate) mod snapshot;
 pub(crate) mod telemetry;
 #[cfg(test)]
+#[path = "../../../tests/unit/search/status/mod.rs"]
 mod tests;
 
 pub use corpus::SearchCorpusStatus;

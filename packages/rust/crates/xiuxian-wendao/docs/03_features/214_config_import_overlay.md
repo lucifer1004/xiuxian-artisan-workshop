@@ -44,6 +44,49 @@ overlay on merge.
 - `nix/modules/process.nix` now points at the root config and uses a bounded
   TOML-aware helper under `scripts/channel/` for readiness-port discovery
 
+## Gateway Runtime Knobs
+
+Gateway process knobs now follow the same TOML-first contract instead of
+living as env-only parser glue in `command.rs`.
+
+The canonical keyspace is:
+
+```toml
+[gateway.runtime]
+listen_backlog = 2048
+studio_concurrency_limit = 64
+studio_request_timeout_secs = 15
+```
+
+Resolution order for these fields is:
+
+1. merged `wendao.toml` / overlay settings
+2. env fallback:
+   `XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG`
+   `XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT`
+   `XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS`
+3. built-in defaults plus clamp bounds in the gateway command surface
+
+This keeps operator-facing gateway limits on the same config-core lane as the
+other TOML-backed runtime owners while preserving env fallback when the TOML
+keys are omitted.
+
+Gateway webhook fallback now follows the same trim-aware precedence hygiene:
+
+1. merged `wendao.toml` / overlay `gateway.webhook_*` settings
+2. env fallback:
+   `WENDAO_WEBHOOK_URL`
+   `WENDAO_WEBHOOK_SECRET`
+3. built-in webhook defaults
+
+Blank env values are treated as absent instead of becoming authoritative
+runtime config.
+
+The gateway notify-status surface reports the effective webhook URL captured at
+startup, so `/api/notify/status` now reflects the same resolved TOML-first
+runtime config the notification worker is actually using instead of re-reading
+`WENDAO_WEBHOOK_*` from the live process environment.
+
 ## Environment Variables In Import Paths
 
 `xiuxian-config-core` now expands environment variables inside `imports`
@@ -82,4 +125,6 @@ non-UI base sections such as `[gateway]` untouched.
 - `gateway/studio/router/config/` owns overlay file naming and `UiConfig`
   projection
 - `src/bin/wendao/execute/gateway/config.rs` consumes merged gateway settings
-  instead of scanning TOML text
+  instead of scanning TOML text, and now consumes the shared
+  `xiuxian-config-core` project-root helper for `$PRJ_ROOT/wendao.toml`
+  discovery instead of owning a separate `PRJ_ROOT` lookup path

@@ -18,4 +18,5 @@ pub use types::{FuzzyMatch, FuzzyMatcher, FuzzyScore};
 pub(crate) use scoring::score_candidate_with_query_chars;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/search/fuzzy/mod.rs"]
 mod tests;

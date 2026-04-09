@@ -171,8 +171,7 @@ impl ZhixingHeyi {
         let persona_name = self
             .active_persona
             .as_ref()
-            .map(|persona| persona.name.as_str())
-            .unwrap_or(DEFAULT_PERSONA_NAME);
+            .map_or(DEFAULT_PERSONA_NAME, |persona| persona.name.as_str());
         let scheduled_local = signal
             .scheduled_at
             .as_deref()

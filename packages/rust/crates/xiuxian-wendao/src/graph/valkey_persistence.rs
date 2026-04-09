@@ -7,13 +7,18 @@
 use super::core::read_lock;
 use super::{GraphError, KnowledgeGraph};
 use crate::entity::{Entity, Relation};
-use crate::valkey_common::{first_non_empty_env, normalize_key_prefix, open_client};
+use crate::settings::{get_setting_string, merged_wendao_settings};
+use crate::valkey_common::{normalize_key_prefix, open_client};
 use chrono::Utc;
 use log::info;
 use serde::{Deserialize, Serialize};
+use serde_yaml::Value;
 use std::collections::HashMap;
+use xiuxian_config_core::toml_first_named_string;
 use xxhash_rust::xxh3::xxh3_64;
 
+const GRAPH_VALKEY_URL_SETTING: &str = "graph.persistence.valkey_url";
+const GRAPH_VALKEY_KEY_PREFIX_SETTING: &str = "graph.persistence.key_prefix";
 const GRAPH_VALKEY_URL_ENV: &str = "XIUXIAN_WENDAO_GRAPH_VALKEY_URL";
 const GRAPH_VALKEY_KEY_PREFIX_ENV: &str = "XIUXIAN_WENDAO_GRAPH_VALKEY_KEY_PREFIX";
 const DEFAULT_GRAPH_VALKEY_KEY_PREFIX: &str = "xiuxian_wendao:graph";
@@ -28,19 +33,50 @@ struct GraphSnapshot {
 }
 
 fn resolve_graph_valkey_url() -> Result<String, GraphError> {
-    first_non_empty_env(&[GRAPH_VALKEY_URL_ENV, "VALKEY_URL"]).ok_or_else(|| {
+    let settings = merged_wendao_settings();
+    resolve_graph_valkey_url_with_settings_and_lookup(&settings, &|name| std::env::var(name).ok())
+}
+
+fn resolve_graph_key_prefix() -> String {
+    let settings = merged_wendao_settings();
+    resolve_graph_key_prefix_with_settings_and_lookup(&settings, &|name| std::env::var(name).ok())
+}
+
+fn resolve_graph_valkey_url_with_settings_and_lookup(
+    settings: &Value,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Result<String, GraphError> {
+    toml_first_named_string(
+        GRAPH_VALKEY_URL_SETTING,
+        get_setting_string(settings, GRAPH_VALKEY_URL_SETTING),
+        lookup,
+        &[GRAPH_VALKEY_URL_ENV, "VALKEY_URL"],
+    )
+    .map(|(_, url)| url)
+    .ok_or_else(|| {
         GraphError::InvalidRelation(
-            GRAPH_VALKEY_URL_ENV.to_string(),
-            format!("graph valkey url is required (set {GRAPH_VALKEY_URL_ENV} or VALKEY_URL)"),
+            GRAPH_VALKEY_URL_SETTING.to_string(),
+            format!(
+                "graph valkey url is required (set {GRAPH_VALKEY_URL_SETTING}, {GRAPH_VALKEY_URL_ENV}, or VALKEY_URL)"
+            ),
         )
     })
 }
 
-fn resolve_graph_key_prefix() -> String {
+fn resolve_graph_key_prefix_with_settings_and_lookup(
+    settings: &Value,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> String {
     normalize_graph_key_prefix(
-        std::env::var(GRAPH_VALKEY_KEY_PREFIX_ENV)
-            .unwrap_or_default()
-            .as_str(),
+        toml_first_named_string(
+            GRAPH_VALKEY_KEY_PREFIX_SETTING,
+            get_setting_string(settings, GRAPH_VALKEY_KEY_PREFIX_SETTING),
+            lookup,
+            &[GRAPH_VALKEY_KEY_PREFIX_ENV],
+        )
+        .map(|(_, value)| value)
+        .unwrap_or_default()
+        .as_str(),
     )
 }
 
@@ -177,41 +213,5 @@ impl KnowledgeGraph {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        DEFAULT_GRAPH_VALKEY_KEY_PREFIX, GraphError, graph_redis_client, normalize_graph_key_prefix,
-    };
-
-    #[test]
-    fn normalize_graph_key_prefix_falls_back_for_blank_input() {
-        assert_eq!(
-            normalize_graph_key_prefix("   "),
-            DEFAULT_GRAPH_VALKEY_KEY_PREFIX.to_string()
-        );
-    }
-
-    #[test]
-    fn normalize_graph_key_prefix_trims_non_blank_input() {
-        assert_eq!(
-            normalize_graph_key_prefix("  xiuxian:graph:test  "),
-            "xiuxian:graph:test".to_string()
-        );
-    }
-
-    #[test]
-    fn graph_redis_client_opens_trimmed_valid_url() {
-        let client = graph_redis_client(" redis://127.0.0.1/ ");
-        assert!(client.is_ok());
-    }
-
-    #[test]
-    fn graph_redis_client_preserves_graph_error_identity() {
-        let Err(error) = graph_redis_client("  ") else {
-            panic!("blank URL should fail");
-        };
-        assert!(matches!(
-            error,
-            GraphError::InvalidRelation(ref field, _) if field == "graph_valkey_client"
-        ));
-    }
-}
+#[path = "../../tests/unit/graph/valkey_persistence.rs"]
+mod tests;

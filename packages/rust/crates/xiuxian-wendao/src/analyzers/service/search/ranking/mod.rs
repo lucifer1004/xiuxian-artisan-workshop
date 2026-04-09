@@ -4,6 +4,7 @@ mod shared;
 mod symbol;
 
 #[cfg(test)]
+#[path = "../../../../../tests/unit/analyzers/service/search/ranking/mod.rs"]
 mod tests;
 
 pub(crate) use example::{ranked_example_matches, ranked_example_matches_with_artifacts};

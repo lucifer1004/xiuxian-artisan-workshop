@@ -14,4 +14,5 @@ pub use ranking::{build_repo_projected_page_search, scored_projected_page_matche
 pub use ranking::build_repo_projected_page_search_with_options;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/analyzers/projection/search/mod.rs"]
 mod tests;

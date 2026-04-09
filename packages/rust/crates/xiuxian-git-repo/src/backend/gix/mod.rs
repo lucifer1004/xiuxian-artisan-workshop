@@ -12,6 +12,7 @@ mod tuning;
 mod types;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/backend/gix/mod.rs"]
 mod tests;
 
 pub(crate) use checkout::checkout_detached_to_revision;

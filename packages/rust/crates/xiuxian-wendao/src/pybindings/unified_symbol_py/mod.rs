@@ -8,6 +8,7 @@ mod py_stats;
 mod py_symbol;
 mod registration;
 #[cfg(test)]
+#[path = "../../../tests/unit/pybindings/unified_symbol_py/mod.rs"]
 mod tests;
 
 pub use py_index::PyUnifiedSymbolIndex;

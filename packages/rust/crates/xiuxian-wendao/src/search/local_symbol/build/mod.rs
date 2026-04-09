@@ -5,6 +5,7 @@ mod types;
 mod write;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/local_symbol/build/mod.rs"]
 mod tests;
 
 pub(crate) use orchestration::ensure_local_symbol_index_started;

@@ -13,6 +13,7 @@ mod retrieval;
 mod search;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/analyzers/service/projection/mod.rs"]
 mod tests;
 
 pub use family::*;

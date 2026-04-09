@@ -57,8 +57,7 @@ fn audit_flow_declares_contract_that_can_validate_plans() {
             nodes.iter().find(|node| {
                 node.get("id")
                     .and_then(toml::Value::as_str)
-                    .map(|value| value == "plan")
-                    .unwrap_or(false)
+                    .is_some_and(|value| value == "plan")
             })
         })
         .and_then(|node| node.get("zhenfa"))
@@ -73,3 +72,5 @@ fn audit_flow_declares_contract_that_can_validate_plans() {
 
     assert_eq!(resolved, audit_dir.join("qianji_plan.xsd"));
 }
+
+xiuxian_testing::crate_test_policy_harness!();

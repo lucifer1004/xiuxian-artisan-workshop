@@ -15,4 +15,5 @@ pub use index::SearchDocumentIndex;
 pub use matcher::{TantivyDocumentMatch, TantivyMatcher};
 
 #[cfg(test)]
+#[path = "../../../tests/unit/search/tantivy/mod.rs"]
 mod tests;

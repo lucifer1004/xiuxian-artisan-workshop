@@ -4,6 +4,7 @@ mod types;
 mod write;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/repo_entity/build/mod.rs"]
 mod tests;
 
 pub(crate) use orchestration::publish_repo_entities;

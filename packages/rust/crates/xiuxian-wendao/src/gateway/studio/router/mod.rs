@@ -40,4 +40,5 @@ pub use sanitization::{
 pub use state::{GatewayState, StudioBootstrapBackgroundIndexingTelemetry, StudioState};
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/gateway/studio/router/mod.rs"]
 mod tests;

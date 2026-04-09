@@ -1,5 +1,29 @@
 use std::path::{Path, PathBuf};
 
+/// Resolve one optional env-style path-like value against `project_root`.
+///
+/// Blank values are treated as absent. Relative paths remain relative when no
+/// project root is available.
+#[must_use]
+pub fn resolve_path_from_value(
+    project_root: Option<&Path>,
+    value: Option<&str>,
+) -> Option<PathBuf> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else if let Some(root) = project_root {
+                root.join(path)
+            } else {
+                path
+            }
+        })
+}
+
 /// Resolve project root from environment or git ancestry.
 ///
 /// Resolution order:
@@ -54,6 +78,15 @@ pub fn resolve_cache_home(project_root: Option<&Path>) -> Option<PathBuf> {
     resolve_home(project_root, "PRJ_CACHE_HOME", ".cache")
 }
 
+/// Resolve cache-home from one optional env-style value or `<project_root>/.cache`.
+#[must_use]
+pub fn resolve_cache_home_from_value(
+    project_root: Option<&Path>,
+    env_value: Option<&str>,
+) -> Option<PathBuf> {
+    resolve_home_from_value(project_root, env_value, ".cache")
+}
+
 /// Normalize an explicit `config_home` with optional `project_root`.
 #[must_use]
 pub fn normalize_config_home(
@@ -73,6 +106,23 @@ pub fn resolve_project_root_or_cwd() -> PathBuf {
     resolve_project_root()
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Resolve project root from one optional raw env-style value and a cwd
+/// fallback.
+///
+/// Blank values are treated as absent. Relative values are resolved against the
+/// provided current directory when available.
+#[must_use]
+pub fn resolve_project_root_or_cwd_from_value(
+    env_value: Option<&str>,
+    current_dir: Option<&Path>,
+) -> PathBuf {
+    if let Some(path) = resolve_path_from_value(current_dir, env_value) {
+        return path;
+    }
+
+    current_dir.map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
 /// Convert `path` to absolute using `project_root` when needed.
@@ -99,18 +149,6 @@ pub(crate) fn resolve_home_from_value(
     env_value: Option<&str>,
     default_relative: &str,
 ) -> Option<PathBuf> {
-    env_value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .map(|path| {
-            if path.is_absolute() {
-                path
-            } else if let Some(root) = project_root {
-                root.join(path)
-            } else {
-                path
-            }
-        })
+    resolve_path_from_value(project_root, env_value)
         .or_else(|| project_root.map(|root| root.join(default_relative)))
 }

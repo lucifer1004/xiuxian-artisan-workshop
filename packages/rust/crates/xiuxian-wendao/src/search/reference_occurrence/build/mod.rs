@@ -5,6 +5,7 @@ mod types;
 mod write;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/reference_occurrence/build/mod.rs"]
 mod tests;
 
 pub(crate) use orchestration::ensure_reference_occurrence_index_started;

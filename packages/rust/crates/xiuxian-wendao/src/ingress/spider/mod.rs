@@ -19,4 +19,5 @@ pub use types::{SpiderPagePayload, WebIngestionSignal};
 pub use url::{canonical_web_uri, web_namespace_from_url};
 
 #[cfg(test)]
+#[path = "../../../tests/unit/ingress/spider/mod.rs"]
 mod tests;

@@ -1,0 +1,19 @@
+---
+source: packages/rust/crates/xiuxian-vector/tests/integration/data_layer_snapshots.rs
+assertion_line: 314
+expression: view
+---
+{
+  "commit_hits": [
+    {
+      "skill": "git",
+      "tool": "git.commit"
+    }
+  ],
+  "history_hits": [
+    {
+      "skill": "git",
+      "tool": "git.rebase"
+    }
+  ]
+}

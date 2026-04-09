@@ -27,27 +27,26 @@ pub(super) fn resolve_qianji_runtime_wendao_ingester(
         file_wendao.graph_scope_key.as_deref(),
     )));
 
-    let graph_dimension = runtime_env
-        .qianji_memory_promotion_graph_dimension
-        .or_else(|| {
-            parse_usize_env_override(runtime_env, "QIANJI_MEMORY_PROMOTION_GRAPH_DIMENSION")
-        })
-        .or(file_wendao.graph_dimension)
-        .unwrap_or(DEFAULT_MEMORY_PROMOTION_GRAPH_DIMENSION);
+    let graph_dimension = xiuxian_config_core::first_some!(
+        runtime_env.qianji_memory_promotion_graph_dimension,
+        parse_usize_env_override(runtime_env, "QIANJI_MEMORY_PROMOTION_GRAPH_DIMENSION"),
+        file_wendao.graph_dimension,
+    )
+    .unwrap_or(DEFAULT_MEMORY_PROMOTION_GRAPH_DIMENSION);
 
-    let persist = runtime_env
-        .qianji_memory_promotion_persist
-        .or_else(|| parse_bool_env_override(runtime_env, "QIANJI_MEMORY_PROMOTION_PERSIST"))
-        .or(file_wendao.persist)
-        .unwrap_or(DEFAULT_MEMORY_PROMOTION_PERSIST);
+    let persist = xiuxian_config_core::first_some!(
+        runtime_env.qianji_memory_promotion_persist,
+        parse_bool_env_override(runtime_env, "QIANJI_MEMORY_PROMOTION_PERSIST"),
+        file_wendao.persist,
+    )
+    .unwrap_or(DEFAULT_MEMORY_PROMOTION_PERSIST);
 
-    let persist_best_effort = runtime_env
-        .qianji_memory_promotion_persist_best_effort
-        .or_else(|| {
-            parse_bool_env_override(runtime_env, "QIANJI_MEMORY_PROMOTION_PERSIST_BEST_EFFORT")
-        })
-        .or(file_wendao.persist_best_effort)
-        .unwrap_or(DEFAULT_MEMORY_PROMOTION_PERSIST_BEST_EFFORT);
+    let persist_best_effort = xiuxian_config_core::first_some!(
+        runtime_env.qianji_memory_promotion_persist_best_effort,
+        parse_bool_env_override(runtime_env, "QIANJI_MEMORY_PROMOTION_PERSIST_BEST_EFFORT"),
+        file_wendao.persist_best_effort,
+    )
+    .unwrap_or(DEFAULT_MEMORY_PROMOTION_PERSIST_BEST_EFFORT);
 
     QianjiRuntimeWendaoIngesterConfig {
         graph_scope,

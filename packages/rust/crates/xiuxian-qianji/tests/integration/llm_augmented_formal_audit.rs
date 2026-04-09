@@ -615,3 +615,5 @@ async fn llm_augmented_audit_cognitive_distribution_values_in_range() {
         }
     }
 }
+
+xiuxian_testing::crate_test_policy_harness!();

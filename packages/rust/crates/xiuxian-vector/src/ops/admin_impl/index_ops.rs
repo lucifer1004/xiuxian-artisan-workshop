@@ -31,6 +31,7 @@ impl VectorStore {
             .create_index(&[VECTOR_COLUMN], IndexType::Vector, None, &params, true)
             .await
             .map_err(VectorStoreError::LanceDB)?;
+        self.invalidate_cached_table(table_name).await;
         Ok(())
     }
 
@@ -104,6 +105,7 @@ impl VectorStore {
             )
             .await
             .map_err(VectorStoreError::LanceDB)?;
+        self.invalidate_cached_table(table_name).await;
         Ok(())
     }
 
@@ -161,6 +163,7 @@ impl VectorStore {
             }
         }
         .map_err(VectorStoreError::LanceDB)?;
+        self.invalidate_cached_table(table_name).await;
         Ok(())
     }
 }

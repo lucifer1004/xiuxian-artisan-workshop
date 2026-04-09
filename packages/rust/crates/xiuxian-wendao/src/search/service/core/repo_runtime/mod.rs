@@ -3,4 +3,5 @@ mod helpers;
 mod reads;
 mod sync;
 #[cfg(test)]
+#[path = "../../../../../tests/unit/search/service/core/repo_runtime/mod.rs"]
 mod tests;

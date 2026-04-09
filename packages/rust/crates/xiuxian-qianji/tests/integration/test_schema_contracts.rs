@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use xiuxian_qianji::contracts::{EdgeDefinition, NodeDefinition, QianjiManifest};
 
 #[test]

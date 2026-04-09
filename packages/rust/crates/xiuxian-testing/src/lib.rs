@@ -36,8 +36,12 @@
 //! Keep tests out of source files using `#[path]` mounting. The shared validation path also treats
 //! inline `#[cfg(test)]` modules as policy violations so crates can fail fast when tests drift back
 //! into `src/`.
-//! For enforcement, prefer the unified `assert_crate_test_policy` helper inside either a consumer
-//! crate test or a dedicated workspace audit crate.
+//! For enforcement inside regular crate test targets, prefer
+//! [`crate_test_policy_harness!`](macro@crate_test_policy_harness), which makes
+//! narrow `cargo test --test <target>` runs execute the policy gate too.
+//! For source-backed unit tests that should participate in `cargo test --lib`
+//! without keeping test bodies inline in `src/`, prefer
+//! [`crate_test_policy_source_harness!`](macro@crate_test_policy_source_harness).
 //!
 //! ```ignore
 //! // src/foo/bar.rs
@@ -46,6 +50,14 @@
 //! #[cfg(test)]
 //! #[path = "../../tests/unit/foo/bar.rs"]
 //! mod tests;
+//! ```
+//!
+//! ```ignore
+//! // src/lib.rs
+//! xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+//!
+//! // tests/unit/lib_policy.rs
+//! xiuxian_testing::crate_test_policy_harness!();
 //! ```
 //!
 //! ## Example
@@ -107,7 +119,7 @@ pub use performance::{
 };
 
 pub use policy::{
-    CrateTestPolicyReport, assert_crate_test_policy,
+    CrateTestPolicyReport, assert_crate_test_policy, assert_crate_test_policy_harness,
     assert_crate_test_policy_with_workspace_config,
     assert_crate_tests_structure_with_workspace_config, format_crate_test_policy_report,
     validate_crate_test_policy, validate_crate_test_policy_with_workspace_config,
@@ -128,3 +140,37 @@ pub use validation::{
     validate_crate_tests, validate_crate_tests_with_policy, validate_tests_structure,
     validate_tests_structure_with_policy,
 };
+
+/// Mount the shared crate test-policy gate directly into a test target.
+///
+/// This macro is intended for integration-test entry points and other explicit
+/// Cargo test targets so `cargo test --test <target>` still runs the crate's
+/// shared test-policy gate.
+#[macro_export]
+macro_rules! crate_test_policy_harness {
+    () => {
+        #[test]
+        fn enforce_crate_test_policy_harness() {
+            $crate::assert_crate_test_policy_harness(std::path::Path::new(env!(
+                "CARGO_MANIFEST_DIR"
+            )));
+        }
+    };
+}
+
+/// Mount a crate test-policy harness from an external source-backed test file.
+///
+/// This macro is intended for `src/lib.rs`, `src/main.rs`, or another source
+/// module that already externalizes unit tests via `#[path]`. It keeps the gate
+/// test body out of `src/` while ensuring `cargo test --lib` still runs the
+/// shared crate test-policy harness.
+#[macro_export]
+macro_rules! crate_test_policy_source_harness {
+    ($path:literal) => {
+        #[cfg(test)]
+        #[path = $path]
+        mod xiuxian_test_policy_harness;
+    };
+}
+
+crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");

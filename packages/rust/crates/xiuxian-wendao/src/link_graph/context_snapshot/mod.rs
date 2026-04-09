@@ -2,6 +2,7 @@ pub(crate) mod id;
 pub(crate) mod runtime;
 pub(crate) mod store;
 #[cfg(test)]
+#[path = "../../../tests/unit/link_graph/context_snapshot/mod.rs"]
 mod tests;
 pub(crate) mod types;
 

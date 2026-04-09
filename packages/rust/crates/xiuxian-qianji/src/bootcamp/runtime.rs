@@ -1,4 +1,5 @@
 use crate::error::QianjiError;
+use crate::runtime_config::resolve_process_project_root;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use xiuxian_wendao::link_graph::LinkGraphIndex;
@@ -16,13 +17,7 @@ fn resolve_repo_root_path(explicit: Option<&Path>) -> PathBuf {
     if let Some(path) = explicit {
         return path.to_path_buf();
     }
-    if let Ok(path) = std::env::var("PRJ_ROOT") {
-        let trimmed = path.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
-    }
-    std::env::current_dir().unwrap_or_else(|_error| std::env::temp_dir())
+    resolve_process_project_root().unwrap_or_else(std::env::temp_dir)
 }
 
 pub(super) fn build_link_graph_index(

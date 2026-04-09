@@ -5,6 +5,7 @@ mod types;
 mod write;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/knowledge_section/build/mod.rs"]
 mod tests;
 
 pub(crate) use orchestration::ensure_knowledge_section_index_started;

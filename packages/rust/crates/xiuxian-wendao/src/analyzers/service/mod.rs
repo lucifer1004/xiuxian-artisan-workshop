@@ -51,4 +51,5 @@ pub(crate) use search::{
 };
 pub use sync::*;
 #[cfg(test)]
+#[path = "../../../tests/unit/analyzers/service/mod.rs"]
 mod tests;

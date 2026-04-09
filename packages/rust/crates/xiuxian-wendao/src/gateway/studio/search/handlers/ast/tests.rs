@@ -51,6 +51,7 @@ async fn studio_ast_flight_provider_materializes_ast_batches() {
     let provider = StudioAstSearchFlightRouteProvider::new(Arc::new(GatewayState {
         index: None,
         signal_tx: None,
+        webhook_url: None,
         studio: Arc::new(studio),
     }));
 

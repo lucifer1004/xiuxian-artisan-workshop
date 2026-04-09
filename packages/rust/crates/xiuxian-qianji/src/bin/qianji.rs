@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
+use xiuxian_config_core::{resolve_cache_home, resolve_project_root_or_cwd_from_value};
 use xiuxian_llm::llm::{LlmClient, OpenAICompatibleClient, OpenAIWireApi};
 use xiuxian_logging::{init, split_logging_args};
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
@@ -23,12 +24,21 @@ use xiuxian_qianji::contract_feedback::{
     run_and_persist_rest_docs_contract_feedback, run_contract_feedback_flow_with_live_advisory,
     run_rest_docs_contract_feedback,
 };
+use xiuxian_qianji::error::QianjiError;
 use xiuxian_qianji::executors::formal_audit::QianjiAdvisoryAuditExecutor;
 use xiuxian_qianji::layout::{QgsTheme, QianjiLayoutEngine, generate_bpmn_xml};
 use xiuxian_qianji::manifest_requires_llm;
-use xiuxian_qianji::runtime_config::resolve_qianji_runtime_llm_config;
+use xiuxian_qianji::runtime_config::{
+    resolve_qianji_runtime_checkpoint_config, resolve_qianji_runtime_llm_config,
+};
 use xiuxian_qianji::sovereign::KnowledgeStorageContractFeedbackSink;
-use xiuxian_qianji::{QianjiCompiler, QianjiLlmClient, QianjiScheduler};
+use xiuxian_qianji::{
+    QianjiCompiler, QianjiLlmClient, QianjiScheduler, check_flowhub, check_flowhub_scenario,
+    check_workdir, classify_flowhub_dir, looks_like_flowhub_scenario_dir, looks_like_workdir_dir,
+    render_flowhub_check_markdown, render_flowhub_scenario_check_markdown,
+    render_flowhub_scenario_show, render_flowhub_show, render_workdir_check_markdown,
+    render_workdir_show, show_flowhub, show_flowhub_scenario, show_workdir,
+};
 use xiuxian_testing::{
     AdvisoryAuditPolicy, CollectionContext, ContractReport, ContractRunConfig, FindingSeverity,
     NoopAdvisoryAuditExecutor,
@@ -37,6 +47,18 @@ use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 const DEFAULT_CONTRACT_FEEDBACK_TABLE_NAME: &str = "contract_feedback";
 const REST_DOCS_PACK_ID: &str = "rest_docs";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DirCliCommand {
+    Show { dir: PathBuf },
+    Check { dir: PathBuf },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DirCliOutput {
+    rendered: String,
+    exit_code: i32,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 enum ContractFeedbackCliCommand {
@@ -85,6 +107,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (log_settings, args) = split_logging_args(&raw_args);
     init("xiuxian_qianji", &log_settings)?;
 
+    if let Some(command) = parse_dir_command(&args)? {
+        return handle_dir_command(command);
+    }
+
     // Support "graph" subcommand: qianji graph <manifest_path> <output_path>
     if args.len() >= 4 && args[1] == "graph" {
         return handle_graph_export(&args[2], &args[3]);
@@ -99,6 +125,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
+    run_manifest_execution(&args).await
+}
+
+async fn run_manifest_execution(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let repo_path = &args[1];
     let manifest_path = &args[2];
     let context_json = &args[3];
@@ -135,9 +165,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let redis_url = env::var("VALKEY_URL")
-        .ok()
-        .unwrap_or_else(|| "redis://localhost:6379/0".to_string());
+    let checkpoint_runtime = resolve_qianji_runtime_checkpoint_config().map_err(|e| {
+        io::Error::other(format!(
+            "Failed to resolve Qianji checkpoint runtime config from qianji.toml: {e}"
+        ))
+    })?;
 
     println!("Initializing Qianji Engine on: {repo_path}");
     if let Some(runtime) = llm_runtime.as_ref() {
@@ -148,6 +180,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("Manifest has no llm nodes; skipping Qianji LLM runtime initialization.");
     }
+    println!(
+        "Resolved Qianji checkpoint runtime config: valkey_url='{}'",
+        checkpoint_runtime.valkey_url
+    );
 
     let index = Arc::new(
         match LinkGraphIndex::build(std::path::Path::new(repo_path)) {
@@ -185,13 +221,108 @@ fallback temp index also failed ({fallback_error})"
     println!("Executing Context: {context_json}");
 
     let result = scheduler
-        .run_with_checkpoint(context, session_id, Some(redis_url))
+        .run_with_checkpoint(context, session_id, Some(checkpoint_runtime.valkey_url))
         .await?;
 
     println!("\n=== Final Qianji Execution Result ===");
     println!("{}", serde_json::to_string_pretty(&result)?);
 
     Ok(())
+}
+
+fn handle_dir_command(command: DirCliCommand) -> Result<(), Box<dyn std::error::Error>> {
+    let output = run_dir_command(command)?;
+    println!("{}", output.rendered);
+    if output.exit_code == 0 {
+        Ok(())
+    } else {
+        std::process::exit(output.exit_code);
+    }
+}
+
+fn run_dir_command(command: DirCliCommand) -> Result<DirCliOutput, QianjiError> {
+    match command {
+        DirCliCommand::Show { dir } => run_show_dir_command(&dir),
+        DirCliCommand::Check { dir } => run_check_dir_command(&dir),
+    }
+}
+
+fn run_show_dir_command(dir: &Path) -> Result<DirCliOutput, QianjiError> {
+    if looks_like_workdir_dir(dir)? {
+        let show = show_workdir(dir)?;
+        return Ok(DirCliOutput {
+            rendered: render_workdir_show(&show),
+            exit_code: 0,
+        });
+    }
+
+    if classify_flowhub_dir(dir)?.is_some() {
+        let show = show_flowhub(dir)?;
+        return Ok(DirCliOutput {
+            rendered: render_flowhub_show(&show),
+            exit_code: 0,
+        });
+    }
+
+    if looks_like_flowhub_scenario_dir(dir) {
+        let flowhub_root = resolve_default_flowhub_root().map_err(|error| {
+            QianjiError::Topology(format!(
+                "failed to resolve default Flowhub root for scenario `{}`: {error}",
+                dir.display()
+            ))
+        })?;
+        let show = show_flowhub_scenario(&flowhub_root, dir)?;
+        return Ok(DirCliOutput {
+            rendered: render_flowhub_scenario_show(&show),
+            exit_code: 0,
+        });
+    }
+
+    Err(QianjiError::Topology(format!(
+        "`{}` is neither a bounded work surface, a Flowhub root/module, nor a Flowhub scenario directory",
+        dir.display()
+    )))
+}
+
+fn run_check_dir_command(dir: &Path) -> Result<DirCliOutput, QianjiError> {
+    if looks_like_workdir_dir(dir)? {
+        let report = check_workdir(dir)?;
+        return Ok(DirCliOutput {
+            rendered: render_workdir_check_markdown(&report),
+            exit_code: if report.is_valid() { 0 } else { 2 },
+        });
+    }
+
+    if classify_flowhub_dir(dir)?.is_some() {
+        let report = check_flowhub(dir)?;
+        return Ok(DirCliOutput {
+            rendered: render_flowhub_check_markdown(&report),
+            exit_code: if report.is_valid() { 0 } else { 2 },
+        });
+    }
+
+    if looks_like_flowhub_scenario_dir(dir) {
+        let flowhub_root = resolve_default_flowhub_root().map_err(|error| {
+            QianjiError::Topology(format!(
+                "failed to resolve default Flowhub root for scenario `{}`: {error}",
+                dir.display()
+            ))
+        })?;
+        let report = check_flowhub_scenario(&flowhub_root, dir);
+        return Ok(DirCliOutput {
+            rendered: render_flowhub_scenario_check_markdown(&report),
+            exit_code: if report.is_valid() { 0 } else { 2 },
+        });
+    }
+
+    Err(QianjiError::Topology(format!(
+        "`{}` is neither a bounded work surface, a Flowhub root/module, nor a Flowhub scenario directory",
+        dir.display()
+    )))
+}
+
+fn resolve_default_flowhub_root() -> io::Result<PathBuf> {
+    Ok(resolve_workspace_root(None)?.join("qianji-flowhub"))
 }
 
 async fn handle_contract_feedback_command(
@@ -556,21 +687,19 @@ fn build_contract_feedback_sink(
 }
 
 fn default_contract_feedback_storage_path(workspace_root: &Path) -> PathBuf {
-    resolve_prj_cache_home(workspace_root)
+    let resolved =
+        resolve_cache_home(Some(workspace_root)).unwrap_or_else(|| workspace_root.join(".cache"));
+    sanitize_prj_cache_home(workspace_root, resolved)
         .join("wendao")
         .join("contract_feedback")
 }
 
-fn resolve_prj_cache_home(workspace_root: &Path) -> PathBuf {
-    let Some(raw) = env::var("PRJ_CACHE_HOME")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    else {
-        return workspace_root.join(".cache");
-    };
-
-    resolve_path_against_root(PathBuf::from(raw), workspace_root)
+fn sanitize_prj_cache_home(workspace_root: &Path, resolved: PathBuf) -> PathBuf {
+    if resolved.is_absolute() && !resolved.starts_with(workspace_root) {
+        workspace_root.join(".cache")
+    } else {
+        resolved
+    }
 }
 
 fn build_contract_feedback_session_id(openapi_path: &Path) -> String {
@@ -594,18 +723,19 @@ fn generated_at_string() -> String {
 }
 
 fn resolve_workspace_root(explicit: Option<&Path>) -> io::Result<PathBuf> {
-    let base = explicit
-        .map(Path::to_path_buf)
-        .or_else(|| {
-            env::var("PRJ_ROOT")
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .map(PathBuf::from)
-        })
-        .unwrap_or(env::current_dir()?);
+    let current_dir = env::current_dir()?;
+    let raw_project_root = env::var("PRJ_ROOT").ok();
+    let base = explicit.map_or_else(
+        || {
+            resolve_project_root_or_cwd_from_value(
+                raw_project_root.as_deref(),
+                Some(current_dir.as_path()),
+            )
+        },
+        Path::to_path_buf,
+    );
 
-    Ok(resolve_path_against_root(base, &env::current_dir()?))
+    Ok(resolve_path_against_root(base, current_dir.as_path()))
 }
 
 fn resolve_cli_path(path: &Path) -> io::Result<PathBuf> {
@@ -727,6 +857,42 @@ fn parse_rest_docs_cli_command(args: &[String]) -> io::Result<RestDocsCliCommand
     Ok(command)
 }
 
+fn parse_dir_command(args: &[String]) -> io::Result<Option<DirCliCommand>> {
+    match args.get(1).map(String::as_str) {
+        Some("show") => Ok(Some(DirCliCommand::Show {
+            dir: parse_dir_flag(&args[2..], "show")?,
+        })),
+        Some("check") => Ok(Some(DirCliCommand::Check {
+            dir: parse_dir_flag(&args[2..], "check")?,
+        })),
+        _ => Ok(None),
+    }
+}
+
+fn parse_dir_flag(args: &[String], command: &str) -> io::Result<PathBuf> {
+    let mut index = 0;
+    let mut dir = None;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--dir" => {
+                index += 1;
+                let value = args.get(index).ok_or_else(|| {
+                    invalid_input(format!("missing value for --dir in `{command}` command"))
+                })?;
+                dir = Some(PathBuf::from(value));
+            }
+            other => {
+                return Err(invalid_input(format!(
+                    "unsupported `{command}` option `{other}`"
+                )));
+            }
+        }
+        index += 1;
+    }
+
+    dir.ok_or_else(|| invalid_input(format!("missing `--dir <path>` for `{command}` command")))
+}
+
 fn parse_flag_value(args: &[String], index: &mut usize, flag: &str) -> io::Result<String> {
     *index += 1;
     args.get(*index)
@@ -744,6 +910,8 @@ fn print_qianji_usage() {
         "  Execution: qianji [-v|--log-verbose] <repo_path> <manifest_path> <context_json> [session_id]"
     );
     eprintln!("  Graph:     qianji [-v|--log-verbose] graph <manifest_path> <output_path>");
+    eprintln!("  Show:      qianji [-v|--log-verbose] show --dir <path>");
+    eprintln!("  Check:     qianji [-v|--log-verbose] check --dir <path>");
     eprintln!(
         "  Contract:  qianji [-v|--log-verbose] contract-feedback rest-docs <openapi_path> [--workspace-root PATH] [--storage-path PATH] [--table-name NAME] [--role ROLE]... [--no-persist] [--live-advisory] [--model MODEL] [--temperature FLOAT] [--cognitive-threshold FLOAT]"
     );
@@ -837,212 +1005,5 @@ fn inject_llm_model_fallback_if_missing(context: &mut serde_json::Value, default
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        ContractFeedbackCliCommand, DEFAULT_CONTRACT_FEEDBACK_TABLE_NAME, REST_DOCS_PACK_ID,
-        RestDocsCliCommand, build_contract_feedback_config, build_rest_docs_collection_context,
-        parse_contract_feedback_command, run_deterministic_rest_docs_contract_feedback,
-        run_scaffold_rest_docs_contract_feedback,
-    };
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use tempfile::TempDir;
-
-    fn to_args(values: &[&str]) -> Vec<String> {
-        values.iter().map(ToString::to_string).collect()
-    }
-
-    fn must_ok<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
-        result.unwrap_or_else(|error| panic!("{context}: {error}"))
-    }
-
-    fn must_some<T>(value: Option<T>, context: &str) -> T {
-        value.unwrap_or_else(|| panic!("{context}"))
-    }
-
-    fn write_openapi_fixture(temp_dir: &TempDir) -> PathBuf {
-        let path = temp_dir.path().join("openapi.yaml");
-        let content = r#"
-openapi: 3.1.0
-paths:
-  /api/search:
-    get:
-      responses:
-        "200":
-          description: ok
-"#;
-        must_ok(
-            fs::write(&path, content),
-            "should write temporary OpenAPI fixture",
-        );
-        path
-    }
-
-    fn rest_docs_command(openapi_path: &Path, workspace_root: &Path) -> RestDocsCliCommand {
-        RestDocsCliCommand {
-            openapi_path: openapi_path.to_path_buf(),
-            workspace_root: Some(workspace_root.to_path_buf()),
-            storage_path: None,
-            table_name: DEFAULT_CONTRACT_FEEDBACK_TABLE_NAME.to_string(),
-            no_persist: true,
-            live_advisory: false,
-            roles: Vec::new(),
-            model: None,
-            temperature: None,
-            cognitive_early_halt_threshold: None,
-        }
-    }
-
-    #[test]
-    fn parse_rest_docs_contract_feedback_command_uses_defaults() {
-        let command = must_some(
-            must_ok(
-                parse_contract_feedback_command(&to_args(&[
-                    "qianji",
-                    "contract-feedback",
-                    "rest-docs",
-                    "specs/openapi.yaml",
-                ])),
-                "contract-feedback parse should succeed",
-            ),
-            "command should be detected",
-        );
-
-        let ContractFeedbackCliCommand::RestDocs(command) = command;
-        assert_eq!(command.openapi_path, PathBuf::from("specs/openapi.yaml"));
-        assert_eq!(command.table_name, DEFAULT_CONTRACT_FEEDBACK_TABLE_NAME);
-        assert!(!command.no_persist);
-        assert!(!command.live_advisory);
-        assert!(command.roles.is_empty());
-    }
-
-    #[test]
-    fn parse_rest_docs_contract_feedback_command_supports_advisory_flags() {
-        let command = must_some(
-            must_ok(
-                parse_contract_feedback_command(&to_args(&[
-                    "qianji",
-                    "contract-feedback",
-                    "rest-docs",
-                    "specs/openapi.yaml",
-                    "--workspace-root",
-                    "/tmp/workspace",
-                    "--storage-path",
-                    ".cache/wendao",
-                    "--table-name",
-                    "contract_audit",
-                    "--role",
-                    "strict_teacher",
-                    "--role",
-                    "rest_contract_auditor",
-                    "--live-advisory",
-                    "--temperature",
-                    "0.2",
-                    "--cognitive-threshold",
-                    "0.35",
-                ])),
-                "contract-feedback parse should succeed",
-            ),
-            "command should be detected",
-        );
-
-        let ContractFeedbackCliCommand::RestDocs(command) = command;
-        assert_eq!(
-            command.workspace_root,
-            Some(PathBuf::from("/tmp/workspace"))
-        );
-        assert_eq!(command.storage_path, Some(PathBuf::from(".cache/wendao")));
-        assert_eq!(command.table_name, "contract_audit");
-        assert_eq!(
-            command.roles,
-            vec![
-                "strict_teacher".to_string(),
-                "rest_contract_auditor".to_string()
-            ]
-        );
-        assert!(command.live_advisory);
-        assert_eq!(command.temperature, Some(0.2));
-        assert_eq!(command.cognitive_early_halt_threshold, Some(0.35));
-    }
-
-    #[tokio::test]
-    async fn deterministic_rest_docs_contract_feedback_outputs_expected_summary() {
-        let temp_dir = must_ok(TempDir::new(), "should create temp dir");
-        let openapi_path = write_openapi_fixture(&temp_dir);
-        let workspace_root = temp_dir.path().to_path_buf();
-        let command = rest_docs_command(&openapi_path, &workspace_root);
-
-        let context =
-            build_rest_docs_collection_context(&openapi_path, Some(workspace_root.clone()));
-        let config = build_contract_feedback_config(&command);
-        let advisory_roles = config
-            .advisory_policy_for_pack(REST_DOCS_PACK_ID)
-            .requested_roles;
-        assert!(advisory_roles.is_empty());
-
-        let output = must_ok(
-            run_deterministic_rest_docs_contract_feedback(
-                &command,
-                &openapi_path,
-                workspace_root.as_path(),
-                context,
-                &config,
-                advisory_roles,
-            )
-            .await,
-            "deterministic rest-docs contract feedback should succeed",
-        );
-
-        assert_eq!(output.report.suite_id, "qianji-rest-docs-contract-feedback");
-        assert_eq!(output.report.stats.total, 2);
-        assert_eq!(output.report.stats.deterministic, 2);
-        assert_eq!(output.report.stats.advisory, 0);
-        assert_eq!(output.knowledge_entry_ids.len(), 2);
-        assert!(output.persisted_entry_ids.is_empty());
-        assert!(output.storage.is_none());
-    }
-
-    #[tokio::test]
-    async fn scaffold_rest_docs_contract_feedback_emits_role_advisory_findings() {
-        let temp_dir = must_ok(TempDir::new(), "should create temp dir");
-        let openapi_path = write_openapi_fixture(&temp_dir);
-        let workspace_root = temp_dir.path().to_path_buf();
-        let mut command = rest_docs_command(&openapi_path, &workspace_root);
-        command.roles = vec!["strict_teacher".to_string(), "artisan-engineer".to_string()];
-
-        let context =
-            build_rest_docs_collection_context(&openapi_path, Some(workspace_root.clone()));
-        let config = build_contract_feedback_config(&command);
-        let advisory_roles = config
-            .advisory_policy_for_pack(REST_DOCS_PACK_ID)
-            .requested_roles;
-        assert_eq!(
-            advisory_roles,
-            vec!["strict_teacher".to_string(), "artisan-engineer".to_string()]
-        );
-
-        let output = must_ok(
-            run_scaffold_rest_docs_contract_feedback(
-                &command,
-                &openapi_path,
-                workspace_root.as_path(),
-                context,
-                &config,
-                advisory_roles,
-            )
-            .await,
-            "scaffold rest-docs contract feedback should succeed",
-        );
-
-        assert_eq!(
-            output.advisory_roles,
-            vec!["strict_teacher".to_string(), "artisan-engineer".to_string()]
-        );
-        assert_eq!(output.report.stats.deterministic, 2);
-        assert_eq!(output.report.stats.advisory, 2);
-        assert_eq!(output.report.stats.total, 4);
-        assert_eq!(output.knowledge_entry_ids.len(), 4);
-        assert!(output.persisted_entry_ids.is_empty());
-        assert!(output.storage.is_none());
-    }
-}
+#[path = "../../tests/unit/bin/qianji.rs"]
+mod tests;

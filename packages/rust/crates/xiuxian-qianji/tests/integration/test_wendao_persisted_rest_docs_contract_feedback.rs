@@ -1,10 +1,11 @@
 //! Integration coverage for persisted Qianji to Wendao contract feedback.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::Value;
 use tempfile::TempDir;
+use xiuxian_config_core::resolve_project_root;
 use xiuxian_qianji::contract_feedback::{
     build_rest_docs_collection_context, run_and_persist_rest_docs_contract_feedback,
 };
@@ -18,12 +19,8 @@ fn must_ok<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
 }
 
 fn workspace_root() -> PathBuf {
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .ancestors()
-        .nth(4)
-        .unwrap_or_else(|| panic!("qianji manifest dir should resolve to workspace root"))
-        .to_path_buf()
+    resolve_project_root()
+        .unwrap_or_else(|| panic!("workspace root should resolve from PRJ_ROOT or git ancestry"))
 }
 
 fn write_drifted_openapi_fixture(temp_dir: &TempDir) -> PathBuf {
@@ -110,3 +107,5 @@ async fn persisted_rest_docs_contract_feedback_persists_wendao_entries_through_s
         Some(openapi_source.as_str())
     );
 }
+
+xiuxian_testing::crate_test_policy_harness!();

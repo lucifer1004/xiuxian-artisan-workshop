@@ -1,4 +1,5 @@
 use super::model::QianjiRuntimeEnv;
+use xiuxian_config_core::{parse_bool_flag, parse_positive, trimmed_non_empty};
 
 pub(super) fn env_var_or_override(runtime_env: &QianjiRuntimeEnv, key: &str) -> Option<String> {
     match env_override_state(runtime_env, key) {
@@ -10,7 +11,7 @@ pub(super) fn env_var_or_override(runtime_env: &QianjiRuntimeEnv, key: &str) -> 
 }
 
 pub(super) fn parse_usize_env_override(runtime_env: &QianjiRuntimeEnv, key: &str) -> Option<usize> {
-    env_var_or_override(runtime_env, key).and_then(|value| value.trim().parse::<usize>().ok())
+    env_var_or_override(runtime_env, key).and_then(|value| parse_positive::<usize>(&value))
 }
 
 pub(super) fn parse_bool_env_override(runtime_env: &QianjiRuntimeEnv, key: &str) -> Option<bool> {
@@ -18,9 +19,7 @@ pub(super) fn parse_bool_env_override(runtime_env: &QianjiRuntimeEnv, key: &str)
 }
 
 pub(super) fn normalize_non_empty(value: Option<String>) -> Option<String> {
-    value
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
+    trimmed_non_empty(value)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,17 +45,10 @@ fn env_override_state(runtime_env: &QianjiRuntimeEnv, key: &str) -> EnvOverrideS
     }
 }
 
-fn parse_bool_flag(raw: &str) -> Option<bool> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
-        "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
-    }
+fn read_env_non_empty(key: &str) -> Option<String> {
+    xiuxian_macros::env_non_empty!(key)
 }
 
-fn read_env_non_empty(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
+#[cfg(test)]
+#[path = "../../tests/unit/runtime_config/env_vars.rs"]
+mod tests;

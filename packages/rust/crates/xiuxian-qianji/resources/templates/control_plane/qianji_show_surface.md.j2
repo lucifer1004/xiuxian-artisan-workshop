@@ -1,0 +1,10 @@
+# {{ title }}
+{%- if header_block != "" %}
+
+{{ header_block }}
+{%- endif %}
+{%- for section in sections %}
+
+## {{ section.title }}
+{{ section.body }}
+{%- endfor %}

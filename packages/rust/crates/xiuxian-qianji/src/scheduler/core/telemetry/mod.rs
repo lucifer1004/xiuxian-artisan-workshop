@@ -3,6 +3,7 @@ use crate::telemetry::SwarmEvent;
 
 mod alerts;
 #[cfg(test)]
+#[path = "../../../../tests/unit/scheduler/core/telemetry/node_transition.rs"]
 mod node_transition;
 
 impl QianjiScheduler {

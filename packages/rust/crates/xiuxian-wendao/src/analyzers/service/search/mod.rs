@@ -14,6 +14,7 @@ mod ranking;
 mod symbol;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/analyzers/service/search/mod.rs"]
 mod tests;
 
 pub use coverage::*;

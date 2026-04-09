@@ -20,4 +20,5 @@ pub(crate) use definitions::{
 pub(crate) use rows::rows_from_analysis;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/repo_entity/schema/mod.rs"]
 mod tests;

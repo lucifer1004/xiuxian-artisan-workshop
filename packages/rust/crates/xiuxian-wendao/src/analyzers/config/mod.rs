@@ -1,6 +1,7 @@
 mod load;
 mod parse;
 #[cfg(test)]
+#[path = "../../../tests/unit/analyzers/config/mod.rs"]
 mod tests;
 mod toml;
 mod types;

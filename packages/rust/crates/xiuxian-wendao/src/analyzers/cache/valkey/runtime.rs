@@ -1,6 +1,12 @@
 use crate::analyzers::errors::RepoIntelligenceError;
+use crate::settings::{get_setting_string, merged_wendao_settings};
 use crate::valkey_common::{normalize_key_prefix, open_client};
+use serde_yaml::Value;
+use xiuxian_config_core::{toml_first_env, toml_first_named_string};
 
+const ANALYZER_VALKEY_URL_SETTING: &str = "analyzers.cache.valkey_url";
+const ANALYZER_VALKEY_KEY_PREFIX_SETTING: &str = "analyzers.cache.key_prefix";
+const ANALYZER_VALKEY_TTL_SETTING: &str = "analyzers.cache.ttl_seconds";
 const ANALYZER_VALKEY_URL_ENV: &str = "XIUXIAN_WENDAO_ANALYZER_VALKEY_URL";
 const VALKEY_URL_ENV: &str = "VALKEY_URL";
 const REDIS_URL_ENV: &str = "REDIS_URL";
@@ -28,29 +34,56 @@ impl ValkeyAnalysisCacheRuntime {
 
 pub(super) fn resolve_valkey_analysis_cache_runtime()
 -> Result<Option<ValkeyAnalysisCacheRuntime>, RepoIntelligenceError> {
-    resolve_valkey_analysis_cache_runtime_with_lookup(&|name| std::env::var(name).ok())
+    let settings = merged_wendao_settings();
+    resolve_valkey_analysis_cache_runtime_with_settings_and_lookup(&settings, &|name| {
+        std::env::var(name).ok()
+    })
 }
 
+#[cfg(test)]
 pub(super) fn resolve_valkey_analysis_cache_runtime_with_lookup(
     lookup: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Option<ValkeyAnalysisCacheRuntime>, RepoIntelligenceError> {
-    let Some((env_name, url)) = first_non_empty_named_lookup(
-        &[ANALYZER_VALKEY_URL_ENV, VALKEY_URL_ENV, REDIS_URL_ENV],
+    resolve_valkey_analysis_cache_runtime_with_settings_and_lookup(&Value::Null, lookup)
+}
+
+#[cfg(test)]
+pub(super) fn resolve_valkey_analysis_cache_runtime_with_settings_and_lookup_for_tests(
+    settings: &Value,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Result<Option<ValkeyAnalysisCacheRuntime>, RepoIntelligenceError> {
+    resolve_valkey_analysis_cache_runtime_with_settings_and_lookup(settings, lookup)
+}
+
+fn resolve_valkey_analysis_cache_runtime_with_settings_and_lookup(
+    settings: &Value,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Result<Option<ValkeyAnalysisCacheRuntime>, RepoIntelligenceError> {
+    let Some((source_name, url)) = toml_first_named_string(
+        ANALYZER_VALKEY_URL_SETTING,
+        get_setting_string(settings, ANALYZER_VALKEY_URL_SETTING),
         lookup,
+        &[ANALYZER_VALKEY_URL_ENV, VALKEY_URL_ENV, REDIS_URL_ENV],
     ) else {
         return Ok(None);
     };
     let client =
         open_client(url.as_str()).map_err(|error| RepoIntelligenceError::AnalysisFailed {
-            message: format!("invalid analyzer valkey url from {env_name}: {error}"),
+            message: format!("invalid analyzer valkey url from {source_name}: {error}"),
         })?;
     let key_prefix = normalize_key_prefix(
-        lookup(ANALYZER_VALKEY_KEY_PREFIX_ENV)
-            .unwrap_or_default()
-            .as_str(),
+        toml_first_env!(
+            settings,
+            ANALYZER_VALKEY_KEY_PREFIX_SETTING,
+            lookup,
+            [ANALYZER_VALKEY_KEY_PREFIX_ENV],
+            get_setting_string
+        )
+        .unwrap_or_default()
+        .as_str(),
         DEFAULT_ANALYZER_VALKEY_KEY_PREFIX,
     );
-    let ttl_seconds = resolve_optional_ttl_seconds_with_lookup(lookup)?;
+    let ttl_seconds = resolve_optional_ttl_seconds_with_settings_and_lookup(settings, lookup)?;
     Ok(Some(ValkeyAnalysisCacheRuntime {
         client: Some(client),
         key_prefix,
@@ -58,32 +91,23 @@ pub(super) fn resolve_valkey_analysis_cache_runtime_with_lookup(
     }))
 }
 
-fn first_non_empty_named_lookup(
-    names: &[&str],
-    lookup: &dyn Fn(&str) -> Option<String>,
-) -> Option<(String, String)> {
-    names.iter().find_map(|name| {
-        lookup(name)
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-            .map(|value| ((*name).to_string(), value))
-    })
-}
-
-fn resolve_optional_ttl_seconds_with_lookup(
+fn resolve_optional_ttl_seconds_with_settings_and_lookup(
+    settings: &Value,
     lookup: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Option<u64>, RepoIntelligenceError> {
-    let Some(raw_ttl) = lookup(ANALYZER_VALKEY_TTL_ENV) else {
+    let Some(raw_ttl) = toml_first_env!(
+        settings,
+        ANALYZER_VALKEY_TTL_SETTING,
+        lookup,
+        [ANALYZER_VALKEY_TTL_ENV],
+        get_setting_string
+    ) else {
         return Ok(None);
     };
-    let trimmed = raw_ttl.trim();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    let ttl_seconds = trimmed.parse::<u64>().map_err(|error| {
+    let ttl_seconds = raw_ttl.parse::<u64>().map_err(|error| {
         RepoIntelligenceError::AnalysisFailed {
             message: format!(
-                "{ANALYZER_VALKEY_TTL_ENV} must be a non-negative integer, got `{trimmed}`: {error}"
+                "{ANALYZER_VALKEY_TTL_ENV} must be a non-negative integer, got `{raw_ttl}`: {error}"
             ),
         }
     })?;

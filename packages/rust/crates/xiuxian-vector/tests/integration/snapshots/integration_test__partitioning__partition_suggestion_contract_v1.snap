@@ -1,0 +1,9 @@
+---
+source: packages/rust/crates/xiuxian-vector/tests/integration/partitioning.rs
+assertion_line: 91
+expression: view
+---
+{
+  "suggested_column": "skill_name",
+  "threshold": 10000
+}

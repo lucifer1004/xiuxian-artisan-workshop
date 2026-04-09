@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::gateway::studio::router::{GatewayState, StudioState};
-use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f32};
+use crate::gateway::studio::test_support::assert_studio_json_snapshot;
 use crate::gateway::studio::types::UiConfig;
 use serde::Deserialize;
 use serde_json::json;
@@ -11,6 +11,10 @@ use tempfile::tempdir;
 struct GraphFixture {
     state: Arc<GatewayState>,
     _temp_dir: tempfile::TempDir,
+}
+
+fn round_f32(value: f32) -> f32 {
+    ((value as f64) * 10_000.0).round() as f32 / 10_000.0_f32
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,6 +55,7 @@ fn make_graph_fixture(docs: Vec<(&str, &str)>) -> GraphFixture {
         state: Arc::new(GatewayState {
             index: None,
             signal_tx: None,
+            webhook_url: None,
             studio: Arc::new(studio_state),
         }),
         _temp_dir: temp_dir,

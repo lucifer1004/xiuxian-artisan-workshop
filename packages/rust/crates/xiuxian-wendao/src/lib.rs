@@ -110,6 +110,8 @@ pub mod unified_symbol;
 /// High-level search router for integrating multiple backends.
 pub mod zhenfa_router;
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 // ---------------------------------------------------------------------------
 // Public re-exports (crate API)
 // ---------------------------------------------------------------------------

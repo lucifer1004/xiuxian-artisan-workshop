@@ -19,10 +19,14 @@ pub mod engine;
 pub mod error;
 /// Built-in node execution mechanisms.
 pub mod executors;
+/// Flowhub module, scenario, and materialize helpers.
+pub mod flowhub;
 /// Graphical layout and aesthetic engine (QGS).
 pub mod layout;
 /// Manifest inspection helpers.
 pub mod manifest;
+/// Shared markdown renderers for `qianji` show/check surfaces.
+pub(crate) mod markdown;
 /// Runtime configuration resolver (`resources/config/qianji.toml` + user overrides).
 pub mod runtime_config;
 /// Formal logic and safety auditing.
@@ -35,6 +39,8 @@ pub mod sovereign;
 pub mod swarm;
 /// Real-time swarm telemetry contracts and Valkey emitter.
 pub mod telemetry;
+/// Bounded work-surface parsing, validation, and CLI support helpers.
+pub mod workdir;
 
 pub use app::{MEMORY_PROMOTION_PIPELINE_TOML, QianjiApp, RESEARCH_TRINITY_TOML};
 pub use bootcamp::{
@@ -58,6 +64,19 @@ pub use contracts::{
 };
 pub use engine::QianjiEngine;
 pub use engine::compiler::QianjiCompiler;
+pub use flowhub::{
+    FlowhubCheckReport, FlowhubDiagnostic, FlowhubDirKind, FlowhubModuleKind, FlowhubModuleShow,
+    FlowhubModuleSummary, FlowhubRootShow, FlowhubScenarioCaseSummary, FlowhubScenarioCheckReport,
+    FlowhubScenarioDiagnostic, FlowhubScenarioHiddenAlias, FlowhubScenarioShow,
+    FlowhubScenarioSurfacePreview, FlowhubShow, MaterializedWorkdir, ResolvedFlowhubModule,
+    check_flowhub, check_flowhub_scenario, classify_flowhub_dir, load_flowhub_module_manifest,
+    load_flowhub_scenario_manifest, looks_like_flowhub_scenario_dir,
+    materialize_flowhub_scenario_workdir, parse_flowhub_module_manifest,
+    parse_flowhub_scenario_manifest, render_flowhub_check_markdown,
+    render_flowhub_scenario_check_markdown, render_flowhub_scenario_show, render_flowhub_show,
+    resolve_flowhub_module_children, resolve_flowhub_scenario_modules, show_flowhub,
+    show_flowhub_scenario,
+};
 pub use manifest::{manifest_declares_qianhuan_bindings, manifest_requires_llm};
 pub use safety::QianjiSafetyGuard;
 pub use scheduler::QianjiScheduler;
@@ -72,6 +91,14 @@ pub use telemetry::{
     ConsensusStatus, DEFAULT_PULSE_CHANNEL, NodeTransitionPhase, NoopPulseEmitter, PulseEmitter,
     SwarmEvent, ValkeyPulseEmitter, unix_millis_now,
 };
+pub use workdir::{
+    WorkdirCheckFollowUpQuery, WorkdirCheckReport, WorkdirDiagnostic, WorkdirMarkdownSurface,
+    WorkdirShow, WorkdirVisibleSurface, WorkdirVisibleSurfaceKind,
+    build_workdir_check_follow_up_query, check_workdir, load_workdir_manifest,
+    looks_like_workdir_dir, parse_workdir_manifest, query_workdir_check_follow_up_payload,
+    query_workdir_markdown_payload, render_workdir_check_markdown, render_workdir_show,
+    show_workdir,
+};
 
 #[cfg(feature = "llm")]
 /// Shared LLM client trait object type when `llm` feature is enabled.
@@ -80,3 +107,5 @@ pub type QianjiLlmClient = dyn xiuxian_llm::llm::LlmClient;
 #[cfg(not(feature = "llm"))]
 /// Placeholder trait object type when `llm` feature is disabled.
 pub type QianjiLlmClient = dyn std::any::Any + Send + Sync;
+
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");

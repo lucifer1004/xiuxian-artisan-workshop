@@ -1,11 +1,12 @@
 //! Integration coverage for the Qianji contract-feedback pipeline.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
 use serde_json::json;
+use xiuxian_config_core::resolve_project_root;
 use xiuxian_qianhuan::{PersonaRegistry, ThousandFacesOrchestrator};
 use xiuxian_qianji::{
     executors::formal_audit::QianjiAdvisoryAuditExecutor, run_and_persist_contract_feedback_flow,
@@ -117,11 +118,8 @@ fn test_context() -> CollectionContext {
 }
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(4)
-        .unwrap_or_else(|| panic!("qianji manifest dir should resolve to workspace root"))
-        .to_path_buf()
+    resolve_project_root()
+        .unwrap_or_else(|| panic!("workspace root should resolve from PRJ_ROOT or git ancestry"))
 }
 
 fn base_config() -> ContractRunConfig {
@@ -260,3 +258,5 @@ async fn run_and_persist_contract_feedback_flow_persists_knowledge_entries_throu
     );
     assert_eq!(sink.entries()[0].id, result.persisted_entry_ids[0]);
 }
+
+xiuxian_testing::crate_test_policy_harness!();

@@ -1,4 +1,9 @@
 impl VectorStore {
+    async fn invalidate_cached_table(&self, table_name: &str) {
+        let mut cache = self.datasets.write().await;
+        let _ = cache.remove(table_name);
+    }
+
     async fn open_table_or_err(&self, table_name: &str) -> Result<Dataset, VectorStoreError> {
         let table_path = self.table_path(table_name);
         if !table_path.exists() {
@@ -50,54 +55,5 @@ impl VectorStore {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ops::DatasetCacheConfig;
-
-    #[tokio::test]
-    async fn open_table_or_err_populates_dataset_cache_for_query_paths() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
-        let db_path = temp_dir.path().join("query_cache");
-        let db_path_str = db_path.to_string_lossy();
-        let store = VectorStore::new_with_cache_options(
-            db_path_str.as_ref(),
-            Some(8),
-            DatasetCacheConfig {
-                max_cached_tables: Some(4),
-            },
-        )
-        .await
-        .expect("create vector store");
-        let schema = store.create_schema();
-        let empty = lance::deps::arrow_array::RecordBatch::new_empty(schema.clone());
-        store
-            .replace_record_batches("cached", schema, vec![empty])
-            .await
-            .expect("create cached table");
-        {
-            let mut cache = store.datasets.write().await;
-            cache.remove("cached");
-            assert!(!cache.contains_key("cached"));
-        }
-
-        store
-            .open_table_or_err("cached")
-            .await
-            .expect("first open should succeed");
-        {
-            let cache = store.datasets.read().await;
-            assert!(cache.contains_key("cached"));
-            assert_eq!(cache.len(), 1);
-        }
-
-        store
-            .open_table_or_err("cached")
-            .await
-            .expect("second open should reuse cache");
-        {
-            let cache = store.datasets.read().await;
-            assert!(cache.contains_key("cached"));
-            assert_eq!(cache.len(), 1);
-        }
-    }
-}
+#[path = "../../../tests/unit/ops/admin_impl/guards.rs"]
+mod tests;

@@ -2,7 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::gateway::studio::perf_support::root::{
-    DEFAULT_REAL_WORKSPACE_ROOT, GatewayPerfRoot, REAL_WORKSPACE_ROOT_ENV,
+    DEFAULT_REAL_WORKSPACE_ROOT, GatewayPerfRoot, REAL_WORKSPACE_READY_TIMEOUT_ENV,
+    REAL_WORKSPACE_ROOT_ENV, real_workspace_ready_timeout_with_lookup,
     resolve_real_workspace_root_with_lookup,
 };
 use crate::gateway::studio::perf_support::state::gateway_ui_config_for_project;
@@ -43,6 +44,22 @@ fn resolve_real_workspace_root_uses_default_frontend_workspace_when_present() {
 
     fs::remove_dir_all(root)
         .unwrap_or_else(|error| panic!("failed to remove temporary perf support root: {error}"));
+}
+
+#[test]
+fn real_workspace_ready_timeout_uses_positive_override() {
+    let timeout = real_workspace_ready_timeout_with_lookup(&|key| {
+        (key == REAL_WORKSPACE_READY_TIMEOUT_ENV).then(|| "120".to_string())
+    });
+    assert_eq!(timeout.as_secs(), 120);
+}
+
+#[test]
+fn real_workspace_ready_timeout_ignores_zero_override() {
+    let timeout = real_workspace_ready_timeout_with_lookup(&|key| {
+        (key == REAL_WORKSPACE_READY_TIMEOUT_ENV).then(|| "0".to_string())
+    });
+    assert_eq!(timeout.as_secs(), 900);
 }
 
 #[test]

@@ -5,6 +5,7 @@ mod load;
 mod types;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/skill_vfs/internal_manifest/mod.rs"]
 mod tests;
 
 pub use authority::resolve_internal_skill_authority;

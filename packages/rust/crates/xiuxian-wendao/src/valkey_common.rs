@@ -1,11 +1,6 @@
-use std::env;
+use std::time::Duration;
 
-/// Return the first non-empty environment value from a precedence-ordered list.
-#[must_use]
-pub(crate) fn first_non_empty_env(names: &[&str]) -> Option<String> {
-    first_non_empty_value(names.iter().map(|name| env::var(name).ok()))
-}
-
+#[cfg(test)]
 #[must_use]
 fn first_non_empty_value<I>(values: I) -> Option<String>
 where
@@ -34,6 +29,31 @@ pub(crate) fn open_client(valkey_url: &str) -> Result<redis::Client, redis::Redi
     redis::Client::open(valkey_url.trim())
 }
 
+pub(crate) fn ping_client(
+    client: &redis::Client,
+    connection_timeout: Duration,
+    io_timeout: Duration,
+) -> Result<String, String> {
+    let connection = client
+        .get_connection_with_timeout(connection_timeout)
+        .map_err(|error| format!("connection failed: {error}"))?;
+    let _ = connection.set_read_timeout(Some(io_timeout));
+    let _ = connection.set_write_timeout(Some(io_timeout));
+    let mut connection = connection;
+    redis::cmd("PING")
+        .query::<String>(&mut connection)
+        .map_err(|error| format!("ping failed: {error}"))
+}
+
+pub(crate) fn ping_valkey_url(
+    valkey_url: &str,
+    connection_timeout: Duration,
+    io_timeout: Duration,
+) -> Result<String, String> {
+    let client = open_client(valkey_url).map_err(|error| format!("invalid valkey url: {error}"))?;
+    ping_client(&client, connection_timeout, io_timeout)
+}
+
 /// Normalize one optional key prefix with a required default.
 #[must_use]
 pub(crate) fn normalize_key_prefix(candidate: &str, default_prefix: &str) -> String {
@@ -46,51 +66,5 @@ pub(crate) fn normalize_key_prefix(candidate: &str, default_prefix: &str) -> Str
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{first_non_empty_value, normalize_key_prefix, open_client, open_optional_client};
-
-    #[test]
-    fn first_non_empty_value_skips_blank_candidates() {
-        assert_eq!(
-            first_non_empty_value([
-                Some("   ".to_string()),
-                None,
-                Some(" redis://127.0.0.1/ ".to_string()),
-            ]),
-            Some("redis://127.0.0.1/".to_string())
-        );
-    }
-
-    #[test]
-    fn open_optional_client_returns_none_for_missing_url() {
-        assert!(open_optional_client(None).is_none());
-    }
-
-    #[test]
-    fn open_optional_client_opens_valid_url() {
-        let client = open_optional_client(Some("redis://127.0.0.1/".to_string()));
-        assert!(client.is_some());
-    }
-
-    #[test]
-    fn open_client_trims_valid_url() {
-        let client = open_client(" redis://127.0.0.1/ ");
-        assert!(client.is_ok());
-    }
-
-    #[test]
-    fn normalize_key_prefix_falls_back_for_blank_input() {
-        assert_eq!(
-            normalize_key_prefix("   ", "xiuxian:test"),
-            "xiuxian:test".to_string()
-        );
-    }
-
-    #[test]
-    fn normalize_key_prefix_trims_non_blank_input() {
-        assert_eq!(
-            normalize_key_prefix("  xiuxian:custom  ", "xiuxian:test"),
-            "xiuxian:custom".to_string()
-        );
-    }
-}
+#[path = "../tests/unit/valkey_common.rs"]
+mod tests;

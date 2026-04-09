@@ -61,11 +61,26 @@ It must not own:
 4. plugin-specific thick implementation
 
 `xiuxian-config-core` is the canonical owner of recursive config imports,
-import-path environment expansion, and merge precedence. `runtime` and
-`wendao` may project typed runtime settings from merged TOML, but they must not
-reintroduce bespoke TOML line scanners or duplicate merge logic. The checked-in
-workspace boot config now lives at `$PRJ_ROOT/wendao.toml`, while crate-owned
-embedded defaults remain under `resources/config/wendao.toml`.
+import-path environment expansion, merge precedence, and shared project-root
+path resolution primitives such as `PRJ_ROOT` and `PRJ_CONFIG_HOME` joining,
+plus generic trimmed env lookup and scalar parse helpers for numeric and bool
+runtime overrides. `runtime` and `wendao` may project typed runtime settings
+from merged TOML, but they must not reintroduce bespoke TOML line scanners,
+duplicate merge logic, or crate-local copies of generic `PRJ_*` path
+normalization and env-parse hygiene. The checked-in workspace boot config now
+lives at `$PRJ_ROOT/wendao.toml`, while crate-owned embedded defaults remain
+under `resources/config/wendao.toml`. That same shared ownership now also
+includes precedence-ordered named lookup hygiene for runtime endpoints such as
+Valkey URLs: `xiuxian-config-core` owns the generic "first non-empty key +
+trimmed value" helper, while Wendao owners keep the domain decision about
+whether a missing or invalid target is optional, startup-blocking, or
+feature-disabling. Wendao-owned dotted key names stay with the owning
+subsystem, for example `analyzers.cache.*`, `graph.persistence.*`, and
+`storage.knowledge.*`. Runtime-owned dotted keys such as `link_graph.cache.*`
+follow the same rule: the typed projection stays in `xiuxian-wendao-runtime`,
+but TOML-first named lookup and generic env hygiene belong in
+`xiuxian-config-core`. These owners should resolve through config-core helpers
+instead of bespoke local precedence code.
 
 ### `xiuxian-wendao`
 

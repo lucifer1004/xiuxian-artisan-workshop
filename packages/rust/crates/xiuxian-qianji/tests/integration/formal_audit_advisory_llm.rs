@@ -210,3 +210,5 @@ async fn live_advisory_executor_records_cognitive_metrics_when_streaming() {
             .any(|evidence| evidence.message.contains("Cognitive distribution"))
     );
 }
+
+xiuxian_testing::crate_test_policy_harness!();

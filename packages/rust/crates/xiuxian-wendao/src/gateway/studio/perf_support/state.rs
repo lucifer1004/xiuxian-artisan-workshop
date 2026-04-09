@@ -29,6 +29,7 @@ pub(crate) fn gateway_state_for_project(project_root: &Path) -> Result<Arc<Gatew
     let state = Arc::new(GatewayState {
         index: None,
         signal_tx: None,
+        webhook_url: None,
         studio: Arc::new(StudioState {
             project_root: project_root.to_path_buf(),
             config_root: config_root.clone(),

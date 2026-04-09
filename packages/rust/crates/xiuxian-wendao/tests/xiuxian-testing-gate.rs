@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use xiuxian_testing::{
     CollectionContext, ContractFinding, FindingSeverity, ModularityRulePack, RulePack,
-    assert_crate_tests_structure_with_workspace_config,
+    assert_crate_test_policy_with_workspace_config,
 };
 
 #[cfg(not(feature = "performance"))]
@@ -287,8 +287,8 @@ mod performance;
 mod performance_stress;
 
 #[test]
-fn enforce_tests_structure_gate() {
-    assert_crate_tests_structure_with_workspace_config(Path::new(env!("CARGO_MANIFEST_DIR")));
+fn enforce_crate_test_policy_gate() {
+    assert_crate_test_policy_with_workspace_config(Path::new(env!("CARGO_MANIFEST_DIR")));
 }
 
 #[test]

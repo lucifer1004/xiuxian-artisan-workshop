@@ -23,4 +23,5 @@ pub use resource_semantics::classify_skill_reference;
 pub use types::{EnhancedNote, EntityRefData, InferredRelation, NoteInput, RefStatsData};
 
 #[cfg(test)]
+#[path = "../../tests/unit/enhancer/mod.rs"]
 mod tests;

@@ -3,6 +3,7 @@ mod input;
 mod keyspace;
 mod records;
 #[cfg(test)]
+#[path = "../../../tests/unit/search/manifest/mod.rs"]
 mod tests;
 
 pub use fingerprint::SearchFileFingerprint;

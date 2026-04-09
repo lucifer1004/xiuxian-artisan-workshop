@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 #[cfg(feature = "zhenfa-router")]
 use arrow_flight::flight_service_server::FlightServiceServer;
 use axum::Json;
@@ -13,7 +13,7 @@ use axum::http::StatusCode;
 #[cfg(feature = "zhenfa-router")]
 use axum::routing::any_service;
 use axum::routing::{Router, get};
-use log::info;
+use log::{error, info};
 use tokio::sync::mpsc;
 #[cfg(feature = "zhenfa-router")]
 use tonic_web::GrpcWebLayer;
@@ -22,17 +22,27 @@ use tower::Layer;
 use tower::{BoxError, ServiceBuilder};
 
 use crate::execute::gateway::{
-    config::{resolve_config_path, resolve_port, resolve_webhook_config},
+    config::{
+        GatewayRuntimeTomlConfig, get_gateway_runtime_from_config, resolve_config_path,
+        resolve_port, resolve_webhook_config,
+    },
     health::health,
     registry::build_plugin_registry,
     shared::AppState,
     status::{notify_status, stats},
 };
 use crate::types::{Cli, GatewayArgs, GatewayCommand, GatewayStartArgs};
+use xiuxian_config_core::lookup_positive_parsed;
 use xiuxian_wendao::LinkGraphIndex;
 #[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::gateway::studio::build_studio_flight_service_with_weights;
-use xiuxian_wendao::gateway::{openapi::paths as openapi_paths, studio::studio_routes};
+use xiuxian_wendao::gateway::{
+    openapi::paths as openapi_paths,
+    studio::{
+        GatewayStartupHealthReport, describe_gateway_startup_health, probe_gateway_startup_health,
+        studio_routes,
+    },
+};
 #[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::link_graph::resolve_link_graph_rerank_flight_runtime_settings;
 #[cfg(feature = "zhenfa-router")]
@@ -79,6 +89,9 @@ async fn handle_start(
     index: Option<&LinkGraphIndex>,
 ) -> Result<()> {
     let config_path = resolve_config_path(cli.config_file.as_deref());
+    let plugin_registry = build_plugin_registry()?;
+    let startup_health = probe_gateway_startup_health(plugin_registry.as_ref());
+    ensure_gateway_startup_health(&startup_health)?;
 
     // Resolve port: CLI arg > config file > default
     let port = resolve_port(args.port, config_path.as_deref());
@@ -88,6 +101,8 @@ async fn handle_start(
 
     // Configure webhook: TOML > env var > defaults
     let webhook_config = resolve_webhook_config(config_path.as_deref());
+    let effective_webhook_url =
+        (!webhook_config.url.is_empty()).then(|| webhook_config.url.clone());
 
     let notification_service = Arc::new(NotificationService::new(webhook_config));
 
@@ -106,15 +121,17 @@ async fn handle_start(
     // depended on them. Since it doesn't (to avoid circular dependency),
     // they are currently empty. A separate aggregator crate would be needed
     // to provide a pre-populated registry.
-    let app_state = Arc::new(AppState::new(
+    let app_state = Arc::new(AppState::new_with_webhook_url(
         index.map(|i| Arc::new(i.clone())),
         Some(signal_tx),
-        build_plugin_registry()?,
+        effective_webhook_url,
+        plugin_registry,
     ));
 
-    let listen_backlog = gateway_listen_backlog();
-    let studio_concurrency_limit = gateway_studio_concurrency_limit();
-    let studio_request_timeout = gateway_studio_request_timeout();
+    let gateway_runtime = get_gateway_runtime_from_config(config_path.as_deref());
+    let listen_backlog = gateway_listen_backlog(gateway_runtime);
+    let studio_concurrency_limit = gateway_studio_concurrency_limit(gateway_runtime);
+    let studio_request_timeout = gateway_studio_request_timeout(gateway_runtime);
 
     // 3. Build the Axum router
     let app = build_gateway_router(
@@ -151,6 +168,27 @@ async fn handle_start(
     socket.bind(addr)?;
     let listener = socket.listen(listen_backlog)?;
     Ok(axum::serve(listener, app).await?)
+}
+
+fn log_gateway_startup_health(
+    report: &xiuxian_wendao::gateway::studio::GatewayStartupHealthReport,
+) {
+    info!("Gateway startup dependency health checks:");
+    for line in describe_gateway_startup_health(report) {
+        if line.contains("=failed ") {
+            error!("  - {line}");
+        } else {
+            info!("  - {line}");
+        }
+    }
+}
+
+pub(crate) fn ensure_gateway_startup_health(report: &GatewayStartupHealthReport) -> Result<()> {
+    log_gateway_startup_health(report);
+    if let Some(summary) = report.failure_summary() {
+        return Err(anyhow!("gateway startup health checks failed: {summary}"));
+    }
+    Ok(())
 }
 
 pub(crate) fn build_gateway_router(
@@ -230,20 +268,26 @@ async fn handle_gateway_service_error(error: BoxError) -> (StatusCode, Json<serd
     )
 }
 
-pub(crate) fn gateway_listen_backlog() -> u32 {
-    gateway_listen_backlog_with_lookup(&|key| std::env::var(key).ok())
+pub(crate) fn gateway_listen_backlog(runtime_config: Option<GatewayRuntimeTomlConfig>) -> u32 {
+    gateway_listen_backlog_with_lookup(runtime_config, &|key| std::env::var(key).ok())
 }
 
-pub(crate) fn gateway_listen_backlog_with_lookup(lookup: &dyn Fn(&str) -> Option<String>) -> u32 {
-    lookup(GATEWAY_LISTEN_BACKLOG_ENV)
-        .and_then(|raw| raw.trim().parse::<u32>().ok())
-        .filter(|value| *value > 0)
+pub(crate) fn gateway_listen_backlog_with_lookup(
+    runtime_config: Option<GatewayRuntimeTomlConfig>,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> u32 {
+    runtime_config
+        .and_then(|config| config.listen_backlog)
+        .or_else(|| lookup_positive_parsed::<u32>(GATEWAY_LISTEN_BACKLOG_ENV, lookup))
         .unwrap_or(DEFAULT_GATEWAY_LISTEN_BACKLOG)
         .clamp(MIN_GATEWAY_LISTEN_BACKLOG, MAX_GATEWAY_LISTEN_BACKLOG)
 }
 
-pub(crate) fn gateway_studio_concurrency_limit() -> usize {
+pub(crate) fn gateway_studio_concurrency_limit(
+    runtime_config: Option<GatewayRuntimeTomlConfig>,
+) -> usize {
     gateway_studio_concurrency_limit_with_lookup(
+        runtime_config,
         &|key| std::env::var(key).ok(),
         std::thread::available_parallelism()
             .ok()
@@ -252,12 +296,13 @@ pub(crate) fn gateway_studio_concurrency_limit() -> usize {
 }
 
 pub(crate) fn gateway_studio_concurrency_limit_with_lookup(
+    runtime_config: Option<GatewayRuntimeTomlConfig>,
     lookup: &dyn Fn(&str) -> Option<String>,
     available_parallelism: Option<usize>,
 ) -> usize {
-    lookup(GATEWAY_STUDIO_CONCURRENCY_LIMIT_ENV)
-        .and_then(|raw| raw.trim().parse::<usize>().ok())
-        .filter(|value| *value > 0)
+    runtime_config
+        .and_then(|config| config.studio_concurrency_limit)
+        .or_else(|| lookup_positive_parsed::<usize>(GATEWAY_STUDIO_CONCURRENCY_LIMIT_ENV, lookup))
         .unwrap_or_else(|| default_gateway_studio_concurrency_limit(available_parallelism))
         .clamp(
             MIN_GATEWAY_STUDIO_CONCURRENCY_LIMIT,
@@ -275,21 +320,29 @@ fn default_gateway_studio_concurrency_limit(available_parallelism: Option<usize>
         )
 }
 
-pub(crate) fn gateway_studio_request_timeout() -> Duration {
-    Duration::from_secs(gateway_studio_request_timeout_secs_with_lookup(&|key| {
-        std::env::var(key).ok()
-    }))
+pub(crate) fn gateway_studio_request_timeout(
+    runtime_config: Option<GatewayRuntimeTomlConfig>,
+) -> Duration {
+    Duration::from_secs(gateway_studio_request_timeout_secs_with_lookup(
+        runtime_config,
+        &|key| std::env::var(key).ok(),
+    ))
 }
 
 pub(crate) fn gateway_studio_request_timeout_secs_with_lookup(
+    runtime_config: Option<GatewayRuntimeTomlConfig>,
     lookup: &dyn Fn(&str) -> Option<String>,
 ) -> u64 {
-    lookup(GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS_ENV)
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|value| *value > 0)
+    runtime_config
+        .and_then(|config| config.studio_request_timeout_secs)
+        .or_else(|| lookup_positive_parsed::<u64>(GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS_ENV, lookup))
         .unwrap_or(DEFAULT_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS)
         .clamp(
             MIN_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS,
             MAX_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS,
         )
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/unit/bin/wendao/execute/gateway/command.rs"]
+mod tests;

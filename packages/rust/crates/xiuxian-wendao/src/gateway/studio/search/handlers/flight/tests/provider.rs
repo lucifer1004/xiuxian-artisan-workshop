@@ -52,6 +52,7 @@ async fn studio_search_flight_provider_rejects_unknown_routes() {
     let provider = StudioSearchFlightRouteProvider::new(Arc::new(GatewayState {
         index: None,
         signal_tx: None,
+        webhook_url: None,
         studio: Arc::new(StudioState::new_with_bootstrap_ui_config(Arc::new(
             registry,
         ))),

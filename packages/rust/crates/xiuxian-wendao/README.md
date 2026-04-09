@@ -150,6 +150,21 @@ The stable runtime metadata keys are:
 - `x-wendao-analysis-repo`
 - `x-wendao-analysis-line`
 
+### Bounded Work Markdown SQL Surface
+
+`xiuxian-wendao` now also exposes a first bounded-work markdown SQL helper at
+`xiuxian_wendao::search::queries::sql::bounded_work_markdown`.
+
+That helper scans only the `blueprint/` and `plan/` surfaces of a bounded
+workdir, builds the RFC-minimum `markdown` rows (`path`, `surface`,
+`heading_path`, `title`, `level`, `skeleton`, `body`), and registers them as
+an in-memory DataFusion table. The same surface now also provides one opt-in
+bootstrap helper that creates a fresh query engine and registers the bounded
+`markdown` table in one step, plus one stable payload helper that executes SQL
+directly over that bounded-work surface. This slice is intentionally local: it
+does not yet wire the `markdown` table into the global Wendao SQL surface
+collector.
+
 The bundled OpenAPI artifact now keeps only the JSON control plane for these
 families. The semantic Flight search contract is pinned by
 `tests/snapshots/gateway/studio/search_flight_service_route_contracts.snap`.

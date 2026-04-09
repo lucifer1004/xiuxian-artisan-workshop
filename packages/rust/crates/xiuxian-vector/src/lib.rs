@@ -105,6 +105,8 @@ mod arrow_codec;
 #[path = "search/search_impl/mod.rs"]
 mod search_impl;
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 // ============================================================================
 // Vector Store Core
 // ============================================================================

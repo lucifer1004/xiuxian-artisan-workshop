@@ -28,12 +28,14 @@ Responsibilities:
 - Enforce bounded injection windows and deterministic output.
 - Serve as the foundation for role-mix and classified injection modes.
 - Provide a stable contract for runtime context assembly.
+- Expose a Rust-only orchestration and persona surface for native runtime consumers.
 
 Non-responsibilities:
 
 - No workflow planning (Graph responsibility).
 - No tool execution loop (ReAct responsibility).
 - No global policy arbitration (Omega responsibility).
+- No Python or PyO3 binding surface.
 
 ## Runtime Position
 
@@ -69,6 +71,23 @@ Planned extension surface:
 - `InjectionPolicy`
 - `InjectionSnapshot`
 - `RoleMixProfile`
+- `ManifestationManager`
+- `EmbeddedManifestationTemplateCatalog`
+
+## Embedded Template Catalog
+
+`xiuxian-qianhuan` now also exposes
+`EmbeddedManifestationTemplateCatalog` as the thin lazy surface for
+embedded-only markdown or control-plane renderers.
+
+Use this when a consumer crate needs:
+
+- bundled Jinja/Tera templates only,
+- lazy shared bootstrap over `ManifestationManager::new_with_embedded_templates`,
+- stable `render_text(...)` or `render_lines(...)` calls without owning a
+  local `OnceLock<Result<ManifestationManager, _>>` wrapper.
+- checked-in template files that can be wired through `include_str!` while the
+  rendering bootstrap stays in `xiuxian-qianhuan`.
 
 ## Example
 

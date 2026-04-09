@@ -289,3 +289,5 @@ fn cognitive_pulse_with_none_session_id() {
         _ => panic!("Expected CognitivePulse"),
     }
 }
+
+xiuxian_testing::crate_test_policy_harness!();

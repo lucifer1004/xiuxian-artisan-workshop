@@ -83,16 +83,19 @@ impl SqlQueryResult {
     }
 
     pub(crate) fn payload(&self) -> Result<SqlQueryPayload, String> {
-        let batches = self
-            .batches
-            .iter()
-            .map(batch_payload)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(SqlQueryPayload {
-            metadata: self.metadata.clone(),
-            batches,
-        })
+        sql_query_payload_from_engine_batches(self.metadata.clone(), &self.batches)
     }
+}
+
+pub(crate) fn sql_query_payload_from_engine_batches(
+    metadata: SqlQueryMetadata,
+    batches: &[EngineRecordBatch],
+) -> Result<SqlQueryPayload, String> {
+    let batches = batches
+        .iter()
+        .map(batch_payload)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(SqlQueryPayload { metadata, batches })
 }
 
 pub(crate) fn engine_batches_rows_payload(

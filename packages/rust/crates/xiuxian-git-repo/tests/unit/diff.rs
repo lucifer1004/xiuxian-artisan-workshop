@@ -1,13 +1,13 @@
 use xiuxian_git_repo::{RevisionChangeKind, diff_checkout_revisions};
 
 use crate::support::{
-    append_repo_file_and_commit, head_revision, init_test_repository, remove_repo_file_and_commit,
-    rename_repo_file_and_commit,
+    append_repo_file_and_commit, head_revision, init_test_repository, must,
+    remove_repo_file_and_commit, rename_repo_file_and_commit, temp_dir,
 };
 
 #[test]
 fn diff_checkout_revisions_reports_modify_delete_and_rename_paths() {
-    let repository = tempfile::tempdir().expect("tempdir");
+    let repository = temp_dir();
     init_test_repository(repository.path());
     append_repo_file_and_commit(
         repository.path(),
@@ -38,8 +38,10 @@ fn diff_checkout_revisions_reports_modify_delete_and_rename_paths() {
     );
     let revision = head_revision(repository.path());
 
-    let diff = diff_checkout_revisions(repository.path(), &previous_revision, &revision)
-        .expect("diff revisions");
+    let diff = must(
+        diff_checkout_revisions(repository.path(), &previous_revision, &revision),
+        "diff revisions",
+    );
 
     assert_eq!(diff.previous_revision, previous_revision);
     assert_eq!(diff.revision, revision);
@@ -59,12 +61,14 @@ fn diff_checkout_revisions_reports_modify_delete_and_rename_paths() {
 
 #[test]
 fn diff_checkout_revisions_returns_empty_summary_for_identical_revisions() {
-    let repository = tempfile::tempdir().expect("tempdir");
+    let repository = temp_dir();
     init_test_repository(repository.path());
     let revision = head_revision(repository.path());
 
-    let diff =
-        diff_checkout_revisions(repository.path(), &revision, &revision).expect("diff revisions");
+    let diff = must(
+        diff_checkout_revisions(repository.path(), &revision, &revision),
+        "diff revisions",
+    );
 
     assert!(diff.is_empty());
     assert!(diff.changed_paths().is_empty());

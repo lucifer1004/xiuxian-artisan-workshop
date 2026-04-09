@@ -35,6 +35,163 @@ The current crate already has three usable foundations:
 
 V1 should build on these surfaces instead of replacing them.
 
+## Test Layout Governance
+
+The crate-level test gate now enforces two complementary rules:
+
+1. `tests/` root is a harness surface, not a dumping ground.
+2. `src/** #[cfg(test)]` modules must mount test code from `tests/unit/...`
+   through `#[path = "..."]` instead of leaving test implementation in `src/`.
+
+### Canonical `tests/` Root Shape
+
+Keep only explicit entrypoints and bounded support surfaces directly under
+`tests/`:
+
+- `unit_test.rs`
+- `integration_test.rs`
+- `performance_test.rs`
+- `scenarios_test.rs`
+- structured directories such as `unit/`, `integration/`, `performance/`,
+  `fixtures/`, `support/`, and `snapshots/`
+
+Any other root file or directory is an exception and must be justified through
+`tests/xiuxian-testings-rules.toml`.
+
+### Target-Local Harness Rule
+
+The preferred shape is for each real Cargo test entrypoint to mount the shared
+gate directly:
+
+```rust
+xiuxian_testing::crate_test_policy_harness!();
+```
+
+That keeps normal commands such as `cargo test --test unit_test` or
+`cargo test --test integration_test` on the same full-policy lane as a full
+crate test run.
+
+`xiuxian-testing-gate.rs` is a legacy transition surface only. Use it only
+when a crate still lacks stable root harness entrypoints and record the reason
+as bounded migration debt instead of treating it as the steady-state shape.
+
+### Source-Backed `--lib` Harness Rule
+
+If a crate keeps unit tests externalized behind `src/** -> tests/unit/**`
+`#[path]` mounts, `cargo test --lib` should still execute the shared gate.
+
+Preferred shape:
+
+```rust
+// src/lib.rs
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
+// tests/unit/lib_policy.rs
+xiuxian_testing::crate_test_policy_harness!();
+```
+
+That keeps the gate body out of `src/` while making normal `cargo test --lib`
+flows enforce the same crate policy as explicit `--test <target>` entrypoints.
+
+`xiuxian-testing` self-hosts this pattern now: `src/lib.rs` mounts the source
+gate, `tests/unit/lib_policy.rs` owns the gate body, and the contract suites
+live behind `tests/integration_test.rs` instead of scattered root targets.
+`xiuxian-git-repo` now proves the consumer variant of the same shape:
+`src/lib.rs` mounts `tests/unit/lib_policy.rs`, `tests/unit_test.rs` owns the
+root harness target, and backend-specific unit coverage can still live under
+`tests/unit/backend/...` without keeping implementation in `src/`.
+`xiuxian-wendao-julia` now follows the same split shape while keeping its
+existing helper seams under `tests/unit/`; the former large inline
+`#[cfg(test)]` blocks in `src/integration_support/`, `src/memory/`, and
+`src/plugin/` now all mount canonical `tests/unit/...` files, so both
+`cargo test --lib` and `cargo test --test unit_test` pass the shared gate
+without crate-local exceptions.
+`xiuxian-wendao` now mounts the same canonical entrypoints:
+`src/lib.rs -> tests/unit/lib_policy.rs` for `cargo test --lib`, plus
+`tests/unit_test.rs` as the explicit root harness target. The first bounded
+consumer slice externalized the smallest inline suites under
+`src/analyzers/service/bootstrap.rs`,
+`src/gateway/studio/types/collection.rs`,
+`src/link_graph/stats_cache/runtime.rs`,
+`src/skill_vfs/zhixing/indexer/stats.rs`, and
+`src/gateway/studio/router/handlers/repo/shared/repository.rs`, but both
+shared harness entrypoints still fail on the crate's larger pre-existing
+inline-test debt and non-standard `tests/support` mounts. That remaining debt
+must keep shrinking in bounded slices instead of being hidden behind the old
+standalone gate target.
+The next bounded follow-up already removed the first support-path drift and two
+more small inline suites by externalizing `src/valkey_common.rs`,
+`src/link_graph/agentic/store/common.rs`, and the
+`src/analyzers/service/projection/` test module onto canonical
+`tests/unit/...` mounts, so those files are no longer present in the active
+Wendao gate failure surface.
+The next bounded analyzer slice removed the remaining small cache/config
+mounts under `src/analyzers/cache/valkey/mod.rs`,
+`src/analyzers/cache/mod.rs`, and `src/analyzers/config/mod.rs`, so the active
+Wendao gate debt is now pushed into the larger analyzer service/query branches
+instead of the analyzer cache/config boundary.
+The next bounded service/search slice then removed
+`src/analyzers/service/search/mod.rs`,
+`src/analyzers/service/search/ranking/mod.rs`, and
+`src/analyzers/service/search/contracts.rs` from the active Wendao failure
+surface, proving the gate can keep shrinking one analyzer subcluster at a
+time without widening into the surrounding service tree.
+The next bounded service-root/planner slice then removed
+`src/analyzers/service/mod.rs`,
+`src/analyzers/service/helpers/mod.rs`,
+`src/analyzers/service/projection/planner/mod.rs`, and
+`src/analyzers/query/docs/planner/mod.rs` from the active Wendao failure
+surface, showing the same bounded externalization pattern works for mixed
+single-file, subtree, and planner-oriented analyzer seams.
+Validator scans must ignore rustdoc examples and comment-only `#[path = "..."]`
+snippets so the canonical documentation pattern does not create false
+`MissingTestFile` policy failures.
+
+### Exception Policy File
+
+The rules file intentionally lives under `tests/` because it governs the
+physical `tests/` layout of one crate.
+
+Use it only when a file or directory truly must remain directly under
+`tests/`. Every allowlist entry must include both:
+
+- `name`
+- `explanation`
+
+Example:
+
+```toml
+[tests]
+allowed_root_files = [
+  { name = "legacy_harness.rs", explanation = "Cargo entrypoint kept at tests root until the suite is migrated into unit_test.rs." },
+]
+allowed_directories = [
+  { name = "bench", explanation = "Temporary benchmark mount kept at tests root until performance_test.rs owns the suite." },
+]
+```
+
+Missing explanations are treated as policy errors.
+
+### Externalized Unit Test Pattern
+
+For source-backed unit tests, keep production files clean and mount the test
+implementation from `tests/unit/...`.
+
+```rust
+#[cfg(test)]
+#[path = "../../tests/unit/foo/bar.rs"]
+mod tests;
+```
+
+The full crate gate rejects both:
+
+- inline `#[cfg(test)] mod tests { ... }`
+- `#[cfg(test)] mod tests;` declarations that still keep the module in `src/`
+  without an external `#[path]` mount
+
+`test_api` remains the narrow exception for exposing private helpers to the
+externalized unit test file.
+
 ## Proposed V1 Layers
 
 ### 1. Structure Policy Layer
@@ -210,3 +367,143 @@ V1 is successful when:
 3. advisory findings can be attributed to role-based audit runs from `Qianji` and `Qianhuan`,
 4. findings and traces are exportable to Wendao as knowledge records, and
 5. advisory and strict execution modes are both supported at the design level.
+
+## Consumer Remediation Notes
+
+The canonical remediation shape for Rust crates is now:
+
+- a source-side harness mounted from `src/lib.rs` or `src/main.rs` so
+  `cargo test --lib` enforces the crate policy by default
+- a root harness target under `tests/unit_test.rs` so explicit integration test
+  selections still traverse the same policy layer
+- source-resident test suites mounted directly from `tests/unit/...` with
+  `#[cfg(test)] #[path = "..."] mod tests;`
+
+When a canonical `tests/unit/...` file already exists, remediation should fold
+any old `src/**/tests.rs` shim imports into that canonical file instead of
+adding another forwarding layer under `src/`.
+
+In practice, consumer crates can be remediated one bounded cluster at a time.
+Once the source-side harness is active, each completed cluster should
+disappear from the shared gate output immediately, which makes the next slice
+selection mechanical instead of judgment-heavy.
+
+For `packages/rust/crates/xiuxian-wendao`, the active remediation proof has
+now also removed the standalone analyzer suites in
+`src/analyzers/saliency.rs` and `src/analyzers/skeptic.rs` from the shared
+gate output. The next bounded slice should follow the same shape on the
+remaining `src/analyzers/projection/*` branch rather than reopening already
+cleared standalone analyzer files.
+
+That next bounded slice has now been applied too: the shared gate no longer
+reports `src/analyzers/projection/search/mod.rs` or
+`src/analyzers/projection/builder/mod.rs`. The active failure surface has
+advanced beyond analyzer projection and is now fronted by parser and
+memory-julia policy debt.
+
+That parser + memory-julia debt has now been cleared as well. The active
+`xiuxian-wendao` gate no longer reports
+`src/parsers/markdown/links/normalize.rs` or `src/memory/julia/mod.rs`, which
+means the next bounded remediation slice should move to `src/bin/wendao/execute/*`
+and then the remaining non-analyzer, non-memory modules.
+
+That `src/bin/wendao/execute/*` slice has now been cleared too. The active
+`xiuxian-wendao` gate no longer reports
+`src/bin/wendao/execute/repo.rs`,
+`src/bin/wendao/execute/gateway/config.rs`, or
+`src/bin/wendao/execute/gateway/command.rs`, so the next bounded remediation
+slice should move into the remaining non-bin owners fronting the gate output:
+`src/ingress/*`, `src/entity/*`, `src/enhancer/*`, and then the larger
+`repo_index` / `search` clusters.
+
+The older `bounded_work_markdown` clippy blockers are now gone as well. The
+consumer lane can rely on `direnv exec . cargo clippy -p xiuxian-wendao --lib --tests -- -D warnings`
+as a live closure gate again, instead of treating that command as permanently
+masked by unrelated debt.
+
+The next shared-gate top cluster has been removed too: `ingress/spider`,
+`entity`, and the current `enhancer/*` module owners no longer appear in the
+live `xiuxian-wendao` failure surface. The next bounded slice should therefore
+start at `src/dependency_indexer/symbols/mod.rs` and then move into the
+`repo_index` state tree, which is now the first large contiguous debt cluster.
+
+That dependency-indexer entry point is now gone from the live failure surface
+as well. The `src/dependency_indexer/symbols/mod.rs` owner now mounts directly
+from `tests/unit/dependency_indexer/symbols/mod.rs`, and the old flat
+`dependency_indexer_symbols.rs` helper has been folded into that canonical
+suite instead of surviving as a parallel legacy test surface. The next bounded
+consumer slice should therefore start directly at `src/repo_index/state/*`.
+
+That milestone-style `repo_index/state` slice has now landed too. The
+source-resident `src/repo_index/state/tests/` subtree has been fully moved into
+`tests/unit/repo_index/state/`, the inline `coordinator/*` and `task/*` suites
+now mount from the same canonical tree, and the shared `xiuxian-wendao` gate
+no longer reports any `repo_index/state` owner. The next milestone should
+therefore start at the now-fronting `graph`, `storage`, and `search/*`
+clusters instead of reopening the cleared repo-index state tree.
+
+That next milestone has now landed as one bounded graph-storage-cache slice.
+`src/graph/valkey_persistence.rs`, `src/storage/crud.rs`, and the full
+`src/search/cache/` front now mount canonical `tests/unit/...` files; the old
+source-resident `src/search/cache/tests.rs` hub has been moved wholesale into
+`tests/unit/search/cache/mod.rs`, and the inline `config`, `runtime`, and
+`writes` suites now live beside it under the same canonical tree. The live
+Wendao gate therefore no longer reports any `graph`, `storage`, or
+`search/cache` owner, so the next milestone starts directly at the broader
+`search/*` front, beginning with `search/reference_occurrence/*` and the other
+remaining search service/query mounts.
+
+That next bounded search-corpus milestone has landed too. The paired
+`build/query` owners for `reference_occurrence`, `attachment`,
+`local_symbol`, `repo_content_chunk`, `repo_entity`, and
+`knowledge_section` now all mount canonical `tests/unit/search/...` trees
+instead of keeping source-resident `tests.rs` or `tests/` submodules in
+`src/`. The live Wendao gate no longer reports any owner from those six
+search corpus families, so the next milestone starts directly at the
+remaining search-platform core: `repo_search`, `coordinator`, `manifest`,
+`queries`, `tantivy`, `status`, `ranking`, and the search service core
+subtree.
+
+That search-platform-core milestone has now landed too. The remaining
+`search/*` front that sat on top of the live Wendao gate now mounts canonical
+`tests/unit/search/...` trees across `repo_search`, `coordinator`,
+`manifest`, `queries`, `tantivy`, `status`, `ranking`, `corpus`,
+`staged_mutation`, and the `search/service/core/*` subtree; the old
+source-resident `tests.rs` files and `tests/` subtrees for `queries` and
+`search/service` have been moved wholesale into the canonical tree, and the
+few inline suites (`repo_search/batch.rs`, `project_fingerprint.rs`,
+`ranking.rs`, `staged_mutation.rs`, `corpus.rs`, `status/maintenance.rs`)
+were externalized beside them. The live Wendao gate therefore no longer
+reports any `search/*` owner at all, so the next milestone begins directly at
+the new front outside search: `pybindings/*`, `query_core`, `unified_symbol`,
+`skill_vfs/*`, and the broader `gateway/studio/*` tree.
+
+That next non-search milestone has landed too. The live Wendao gate no longer
+reports `src/pybindings/unified_symbol_py/mod.rs`,
+`src/pybindings/dep_indexer_py/mod.rs`, `src/query_core/mod.rs`,
+`src/unified_symbol/mod.rs`, `src/skill_vfs/zhixing/resources/mod.rs`,
+`src/skill_vfs/internal_manifest/mod.rs`,
+`src/skill_vfs/resolver/runtime.rs`, or
+`src/zhenfa_router/native/semantic_check/docs_governance/mod.rs`. Their old
+source-resident `tests.rs` files and `tests/` trees now mount from canonical
+`tests/unit/...` locations, and the `pybindings` branch is now explicitly
+validated under `--features pybindings` instead of being treated as invisible
+default-lib debt. The next milestone is therefore the now-fronting
+`gateway/studio/*` and `gateway/openapi/*` tree.
+
+That first `gateway/studio` milestone has landed too. The live Wendao gate no
+longer reports `src/gateway/studio/vfs/mod.rs`,
+`src/gateway/studio/vfs/{flight,flight_content,flight_scan,navigation}.rs`,
+`src/gateway/studio/pathing.rs`,
+`src/gateway/studio/types/config.rs`,
+`src/gateway/studio/types/search_index/mod.rs`,
+`src/gateway/studio/analysis/markdown/compile/mod.rs`,
+`src/gateway/studio/symbol_index/state/mod.rs`,
+`src/gateway/studio/search/project_scope.rs`, or
+`src/gateway/studio/search/definition/mod.rs`. The old source-resident
+`tests.rs` and `tests/` trees for that front now mount from canonical
+`tests/unit/gateway/studio/...` locations, and the stale dead surface
+`tests/unit/gateway/studio/vfs.rs` has been retired instead of kept alive as a
+parallel compatibility path. The next milestone therefore starts at the now
+fronting `gateway/studio/search/handlers/*`, `gateway/studio/router/*`,
+`gateway/studio/startup_health/*`, and `gateway/openapi/*` tree.

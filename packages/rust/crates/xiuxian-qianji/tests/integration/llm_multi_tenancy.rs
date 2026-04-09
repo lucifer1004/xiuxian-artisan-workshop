@@ -226,3 +226,5 @@ api_key_env = "TENANT_API_KEY"
     assert!(message.contains("litellm_rs"));
     assert!(message.contains("not yet supported"));
 }
+
+xiuxian_testing::crate_test_policy_harness!();

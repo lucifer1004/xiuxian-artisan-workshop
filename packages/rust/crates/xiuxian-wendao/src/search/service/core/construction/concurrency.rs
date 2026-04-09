@@ -1,5 +1,6 @@
 use chrono::Utc;
 use tokio::sync::OwnedSemaphorePermit;
+use xiuxian_config_core::lookup_positive_parsed;
 use xiuxian_vector::VectorStoreError;
 
 use crate::search::service::core::types::SearchPlaneService;
@@ -63,9 +64,7 @@ pub(crate) fn repo_search_read_concurrency_limit_with_lookup(
     lookup: &dyn Fn(&str) -> Option<String>,
     available_parallelism: Option<usize>,
 ) -> usize {
-    lookup(REPO_SEARCH_READ_CONCURRENCY_ENV)
-        .and_then(|raw| raw.trim().parse::<usize>().ok())
-        .filter(|value| *value > 0)
+    lookup_positive_parsed::<usize>(REPO_SEARCH_READ_CONCURRENCY_ENV, lookup)
         .unwrap_or_else(|| default_repo_search_read_concurrency_limit(available_parallelism))
 }
 

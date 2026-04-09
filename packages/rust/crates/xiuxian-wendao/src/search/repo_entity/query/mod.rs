@@ -3,6 +3,7 @@ mod results;
 mod search;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/repo_entity/query/mod.rs"]
 mod tests;
 
 pub(crate) use results::{

@@ -20,4 +20,5 @@ pub(crate) use mounts::embedded_semantic_reference_mounts;
 pub(crate) use paths::{ZHIXING_EMBEDDED_CRATE_ID, embedded_resource_dir};
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/skill_vfs/zhixing/resources/mod.rs"]
 mod tests;

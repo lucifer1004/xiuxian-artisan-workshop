@@ -33,9 +33,22 @@ impl GatewayState {
         signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
         plugin_registry: Arc<PluginRegistry>,
     ) -> Self {
+        Self::new_with_webhook_url(index, signal_tx, None, plugin_registry)
+    }
+
+    /// Create gateway state shared by the CLI endpoints and Studio router
+    /// with the effective webhook URL chosen at startup.
+    #[must_use]
+    pub fn new_with_webhook_url(
+        index: Option<Arc<LinkGraphIndex>>,
+        signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+        webhook_url: Option<String>,
+        plugin_registry: Arc<PluginRegistry>,
+    ) -> Self {
         Self {
             index,
             signal_tx,
+            webhook_url,
             studio: Arc::new(StudioState::new_with_bootstrap_ui_config(plugin_registry)),
         }
     }

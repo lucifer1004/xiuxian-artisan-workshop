@@ -20,8 +20,6 @@ pub mod manifestation;
 pub mod orchestrator;
 /// Persona model and registry for role-mix style injection.
 pub mod persona;
-/// Python bindings for the thin orchestration/persona API surface.
-pub mod python_module;
 /// Tone transmutation traits and implementations.
 pub mod transmuter;
 mod window;
@@ -45,8 +43,8 @@ pub use hot_reload::{
 };
 pub use interface::ManifestationInterface;
 pub use manifestation::{
-    ManifestationManager, ManifestationRenderRequest, ManifestationRuntimeContext,
-    ManifestationTemplateTarget, MemoryTemplateRecord,
+    EmbeddedManifestationTemplateCatalog, ManifestationManager, ManifestationRenderRequest,
+    ManifestationRuntimeContext, ManifestationTemplateTarget, MemoryTemplateRecord,
 };
 pub use orchestrator::{InjectionLayer, ThousandFacesOrchestrator};
 pub use persona::{MemoryPersonaRecord, PersonaProfile, PersonaProvider, PersonaRegistry};

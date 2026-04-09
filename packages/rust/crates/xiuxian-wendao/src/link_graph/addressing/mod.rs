@@ -52,6 +52,7 @@ mod structural_transaction;
 mod topology;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/link_graph/addressing/mod.rs"]
 mod tests;
 
 pub use address::{Address, EnhancedResolvedNode, ResolveMode, ResolvedNode};

@@ -46,6 +46,13 @@ impl Default for QianjiRuntimeWendaoIngesterConfig {
     }
 }
 
+/// Resolved runtime config for checkpoint persistence and resume state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QianjiRuntimeCheckpointConfig {
+    /// Effective Valkey URL used for checkpoint load/save/delete.
+    pub valkey_url: String,
+}
+
 /// Explicit runtime environment used by the resolver (test-friendly).
 #[derive(Debug, Default, Clone)]
 pub struct QianjiRuntimeEnv {
@@ -75,6 +82,8 @@ pub struct QianjiRuntimeEnv {
     pub qianji_memory_promotion_persist: Option<bool>,
     /// Optional `QIANJI_MEMORY_PROMOTION_PERSIST_BEST_EFFORT` override.
     pub qianji_memory_promotion_persist_best_effort: Option<bool>,
+    /// Optional `QIANJI_VALKEY_URL` override for checkpoint persistence.
+    pub qianji_checkpoint_valkey_url: Option<String>,
     /// Optional values for arbitrary env keys (used for `api_key_env` lookups).
     pub extra_env: Vec<(String, String)>,
 }

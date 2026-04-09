@@ -1,7 +1,11 @@
 //! Unit tests for addressing mod module.
 
 use super::*;
+use crate::link_graph::PageIndexNode;
 use std::collections::HashMap;
+
+pub(super) use super::mutation::compute_hash;
+pub(super) use super::node_lookup::{find_by_hash, find_by_id, find_by_path};
 
 #[test]
 fn test_address_parse_id() {
@@ -148,14 +152,13 @@ fn test_replace_byte_range_basic() {
         panic!("replace_byte_range should succeed");
     };
     assert_eq!(result.new_content, "Hello, Rust!");
-    assert_eq!(result.byte_delta, -1); // "world" (5) -> "Rust" (4)
+    assert_eq!(result.byte_delta, -1);
     assert_eq!(result.line_delta, 0);
 }
 
 #[test]
 fn test_replace_byte_range_with_hash_verification() {
     let content = "Hello, world!";
-    // Compute hash of "world"
     let hash = compute_hash("world");
     let Ok(result) = replace_byte_range(content, 7, 12, "Rust", Some(&hash)) else {
         panic!("replace_byte_range should verify the hash");
@@ -212,12 +215,11 @@ fn test_update_section_content() {
         panic!("update_section_content should succeed");
     };
     assert_eq!(result.new_content, "new content here");
-    assert_eq!(result.byte_delta, 0); // "old content" (11) -> "new content" (11) = 0
+    assert_eq!(result.byte_delta, 0);
 }
 
 #[test]
 fn test_adjust_line_range_before() {
-    // Modification before the section
     let (start, end) = adjust_line_range(10, 20, 5, 5);
     assert_eq!(start, 15);
     assert_eq!(end, 25);
@@ -225,7 +227,6 @@ fn test_adjust_line_range_before() {
 
 #[test]
 fn test_adjust_line_range_within() {
-    // Modification within the section
     let (start, end) = adjust_line_range(10, 20, 3, 15);
     assert_eq!(start, 10);
     assert_eq!(end, 23);
@@ -233,7 +234,6 @@ fn test_adjust_line_range_within() {
 
 #[test]
 fn test_adjust_line_range_after() {
-    // Modification after the section
     let (start, end) = adjust_line_range(10, 20, 5, 30);
     assert_eq!(start, 10);
     assert_eq!(end, 20);
@@ -251,5 +251,5 @@ fn test_compute_hash_consistency() {
     let hash1 = compute_hash("test content");
     let hash2 = compute_hash("test content");
     assert_eq!(hash1, hash2);
-    assert_eq!(hash1.len(), 16); // Blake3 truncated to 16 hex chars
+    assert_eq!(hash1.len(), 16);
 }

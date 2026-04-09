@@ -22,17 +22,33 @@ pub(super) struct GatewayStateFixture {
     pub(super) state: Arc<GatewayState>,
 }
 
-pub(super) fn make_gateway_state_with_docs(docs: &[(&str, &str)]) -> GatewayStateFixture {
-    let temp_dir = tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-    for (path, contents) in docs {
-        let full_path = temp_dir.path().join(path);
+fn write_fixture_files(root: &std::path::Path, files: &[(&str, &str)], context: &str) {
+    for (path, contents) in files {
+        let full_path = root.join(path);
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent)
-                .unwrap_or_else(|error| panic!("create fixture dirs for {path}: {error}"));
+                .unwrap_or_else(|error| panic!("create {context} dirs for {path}: {error}"));
         }
         fs::write(&full_path, contents)
-            .unwrap_or_else(|error| panic!("write fixture doc {path}: {error}"));
+            .unwrap_or_else(|error| panic!("write {context} file {path}: {error}"));
     }
+}
+
+fn gateway_state_fixture(temp_dir: TempDir, studio: StudioState) -> GatewayStateFixture {
+    GatewayStateFixture {
+        _temp_dir: temp_dir,
+        state: Arc::new(GatewayState {
+            index: None,
+            signal_tx: None,
+            webhook_url: None,
+            studio: Arc::new(studio),
+        }),
+    }
+}
+
+pub(super) fn make_gateway_state_with_docs(docs: &[(&str, &str)]) -> GatewayStateFixture {
+    let temp_dir = tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    write_fixture_files(temp_dir.path(), docs, "fixture");
 
     let mut studio = test_studio_state();
     studio.project_root = temp_dir.path().to_path_buf();
@@ -56,14 +72,7 @@ pub(super) fn make_gateway_state_with_docs(docs: &[(&str, &str)]) -> GatewayStat
         warmed_index,
     );
 
-    GatewayStateFixture {
-        _temp_dir: temp_dir,
-        state: Arc::new(GatewayState {
-            index: None,
-            signal_tx: None,
-            studio: Arc::new(studio),
-        }),
-    }
+    gateway_state_fixture(temp_dir, studio)
 }
 
 pub(super) async fn make_gateway_state_with_search_routes() -> GatewayStateFixture {
@@ -78,15 +87,7 @@ pub(super) async fn make_gateway_state_with_search_routes() -> GatewayStateFixtu
             "pub struct AlphaService;\npub fn alpha_handler() {}\n",
         ),
     ];
-    for (path, contents) in docs {
-        let full_path = temp_dir.path().join(path);
-        if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .unwrap_or_else(|error| panic!("create fixture dirs for {path}: {error}"));
-        }
-        fs::write(&full_path, contents)
-            .unwrap_or_else(|error| panic!("write fixture doc {path}: {error}"));
-    }
+    write_fixture_files(temp_dir.path(), &docs, "fixture");
 
     let mut studio = test_studio_state();
     studio.project_root = temp_dir.path().to_path_buf();
@@ -163,14 +164,7 @@ pub(super) async fn make_gateway_state_with_search_routes() -> GatewayStateFixtu
         .await
         .unwrap_or_else(|error| panic!("publish attachments: {error}"));
 
-    GatewayStateFixture {
-        _temp_dir: temp_dir,
-        state: Arc::new(GatewayState {
-            index: None,
-            signal_tx: None,
-            studio: Arc::new(studio),
-        }),
-    }
+    gateway_state_fixture(temp_dir, studio)
 }
 
 pub(super) fn make_gateway_state_with_repo(repo_files: &[(&str, &str)]) -> GatewayStateFixture {
@@ -205,14 +199,7 @@ pub(super) fn make_gateway_state_with_repo(repo_files: &[(&str, &str)]) -> Gatew
         }],
     });
 
-    GatewayStateFixture {
-        _temp_dir: temp_dir,
-        state: Arc::new(GatewayState {
-            index: None,
-            signal_tx: None,
-            studio: Arc::new(studio),
-        }),
-    }
+    gateway_state_fixture(temp_dir, studio)
 }
 
 pub(super) async fn make_gateway_state_with_attachments() -> GatewayStateFixture {
@@ -261,14 +248,7 @@ pub(super) async fn make_gateway_state_with_attachments() -> GatewayStateFixture
         .await
         .unwrap_or_else(|error| panic!("publish attachments: {error}"));
 
-    GatewayStateFixture {
-        _temp_dir: temp_dir,
-        state: Arc::new(GatewayState {
-            index: None,
-            signal_tx: None,
-            studio: Arc::new(studio),
-        }),
-    }
+    gateway_state_fixture(temp_dir, studio)
 }
 
 #[derive(Debug)]
@@ -313,6 +293,7 @@ pub(super) fn bare_gateway_state() -> Arc<GatewayState> {
     Arc::new(GatewayState {
         index: None,
         signal_tx: None,
+        webhook_url: None,
         studio: Arc::new(StudioState::new_with_bootstrap_ui_config(Arc::new(
             crate::analyzers::bootstrap_builtin_registry()
                 .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),

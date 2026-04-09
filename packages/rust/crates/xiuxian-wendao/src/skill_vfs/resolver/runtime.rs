@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::core::SkillVfsResolver;
 use crate::skill_vfs::SkillVfsError;
+use xiuxian_config_core::{resolve_path_from_value, resolve_project_root_or_cwd_from_value};
 
 impl SkillVfsResolver {
     /// Discover runtime semantic skill roots from the current process environment.
@@ -38,20 +39,8 @@ impl SkillVfsResolver {
         project_root: &Path,
         env_value: Option<&str>,
     ) -> PathBuf {
-        env_value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .map_or_else(
-                || project_root.join("internal_skills"),
-                |path| {
-                    if path.is_absolute() {
-                        path
-                    } else {
-                        project_root.join(path)
-                    }
-                },
-            )
+        resolve_path_from_value(Some(project_root), env_value)
+            .unwrap_or_else(|| project_root.join("internal_skills"))
     }
 
     /// Resolve the runtime internal-skill root from the current process environment.
@@ -97,35 +86,14 @@ impl SkillVfsResolver {
 }
 
 fn resolve_project_root() -> PathBuf {
-    if let Some(root) = std::env::var("PRJ_ROOT")
-        .ok()
-        .map(|raw| raw.trim().to_string())
-        .filter(|raw| !raw.is_empty())
-    {
-        let path = PathBuf::from(root);
-        if path.is_absolute() {
-            return path;
-        }
-        if let Ok(cwd) = std::env::current_dir() {
-            return cwd.join(path);
-        }
-        return path;
-    }
-
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    let raw_project_root = std::env::var("PRJ_ROOT").ok();
+    let current_dir = std::env::current_dir().ok();
+    resolve_project_root_or_cwd_from_value(raw_project_root.as_deref(), current_dir.as_deref())
 }
 
 fn env_path(key: &str, project_root: &Path) -> Option<PathBuf> {
-    let path = PathBuf::from(
-        std::env::var(key)
-            .ok()
-            .map(|raw| raw.trim().to_string())
-            .filter(|raw| !raw.is_empty())?,
-    );
-    if path.is_absolute() {
-        return Some(path);
-    }
-    Some(project_root.join(path))
+    let raw_value = std::env::var(key).ok();
+    resolve_path_from_value(Some(project_root), raw_value.as_deref())
 }
 
 fn discover_crate_skill_roots(crates_root: &Path) -> Vec<PathBuf> {
@@ -149,3 +117,7 @@ fn dedup_paths(paths: &mut Vec<PathBuf>) {
     }
     *paths = unique;
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/skill_vfs/resolver/runtime.rs"]
+mod tests;

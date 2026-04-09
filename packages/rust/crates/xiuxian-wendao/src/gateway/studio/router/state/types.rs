@@ -178,6 +178,8 @@ pub struct GatewayState {
     pub index: Option<Arc<LinkGraphIndex>>,
     /// Signal sender for notification worker.
     pub signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+    /// Effective webhook URL chosen at gateway startup, if configured.
+    pub webhook_url: Option<String>,
     /// Studio-specific state for VFS/graph/search APIs.
     pub studio: Arc<StudioState>,
 }

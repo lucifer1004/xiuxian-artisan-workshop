@@ -62,37 +62,61 @@ impl SearchPlaneCacheConfig {
         lookup: &dyn Fn(&str) -> Option<String>,
     ) -> Self {
         Self {
-            query_ttl_seconds: parse_setting_u64(settings, QUERY_CACHE_TTL_SETTING)
-                .or_else(|| parse_lookup_u64(QUERY_CACHE_TTL_ENV, lookup))
-                .unwrap_or(DEFAULT_QUERY_CACHE_TTL_SEC),
-            autocomplete_ttl_seconds: parse_setting_u64(settings, AUTOCOMPLETE_CACHE_TTL_SETTING)
-                .or_else(|| parse_lookup_u64(AUTOCOMPLETE_CACHE_TTL_ENV, lookup))
-                .unwrap_or(DEFAULT_AUTOCOMPLETE_CACHE_TTL_SEC),
-            repo_revision_retention: parse_setting_u64(settings, REPO_REVISION_RETENTION_SETTING)
-                .or_else(|| parse_lookup_u64(REPO_REVISION_RETENTION_ENV, lookup))
-                .and_then(|value| usize::try_from(value).ok())
-                .filter(|value| *value > 0)
-                .unwrap_or(DEFAULT_REPO_REVISION_RETENTION),
+            query_ttl_seconds: xiuxian_config_core::toml_first_env!(
+                settings,
+                QUERY_CACHE_TTL_SETTING,
+                lookup,
+                [QUERY_CACHE_TTL_ENV],
+                get_setting_string,
+                |raw| raw.trim().parse::<u64>().ok()
+            )
+            .unwrap_or(DEFAULT_QUERY_CACHE_TTL_SEC),
+            autocomplete_ttl_seconds: xiuxian_config_core::toml_first_env!(
+                settings,
+                AUTOCOMPLETE_CACHE_TTL_SETTING,
+                lookup,
+                [AUTOCOMPLETE_CACHE_TTL_ENV],
+                get_setting_string,
+                |raw| raw.trim().parse::<u64>().ok()
+            )
+            .unwrap_or(DEFAULT_AUTOCOMPLETE_CACHE_TTL_SEC),
+            repo_revision_retention: xiuxian_config_core::toml_first_env!(
+                settings,
+                REPO_REVISION_RETENTION_SETTING,
+                lookup,
+                [REPO_REVISION_RETENTION_ENV],
+                get_setting_string,
+                |raw| raw.trim().parse::<u64>().ok()
+            )
+            .and_then(|value| usize::try_from(value).ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(DEFAULT_REPO_REVISION_RETENTION),
             connection_timeout: Duration::from_millis(
-                parse_setting_u64(settings, CACHE_CONNECTION_TIMEOUT_MS_SETTING)
-                    .or_else(|| parse_lookup_u64(CACHE_CONNECTION_TIMEOUT_MS_ENV, lookup))
-                    .unwrap_or(DEFAULT_CACHE_CONNECTION_TIMEOUT_MS),
+                xiuxian_config_core::toml_first_env!(
+                    settings,
+                    CACHE_CONNECTION_TIMEOUT_MS_SETTING,
+                    lookup,
+                    [CACHE_CONNECTION_TIMEOUT_MS_ENV],
+                    get_setting_string,
+                    |raw| raw.trim().parse::<u64>().ok()
+                )
+                .unwrap_or(DEFAULT_CACHE_CONNECTION_TIMEOUT_MS),
             ),
             response_timeout: Duration::from_millis(
-                parse_setting_u64(settings, CACHE_RESPONSE_TIMEOUT_MS_SETTING)
-                    .or_else(|| parse_lookup_u64(CACHE_RESPONSE_TIMEOUT_MS_ENV, lookup))
-                    .unwrap_or(DEFAULT_CACHE_RESPONSE_TIMEOUT_MS),
+                xiuxian_config_core::toml_first_env!(
+                    settings,
+                    CACHE_RESPONSE_TIMEOUT_MS_SETTING,
+                    lookup,
+                    [CACHE_RESPONSE_TIMEOUT_MS_ENV],
+                    get_setting_string,
+                    |raw| raw.trim().parse::<u64>().ok()
+                )
+                .unwrap_or(DEFAULT_CACHE_RESPONSE_TIMEOUT_MS),
             ),
         }
     }
 }
 
-fn parse_setting_u64(settings: &Value, dotted_key: &str) -> Option<u64> {
-    get_setting_string(settings, dotted_key)
-        .as_deref()
-        .and_then(|value| value.trim().parse::<u64>().ok())
-}
-
-fn parse_lookup_u64(name: &str, lookup: &dyn Fn(&str) -> Option<String>) -> Option<u64> {
-    lookup(name).and_then(|value| value.trim().parse::<u64>().ok())
-}
+#[cfg(test)]
+#[path = "../../../tests/unit/search/cache/config.rs"]
+mod tests;

@@ -13,4 +13,5 @@ pub use registration::register_dependency_indexer_module;
 pub use symbols::{PyExternalSymbol, PySymbolIndex};
 
 #[cfg(test)]
+#[path = "../../../tests/unit/pybindings/dep_indexer_py/mod.rs"]
 mod tests;

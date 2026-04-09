@@ -17,7 +17,34 @@
     clippy::unnecessary_to_owned,
     clippy::too_many_lines
 )]
-use super::*;
+use crate::graph::{GraphError, KnowledgeGraph, SkillDoc};
+use crate::{Entity, EntityType, Relation, RelationType};
+use serde_yaml::Value;
+use tempfile::TempDir;
+
+use super::{
+    DEFAULT_GRAPH_VALKEY_KEY_PREFIX, graph_redis_client, normalize_graph_key_prefix,
+    resolve_graph_key_prefix_with_settings_and_lookup,
+    resolve_graph_valkey_url_with_settings_and_lookup,
+};
+
+fn has_valkey() -> bool {
+    [
+        "XIUXIAN_WENDAO_GRAPH_VALKEY_URL",
+        "VALKEY_URL",
+        "XIUXIAN_WENDAO_KNOWLEDGE_VALKEY_URL",
+    ]
+    .into_iter()
+    .any(|name| {
+        std::env::var(name)
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+    })
+}
+
+fn settings_from_yaml(yaml: &str) -> Value {
+    serde_yaml::from_str(yaml).unwrap_or_else(|error| panic!("settings yaml: {error}"))
+}
 
 #[tokio::test]
 async fn test_save_and_load_valkey_roundtrip() {
@@ -150,4 +177,95 @@ async fn test_valkey_persistence_with_skill_registration() {
         !results.is_empty(),
         "Search should find git entities after Valkey roundtrip"
     );
+}
+
+#[test]
+fn normalize_graph_key_prefix_falls_back_for_blank_input() {
+    assert_eq!(
+        normalize_graph_key_prefix("   "),
+        DEFAULT_GRAPH_VALKEY_KEY_PREFIX.to_string()
+    );
+}
+
+#[test]
+fn normalize_graph_key_prefix_trims_non_blank_input() {
+    assert_eq!(
+        normalize_graph_key_prefix("  xiuxian:graph:test  "),
+        "xiuxian:graph:test".to_string()
+    );
+}
+
+#[test]
+fn graph_redis_client_opens_trimmed_valid_url() {
+    let client = graph_redis_client(" redis://127.0.0.1/ ");
+    assert!(client.is_ok());
+}
+
+#[test]
+fn graph_redis_client_preserves_graph_error_identity() {
+    let Err(error) = graph_redis_client("  ") else {
+        panic!("blank URL should fail");
+    };
+    assert!(matches!(
+        error,
+        GraphError::InvalidRelation(ref field, _) if field == "graph_valkey_client"
+    ));
+}
+
+#[test]
+fn graph_valkey_resolution_prefers_toml_values() {
+    let settings = settings_from_yaml(
+        r#"
+graph:
+  persistence:
+    valkey_url: "redis://127.0.0.1:6380/0"
+    key_prefix: "xiuxian:test:graph"
+"#,
+    );
+
+    let url = resolve_graph_valkey_url_with_settings_and_lookup(&settings, &|_| {
+        Some("redis://127.0.0.1:6379/0".to_string())
+    })
+    .unwrap_or_else(|error| panic!("graph valkey url should resolve: {error:?}"));
+    let key_prefix = resolve_graph_key_prefix_with_settings_and_lookup(&settings, &|_| None);
+
+    assert_eq!(url, "redis://127.0.0.1:6380/0");
+    assert_eq!(key_prefix, "xiuxian:test:graph");
+}
+
+#[test]
+fn graph_valkey_resolution_falls_back_to_env_when_toml_is_missing() {
+    let url = resolve_graph_valkey_url_with_settings_and_lookup(&Value::Null, &|name| match name {
+        "XIUXIAN_WENDAO_GRAPH_VALKEY_URL" => Some("redis://127.0.0.1:6379/5".to_string()),
+        _ => None,
+    })
+    .unwrap_or_else(|error| panic!("graph env fallback should resolve: {error:?}"));
+
+    assert_eq!(url, "redis://127.0.0.1:6379/5");
+}
+
+#[test]
+fn graph_valkey_resolution_keeps_invalid_toml_authoritative() {
+    let settings = settings_from_yaml(
+        r#"
+graph:
+  persistence:
+    valkey_url: " definitely-not-a-redis-url "
+"#,
+    );
+
+    let url = resolve_graph_valkey_url_with_settings_and_lookup(&settings, &|name| match name {
+        "XIUXIAN_WENDAO_GRAPH_VALKEY_URL" => Some("redis://127.0.0.1:6379/5".to_string()),
+        _ => None,
+    })
+    .unwrap_or_else(|error| panic!("graph valkey url should still resolve raw TOML: {error:?}"));
+
+    let error = graph_redis_client(url.as_str())
+        .err()
+        .unwrap_or_else(|| panic!("invalid TOML url should stay authoritative"));
+
+    assert!(matches!(
+        error,
+        GraphError::InvalidRelation(ref field, _) if field == "graph_valkey_client"
+    ));
 }

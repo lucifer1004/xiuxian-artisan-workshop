@@ -192,6 +192,7 @@ pub fn build_studio_flight_service_for_roots_with_weights(
     let gateway_state = Arc::new(GatewayState {
         index: None,
         signal_tx: None,
+        webhook_url: None,
         studio: Arc::new(studio),
     });
     build_studio_flight_service_with_weights(
@@ -591,6 +592,7 @@ mod tests {
         let state = Arc::new(GatewayState {
             index: None,
             signal_tx: None,
+            webhook_url: None,
             studio: Arc::new(studio),
         });
 

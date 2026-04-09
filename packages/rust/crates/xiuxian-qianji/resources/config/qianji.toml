@@ -12,3 +12,6 @@ graph_scope = "qianji:memory_promotion"
 graph_dimension = 1024
 persist = true
 persist_best_effort = true
+
+[checkpoint]
+valkey_url = "redis://127.0.0.1:6379/0"

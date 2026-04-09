@@ -10,6 +10,7 @@ mod scope;
 mod uri;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/analyzers/service/helpers/mod.rs"]
 mod tests;
 
 pub use uri::relation_kind_label;

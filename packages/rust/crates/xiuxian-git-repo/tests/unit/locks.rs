@@ -6,6 +6,8 @@ use xiuxian_git_repo::{
     checkout_lock_max_wait_with_lookup, is_descriptor_pressure_error, managed_lock_path_for,
 };
 
+use crate::support::must;
+
 #[test]
 fn managed_checkout_lock_reclaims_stale_lockfiles() {
     let spec = RepoSpec {
@@ -20,17 +22,19 @@ fn managed_checkout_lock_reclaims_stale_lockfiles() {
     };
     let lock_path = managed_lock_path_for(&spec);
     if let Some(parent) = lock_path.parent() {
-        fs::create_dir_all(parent).expect("create lock dir");
+        must(fs::create_dir_all(parent), "create lock dir");
     }
-    fs::write(&lock_path, "stale").expect("write stale lock");
+    must(fs::write(&lock_path, "stale"), "write stale lock");
 
-    let guard = acquire_managed_checkout_lock_with_policy(
-        lock_path.clone(),
-        Duration::from_millis(1),
-        Duration::from_millis(5),
-        Duration::ZERO,
-    )
-    .expect("reclaim stale lock");
+    let guard = must(
+        acquire_managed_checkout_lock_with_policy(
+            lock_path.clone(),
+            Duration::from_millis(1),
+            Duration::from_millis(5),
+            Duration::ZERO,
+        ),
+        "reclaim stale lock",
+    );
 
     assert!(lock_path.exists());
     drop(guard);
@@ -51,17 +55,19 @@ fn managed_checkout_lock_times_out_for_active_lockfiles() {
     };
     let lock_path = managed_lock_path_for(&spec);
     if let Some(parent) = lock_path.parent() {
-        fs::create_dir_all(parent).expect("create lock dir");
+        must(fs::create_dir_all(parent), "create lock dir");
     }
-    fs::write(&lock_path, "busy").expect("write active lock");
+    must(fs::write(&lock_path, "busy"), "write active lock");
 
-    let error = acquire_managed_checkout_lock_with_policy(
+    let error = match acquire_managed_checkout_lock_with_policy(
         lock_path.clone(),
         Duration::from_millis(1),
         Duration::from_millis(5),
         Duration::from_secs(60),
-    )
-    .expect_err("active lock should time out");
+    ) {
+        Ok(_guard) => panic!("active lock should time out"),
+        Err(error) => error,
+    };
 
     assert_eq!(error.kind, RepoErrorKind::LockBusy);
     assert!(
@@ -70,7 +76,7 @@ fn managed_checkout_lock_times_out_for_active_lockfiles() {
             .contains("timed out waiting for managed checkout lock")
     );
 
-    fs::remove_file(&lock_path).expect("cleanup active lock");
+    must(fs::remove_file(&lock_path), "cleanup active lock");
 }
 
 #[test]

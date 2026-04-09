@@ -242,6 +242,10 @@ fn validate_external_test_in_file(
 
     // Look for #[path = "..."] patterns
     for (line_num, line) in content.lines().enumerate() {
+        if is_comment_line(line) {
+            continue;
+        }
+
         let Some(path_start) = line.find("#[path = \"") else {
             continue;
         };
@@ -279,6 +283,11 @@ fn validate_external_test_in_file(
 
 fn resolve_test_path(file_path: &Path, crate_root: &Path, path_value: &str) -> PathBuf {
     file_path.parent().unwrap_or(crate_root).join(path_value)
+}
+
+fn is_comment_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*')
 }
 
 fn is_test_cfg_attribute(line: &str) -> bool {
@@ -325,14 +334,11 @@ fn parse_module_name(line: &str) -> Option<String> {
 }
 
 fn should_externalize_test_module(name: &str) -> bool {
-    matches!(name, "test" | "tests")
-        || name.ends_with("_test")
-        || name.ends_with("_tests")
-        || name.starts_with("tests_")
+    name != "test_api"
 }
 
 fn has_path_attribute(lines: &[&str], start: usize, end: usize) -> bool {
-    (start..end).any(|index| lines[index].contains("#[path ="))
+    (start..end).any(|index| !is_comment_line(lines[index]) && lines[index].contains("#[path ="))
 }
 
 /// Validation issue for external test mountings.
@@ -364,8 +370,21 @@ pub enum ExternalTestValidationIssue {
         source_file: PathBuf,
         /// Line number of the #[cfg(test)] attribute.
         line_number: usize,
+        /// Module name gated by `#[cfg(test)]`.
+        module_name: String,
         /// Number of lines in the test block.
         block_size: usize,
+        /// Suggested external test file path.
+        suggested_path: String,
+    },
+    /// `#[cfg(test)] mod ...;` kept inside `src/` without external `#[path]` mounting.
+    SourceResidentTestModule {
+        /// Source file containing the module declaration.
+        source_file: PathBuf,
+        /// Line number of the #[cfg(test)] attribute.
+        line_number: usize,
+        /// Module name gated by `#[cfg(test)]`.
+        module_name: String,
         /// Suggested external test file path.
         suggested_path: String,
     },
@@ -401,13 +420,27 @@ impl ExternalTestValidationIssue {
             Self::InlineTestBlock {
                 source_file,
                 line_number,
+                module_name,
                 block_size,
                 suggested_path,
             } => format!(
-                "{}:{}: Inline test block ({} lines) should be externalized to '{}'",
+                "{}:{}: Inline cfg(test) module '{}' ({} lines) should be externalized to '{}'",
                 source_file.display(),
                 line_number,
+                module_name,
                 block_size,
+                suggested_path
+            ),
+            Self::SourceResidentTestModule {
+                source_file,
+                line_number,
+                module_name,
+                suggested_path,
+            } => format!(
+                "{}:{}: cfg(test) module '{}' stays in src/ without #[path]; mount it from '{}'",
+                source_file.display(),
+                line_number,
+                module_name,
                 suggested_path
             ),
         }
@@ -416,8 +449,9 @@ impl ExternalTestValidationIssue {
 
 /// Detect inline test blocks in a crate's source files.
 ///
-/// This function scans for `#[cfg(test)] mod tests { ... }` patterns
-/// where the test module body is inline (not external via `#[path]`).
+/// This function scans for `#[cfg(test)]` modules that remain in `src/`,
+/// either as inline blocks or as `mod ...;` declarations without an external
+/// `#[path]` mount into `tests/unit/...`.
 ///
 /// # Arguments
 ///
@@ -491,13 +525,26 @@ fn detect_inline_test_in_file(
                     continue;
                 };
 
-                if !should_externalize_test_module(&module_name) || has_path_attribute(&lines, i, j)
-                {
+                if !should_externalize_test_module(&module_name) {
                     i += 1;
                     continue;
                 }
 
+                if has_path_attribute(&lines, i, j) {
+                    i += 1;
+                    continue;
+                }
+
+                let relative = file_path.strip_prefix(crate_root).unwrap_or(file_path);
+                let suggested = generate_path_attribute(relative, "tests");
+
                 if mod_line.ends_with(';') {
+                    issues.push(ExternalTestValidationIssue::SourceResidentTestModule {
+                        source_file: file_path.to_path_buf(),
+                        line_number: i + 1,
+                        module_name,
+                        suggested_path: suggested,
+                    });
                     i += 1;
                     continue;
                 }
@@ -514,14 +561,12 @@ fn detect_inline_test_in_file(
                     let block_size = count_block_lines(&lines, brace_line);
 
                     if block_size >= min_block_lines {
-                        let relative = file_path.strip_prefix(crate_root).unwrap_or(file_path);
-                        let suggested = generate_path_attribute(relative, "tests");
-
                         issues.push(ExternalTestValidationIssue::InlineTestBlock {
                             source_file: file_path.to_path_buf(),
                             line_number: i + 1,
+                            module_name,
                             block_size,
-                            suggested_path: suggested,
+                            suggested_path: suggested.clone(),
                         });
                     }
                 }
@@ -570,13 +615,20 @@ fn count_block_lines(lines: &[&str], start_line: usize) -> usize {
 pub fn format_inline_test_report(issues: &[ExternalTestValidationIssue]) -> String {
     use std::fmt::Write;
 
-    let inline_issues: Vec<_> = issues
+    let externalization_issues: Vec<_> = issues
         .iter()
-        .filter(|i| matches!(i, ExternalTestValidationIssue::InlineTestBlock { .. }))
+        .filter(|issue| {
+            matches!(
+                issue,
+                ExternalTestValidationIssue::InlineTestBlock { .. }
+                    | ExternalTestValidationIssue::SourceResidentTestModule { .. }
+            )
+        })
         .collect();
 
-    if inline_issues.is_empty() {
-        return "✅ No inline test blocks found. All tests properly externalized.".into();
+    if externalization_issues.is_empty() {
+        return "✅ No cfg(test) modules remain in src/. All tests are properly externalized."
+            .into();
     }
 
     let mut report = String::new();
@@ -590,48 +642,11 @@ pub fn format_inline_test_report(issues: &[ExternalTestValidationIssue]) -> Stri
                         INLINE TEST BLOCK VIOLATIONS
 ================================================================================
 ",
-        inline_issues.len()
+        externalization_issues.len()
     );
 
-    for (i, issue) in inline_issues.iter().enumerate() {
-        if let ExternalTestValidationIssue::InlineTestBlock {
-            source_file,
-            line_number,
-            block_size,
-            suggested_path,
-        } = issue
-        {
-            let relative = source_file
-                .strip_prefix(&cwd)
-                .unwrap_or(source_file)
-                .to_string_lossy();
-            let src_relative = relative
-                .split_once("/src/")
-                .map_or(relative.as_ref(), |(_, s)| s);
-
-            let _ = writeln!(
-                report,
-                r#"{i}. src/{src}
-   📍 Line {line} | {size} lines of inline tests
-
-   ✏️  HOW TO FIX:
-   1. Create: tests/unit/{src}
-   2. Cut the #[cfg(test)] mod tests {{ ... }} block from source
-   3. Paste into the new test file (remove #[cfg(test)] wrapper)
-   4. In source file, add at the end:
-
-      #[cfg(test)]
-      #[path = "{path}"]
-      mod tests;
-
-"#,
-                i = i + 1,
-                src = src_relative,
-                line = line_number,
-                size = block_size,
-                path = suggested_path
-            );
-        }
+    for (i, issue) in externalization_issues.iter().enumerate() {
+        append_externalization_issue(&mut report, issue, i + 1, &cwd);
     }
 
     let _ = writeln!(
@@ -650,190 +665,81 @@ The #[path] attribute calculates relative path from source file to test file.
     report
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
+fn append_externalization_issue(
+    report: &mut String,
+    issue: &ExternalTestValidationIssue,
+    ordinal: usize,
+    cwd: &Path,
+) {
+    use std::fmt::Write;
 
-    fn create_temp_crate() -> tempfile::TempDir {
-        let temp = match tempfile::tempdir() {
-            Ok(temp) => temp,
-            Err(error) => panic!("tempdir should be created: {error}"),
-        };
-        if let Err(error) = fs::create_dir_all(temp.path().join("src")) {
-            panic!("src dir should be created: {error}");
-        }
-        if let Err(error) = fs::write(
-            temp.path().join("Cargo.toml"),
-            "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-        ) {
-            panic!("Cargo.toml should be written: {error}");
-        }
-        temp
-    }
+    match issue {
+        ExternalTestValidationIssue::InlineTestBlock {
+            source_file,
+            line_number,
+            module_name,
+            block_size,
+            suggested_path,
+        } => {
+            let src_relative = source_relative_path(source_file, cwd);
+            let _ = writeln!(
+                report,
+                r#"{ordinal}. src/{src_relative}
+   📍 Line {line_number} | module `{module_name}` | {block_size} lines inline
 
-    fn write_fixture_file(crate_root: &Path, relative_path: &str, content: &str) {
-        let path = crate_root.join(relative_path);
-        let Some(parent) = path.parent() else {
-            panic!("fixture path should have parent: {path:?}");
-        };
-        if let Err(error) = fs::create_dir_all(parent) {
-            panic!("fixture directories should be created: {error}");
-        }
-        if let Err(error) = fs::write(path, content) {
-            panic!("fixture file should be written: {error}");
-        }
-    }
+   ✏️  HOW TO FIX:
+   1. Create: tests/unit/{src_relative}
+   2. Cut the #[cfg(test)] mod {module_name} {{ ... }} block from source
+   3. Paste into the new test file (remove #[cfg(test)] wrapper)
+   4. In source file, add at the end:
 
-    #[test]
-    fn test_calculate_test_path_simple() {
-        let source = Path::new("src/foo.rs");
-        let test_path = calculate_test_path(source, "tests");
-        assert_eq!(test_path, PathBuf::from("tests/unit/foo.rs"));
-    }
+      #[cfg(test)]
+      #[path = "{suggested_path}"]
+      mod {module_name};
 
-    #[test]
-    fn test_calculate_test_path_nested() {
-        let source = Path::new("src/foo/bar/baz.rs");
-        let test_path = calculate_test_path(source, "tests");
-        assert_eq!(test_path, PathBuf::from("tests/unit/foo/bar/baz.rs"));
-    }
-
-    #[test]
-    fn test_generate_path_attribute_simple() {
-        let source = Path::new("src/foo.rs");
-        let path_attr = generate_path_attribute(source, "tests");
-        assert_eq!(path_attr, "../tests/unit/foo.rs");
-    }
-
-    #[test]
-    fn test_generate_path_attribute_nested() {
-        let source = Path::new("src/foo/bar/baz.rs");
-        let path_attr = generate_path_attribute(source, "tests");
-        // 3 levels deep = ../../../
-        assert_eq!(path_attr, "../../../tests/unit/foo/bar/baz.rs");
-    }
-
-    #[test]
-    fn validate_external_test_mounts_reports_inline_test_blocks() {
-        let temp = create_temp_crate();
-        write_fixture_file(
-            temp.path(),
-            "src/foo.rs",
-            r"
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn keeps_policy_strict() {}
-}
-",
-        );
-
-        let issues = validate_external_test_mounts(temp.path());
-        assert_eq!(issues.len(), 1);
-
-        match &issues[0] {
-            ExternalTestValidationIssue::InlineTestBlock {
-                source_file,
-                suggested_path,
-                ..
-            } => {
-                assert!(source_file.ends_with("src/foo.rs"));
-                assert_eq!(suggested_path, "../tests/unit/foo.rs");
-            }
-            issue => panic!("expected inline test issue, got {issue:?}"),
-        }
-    }
-
-    #[test]
-    fn validate_external_test_mounts_reports_named_test_modules() {
-        let temp = create_temp_crate();
-        write_fixture_file(
-            temp.path(),
-            "src/parser.rs",
-            r#"
-#[cfg(any(test, feature = "nightly-tests"))]
-pub(crate) mod parser_tests {
-    #[test]
-    fn parses() {}
-}
 "#,
-        );
+            );
+        }
+        ExternalTestValidationIssue::SourceResidentTestModule {
+            source_file,
+            line_number,
+            module_name,
+            suggested_path,
+        } => {
+            let src_relative = source_relative_path(source_file, cwd);
+            let _ = writeln!(
+                report,
+                r#"{ordinal}. src/{src_relative}
+   📍 Line {line_number} | module `{module_name}` still mounted from src/
 
-        let issues = validate_external_test_mounts(temp.path());
-        assert_eq!(issues.len(), 1);
-        assert!(matches!(
-            issues[0],
-            ExternalTestValidationIssue::InlineTestBlock { .. }
-        ));
+   ✏️  HOW TO FIX:
+   Replace the local module mount with:
+
+      #[cfg(test)]
+      #[path = "{suggested_path}"]
+      mod {module_name};
+
+   Then move the test implementation to tests/unit/{src_relative}.
+
+"#,
+            );
+        }
+        _ => {}
     }
+}
 
-    #[test]
-    fn validate_external_test_mounts_ignores_test_api_and_resolves_nested_paths() {
-        let temp = create_temp_crate();
-        write_fixture_file(
-            temp.path(),
-            "src/foo/bar.rs",
-            r#"
-fn helper() {}
-
-#[cfg(test)]
-pub mod test_api {
-    pub use super::helper;
+fn source_relative_path<'a>(source_file: &'a Path, cwd: &Path) -> std::borrow::Cow<'a, str> {
+    let relative = source_file
+        .strip_prefix(cwd)
+        .unwrap_or(source_file)
+        .to_string_lossy();
+    if let Some((_, src_relative)) = relative.split_once("/src/") {
+        std::borrow::Cow::Owned(src_relative.to_string())
+    } else {
+        relative
+    }
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/foo/bar.rs"]
+#[path = "../tests/unit/external_test.rs"]
 mod tests;
-"#,
-        );
-        write_fixture_file(
-            temp.path(),
-            "tests/unit/foo/bar.rs",
-            "#[test]\nfn uses_external_test_file() {}\n",
-        );
-
-        let issues = validate_external_test_mounts(temp.path());
-        assert!(issues.is_empty(), "expected no issues, got {issues:?}");
-    }
-
-    #[test]
-    fn validate_external_test_mounts_reports_missing_external_test_file() {
-        let temp = create_temp_crate();
-        write_fixture_file(
-            temp.path(),
-            "src/foo/bar.rs",
-            r#"
-#[cfg(test)]
-#[path = "../../tests/unit/foo/bar.rs"]
-mod tests;
-"#,
-        );
-
-        let issues = validate_external_test_mounts(temp.path());
-        assert_eq!(issues.len(), 1);
-        assert!(matches!(
-            issues[0],
-            ExternalTestValidationIssue::MissingTestFile { .. }
-        ));
-    }
-
-    #[test]
-    fn detect_inline_test_blocks_respects_min_block_lines() {
-        let temp = create_temp_crate();
-        write_fixture_file(
-            temp.path(),
-            "src/foo.rs",
-            r"
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn tiny() {}
-}
-",
-        );
-
-        assert!(detect_inline_test_blocks(temp.path(), 10).is_empty());
-        assert_eq!(detect_inline_test_blocks(temp.path(), 1).len(), 1);
-    }
-}

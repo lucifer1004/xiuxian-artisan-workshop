@@ -2,6 +2,7 @@ mod autocomplete;
 mod search;
 mod shared;
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/local_symbol/query/mod.rs"]
 mod tests;
 
 pub(crate) use autocomplete::autocomplete_local_symbols;

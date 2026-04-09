@@ -5,6 +5,7 @@ mod types;
 mod write;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/attachment/build/mod.rs"]
 mod tests;
 
 pub(crate) use extract::attachment_kind_label;

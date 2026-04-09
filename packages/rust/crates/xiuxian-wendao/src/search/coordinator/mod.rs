@@ -8,4 +8,5 @@ pub use types::{BeginBuildDecision, SearchBuildLease};
 pub(crate) use types::{SearchCompactionReason, SearchCompactionTask};
 
 #[cfg(test)]
+#[path = "../../../tests/unit/search/coordinator/mod.rs"]
 mod tests;

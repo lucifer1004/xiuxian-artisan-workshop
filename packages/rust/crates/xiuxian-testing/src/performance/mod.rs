@@ -14,4 +14,5 @@ pub use run::{run_async_budget, run_sync_budget};
 pub use types::{PerfBudget, PerfQuantiles, PerfReport, PerfRunConfig, PerfSummary};
 
 #[cfg(test)]
+#[path = "../../tests/unit/performance.rs"]
 mod tests;

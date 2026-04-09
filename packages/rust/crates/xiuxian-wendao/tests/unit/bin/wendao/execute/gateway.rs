@@ -10,15 +10,19 @@ use axum::http::{Request, StatusCode};
 use axum::routing::Router;
 use tokio::sync::mpsc;
 use tower::ServiceExt;
+use xiuxian_wendao::gateway::studio::{GatewayStartupDependencyCheck, GatewayStartupHealthReport};
 use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::execute::gateway::{
     command::{
-        GATEWAY_FLIGHT_SERVICE_AXUM_PATH, build_gateway_router, gateway_listen_backlog_with_lookup,
-        gateway_studio_concurrency_limit_with_lookup,
+        GATEWAY_FLIGHT_SERVICE_AXUM_PATH, build_gateway_router, ensure_gateway_startup_health,
+        gateway_listen_backlog_with_lookup, gateway_studio_concurrency_limit_with_lookup,
         gateway_studio_request_timeout_secs_with_lookup,
     },
-    config::{get_webhook_from_config, resolve_port, resolve_webhook_config},
+    config::{
+        GatewayRuntimeTomlConfig, get_gateway_runtime_from_config, get_webhook_from_config,
+        resolve_port, resolve_webhook_config, resolve_webhook_config_with_lookup,
+    },
     health::gateway_health_response,
     registry::build_plugin_registry,
     shared::{AppState, DEFAULT_PORT},
@@ -79,7 +83,19 @@ fn mismatched_pid() -> u32 {
 }
 
 fn app_state(signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>) -> Arc<AppState> {
-    Arc::new(AppState::new(None, signal_tx, bootstrap_builtin_registry()))
+    app_state_with_webhook_url(signal_tx, None)
+}
+
+fn app_state_with_webhook_url(
+    signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+    webhook_url: Option<String>,
+) -> Arc<AppState> {
+    Arc::new(AppState::new_with_webhook_url(
+        None,
+        signal_tx,
+        webhook_url,
+        bootstrap_builtin_registry(),
+    ))
 }
 
 fn bootstrap_builtin_registry() -> Arc<xiuxian_wendao::analyzers::PluginRegistry> {
@@ -93,13 +109,13 @@ fn test_default_port() {
 
 #[test]
 fn test_gateway_listen_backlog_defaults_when_env_missing() {
-    let backlog = gateway_listen_backlog_with_lookup(&|_| None);
+    let backlog = gateway_listen_backlog_with_lookup(None, &|_| None);
     assert_eq!(backlog, 2048);
 }
 
 #[test]
 fn test_gateway_listen_backlog_accepts_positive_override() {
-    let backlog = gateway_listen_backlog_with_lookup(&|key| {
+    let backlog = gateway_listen_backlog_with_lookup(None, &|key| {
         if key == "XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG" {
             Some("4096".to_string())
         } else {
@@ -111,7 +127,7 @@ fn test_gateway_listen_backlog_accepts_positive_override() {
 
 #[test]
 fn test_gateway_listen_backlog_clamps_invalid_override() {
-    let backlog = gateway_listen_backlog_with_lookup(&|key| {
+    let backlog = gateway_listen_backlog_with_lookup(None, &|key| {
         if key == "XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG" {
             Some("0".to_string())
         } else {
@@ -123,13 +139,14 @@ fn test_gateway_listen_backlog_clamps_invalid_override() {
 
 #[test]
 fn test_gateway_studio_concurrency_limit_defaults_from_parallelism() {
-    let limit = gateway_studio_concurrency_limit_with_lookup(&|_| None, Some(8));
+    let limit = gateway_studio_concurrency_limit_with_lookup(None, &|_| None, Some(8));
     assert_eq!(limit, 32);
 }
 
 #[test]
 fn test_gateway_studio_concurrency_limit_accepts_positive_override() {
     let limit = gateway_studio_concurrency_limit_with_lookup(
+        None,
         &|key| {
             if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT" {
                 Some("96".to_string())
@@ -145,6 +162,7 @@ fn test_gateway_studio_concurrency_limit_accepts_positive_override() {
 #[test]
 fn test_gateway_studio_concurrency_limit_ignores_invalid_override() {
     let limit = gateway_studio_concurrency_limit_with_lookup(
+        None,
         &|key| {
             if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT" {
                 Some("-1".to_string())
@@ -160,6 +178,7 @@ fn test_gateway_studio_concurrency_limit_ignores_invalid_override() {
 #[test]
 fn test_gateway_studio_concurrency_limit_clamps_large_override() {
     let limit = gateway_studio_concurrency_limit_with_lookup(
+        None,
         &|key| {
             if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT" {
                 Some("320".to_string())
@@ -174,13 +193,13 @@ fn test_gateway_studio_concurrency_limit_clamps_large_override() {
 
 #[test]
 fn test_gateway_studio_request_timeout_defaults_when_env_missing() {
-    let timeout = gateway_studio_request_timeout_secs_with_lookup(&|_| None);
+    let timeout = gateway_studio_request_timeout_secs_with_lookup(None, &|_| None);
     assert_eq!(timeout, 15);
 }
 
 #[test]
 fn test_gateway_studio_request_timeout_accepts_positive_override() {
-    let timeout = gateway_studio_request_timeout_secs_with_lookup(&|key| {
+    let timeout = gateway_studio_request_timeout_secs_with_lookup(None, &|key| {
         if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS" {
             Some("25".to_string())
         } else {
@@ -192,7 +211,7 @@ fn test_gateway_studio_request_timeout_accepts_positive_override() {
 
 #[test]
 fn test_gateway_studio_request_timeout_clamps_invalid_override() {
-    let timeout = gateway_studio_request_timeout_secs_with_lookup(&|key| {
+    let timeout = gateway_studio_request_timeout_secs_with_lookup(None, &|key| {
         if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS" {
             Some("0".to_string())
         } else {
@@ -200,6 +219,67 @@ fn test_gateway_studio_request_timeout_clamps_invalid_override() {
         }
     });
     assert_eq!(timeout, 15);
+}
+
+#[test]
+fn test_get_gateway_runtime_from_config_reads_runtime_knobs() {
+    let config_path = write_temp_gateway_config(
+        r"
+[gateway.runtime]
+listen_backlog = 3072
+studio_concurrency_limit = 72
+studio_request_timeout_secs = 18
+",
+    );
+
+    let runtime = get_gateway_runtime_from_config(Some(config_path.as_path()));
+    remove_temp_gateway_config(config_path.as_path());
+
+    assert_eq!(
+        runtime,
+        Some(GatewayRuntimeTomlConfig {
+            listen_backlog: Some(3072),
+            studio_concurrency_limit: Some(72),
+            studio_request_timeout_secs: Some(18),
+        })
+    );
+}
+
+#[test]
+fn test_gateway_startup_health_rejects_failed_dependencies() {
+    let report = GatewayStartupHealthReport::new(vec![
+        GatewayStartupDependencyCheck::connected("builtin_plugin_registry", "plugins=julia"),
+        GatewayStartupDependencyCheck::failed("search_cache_valkey", "connection failed"),
+    ]);
+
+    let error = match ensure_gateway_startup_health(&report) {
+        Ok(()) => panic!("failed startup health should abort gateway startup"),
+        Err(error) => error,
+    };
+
+    assert_eq!(
+        error.to_string(),
+        "gateway startup health checks failed: search_cache_valkey (connection failed)"
+    );
+}
+
+#[test]
+fn test_gateway_startup_health_accepts_ready_dependencies() {
+    let report = GatewayStartupHealthReport::new(vec![
+        GatewayStartupDependencyCheck::connected("builtin_plugin_registry", "plugins=julia"),
+        GatewayStartupDependencyCheck::connected(
+            "search_cache_valkey",
+            "url=redis://127.0.0.1:6379/0 ping=PONG",
+        ),
+        GatewayStartupDependencyCheck::connected(
+            "link_graph_cache_valkey",
+            "url=redis://127.0.0.1:6379/0 ping=PONG key_prefix=xiuxian:link_graph",
+        ),
+    ]);
+
+    if let Err(error) = ensure_gateway_startup_health(&report) {
+        panic!("healthy startup dependencies should allow gateway startup: {error}");
+    }
 }
 
 #[test]
@@ -294,7 +374,7 @@ async fn test_stats_endpoint_no_index() {
 #[tokio::test]
 async fn test_notify_status_endpoint() {
     let (tx, _rx) = mpsc::unbounded_channel();
-    let state = app_state(Some(tx));
+    let state = app_state_with_webhook_url(Some(tx), Some("http://127.0.0.1:9999/hooks".into()));
     let expected_bootstrap_background_indexing =
         state.studio.bootstrap_background_indexing_enabled();
     let expected_bootstrap_background_indexing_mode =
@@ -315,6 +395,11 @@ async fn test_notify_status_endpoint() {
     );
     assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_at"].is_null());
     assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_source"].is_null());
+    assert_eq!(result.0["webhook_configured"], serde_json::json!(true));
+    assert_eq!(
+        result.0["webhook_url"],
+        serde_json::json!("http://127.0.0.1:9999/hooks")
+    );
 }
 
 #[tokio::test]
@@ -340,6 +425,8 @@ async fn test_notify_status_no_channel() {
     );
     assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_at"].is_null());
     assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_source"].is_null());
+    assert_eq!(result.0["webhook_configured"], serde_json::json!(false));
+    assert!(result.0["webhook_url"].is_null());
 }
 
 #[tokio::test]
@@ -393,6 +480,31 @@ fn test_webhook_config_from_env() {
 }
 
 #[test]
+fn test_webhook_config_from_lookup_uses_trimmed_env_values() {
+    let config = resolve_webhook_config_with_lookup(None, &|name| match name {
+        "WENDAO_WEBHOOK_URL" => Some(" http://127.0.0.1:9999/hooks ".to_string()),
+        "WENDAO_WEBHOOK_SECRET" => Some(" top-secret ".to_string()),
+        _ => None,
+    });
+
+    assert_eq!(config.url, "http://127.0.0.1:9999/hooks");
+    assert_eq!(config.secret.as_deref(), Some("top-secret"));
+    assert_eq!(config.timeout_secs, 10);
+    assert!(config.retry_on_failure);
+}
+
+#[test]
+fn test_webhook_config_from_lookup_ignores_blank_env_values() {
+    let config = resolve_webhook_config_with_lookup(None, &|name| match name {
+        "WENDAO_WEBHOOK_URL" | "WENDAO_WEBHOOK_SECRET" => Some("   ".to_string()),
+        _ => None,
+    });
+
+    assert!(config.url.is_empty());
+    assert!(config.secret.is_none());
+}
+
+#[test]
 fn test_resolve_webhook_config_from_cli_config_path() {
     let config_path = write_temp_gateway_config(
         r#"
@@ -409,6 +521,29 @@ webhook_enabled = true
     assert_eq!(config.url, "http://127.0.0.1:9999");
     assert_eq!(config.secret.as_deref(), Some("test-secret"));
     assert_eq!(config.timeout_secs, 10);
+}
+
+#[test]
+fn test_resolve_webhook_config_prefers_toml_over_env_fallback() {
+    let config_path = write_temp_gateway_config(
+        r#"
+[gateway]
+webhook_url = "http://127.0.0.1:9999"
+webhook_secret = "test-secret"
+webhook_enabled = true
+"#,
+    );
+
+    let config =
+        resolve_webhook_config_with_lookup(Some(config_path.as_path()), &|name| match name {
+            "WENDAO_WEBHOOK_URL" => Some("http://127.0.0.1:7777/hooks".to_string()),
+            "WENDAO_WEBHOOK_SECRET" => Some("env-secret".to_string()),
+            _ => None,
+        });
+    remove_temp_gateway_config(&config_path);
+
+    assert_eq!(config.url, "http://127.0.0.1:9999");
+    assert_eq!(config.secret.as_deref(), Some("test-secret"));
 }
 
 #[test]

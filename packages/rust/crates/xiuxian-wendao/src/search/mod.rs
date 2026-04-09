@@ -30,6 +30,7 @@ pub(crate) use attachment::AttachmentSearchError;
 #[cfg(test)]
 pub(crate) use cache::SearchPlaneCache;
 pub(crate) use cache::SearchPlaneCacheTtl;
+pub(crate) use cache::resolve_search_plane_cache_connection_target;
 pub use coordinator::{BeginBuildDecision, SearchBuildLease, SearchPlaneCoordinator};
 pub use corpus::SearchCorpusKind;
 pub use fuzzy::{

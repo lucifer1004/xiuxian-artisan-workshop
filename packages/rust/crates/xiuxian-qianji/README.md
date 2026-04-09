@@ -40,22 +40,148 @@ Qianji is a **High-Performance Annotator**. In the milliseconds before a node ex
 
 ---
 
-## 3. Declarative Orchestration (The YAML Script)
+## 3. Declarative Orchestration (The TOML Manifest)
 
-True to the **"Rust-Hard, Python-Thin"** mandate, the "Thousand Mechanisms" are defined via a declarative YAML manifest.
+True to the **"Rust-Hard, Host-Thin"** mandate, the "Thousand Mechanisms" are
+defined through a declarative TOML manifest. The primary operator surface is
+the `qianji` CLI, while the Rust API remains available for embedding and
+testing.
 
-```yaml
-name: "Artifact_Refining_Pipeline"
-nodes:
-  - id: "Seeker"
-    task_type: "knowledge"
-  - id: "Auditor"
-    task_type: "calibration"
-edges:
-  - from: "Seeker"
-    to: "Auditor"
-    label: "Verify"
+```toml
+name = "artifact_refining_pipeline"
+
+[[nodes]]
+id = "Seeker"
+task_type = "knowledge"
+weight = 1.0
+params = {}
+
+[[nodes]]
+id = "Auditor"
+task_type = "calibration"
+weight = 1.0
+params = {}
+
+[[edges]]
+from = "Seeker"
+to = "Auditor"
+weight = 1.0
+label = "Verify"
 ```
+
+The Flowhub graph-contract direction for reusable Flowhub flows, materialized plan
+work surfaces, Codex operational workdirs, and validation-first
+materialization is tracked in
+[RFC: Qianji Flowhub Graph Contract Model](docs/rfcs/2026-04-07-qianji-flowhub-graph-contract-model-rfc.md).
+That RFC now also treats scenarios as guard graphs over the bounded work
+surface, with explicit done-gate semantics and blocked-vs-failed diagnostics
+for `qianji check`.
+The retrieval-facing SQL surface for bounded plan work is tracked in
+[RFC 0003: Wendao SQL Minimal Retrieval Surface for Bounded Plan Work](docs/rfcs/2026-04-07-wendao-sql-minimal-retrieval-surface-rfc.md).
+The compact validation and flowchart-alignment contract for bounded plan work
+is tracked in
+[RFC 0004: Compact Validation and Flowchart Alignment](docs/rfcs/2026-04-08-compact-validation-flowchart-alignment-rfc.md).
+The markdown `skeleton` contract for bounded plan work is tracked in
+[RFC 0005: Markdown Skeleton Minimal Rules for Bounded Plan Work](docs/rfcs/2026-04-08-markdown-skeleton-minimal-rules-rfc.md).
+The stable row-segmentation contract for the `markdown` retrieval surface is
+tracked in
+[RFC 0006: Markdown Row Segmentation Minimal Rules for Bounded Plan Work](docs/rfcs/2026-04-08-markdown-row-segmentation-minimal-rules-rfc.md).
+The minimum visible `flowchart.mmd` backbone contract for bounded plan work is
+tracked in
+[RFC 0007: Flowchart Backbone Minimal Rules for Bounded Plan Work](docs/rfcs/2026-04-08-flowchart-backbone-minimal-rules-rfc.md).
+The stable external `heading_path` convention for the `markdown` retrieval
+surface is tracked in
+[RFC 0008: Heading Path Minimal Conventions for Bounded Plan Work](docs/rfcs/2026-04-08-heading-path-minimal-conventions-rfc.md).
+The current implementation-status matrix for this active RFC cluster is
+tracked in
+[Audit: Qianji RFC Implementation Coverage](docs/rfcs/2026-04-08-qianji-rfc-implementation-coverage-audit.md).
+In that model, directory shape is the first structural signal, optional
+`tree` is only a bounded probe for deciding whether deeper inspection is
+necessary, and exact fragment retrieval is performed through Wendao SQL rather
+than through a Qianji-specific query DSL.
+The crate now also exposes bounded `workdir` helpers for compact root-manifest
+parse/load/validate, first-order surface rendering, and structural
+`flowchart.mmd` checks, plus a Flowhub runtime bridge for real
+`qianji-flowhub` roots and module directories. The `qianji` binary now accepts
+`show --dir <path>` plus `check --dir <path>` and auto-detects whether the
+target is a bounded work surface or a Flowhub root/module, with direct binary
+coverage for rendered output and blocking invalid-check status.
+The same `workdir` surface now also exposes a thin bounded markdown query
+wrapper over Wendao SQL, so library callers can execute exact SQL retrieval
+against `blueprint/` plus `plan/` without changing the `qianji` CLI surface.
+Failing workdir checks can now also derive one default follow-up skeleton query
+from their current diagnostics, so repair-oriented callers can fetch only the
+bounded markdown surfaces implicated by the current `qianji check` failure
+without widening the command surface.
+That same bounded guidance now appears directly in failing `qianji check --dir`
+workdir output as a `## Follow-up Query` section, while success output and the
+Flowhub / scenario check surfaces remain unchanged.
+The Flowhub materialize lane now also consumes that follow-up surface on
+generated-workdir validation failure, so invalid materialized outputs return
+the blocking markdown diagnostics together with one bounded SQL repair query
+instead of only the raw failure report.
+The crate now also exposes early parser helpers for hierarchical Flowhub
+module refs and composite module manifests (`rust`,
+module-root `[template]` / `template.link`), plus file-backed manifest
+loaders and bounded nested-module resolution, while full operational
+work-surface materialization and deeper bounded execution semantics remain
+later slices.
+The Flowhub library surface now owns that whole lane under one namespace:
+module/scenario manifest parsing, hierarchical resolution, and scenario
+preview/check over real `qianji-flowhub` node graphs. The real Flowhub tree is
+now qianji.toml-only at each node, so checked-in `template/` and `validation/`
+surfaces are no longer part of the live library contract. The early
+library-only materialize core remains covered through test-only template
+fixtures rather than the real Flowhub root. The Flowhub root is now anchored
+by its own `qianji.toml` with `[contract].register` plus
+`[contract].required`, so top-level node ownership is explicit (`coding`,
+`rust`, `blueprint`, `plan`) and undeclared child directories now count as
+Flowhub structural drift. The main RFC now also documents `[contract]` as the
+primary structure contract and keeps `[[validation]]` as an optional secondary
+rule surface, including the current grammar limits for `register`, `required`,
+`*/...` expansion, and the minimum markdown diagnostic shape for contract
+failures. The crate now also routes Flowhub, scenario, and workdir check
+rendering through one shared internal markdown diagnostics surface so the
+`qianji check` output shape stays aligned across targets. The crate now also
+routes Flowhub root/module previews, Flowhub scenario previews, and bounded
+work-surface previews through one shared internal markdown show surface so
+`qianji show` keeps the same H1-plus-metadata-plus-H2-sections contract
+across targets. Live Flowhub nodes may now also own immediate Mermaid
+scenario-case graphs such as `qianji-flowhub/plan/codex-plan.mmd`, contracted
+through `[contract].required`. `qianji check` now parses those `.mmd` files
+through the mature `merman-core` render-model parser, classifies labels
+matching live Flowhub module names as graph-module nodes, and rejects
+malformed or uncontracted scenario-case graphs. A valid scenario-case graph
+must derive its `merimind_graph_name` from the owning filename stem rather
+than from the Mermaid direction token, must cover every registered Flowhub
+module node required by the current root contract, and must keep one
+connected module backbone across those module nodes. Undeclared graph-node
+labels such as stale semantic-node names now fail validation explicitly, and
+`qianji show --dir .../plan` maps each immediate Mermaid file into
+`file_name -> merimind_graph_name` in the markdown preview surface. The
+control-plane markdown renderer path is now also deduplicated through one
+shared embedded `qianhuan` template catalog exported by
+`xiuxian-qianhuan`, so `show`, `check`, Flowhub-root/module blocks, and
+Flowhub-scenario preview blocks no longer each own a separate local
+`OnceLock` plus embedded-template bootstrap path inside `xiuxian-qianji`.
+Those control-plane templates now also live as checked-in `.md.j2` files
+under `resources/templates/control_plane/`, so the Rust side only keeps
+payload assembly plus `include_str!` bindings rather than large inline
+template strings.
+This slice does not add a new CLI verb yet.
+The touched CLI and
+integration-test coverage now anchors repo/workspace resolution through the
+shared `PRJ_ROOT`-aware resolver in `xiuxian-config-core` rather than through
+crate-local ancestor guessing.
+The crate source root now also mounts the shared crate-test-policy source
+harness, and the previously inline source test modules in
+`src/bin/qianji.rs` and `src/contract_feedback/rest_docs.rs` are now
+externalized under `tests/unit/`. Follow-up bounded slices now also
+externalize the remaining inline source test modules under `src/executors/`
+and `src/sovereign/` into `tests/unit/executors/` plus
+`tests/unit/sovereign/`. The shared crate-test-policy harness for
+`xiuxian-qianji` now passes end-to-end again, without changing the `show` /
+`check` behavior of the Flowhub lane.
 
 ---
 
@@ -71,9 +197,24 @@ edges:
 
 ## 5. Quick Start
 
-```rust
-let engine = compiler.compile(manifest_yaml)?;
-let result = scheduler.run(initial_context).await?;
+```sh
+direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji -- \
+  /path/to/repo \
+  /path/to/qianji.toml \
+  '{"seed":"artifact_refining_pipeline"}'
+
+direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji -- \
+  graph \
+  /path/to/qianji.toml \
+  /path/to/workflow.bpmn
+
+direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
+  show \
+  --dir "$PRJ_ROOT/qianji-flowhub"
+
+direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
+  check \
+  --dir "$PRJ_ROOT/qianji-flowhub"
 ```
 
 ---

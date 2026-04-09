@@ -2,15 +2,17 @@ use super::env_vars::env_var_or_override;
 use super::model::QianjiRuntimeEnv;
 use std::env;
 use std::path::{Path, PathBuf};
+use xiuxian_config_core::{resolve_path_from_value, resolve_project_root_or_cwd_from_value};
 
 pub(super) fn resolve_project_root(runtime_env: &QianjiRuntimeEnv) -> PathBuf {
     if let Some(path) = &runtime_env.prj_root {
         return path.clone();
     }
-    if let Some(raw) = env_var_or_override(runtime_env, "PRJ_ROOT") {
-        return PathBuf::from(raw);
-    }
-    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    let raw_project_root = env_var_or_override(runtime_env, "PRJ_ROOT");
+    resolve_project_root_from_value(
+        raw_project_root.as_deref(),
+        env::current_dir().ok().as_deref(),
+    )
 }
 
 pub(super) fn resolve_prj_config_home(
@@ -21,25 +23,45 @@ pub(super) fn resolve_prj_config_home(
         return path.clone();
     }
 
-    if let Some(raw) = env_var_or_override(runtime_env, "PRJ_CONFIG_HOME") {
-        let path = PathBuf::from(raw);
-        if path.is_absolute() {
-            return path;
-        }
-        return project_root.join(path);
+    if let Some(path) = resolve_path_from_value(
+        Some(project_root),
+        env_var_or_override(runtime_env, "PRJ_CONFIG_HOME").as_deref(),
+    ) {
+        return path;
     }
 
     project_root.join(".config")
 }
 
-pub(super) fn runtime_env_has_path_overrides(runtime_env: &QianjiRuntimeEnv) -> bool {
-    runtime_env.prj_root.is_some()
-        || runtime_env.prj_config_home.is_some()
-        || runtime_env.qianji_config_path.is_some()
-        || runtime_env.extra_env.iter().any(|(key, _)| {
-            matches!(
-                key.as_str(),
-                "PRJ_ROOT" | "PRJ_CONFIG_HOME" | "QIANJI_CONFIG_PATH"
-            )
-        })
+pub(crate) fn resolve_project_root_from_value(
+    raw_project_root: Option<&str>,
+    current_dir: Option<&Path>,
+) -> PathBuf {
+    resolve_project_root_or_cwd_from_value(raw_project_root, current_dir)
 }
+
+pub(crate) fn resolve_process_project_root() -> Option<PathBuf> {
+    let current_dir = env::current_dir().ok();
+    let raw_project_root = env::var("PRJ_ROOT").ok();
+    if raw_project_root.is_none() && current_dir.is_none() {
+        return None;
+    }
+    Some(resolve_project_root_from_value(
+        raw_project_root.as_deref(),
+        current_dir.as_deref(),
+    ))
+}
+
+pub(crate) fn resolve_process_project_root_from_cwd(current_dir: &Path) -> PathBuf {
+    let raw_project_root = env::var("PRJ_ROOT").ok();
+    resolve_project_root_from_value(raw_project_root.as_deref(), Some(current_dir))
+}
+
+pub(crate) fn resolve_process_env_path(key: &str, project_root: &Path) -> Option<PathBuf> {
+    let raw_value = env::var(key).ok();
+    resolve_path_from_value(Some(project_root), raw_value.as_deref())
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/runtime_config/pathing.rs"]
+mod tests;

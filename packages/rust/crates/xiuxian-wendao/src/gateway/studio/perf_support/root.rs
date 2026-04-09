@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use xiuxian_config_core::{lookup_positive_parsed, resolve_path_from_value};
 
 pub(crate) const REAL_WORKSPACE_ROOT_ENV: &str = "XIUXIAN_WENDAO_GATEWAY_PERF_WORKSPACE_ROOT";
 pub(crate) const REAL_WORKSPACE_READY_TIMEOUT_ENV: &str =
@@ -31,16 +32,10 @@ pub(crate) fn resolve_real_workspace_root_with_lookup(
     project_root: &Path,
     lookup: &dyn Fn(&str) -> Option<String>,
 ) -> Option<PathBuf> {
-    if let Some(path) = lookup(REAL_WORKSPACE_ROOT_ENV)
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    {
-        let path = PathBuf::from(path);
-        let resolved = if path.is_absolute() {
-            path
-        } else {
-            project_root.join(path)
-        };
+    if let Some(resolved) = resolve_path_from_value(
+        Some(project_root),
+        lookup(REAL_WORKSPACE_ROOT_ENV).as_deref(),
+    ) {
         return Some(resolved);
     }
 
@@ -49,9 +44,14 @@ pub(crate) fn resolve_real_workspace_root_with_lookup(
 }
 
 pub(crate) fn real_workspace_ready_timeout() -> Duration {
-    let parsed = std::env::var(REAL_WORKSPACE_READY_TIMEOUT_ENV)
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|value| *value > 0);
-    Duration::from_secs(parsed.unwrap_or(DEFAULT_REAL_WORKSPACE_READY_TIMEOUT_SECS))
+    real_workspace_ready_timeout_with_lookup(&|key| std::env::var(key).ok())
+}
+
+pub(crate) fn real_workspace_ready_timeout_with_lookup(
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Duration {
+    Duration::from_secs(
+        lookup_positive_parsed::<u64>(REAL_WORKSPACE_READY_TIMEOUT_ENV, lookup)
+            .unwrap_or(DEFAULT_REAL_WORKSPACE_READY_TIMEOUT_SECS),
+    )
 }

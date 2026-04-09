@@ -6,6 +6,7 @@ mod types;
 mod ui;
 
 #[cfg(test)]
+#[path = "../../../../../tests/unit/gateway/studio/router/state/mod.rs"]
 mod tests;
 
 #[cfg(test)]

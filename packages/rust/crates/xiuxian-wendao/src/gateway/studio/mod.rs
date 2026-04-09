@@ -15,6 +15,9 @@ pub mod perf_support;
 pub mod router;
 #[cfg(feature = "zhenfa-router")]
 pub(crate) mod search;
+/// Gateway startup dependency health probes and reporting.
+#[cfg(feature = "zhenfa-router")]
+pub mod startup_health;
 #[cfg(feature = "zhenfa-router")]
 pub mod symbol_index;
 #[cfg(feature = "zhenfa-router")]
@@ -35,8 +38,14 @@ pub use search::handlers::{
     build_studio_flight_service, build_studio_flight_service_for_roots,
     build_studio_flight_service_for_roots_with_weights, build_studio_flight_service_with_weights,
 };
+#[cfg(feature = "zhenfa-router")]
+pub use startup_health::{
+    GatewayStartupDependencyCheck, GatewayStartupDependencyStatus, GatewayStartupHealthReport,
+    describe_gateway_startup_health, probe_gateway_startup_health,
+};
 
 #[cfg(test)]
+#[path = "../../../tests/unit/gateway/studio/support.rs"]
 pub(crate) mod test_support;
 
 #[cfg(all(test, feature = "zhenfa-router"))]

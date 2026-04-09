@@ -7,14 +7,19 @@ use arrow_array::{Float64Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Schema};
 
 /// Canonical rerank response `doc_id` column.
+#[cfg(feature = "transport")]
 pub const RERANK_RESPONSE_DOC_ID_COLUMN: &str = "doc_id";
 /// Canonical rerank response raw vector-score column.
+#[cfg(feature = "transport")]
 pub const RERANK_RESPONSE_VECTOR_SCORE_COLUMN: &str = "vector_score";
 /// Canonical rerank response semantic-score column.
+#[cfg(feature = "transport")]
 pub const RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN: &str = "semantic_score";
 /// Canonical rerank response `final_score` column.
+#[cfg(feature = "transport")]
 pub const RERANK_RESPONSE_FINAL_SCORE_COLUMN: &str = "final_score";
 /// Canonical rerank response `rank` column.
+#[cfg(feature = "transport")]
 pub const RERANK_RESPONSE_RANK_COLUMN: &str = "rank";
 
 /// Validate the stable rerank response schema.

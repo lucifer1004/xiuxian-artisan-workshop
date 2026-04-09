@@ -37,4 +37,5 @@ pub use stats::UnifiedIndexStats;
 pub use symbol::{SymbolSource, UnifiedSymbol};
 
 #[cfg(test)]
+#[path = "../../tests/unit/unified_symbol/mod.rs"]
 mod tests;

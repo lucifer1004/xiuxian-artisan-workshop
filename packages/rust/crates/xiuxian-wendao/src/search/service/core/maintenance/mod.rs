@@ -5,6 +5,7 @@ mod repo;
 mod worker;
 
 #[cfg(test)]
+#[path = "../../../../../tests/unit/search/service/core/maintenance/mod.rs"]
 mod tests;
 
 #[cfg(test)]

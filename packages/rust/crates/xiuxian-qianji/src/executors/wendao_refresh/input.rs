@@ -1,3 +1,4 @@
+use crate::runtime_config::resolve_process_project_root_from_cwd;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -64,11 +65,7 @@ pub(super) fn resolve_root_dir(
         }
     }
 
-    if let Ok(path) = std::env::var("PRJ_ROOT")
-        && !path.trim().is_empty()
-    {
-        return Ok(PathBuf::from(path.trim()));
-    }
-
-    std::env::current_dir().map_err(|error| format!("failed to resolve current_dir: {error}"))
+    let current_dir = std::env::current_dir()
+        .map_err(|error| format!("failed to resolve current_dir: {error}"))?;
+    Ok(resolve_process_project_root_from_cwd(current_dir.as_path()))
 }

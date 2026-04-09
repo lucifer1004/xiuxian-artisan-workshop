@@ -8,6 +8,8 @@ pub mod integration_support;
 pub mod memory;
 mod plugin;
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 #[cfg(test)]
 pub(crate) use plugin::test_support as julia_plugin_test_support;
 

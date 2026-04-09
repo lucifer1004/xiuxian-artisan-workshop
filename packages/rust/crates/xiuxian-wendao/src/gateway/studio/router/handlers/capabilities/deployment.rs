@@ -122,6 +122,7 @@ mod tests {
         let state = Arc::new(GatewayState {
             index: None,
             signal_tx: None,
+            webhook_url: None,
             studio: Arc::new(StudioState::new()),
         });
 

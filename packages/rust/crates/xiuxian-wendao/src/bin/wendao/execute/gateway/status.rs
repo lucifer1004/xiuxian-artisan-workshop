@@ -25,8 +25,7 @@ pub(crate) async fn stats(State(state): State<Arc<AppState>>) -> Json<serde_json
 /// Notification service status endpoint.
 pub(crate) async fn notify_status(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let has_signal_channel = state.signal_tx.is_some();
-    let webhook_url =
-        std::env::var("WENDAO_WEBHOOK_URL").unwrap_or_else(|_| "not configured".to_string());
+    let webhook_url = state.webhook_url.clone();
     let telemetry = state.studio.bootstrap_background_indexing_telemetry();
 
     Json(json!({
@@ -39,7 +38,7 @@ pub(crate) async fn notify_status(State(state): State<Arc<AppState>>) -> Json<se
             .deferred_activation_at(),
         "studio_bootstrap_background_indexing_deferred_activation_source": telemetry
             .deferred_activation_source(),
-        "webhook_configured": !webhook_url.is_empty(),
-        "webhook_url": if webhook_url.is_empty() { serde_json::Value::Null } else { json!(webhook_url) }
+        "webhook_configured": webhook_url.is_some(),
+        "webhook_url": webhook_url.map_or(serde_json::Value::Null, serde_json::Value::String)
     }))
 }

@@ -44,4 +44,5 @@ pub use telemetry::{
 pub use types::{WendaoBackendKind, WendaoOperatorKind, WendaoQueryCoreError, WendaoRelation};
 
 #[cfg(test)]
+#[path = "../../tests/unit/query_core/mod.rs"]
 mod tests;

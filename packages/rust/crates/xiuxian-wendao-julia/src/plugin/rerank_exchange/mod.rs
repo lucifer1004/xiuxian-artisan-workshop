@@ -1,5 +1,6 @@
 mod fetch;
 #[cfg(test)]
+#[path = "../../../tests/unit/plugin/rerank_exchange/mod.rs"]
 mod tests;
 
 pub use fetch::{

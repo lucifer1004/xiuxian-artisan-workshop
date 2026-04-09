@@ -31,3 +31,5 @@ pub use sync::{
     MaterializedRepo, RepoDriftState, RepoLifecycleState, RepoSourceKind, SyncMode,
     resolve_repository_source,
 };
+
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");

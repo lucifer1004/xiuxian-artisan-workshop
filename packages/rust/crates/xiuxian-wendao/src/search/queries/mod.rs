@@ -11,4 +11,5 @@ pub mod sql;
 pub use self::core::SearchQueryService;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/search/queries/mod.rs"]
 mod tests;

@@ -12,7 +12,7 @@ mod sources;
 mod transport;
 
 #[cfg(test)]
-#[path = "../../tests/support/plugin/mod.rs"]
+#[path = "../../tests/unit/plugin/mod.rs"]
 pub(crate) mod test_support;
 
 pub use capability_manifest::{

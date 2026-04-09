@@ -32,3 +32,5 @@ fn run_all_scenarios() {
         .unwrap_or_else(|error| panic!("scenario tests should pass: {error}"));
     assert!(count > 0, "should run at least one scenario");
 }
+
+xiuxian_testing::crate_test_policy_harness!();

@@ -10,4 +10,5 @@ pub use self::payload::GraphqlQueryPayload;
 pub(crate) use self::execution::query_graphql_payload_with_context;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/search/queries/graphql/mod.rs"]
 mod tests;

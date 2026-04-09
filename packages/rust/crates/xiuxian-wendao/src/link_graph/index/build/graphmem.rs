@@ -127,20 +127,5 @@ pub(super) fn sync_graphmem_state_best_effort(index: &LinkGraphIndex) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::redis_client;
-
-    #[test]
-    fn redis_client_opens_trimmed_valid_url() {
-        let client = redis_client(" redis://127.0.0.1/ ");
-        assert!(client.is_ok());
-    }
-
-    #[test]
-    fn redis_client_preserves_graphmem_error_context() {
-        let Err(error) = redis_client("  ") else {
-            panic!("blank URL should fail");
-        };
-        assert!(error.contains("link-graph graphmem sync"));
-    }
-}
+#[path = "../../../../tests/unit/link_graph/index/build/graphmem.rs"]
+mod tests;

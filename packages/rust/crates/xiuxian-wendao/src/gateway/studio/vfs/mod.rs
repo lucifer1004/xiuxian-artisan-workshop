@@ -11,6 +11,7 @@ mod roots;
 mod scan;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/gateway/studio/vfs/mod.rs"]
 mod tests;
 
 pub(crate) use content::{get_entry, read_content, resolve_vfs_file_path};

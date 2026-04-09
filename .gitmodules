@@ -7,3 +7,6 @@
 [submodule "packages/rust/crates/xiuxian-ast/tree-sitter-modelica"]
 	path = packages/rust/crates/xiuxian-ast/tree-sitter-modelica
 	url = https://github.com/OpenModelica/tree-sitter-modelica.git
+[submodule "qianji-flowhub"]
+	path = qianji-flowhub
+	url = https://github.com/tao3k/qianji-flowhub.git

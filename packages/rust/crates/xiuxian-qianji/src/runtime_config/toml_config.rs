@@ -10,6 +10,8 @@ pub(super) struct QianjiToml {
     pub(super) llm: QianjiTomlLlm,
     #[serde(default)]
     pub(super) memory_promotion: QianjiTomlMemoryPromotion,
+    #[serde(default)]
+    pub(super) checkpoint: QianjiTomlCheckpoint,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -49,6 +51,11 @@ pub(super) struct QianjiTomlWendaoIngester {
     pub(super) graph_dimension: Option<usize>,
     pub(super) persist: Option<bool>,
     pub(super) persist_best_effort: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub(super) struct QianjiTomlCheckpoint {
+    pub(super) valkey_url: Option<String>,
 }
 
 pub(super) fn apply_llm_overlay(target: &mut QianjiTomlLlm, overlay: QianjiTomlLlm) {
@@ -120,5 +127,14 @@ pub(super) fn apply_memory_promotion_overlay(
     }
     if let Some(persist_best_effort) = overlay.wendao.persist_best_effort {
         target.wendao.persist_best_effort = Some(persist_best_effort);
+    }
+}
+
+pub(super) fn apply_checkpoint_overlay(
+    target: &mut QianjiTomlCheckpoint,
+    overlay: QianjiTomlCheckpoint,
+) {
+    if let Some(valkey_url) = normalize_non_empty(overlay.valkey_url) {
+        target.valkey_url = Some(valkey_url);
     }
 }
