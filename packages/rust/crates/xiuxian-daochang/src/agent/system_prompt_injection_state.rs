@@ -240,40 +240,5 @@ fn now_unix_ms() -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        SessionSystemPromptInjectionSnapshot, message_to_snapshot,
-        normalize_session_prompt_injection_snapshot, snapshot_to_message,
-    };
-
-    #[test]
-    fn normalization_counts_qa_entries_and_renders_canonical_xml() {
-        let snapshot = normalize_session_prompt_injection_snapshot(
-            r#"
-<system_prompt_injection>
-  <qa><q>q1</q><a>a1</a></qa>
-  <qa><q>q2</q><a>a2</a></qa>
-</system_prompt_injection>
-"#,
-        )
-        .expect("xml should normalize");
-
-        assert_eq!(snapshot.qa_count, 2);
-        assert!(snapshot.xml.contains("<system_prompt_injection>"));
-        assert!(snapshot.xml.contains("<q>q1</q>"));
-        assert!(snapshot.updated_at_unix_ms > 0);
-    }
-
-    #[test]
-    fn snapshot_storage_roundtrip_preserves_fields() {
-        let snapshot = SessionSystemPromptInjectionSnapshot {
-            xml: "<system_prompt_injection><qa><q>q</q><a>a</a></qa></system_prompt_injection>"
-                .to_string(),
-            qa_count: 1,
-            updated_at_unix_ms: 42,
-        };
-        let message = snapshot_to_message(&snapshot).expect("snapshot should serialize");
-        let decoded = message_to_snapshot(&message).expect("message should deserialize");
-        assert_eq!(decoded, snapshot);
-    }
-}
+#[path = "../../tests/unit/agent/system_prompt_injection_state/mod.rs"]
+mod tests;

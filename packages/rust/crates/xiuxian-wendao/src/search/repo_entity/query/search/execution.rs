@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
+use xiuxian_vector::EngineRecordBatch;
 
 use crate::analyzers::service::{
     example_match_score, import_match_score, module_match_score, normalized_rank_score,
     symbol_match_score,
 };
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::ranking::{
     RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, trim_ranked_vec,
 };
@@ -18,12 +19,12 @@ use crate::search::repo_entity::query::search::types::{
 use crate::search::repo_entity::schema::projected_columns;
 
 pub(crate) async fn execute_repo_entity_search(
-    engine: &SearchEngineContext,
+    query_engine: &ParquetQueryEngine,
     table_name: &str,
     query: &RepoEntityQuery<'_>,
 ) -> Result<RepoEntitySearchExecution, RepoEntitySearchError> {
     let sql = build_repo_entity_stage1_sql(table_name, query.language_filters, query.kind_filters);
-    let batches = engine.sql_batches(sql.as_str()).await?;
+    let batches = query_engine.query_batches(sql.as_str()).await?;
     let mut telemetry = StreamingRerankTelemetry::new(query.window, None, None);
     let mut candidates = Vec::with_capacity(query.window.target);
 

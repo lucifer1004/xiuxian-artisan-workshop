@@ -7,6 +7,10 @@ pub(super) fn sql_string_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+pub(super) fn sql_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
 pub(super) fn string_column<'a>(
     batch: &'a EngineRecordBatch,
     name: &str,

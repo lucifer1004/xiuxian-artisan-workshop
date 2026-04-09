@@ -50,7 +50,7 @@ pub struct ReflectiveRuntime {
 
 impl ReflectiveRuntime {
     #[must_use]
-    pub const fn stage(&self) -> Option<ReflectiveRuntimeStage> {
+    pub const fn stage(self) -> Option<ReflectiveRuntimeStage> {
         self.stage
     }
 

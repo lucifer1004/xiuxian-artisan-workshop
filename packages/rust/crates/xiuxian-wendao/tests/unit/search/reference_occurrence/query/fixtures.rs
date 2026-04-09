@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+#[cfg(feature = "duckdb")]
+use std::fs;
+
 use crate::gateway::studio::types::{ReferenceSearchHit, StudioNavigationTarget};
 use crate::search::reference_occurrence::schema::{
     reference_occurrence_batches, reference_occurrence_schema,
@@ -8,6 +11,8 @@ use crate::search::{
     BeginBuildDecision, SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace,
     SearchPlaneService,
 };
+#[cfg(feature = "duckdb")]
+use crate::set_link_graph_wendao_config_override;
 use xiuxian_vector::ColumnarScanOptions;
 
 pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
@@ -17,6 +22,17 @@ pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneServic
         SearchManifestKeyspace::new("xiuxian:test:reference_occurrence"),
         SearchMaintenancePolicy::default(),
     )
+}
+
+#[cfg(feature = "duckdb")]
+pub(super) fn write_search_duckdb_runtime_override(
+    body: &str,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(&config_path, body)?;
+    set_link_graph_wendao_config_override(&config_path.to_string_lossy());
+    Ok(temp)
 }
 
 pub(super) fn sample_hit(name: &str, path: &str, line: usize) -> ReferenceSearchHit {

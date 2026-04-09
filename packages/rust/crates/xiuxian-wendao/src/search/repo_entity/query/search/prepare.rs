@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::SearchCorpusKind;
 use crate::search::SearchPlaneService;
 use crate::search::ranking::sort_by_rank;
@@ -42,9 +43,12 @@ pub(crate) async fn prepare_repo_entity_search(
         SearchCorpusKind::RepoEntity,
         publication.publication_id.as_str(),
     );
-    service
-        .search_engine()
-        .ensure_parquet_table_registered(engine_table_name.as_str(), parquet_path.as_path(), &[])
+    #[cfg(feature = "duckdb")]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+    #[cfg(not(feature = "duckdb"))]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    query_engine
+        .ensure_parquet_table_registered(engine_table_name.as_str(), parquet_path.as_path())
         .await?;
 
     let query = RepoEntityQuery {
@@ -56,14 +60,14 @@ pub(crate) async fn prepare_repo_entity_search(
         window: retained_window(limit),
     };
     let execution =
-        execute_repo_entity_search(service.search_engine(), engine_table_name.as_str(), &query)
-            .await?;
+        execute_repo_entity_search(&query_engine, engine_table_name.as_str(), &query).await?;
     let mut candidates = execution.candidates;
     sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
 
     Ok(Some(PreparedRepoEntitySearch {
         _read_permit: read_permit,
+        query_engine,
         engine_table_name,
         candidates,
         telemetry: execution.telemetry,

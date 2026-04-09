@@ -16,14 +16,14 @@ pub(crate) async fn search_local_symbols(
         return Ok(Vec::new());
     }
 
-    let table_names = prepare_local_symbol_read_tables(service).await?;
-    if table_names.is_empty() {
+    let prepared = prepare_local_symbol_read_tables(service).await?;
+    if prepared.table_names.is_empty() {
         return Ok(Vec::new());
     }
 
     let execution = execute_local_symbol_search(
-        service.search_engine(),
-        table_names.as_slice(),
+        &prepared.query_engine,
+        prepared.table_names.as_slice(),
         query_lower.as_str(),
         retained_window(limit),
     )
@@ -31,7 +31,7 @@ pub(crate) async fn search_local_symbols(
     let mut candidates = execution.candidates;
     sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
-    let hits = decode_local_symbol_hits(service.search_engine(), candidates).await?;
+    let hits = decode_local_symbol_hits(&prepared.query_engine, candidates).await?;
     service.record_query_telemetry(
         SearchCorpusKind::LocalSymbol,
         execution

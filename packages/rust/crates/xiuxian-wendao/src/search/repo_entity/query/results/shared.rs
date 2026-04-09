@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::search::SearchPlaneService;
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::repo_entity::query::hydrate::{
     load_hydrated_rows_by_id, typed_repo_entity_columns,
 };
@@ -9,7 +9,7 @@ use crate::search::repo_entity::query::search::{
 };
 
 pub(super) async fn load_hydrated_rows(
-    service: &SearchPlaneService,
+    query_engine: &ParquetQueryEngine,
     engine_table_name: &str,
     candidates: &[RepoEntityCandidate],
 ) -> Result<BTreeMap<String, HydratedRepoEntityRow>, RepoEntitySearchError> {
@@ -18,7 +18,7 @@ pub(super) async fn load_hydrated_rows(
         .map(|candidate| candidate.id.clone())
         .collect::<Vec<_>>();
     load_hydrated_rows_by_id(
-        service.search_engine(),
+        query_engine,
         engine_table_name,
         ids.as_slice(),
         typed_repo_entity_columns().as_slice(),

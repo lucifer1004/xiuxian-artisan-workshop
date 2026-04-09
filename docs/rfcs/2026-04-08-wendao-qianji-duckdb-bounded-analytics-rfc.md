@@ -119,9 +119,27 @@ The currently landed Wendao slices are:
 4. a bounded markdown pilot that can execute through DataFusion or DuckDB
    while keeping the default path DataFusion-backed
 5. additive bounded execution metadata for engine choice, row and byte counts,
-   registration time, local execution time, and materialization state
+   registration time, local execution time, materialization state, and peak
+   temp-storage bytes
 6. workspace Arrow `58.1.0` alignment and `arrow-flight` `flight-sql`
    enablement across the Wendao crates that participate in this lane
+7. a bounded repo-backed Parquet query-engine seam that can execute
+   `repo_entity` and `repo_content_chunk` gateway publication reads through
+   DuckDB when `search.duckdb` is enabled, while preserving DataFusion
+   fallback for non-`duckdb` builds and disabled runtime policy
+8. a bounded local-corpus reuse of the same Parquet query-engine seam for
+   published `local_symbol` search, autocomplete, and payload hydration reads,
+   again selecting DuckDB only when `search.duckdb` is enabled
+9. a bounded local-corpus reuse of the same Parquet query-engine seam for the
+   published `reference_occurrence` lane behind `/search/references`, with
+   engine-safe identifier quoting so the same published parquet read path
+   stays valid in both DataFusion and DuckDB
+10. a bounded local-corpus reuse of the same Parquet query-engine seam for the
+    published `attachment` lane behind `/search/attachments`, with the same
+    engine-safe SQL generation and DuckDB selection policy
+11. a bounded local-corpus reuse of the same Parquet query-engine seam for the
+    published `knowledge_section` lane behind gateway knowledge search, again
+    with engine-safe SQL generation and DuckDB selection policy
 
 Qianji does not yet have a stage-local DuckDB pilot, and the shared query
 system remains DataFusion-led.
@@ -279,6 +297,8 @@ Responsibilities for the current landed shape are:
 3. `arrow.rs`: Arrow batch registration and result decode
 4. `engine.rs`: local relation-engine policy, request-scoped registration,
    query execution, and bounded engine metadata exposure
+5. `parquet.rs`: repo-backed Parquet query-engine selection and bounded
+   DataFusion or DuckDB execution for gateway publication reads
 
 The current bounded landing does not yet need separate `registration.rs`,
 `query.rs`, or `telemetry.rs` files. If later slices prove real cross-package
@@ -362,7 +382,77 @@ The existing bounded-work markdown SQL lane is the best first Wendao pilot:
 3. the current DataFusion lane provides a correctness baseline
 4. the external Flight business contract does not need to change
 
-### 10.2 Qianji Audit and Reduce Stages
+### 10.2 Repo-Backed Gateway Reads [landed in first bounded form]
+
+The first gateway-facing DuckDB cut is now landed for repo-backed published
+Parquet reads:
+
+1. `repo_entity` publication reads now go through a bounded
+   `ParquetQueryEngine` seam
+2. `repo_content_chunk` publication reads now go through the same seam
+3. DuckDB-enabled Wendao hosts can execute those gateway-facing Parquet reads
+   locally in DuckDB without changing payload contracts
+4. non-repo gateway handlers and local-corpus Lance-backed build paths remain
+   future migration work
+
+### 10.3 Local Symbol Gateway Reads [landed in bounded form]
+
+The next local-corpus gateway cut is now landed for published `local_symbol`
+reads:
+
+1. active-epoch local-symbol parquet tables now register through the same
+   bounded `ParquetQueryEngine` seam
+2. local-symbol search, autocomplete, and payload hydration now execute
+   through that seam instead of reading directly from `SearchEngineContext`
+3. DuckDB-enabled Wendao hosts can execute those published local-symbol reads
+   locally in DuckDB without changing response payloads
+4. the unified in-memory symbol index behind `/search/symbols` remains a
+   separate subsystem and is not part of this cut
+
+### 10.4 Reference Occurrence Gateway Reads [landed in bounded form]
+
+The next local-corpus gateway cut is now landed for published
+`reference_occurrence` reads behind `/search/references`:
+
+1. the active-epoch published parquet file now registers through the same
+   bounded `ParquetQueryEngine` seam
+2. the stage-one scan and payload hydration path now execute through that seam
+   instead of reading directly from `SearchEngineContext`
+3. the SQL builder for this lane now quotes engine-facing identifiers such as
+   `column`, so the same published parquet read path stays valid in both
+   DataFusion and DuckDB
+4. Lance-backed reference-occurrence build ownership remains outside this cut
+
+### 10.5 Attachment Gateway Reads [landed in bounded form]
+
+The next local-corpus gateway cut is now landed for published `attachment`
+reads behind `/search/attachments`:
+
+1. the active-epoch published parquet file now registers through the same
+   bounded `ParquetQueryEngine` seam
+2. the stage-one scan and payload hydration path now execute through that seam
+   instead of reading directly from `SearchEngineContext`
+3. the SQL builder for this lane now quotes engine-facing identifiers and
+   table names so the same published parquet read path stays valid in both
+   DataFusion and DuckDB
+4. Lance-backed attachment build ownership remains outside this cut
+
+### 10.6 Knowledge Gateway Reads [landed in bounded form]
+
+The next local-corpus gateway cut is now landed for published
+`knowledge_section` reads behind gateway knowledge search:
+
+1. the active-epoch published parquet file now registers through the same
+   bounded `ParquetQueryEngine` seam
+2. the stage-one scan and payload hydration path now execute through that seam
+   instead of reading directly from `SearchEngineContext`
+3. the SQL builder for this lane now quotes engine-facing identifiers and
+   table names so the same published parquet read path stays valid in both
+   DataFusion and DuckDB
+4. knowledge intent/source merge orchestration and Lance-backed build
+   ownership remain outside this cut
+
+### 10.7 Qianji Audit and Reduce Stages
 
 The next likely pilot is stage-local relation analytics over workflow-held
 Arrow batches, especially:
@@ -375,7 +465,7 @@ Arrow batches, especially:
 These are relation-oriented workloads, but they still sit above retrieval and
 storage ownership.
 
-### 10.3 Repo and Runtime Diagnostics
+### 10.8 Repo and Runtime Diagnostics
 
 Status, maintenance, and explain-facing analytics are a third candidate:
 
@@ -404,8 +494,7 @@ Minimum execution metadata should include:
 
 The current bounded Wendao pilot already reports input batch count, input
 rows and bytes, registration time, local query execution time, output rows and
-bytes, and materialization state. Spill or temp-usage indicators are still
-future work.
+bytes, materialization state, and peak temp-storage bytes.
 
 The causal narrative should remain explicit:
 
@@ -479,8 +568,23 @@ Revisit this direction if:
 1. the bounded-work markdown lane can execute through DataFusion or DuckDB
 2. the request-scoped registration policy is real and engine-visible
 3. additive bounded metadata now reports engine choice, rows, bytes, timing,
-   and materialization state
-4. broader performance gating and broader diagnostics pilots are still open
+   materialization state, and peak temp-storage bytes
+4. repo-backed `repo_entity` and `repo_content_chunk` publication reads now
+   route through a bounded Parquet query-engine seam that selects DuckDB when
+   `search.duckdb` is enabled and otherwise preserves DataFusion fallback
+5. published `local_symbol` reads now reuse the same bounded Parquet
+   query-engine seam for search, autocomplete, and payload hydration
+6. published `reference_occurrence` reads behind `/search/references` now
+   reuse the same bounded Parquet query-engine seam, with identifier-safe SQL
+   generation for both DataFusion and DuckDB
+7. published `attachment` reads behind `/search/attachments` now reuse the
+   same bounded Parquet query-engine seam, again with engine-safe SQL
+   generation for both DataFusion and DuckDB
+8. published `knowledge_section` reads behind gateway knowledge search now
+   reuse the same bounded Parquet query-engine seam, again with engine-safe
+   SQL generation for both DataFusion and DuckDB
+9. broader performance gating, remaining gateway migration, and broader
+   diagnostics pilots are still open
 
 ### Phase 3: Qianji Pilot [future]
 

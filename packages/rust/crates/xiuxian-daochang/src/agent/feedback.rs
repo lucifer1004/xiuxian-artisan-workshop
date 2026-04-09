@@ -1,4 +1,5 @@
 use anyhow::Result;
+use num_traits::ToPrimitive;
 
 use crate::agent::memory::{RecalledEpisodeCandidate, apply_recall_credit};
 use crate::agent::memory_recall_feedback::{
@@ -10,6 +11,10 @@ use crate::observability::SessionEvent;
 
 impl Agent {
     /// Clear session history for a session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when bounded-session or session storage cleanup fails.
     pub async fn clear_session(&self, session_id: &str) -> Result<()> {
         if let Some(ref w) = self.bounded_session {
             w.clear(session_id).await?;
@@ -19,7 +24,7 @@ impl Agent {
             .write()
             .await
             .remove(session_id);
-        self.clear_memory_recall_feedback_bias(session_id).await;
+        self.clear_memory_recall_feedback_bias(session_id);
         let _ = self.clear_session_system_prompt_injection(session_id).await;
         self.session.clear(session_id).await
     }
@@ -32,9 +37,7 @@ impl Agent {
         session_id: &str,
         direction: SessionRecallFeedbackDirection,
     ) -> Option<SessionRecallFeedbackUpdate> {
-        if self.memory_store.is_none() {
-            return None;
-        }
+        self.memory_store.as_ref()?;
         let outcome = match direction {
             SessionRecallFeedbackDirection::Up => RecallOutcome::Success,
             SessionRecallFeedbackDirection::Down => RecallOutcome::Failure,
@@ -64,7 +67,7 @@ impl Agent {
         {
             return bias;
         }
-        if let Some(bias) = self.load_memory_recall_feedback_bias(session_id).await {
+        if let Some(bias) = self.load_memory_recall_feedback_bias(session_id) {
             self.memory_recall_feedback
                 .write()
                 .await
@@ -74,7 +77,7 @@ impl Agent {
         0.0
     }
 
-    pub(in crate::agent) async fn load_memory_recall_feedback_bias(
+    pub(in crate::agent) fn load_memory_recall_feedback_bias(
         &self,
         session_id: &str,
     ) -> Option<f32> {
@@ -83,7 +86,7 @@ impl Agent {
             .and_then(|store| store.recall_feedback_bias(session_id))
     }
 
-    pub(in crate::agent) async fn persist_memory_recall_feedback_bias(
+    pub(in crate::agent) fn persist_memory_recall_feedback_bias(
         &self,
         session_id: &str,
         bias: f32,
@@ -94,7 +97,7 @@ impl Agent {
         self.persist_memory_recall_feedback_bias_atomic(session_id, bias, "feedback_update");
     }
 
-    pub(in crate::agent) async fn clear_memory_recall_feedback_bias(&self, session_id: &str) {
+    pub(in crate::agent) fn clear_memory_recall_feedback_bias(&self, session_id: &str) {
         if let Some(store) = self.memory_store.as_ref() {
             store.clear_recall_feedback_bias(session_id);
         }
@@ -108,9 +111,7 @@ impl Agent {
         assistant_message: &str,
         tool_summary: Option<&ToolExecutionSummary>,
     ) -> Option<RecallOutcome> {
-        if self.memory_store.is_none() {
-            return None;
-        }
+        self.memory_store.as_ref()?;
         let (outcome, source) =
             resolve_feedback_outcome(user_message, tool_summary, assistant_message);
         self.apply_recall_feedback_outcome(session_id, outcome, source, tool_summary)
@@ -138,7 +139,14 @@ impl Agent {
             return;
         }
         let total_delta: f32 = updates.iter().map(|u| u.updated_q - u.previous_q).sum();
-        let avg_weight = updates.iter().map(|u| u.weight).sum::<f32>() / updates.len() as f32;
+        let Some(applied_count) = updates.len().to_f64() else {
+            return;
+        };
+        let avg_weight = updates
+            .iter()
+            .map(|update| f64::from(update.weight))
+            .sum::<f64>()
+            / applied_count;
         tracing::debug!(
             event = SessionEvent::MemoryRecallCreditApplied.as_str(),
             session_id,
@@ -164,8 +172,7 @@ impl Agent {
             .write()
             .await
             .insert(session_id.to_string(), updated);
-        self.persist_memory_recall_feedback_bias(session_id, updated)
-            .await;
+        self.persist_memory_recall_feedback_bias(session_id, updated);
         tracing::debug!(
             event = SessionEvent::MemoryRecallFeedbackUpdated.as_str(),
             session_id,

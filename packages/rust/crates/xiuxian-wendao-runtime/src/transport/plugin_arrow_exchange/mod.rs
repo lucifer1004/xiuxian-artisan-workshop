@@ -5,6 +5,7 @@ mod request;
 mod response;
 mod roundtrip;
 #[cfg(test)]
+#[path = "../../../tests/unit/transport/plugin_arrow_exchange/mod.rs"]
 mod tests;
 
 pub use metadata::{attach_plugin_arrow_request_metadata, plugin_arrow_request_trace_id};

@@ -5,14 +5,14 @@ use duckdb::Connection;
 use super::runtime::resolve_enabled_search_duckdb_runtime;
 use crate::duckdb::{DuckDbDatabasePath, SearchDuckDbRuntimeConfig};
 
-/// Feature-gated host-owned DuckDB connection wrapper for bounded analytics.
+/// Feature-gated host-owned `DuckDB` connection wrapper for bounded analytics.
 pub struct SearchDuckDbConnection {
     connection: Connection,
     runtime: SearchDuckDbRuntimeConfig,
 }
 
 impl SearchDuckDbConnection {
-    /// Open a configured bounded DuckDB connection from merged Wendao settings.
+    /// Open a configured bounded `DuckDB` connection from merged Wendao settings.
     ///
     /// # Errors
     ///
@@ -23,7 +23,7 @@ impl SearchDuckDbConnection {
         Self::from_runtime(runtime)
     }
 
-    /// Open a bounded DuckDB connection from one resolved runtime config.
+    /// Open a bounded `DuckDB` connection from one resolved runtime config.
     ///
     /// # Errors
     ///
@@ -36,7 +36,7 @@ impl SearchDuckDbConnection {
         })
     }
 
-    /// Access the underlying DuckDB connection.
+    /// Access the underlying `DuckDB` connection.
     #[must_use]
     pub fn connection(&self) -> &Connection {
         &self.connection
@@ -49,12 +49,12 @@ impl SearchDuckDbConnection {
     }
 }
 
-/// Open one bounded DuckDB connection from a resolved runtime config.
+/// Open one bounded `DuckDB` connection from a resolved runtime config.
 ///
 /// # Errors
 ///
 /// Returns an error when the runtime is disabled, when required directories
-/// cannot be created, or when DuckDB rejects the initialization pragmas.
+/// cannot be created, or when `DuckDB` rejects the initialization pragmas.
 pub fn open_search_duckdb_connection(
     runtime: &SearchDuckDbRuntimeConfig,
 ) -> Result<Connection, String> {
@@ -98,7 +98,7 @@ pub fn open_search_duckdb_connection(
     let escaped_temp_directory = runtime.temp_directory.to_string_lossy().replace('\'', "''");
     connection
         .execute_batch(&format!(
-            "PRAGMA temp_directory='{escaped_temp_directory}';\nPRAGMA threads={};",
+            "PRAGMA temp_directory='{escaped_temp_directory}';\nPRAGMA threads={};\nPRAGMA enable_profiling='no_output';\nPRAGMA profiling_mode='standard';",
             runtime.threads
         ))
         .map_err(|error| format!("failed to initialize search DuckDB pragmas: {error}"))?;

@@ -15,14 +15,14 @@ pub(crate) async fn autocomplete_local_symbols(
         return Ok(Vec::new());
     }
 
-    let table_names = prepare_local_symbol_read_tables(service).await?;
-    if table_names.is_empty() {
+    let prepared = prepare_local_symbol_read_tables(service).await?;
+    if prepared.table_names.is_empty() {
         return Ok(Vec::new());
     }
 
     let execution = execute_local_symbol_autocomplete(
-        service.search_engine(),
-        table_names.as_slice(),
+        &prepared.query_engine,
+        prepared.table_names.as_slice(),
         normalized_prefix.as_str(),
         suggestion_window(limit),
     )

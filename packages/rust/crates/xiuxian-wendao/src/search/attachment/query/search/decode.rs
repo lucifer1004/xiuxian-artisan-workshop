@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::AttachmentSearchHit;
 use crate::search::attachment::schema::{hit_json_column, id_column};
-use xiuxian_vector::SearchEngineContext;
 
-use super::helpers::{sql_string_literal, string_column};
+use super::helpers::{sql_identifier, sql_string_literal, string_column};
 use super::types::{AttachmentCandidate, AttachmentSearchError};
 
 pub(super) async fn decode_attachment_hits(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_name: &str,
     candidates: Vec<AttachmentCandidate>,
 ) -> Result<Vec<AttachmentSearchHit>, AttachmentSearchError> {
@@ -31,7 +31,7 @@ pub(super) async fn decode_attachment_hits(
 }
 
 async fn load_hit_payloads_by_id(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_name: &str,
     candidates: &[AttachmentCandidate],
 ) -> Result<BTreeMap<String, String>, AttachmentSearchError> {
@@ -41,8 +41,9 @@ async fn load_hit_payloads_by_id(
 
     let sql = format!(
         "SELECT {id_column}, {hit_json_column} FROM {table_name} WHERE {id_column} IN ({ids})",
-        id_column = id_column(),
-        hit_json_column = hit_json_column(),
+        id_column = sql_identifier(id_column()),
+        hit_json_column = sql_identifier(hit_json_column()),
+        table_name = sql_identifier(table_name),
         ids = candidates
             .iter()
             .map(|candidate| sql_string_literal(candidate.id.as_str()))
@@ -50,7 +51,7 @@ async fn load_hit_payloads_by_id(
             .join(", ")
     );
     let mut payloads = BTreeMap::new();
-    let batches = engine.sql_batches(sql.as_str()).await?;
+    let batches = engine.query_batches(sql.as_str()).await?;
 
     for batch in batches {
         let id = string_column(&batch, id_column())?;

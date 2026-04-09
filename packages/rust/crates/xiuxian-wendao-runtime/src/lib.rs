@@ -18,5 +18,8 @@ pub mod settings;
 /// Transport negotiation and client-construction helpers.
 pub mod transport;
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 #[cfg(test)]
+#[path = "../tests/unit/lib/mod.rs"]
 mod tests;

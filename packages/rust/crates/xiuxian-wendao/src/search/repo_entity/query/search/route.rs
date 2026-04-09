@@ -27,17 +27,19 @@ pub(crate) async fn search_repo_entities(
     else {
         return Ok(Vec::new());
     };
-    let hits: Vec<SearchHit> = hydrate_repo_entity_hits(
-        service.search_engine(),
-        prepared.engine_table_name.as_str(),
-        prepared.candidates,
-    )
-    .await?;
+    let crate::search::repo_entity::query::search::PreparedRepoEntitySearch {
+        _read_permit,
+        query_engine,
+        engine_table_name,
+        candidates,
+        telemetry,
+        source,
+    } = prepared;
+    let hits: Vec<SearchHit> =
+        hydrate_repo_entity_hits(&query_engine, engine_table_name.as_str(), candidates).await?;
     service.record_query_telemetry(
         crate::search::SearchCorpusKind::RepoEntity,
-        prepared
-            .telemetry
-            .finish(prepared.source, Some(repo_id.to_string()), hits.len()),
+        telemetry.finish(source, Some(repo_id.to_string()), hits.len()),
     );
     Ok(hits)
 }

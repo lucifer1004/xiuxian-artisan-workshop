@@ -6,6 +6,7 @@ mod repo;
 mod rerank;
 mod search;
 #[cfg(test)]
+#[path = "../../tests/unit/transport/query_contract/mod.rs"]
 mod tests;
 mod vfs;
 

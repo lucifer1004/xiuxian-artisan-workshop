@@ -8,9 +8,9 @@ use xiuxian_wendao_runtime::config::{
     DEFAULT_SEARCH_DUCKDB_MATERIALIZE_THRESHOLD_ROWS, DEFAULT_SEARCH_DUCKDB_PREFER_VIRTUAL_ARROW,
 };
 
-use super::query::{
-    query_bounded_work_markdown_payload, query_bounded_work_markdown_payload_with_engine,
-};
+use super::query::query_bounded_work_markdown_payload;
+#[cfg(feature = "duckdb")]
+use super::query::query_bounded_work_markdown_payload_with_engine;
 use super::register::{
     BOUNDED_WORK_MARKDOWN_TABLE_NAME, bootstrap_bounded_work_markdown_query_engine,
     build_bounded_work_markdown_rows, register_bounded_work_markdown_table,
@@ -186,6 +186,7 @@ async fn queries_bounded_work_markdown_payload() -> TestResult {
             .as_deref(),
         Some("materialized")
     );
+    assert_eq!(payload.metadata.local_temp_storage_peak_bytes, None);
     assert_eq!(
         payload.metadata.local_relation_engine.as_deref(),
         Some("datafusion")
@@ -276,6 +277,7 @@ async fn queries_bounded_work_markdown_payload_with_duckdb_local_relation_engine
             .as_deref(),
         Some("virtual")
     );
+    assert!(payload.metadata.local_temp_storage_peak_bytes.is_some());
     assert_eq!(
         payload.metadata.local_relation_engine.as_deref(),
         Some("duckdb")
@@ -356,6 +358,7 @@ async fn queries_bounded_work_markdown_payload_with_duckdb_materialized_local_re
             .as_deref(),
         Some("materialized")
     );
+    assert!(payload.metadata.local_temp_storage_peak_bytes.is_some());
     assert_eq!(
         payload.metadata.duckdb_registration_strategy.as_deref(),
         Some("materialized_appender")

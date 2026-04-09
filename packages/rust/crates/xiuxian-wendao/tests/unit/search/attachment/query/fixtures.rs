@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+#[cfg(feature = "duckdb")]
+use std::fs;
+
 use crate::gateway::studio::types::{AttachmentSearchHit, StudioNavigationTarget};
 use crate::search::attachment::schema::{
     attachment_batches, attachment_schema, search_text_column,
@@ -8,6 +11,8 @@ use crate::search::{
     BeginBuildDecision, SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace,
     SearchPlaneService,
 };
+#[cfg(feature = "duckdb")]
+use crate::set_link_graph_wendao_config_override;
 
 pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
     SearchPlaneService::with_paths(
@@ -16,6 +21,17 @@ pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneServic
         SearchManifestKeyspace::new("xiuxian:test:attachment"),
         SearchMaintenancePolicy::default(),
     )
+}
+
+#[cfg(feature = "duckdb")]
+pub(super) fn write_search_duckdb_runtime_override(
+    body: &str,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(&config_path, body)?;
+    set_link_graph_wendao_config_override(&config_path.to_string_lossy());
+    Ok(temp)
 }
 
 pub(super) fn sample_hit(

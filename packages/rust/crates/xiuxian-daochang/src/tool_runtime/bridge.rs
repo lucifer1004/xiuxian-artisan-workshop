@@ -957,33 +957,5 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{ToolRuntimeCallWireResult, ToolRuntimeJsonRpcResponse, try_parse_sse_message};
-
-    #[test]
-    fn sse_parser_skips_retry_priming_event() {
-        let payload = "id: 0\nretry: 3000\n\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"tools\":[]}}\n\n";
-        let parsed = try_parse_sse_message(payload)
-            .expect("parse should succeed")
-            .expect("json-rpc message should be extracted");
-        let response: ToolRuntimeJsonRpcResponse<serde_json::Value> =
-            serde_json::from_value(parsed).expect("response should deserialize");
-        assert_eq!(response.jsonrpc, "2.0");
-    }
-
-    #[test]
-    fn call_result_deserialization_preserves_text_and_error_flag() {
-        let payload = serde_json::json!({
-            "content": [
-                { "type": "text", "text": "hello" },
-                { "type": "image", "data": "ignored", "mimeType": "image/png" }
-            ],
-            "isError": true
-        });
-        let result: ToolRuntimeCallWireResult =
-            serde_json::from_value(payload).expect("call result should deserialize");
-        assert_eq!(result.content.len(), 2);
-        assert_eq!(result.content[0].text.as_deref(), Some("hello"));
-        assert_eq!(result.is_error, Some(true));
-    }
-}
+#[path = "../../tests/unit/tool_runtime/bridge.rs"]
+mod tests;

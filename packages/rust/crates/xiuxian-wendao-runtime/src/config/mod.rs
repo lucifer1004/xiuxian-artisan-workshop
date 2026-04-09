@@ -5,6 +5,7 @@ mod models;
 mod resolve;
 mod retrieval;
 #[cfg(test)]
+#[path = "../../tests/unit/config/test_support.rs"]
 pub(crate) mod test_support;
 
 pub use constants::{

@@ -51,6 +51,7 @@ async fn sql_query_execution_returns_transport_neutral_payload() {
     assert_eq!(payload.metadata.registered_input_bytes, None);
     assert_eq!(payload.metadata.result_bytes, None);
     assert_eq!(payload.metadata.local_relation_materialization_state, None);
+    assert_eq!(payload.metadata.local_temp_storage_peak_bytes, None);
     assert_eq!(payload.metadata.local_relation_engine, None);
     assert_eq!(payload.metadata.duckdb_registration_strategy, None);
     assert_eq!(payload.metadata.registered_input_batch_count, None);

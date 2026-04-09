@@ -721,3 +721,97 @@ that sat under the pack's `--all-features` clippy lane. The decisive outcome
 is that the plugin pack now passes the shared gate as part of default
 `cargo test` and clears
 `cargo clippy -p xiuxian-wendao-core -p xiuxian-wendao-builtin -p xiuxian-wendao-modelica --lib --tests --all-features -- -D warnings`.
+
+The next bounded consumer milestone then landed as a runtime-and-orchestration
+pack spanning `xiuxian-qianhuan`, `xiuxian-zhixing`, and `xiuxian-llm`. All
+three crates now mount the canonical source-side harness in `src/lib.rs`, own
+explicit `tests/unit_test.rs` root targets where needed, and keep their moved
+coverage under canonical `tests/unit/...` trees. `xiuxian-zhixing`
+externalized the remaining source-backed suites from `src/agenda/entry.rs`
+and `src/heyi/reminders.rs`; because the stronger lane made the full migrated
+suite run again, the same slice also closed real agenda-path drift by
+restoring `TASK` query semantics, the heart-demon blocker check, and the
+Wendao-backed metadata/task reindex invariants for agenda files.
+`xiuxian-llm` externalized the remaining runtime/web suites from
+`src/runtime/{bus,slot}.rs` and `src/web/mod.rs`, and the newly live strict-
+clippy debt in the `OpenAI` `/responses` regression tests was closed in place
+by switching the moved tests to `Result` and explicit error branches instead
+of `expect()`. The dependency chain also stayed green under the stricter lane:
+the touched Wendao duckdb/query test modules now gate feature-specific imports
+correctly, and the touched Zhixing agenda-entry suite no longer depends on
+strict float equality. The decisive outcome is that the pack now passes the
+shared gate as part of default `cargo test`, and
+`cargo clippy -p xiuxian-qianhuan -p xiuxian-zhixing -p xiuxian-llm -p xiuxian-wendao --lib --tests -- -D warnings`
+is green.
+
+The next bounded consumer milestone then landed in `xiuxian-wendao-runtime`.
+The crate now mounts the canonical source-side harness in `src/lib.rs`, owns
+explicit `tests/unit_test.rs` and `tests/unit/lib_policy.rs` entrypoints, and
+keeps the former source-owned suites from `src/tests/**`,
+`src/transport/query_contract/tests/**`,
+`src/transport/plugin_arrow_exchange/tests.rs`,
+`src/config/test_support.rs`, and the remaining inline `#[cfg(test)]` blocks
+under canonical `tests/unit/...` trees. The stronger default-profile lane also
+exposed drift in the existing `src/bin/wendao_flight_server.rs` surface; that
+bin now gates its transport-only implementation inside the source file instead
+of widening Cargo target metadata, so `cargo test --test unit_test` stays
+green while `transport` and `--all-features` still exercise the real Flight
+server. The decisive outcome is that `xiuxian-wendao-runtime` now passes the
+shared gate as part of default `cargo test`, while
+`cargo test -p xiuxian-wendao-runtime --all-features` and
+`cargo clippy -p xiuxian-wendao-runtime --lib --tests --all-features -- -D warnings`
+are green.
+
+The next bounded consumer milestone then landed in `xiuxian-daochang`.
+That crate now follows the same canonical split harness shape:
+`src/lib.rs -> tests/unit/lib_policy.rs` for the source-side gate plus
+`tests/unit_test.rs` as the explicit root harness target, with the former
+root-scattered `tests/*.rs` surface absorbed under canonical `tests/unit/**`.
+The remaining source-owned inline suites from
+`src/jobs/manager/types.rs`,
+`src/agent/tool_dispatch/helpers.rs`,
+`src/agent/bootstrap/native_tools.rs`,
+`src/agent/system_prompt_injection_state.rs`,
+`src/runtime_agent_factory/tools.rs`,
+`src/channels/telegram/channel/markdown/escape.rs`,
+`src/channels/telegram/runtime/dispatch/preview.rs`, and
+`src/tool_runtime/bridge.rs` were externalized onto canonical `#[path]`
+mounts. Because the migrated root suite had several old integration-crate
+assumptions baked into it, the lane also closed the real harness drift inside
+the moved test tree: shared helper folders such as `agent/` and
+`telegram_media_support/` now mount explicitly, the `session_redis` harness
+now provides the minimum root aliases required by the source-backed session
+context tests, and the moved system-prompt-injection roundtrip test now
+matches the live `Option` serialization contract. Validation also surfaced two
+bounded upstream compile drifts in `xiuxian-wendao` around the new
+`ParquetQueryEngine` API, and the same wave closed them in place so the
+consumer gate can execute without being blocked by dependency compile drift.
+The decisive outcome is that `xiuxian-daochang` now passes the shared gate as
+part of both `cargo test --lib` and `cargo test --test unit_test`, while the
+remaining strict-clippy failures are broader pre-existing crate debt outside
+the harness migration slice.
+
+The first post-gate convergence slice then stayed inside `xiuxian-daochang`
+instead of opening another consumer. That bounded follow-up closed the initial
+strict-clippy cluster under `src/agent/feedback.rs` and
+`src/test_support/{bootstrap,memory_recall_metrics,reflection}.rs`: the lane
+restored the missing `# Errors` contract on `clear_session`, collapsed no-op
+async helper methods back to synchronous helpers, removed the remaining
+precision-loss casts from feedback and test-support metrics, marked the pure
+bootstrap helpers as `#[must_use]`, and tightened the tiny reflection getter
+to pass `self` by value. The decisive outcome is that those files no longer
+appear on the strict-clippy failure surface; the remaining debt has moved on
+to later owners such as `agent/system_prompt_injection_state`,
+`agent/memory_recall_metrics`, `agent/reflection/lifecycle`, and the broader
+telegram/discord runtime cluster.
+
+The next bounded follow-up stayed on that same agent lane and closed the next
+strict-clippy cluster under `src/agent/memory_recall_metrics.rs`,
+`src/agent/reflection/lifecycle.rs`, and the source-backed
+`tests/unit/agent/system_prompt_injection_state/mod.rs`. That slice removed
+the remaining precision-loss conversion in recall metrics, changed the tiny
+reflection lifecycle getter to pass `self` by value, and simplified the moved
+XML normalization test literal so the source-backed suite no longer trips the
+raw-string lint. The decisive outcome is that those owners also disappeared
+from the strict-clippy failure surface, which has now moved forward into the
+telegram/discord runtime and channel cluster.

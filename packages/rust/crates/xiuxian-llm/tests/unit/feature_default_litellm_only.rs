@@ -2,7 +2,8 @@
 
 #[test]
 fn default_feature_profile_keeps_provider_litellm_enabled() {
-    assert!(cfg!(feature = "provider-litellm"));
+    let provider_litellm_enabled = std::hint::black_box(cfg!(feature = "provider-litellm"));
+    assert!(provider_litellm_enabled);
     let _ = std::mem::size_of::<xiuxian_llm::llm::OpenAICompatibleClient>();
     let backend = xiuxian_llm::embedding::backend::parse_embedding_backend_kind(Some("litellm"));
     assert_eq!(

@@ -5,12 +5,12 @@ use crate::agent::{DownstreamAdmissionRuntimeSnapshot, MemoryRuntimeStatusSnapsh
 use super::helpers::is_backend_ready;
 
 pub(in crate::channels::discord::runtime::managed::replies::memory) fn format_memory_runtime_status_json(
-    status: MemoryRuntimeStatusSnapshot,
+    status: &MemoryRuntimeStatusSnapshot,
 ) -> serde_json::Value {
     let backend_ready = is_backend_ready(
         status.enabled,
         status.active_backend.is_some(),
-        &status.startup_load_status,
+        status.startup_load_status,
     );
     json!({
         "memory_enabled": status.enabled,

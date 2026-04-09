@@ -1,21 +1,26 @@
 use std::fs;
-use std::path::Path;
 use std::sync::Arc;
 
-use arrow::array::{Int64Array, StringArray};
+#[cfg(feature = "duckdb")]
+use std::path::Path;
+
+#[cfg(feature = "duckdb")]
+use arrow::array::Int64Array;
+use arrow::array::StringArray;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use serial_test::serial;
 
 use crate::duckdb::{
     DataFusionLocalRelationEngine, DuckDbDatabasePath, LocalRelationEngine,
-    LocalRelationEngineKind, resolve_search_duckdb_runtime,
+    LocalRelationEngineKind, ParquetQueryEngine, resolve_search_duckdb_runtime,
 };
 #[cfg(feature = "duckdb")]
 use crate::duckdb::{
     DuckDbLocalRelationEngine, DuckDbRegistrationStrategy, SearchDuckDbRuntimeConfig,
 };
 use crate::link_graph::set_link_graph_wendao_config_override;
+use xiuxian_vector::SearchEngineContext;
 #[cfg(feature = "duckdb")]
 use xiuxian_wendao_runtime::config::{
     DEFAULT_SEARCH_DUCKDB_MATERIALIZE_THRESHOLD_ROWS, DEFAULT_SEARCH_DUCKDB_PREFER_VIRTUAL_ARROW,
@@ -130,6 +135,7 @@ async fn duckdb_local_relation_engine_registers_and_queries_batches() -> TestRes
         .await
         .map_err(std::io::Error::other)?;
 
+    assert!(engine.last_query_temp_storage_peak_bytes().is_some());
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].num_rows(), 2);
     let names = result[0]
@@ -173,6 +179,7 @@ async fn duckdb_local_relation_engine_materializes_when_threshold_is_reached() -
         .await
         .map_err(std::io::Error::other)?;
 
+    assert!(engine.last_query_temp_storage_peak_bytes().is_some());
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].num_rows(), 2);
     Ok(())
@@ -197,6 +204,26 @@ threads = 2
         .connection()
         .execute("create table ducks (name text)", [])
         .map_err(std::io::Error::other)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "duckdb")]
+#[test]
+#[serial]
+fn configured_parquet_query_engine_uses_duckdb_when_enabled() -> TestResult {
+    let _temp = write_search_duckdb_runtime_override(
+        r#"[search.duckdb]
+enabled = true
+database_path = ":memory:"
+temp_directory = ".cache/duckdb/repo-query-tmp"
+threads = 2
+"#,
+    )?;
+
+    let engine = ParquetQueryEngine::configured(SearchEngineContext::new())
+        .map_err(std::io::Error::other)?;
+    assert_eq!(engine.kind(), LocalRelationEngineKind::DuckDb);
 
     Ok(())
 }

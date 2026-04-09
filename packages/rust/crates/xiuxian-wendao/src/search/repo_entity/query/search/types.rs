@@ -1,5 +1,6 @@
 use tokio::sync::OwnedSemaphorePermit;
 
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::ranking::{RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry};
 
 pub(crate) const MODULE_BUCKETS: u8 = 3;
@@ -43,6 +44,7 @@ pub(crate) struct RepoEntitySearchExecution {
 
 pub(crate) struct PreparedRepoEntitySearch {
     pub(crate) _read_permit: OwnedSemaphorePermit,
+    pub(crate) query_engine: ParquetQueryEngine,
     pub(crate) engine_table_name: String,
     pub(crate) candidates: Vec<RepoEntityCandidate>,
     pub(crate) telemetry: StreamingRerankTelemetry,

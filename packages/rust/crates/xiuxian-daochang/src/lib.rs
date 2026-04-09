@@ -7,6 +7,8 @@
 pub static RESOURCES: ::include_dir::Dir<'_> =
     ::include_dir::include_dir!("$CARGO_MANIFEST_DIR/resources");
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 mod agent;
 mod channel_runtime;
 mod channels;

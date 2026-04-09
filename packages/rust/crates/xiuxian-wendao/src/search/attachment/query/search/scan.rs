@@ -1,21 +1,22 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
+use xiuxian_vector::EngineRecordBatch;
 
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::attachment::schema::{
     attachment_ext_column, attachment_name_column, attachment_name_folded_column, id_column,
     kind_column, projected_columns,
 };
 use crate::search::ranking::{StreamingRerankSource, StreamingRerankTelemetry, trim_ranked_vec};
 
-use super::helpers::{sql_string_literal, string_column};
+use super::helpers::{sql_identifier, sql_string_literal, string_column};
 use super::scoring::{candidate_score, compare_candidates};
 use super::types::{
     AttachmentCandidate, AttachmentCandidateQuery, AttachmentSearchError, AttachmentSearchExecution,
 };
 
 pub(crate) async fn execute_attachment_search(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_name: &str,
     candidate_query: &AttachmentCandidateQuery<'_>,
 ) -> Result<AttachmentSearchExecution, AttachmentSearchError> {
@@ -24,7 +25,7 @@ pub(crate) async fn execute_attachment_search(
         candidate_query.extensions,
         candidate_query.kinds,
     );
-    let batches = engine.sql_batches(sql.as_str()).await?;
+    let batches = engine.query_batches(sql.as_str()).await?;
     let mut telemetry = StreamingRerankTelemetry::new(candidate_query.window, None, None);
     let mut candidates = Vec::with_capacity(candidate_query.window.target);
 
@@ -44,10 +45,15 @@ pub(crate) fn build_attachment_stage1_sql(
     normalized_extensions: &HashSet<String>,
     normalized_kinds: &HashSet<String>,
 ) -> String {
-    let projections = projected_columns().join(", ");
+    let projections = projected_columns()
+        .into_iter()
+        .map(sql_identifier)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let quoted_table_name = sql_identifier(table_name);
     match filter_expression(normalized_extensions, normalized_kinds) {
-        Some(filter) => format!("SELECT {projections} FROM {table_name} WHERE {filter}"),
-        None => format!("SELECT {projections} FROM {table_name}"),
+        Some(filter) => format!("SELECT {projections} FROM {quoted_table_name} WHERE {filter}"),
+        None => format!("SELECT {projections} FROM {quoted_table_name}"),
     }
 }
 
@@ -129,7 +135,8 @@ fn disjunction(column: &str, values: &HashSet<String>) -> Option<String> {
     let mut sorted = values.iter().cloned().collect::<Vec<_>>();
     sorted.sort_unstable();
     Some(format!(
-        "{column} IN ({})",
+        "{} IN ({})",
+        sql_identifier(column),
         sorted
             .into_iter()
             .map(|value| sql_string_literal(value.as_str()))

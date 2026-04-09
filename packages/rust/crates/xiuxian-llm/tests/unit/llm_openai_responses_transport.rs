@@ -1,6 +1,6 @@
 #![cfg(feature = "provider-litellm")]
 
-//! Integration tests for OpenAI `/responses` transport execution.
+//! Integration tests for `OpenAI` `/responses` transport execution.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -224,7 +224,8 @@ async fn execute_openai_responses_request_surfaces_http_error_status() -> Result
         &request_with_tool_alias(),
     )
     .await
-    .expect_err("400 status should fail");
+    .err()
+    .ok_or_else(|| anyhow!("400 status should fail"))?;
     let rendered = err.to_string();
     if !rendered.contains("status 400") {
         return Err(anyhow!("unexpected error message: {rendered}"));
@@ -259,7 +260,9 @@ async fn execute_openai_responses_request_fails_fast_when_headers_stall() -> Res
     tokio::time::advance(Duration::from_secs(31)).await;
 
     let result = task.await?;
-    let err = result.expect_err("stalled headers should fail");
+    let err = result
+        .err()
+        .ok_or_else(|| anyhow!("stalled headers should fail"))?;
     let rendered = err.to_string();
     if !rendered.contains("response headers were not received within 10s") {
         return Err(anyhow!("unexpected timeout error message: {rendered}"));
@@ -326,7 +329,8 @@ data: [DONE]"#,
         &request,
     )
     .await
-    .expect_err("duplicate tool output should fail locally");
+    .err()
+    .ok_or_else(|| anyhow!("duplicate tool output should fail locally"))?;
 
     let rendered = err.to_string();
     if !rendered.contains("without an available preceding function_call") {
@@ -364,7 +368,8 @@ data: [DONE]"#,
         &request,
     )
     .await
-    .expect_err("orphan tool output should fail locally");
+    .err()
+    .ok_or_else(|| anyhow!("orphan tool output should fail locally"))?;
 
     let rendered = err.to_string();
     if !rendered.contains("function_call_output items without an available preceding function_call")

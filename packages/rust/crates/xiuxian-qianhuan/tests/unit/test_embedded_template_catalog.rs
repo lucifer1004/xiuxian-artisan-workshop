@@ -13,31 +13,29 @@ static TEST_TEMPLATE_CATALOG: EmbeddedManifestationTemplateCatalog =
     );
 
 #[test]
-fn embedded_template_catalog_renders_text() {
-    let rendered = TEST_TEMPLATE_CATALOG
-        .render_text(
-            TEST_TEMPLATE_NAME,
-            json!({
-                "value": "alpha",
-                "tail": "omega",
-            }),
-        )
-        .expect("embedded template catalog should render text");
+fn embedded_template_catalog_renders_text() -> Result<(), Box<dyn std::error::Error>> {
+    let rendered = TEST_TEMPLATE_CATALOG.render_text(
+        TEST_TEMPLATE_NAME,
+        json!({
+            "value": "alpha",
+            "tail": "omega",
+        }),
+    )?;
 
     assert_eq!(rendered, "Value: alpha\nTail: omega");
+    Ok(())
 }
 
 #[test]
-fn embedded_template_catalog_renders_lines() {
-    let rendered = TEST_TEMPLATE_CATALOG
-        .render_lines(
-            TEST_TEMPLATE_NAME,
-            json!({
-                "value": "alpha",
-                "tail": "omega",
-            }),
-        )
-        .expect("embedded template catalog should render lines");
+fn embedded_template_catalog_renders_lines() -> Result<(), Box<dyn std::error::Error>> {
+    let rendered = TEST_TEMPLATE_CATALOG.render_lines(
+        TEST_TEMPLATE_NAME,
+        json!({
+            "value": "alpha",
+            "tail": "omega",
+        }),
+    )?;
 
     assert_eq!(rendered, vec!["Value: alpha", "Tail: omega"]);
+    Ok(())
 }

@@ -1,3 +1,4 @@
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::AttachmentSearchHit;
 use crate::search::ranking::sort_by_rank;
 use crate::search::{SearchCorpusKind, SearchPlaneService};
@@ -10,6 +11,12 @@ use super::scoring::{
 };
 use super::types::{AttachmentCandidateQuery, AttachmentSearchError};
 
+#[derive(Clone)]
+struct PreparedAttachmentRead {
+    query_engine: ParquetQueryEngine,
+    table_name: String,
+}
+
 pub(crate) async fn search_attachment_hits(
     service: &SearchPlaneService,
     query: &str,
@@ -18,13 +25,6 @@ pub(crate) async fn search_attachment_hits(
     kinds: &[crate::link_graph::LinkGraphAttachmentKind],
     case_sensitive: bool,
 ) -> Result<Vec<AttachmentSearchHit>, AttachmentSearchError> {
-    let status = service
-        .coordinator()
-        .status_for(SearchCorpusKind::Attachment);
-    let Some(active_epoch) = status.active_epoch else {
-        return Err(AttachmentSearchError::NotReady);
-    };
-
     let query_text = query.trim();
     if query_text.is_empty() {
         return Ok(Vec::new());
@@ -32,19 +32,7 @@ pub(crate) async fn search_attachment_hits(
 
     let normalized_extensions = normalize_extension_filters(extensions);
     let normalized_kinds = normalize_kind_filters(kinds);
-
-    let parquet_path = service.local_epoch_parquet_path(SearchCorpusKind::Attachment, active_epoch);
-    if !parquet_path.exists() {
-        return Err(AttachmentSearchError::NotReady);
-    }
-    let engine_table_name = SearchPlaneService::local_epoch_engine_table_name(
-        SearchCorpusKind::Attachment,
-        active_epoch,
-    );
-    service
-        .search_engine()
-        .ensure_parquet_table_registered(engine_table_name.as_str(), parquet_path.as_path(), &[])
-        .await?;
+    let prepared = prepare_attachment_read(service).await?;
 
     let normalized_query = if case_sensitive {
         query_text.to_string()
@@ -61,8 +49,8 @@ pub(crate) async fn search_attachment_hits(
         window: retained_window(limit),
     };
     let execution = execute_attachment_search(
-        service.search_engine(),
-        engine_table_name.as_str(),
+        &prepared.query_engine,
+        prepared.table_name.as_str(),
         &candidate_query,
     )
     .await?;
@@ -70,8 +58,8 @@ pub(crate) async fn search_attachment_hits(
     sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
     let hits = decode_attachment_hits(
-        service.search_engine(),
-        engine_table_name.as_str(),
+        &prepared.query_engine,
+        prepared.table_name.as_str(),
         candidates,
     )
     .await?;
@@ -82,4 +70,36 @@ pub(crate) async fn search_attachment_hits(
             .finish(execution.source, None, hits.len()),
     );
     Ok(hits)
+}
+
+async fn prepare_attachment_read(
+    service: &SearchPlaneService,
+) -> Result<PreparedAttachmentRead, AttachmentSearchError> {
+    let status = service
+        .coordinator()
+        .status_for(SearchCorpusKind::Attachment);
+    let Some(active_epoch) = status.active_epoch else {
+        return Err(AttachmentSearchError::NotReady);
+    };
+
+    let parquet_path = service.local_epoch_parquet_path(SearchCorpusKind::Attachment, active_epoch);
+    if !parquet_path.exists() {
+        return Err(AttachmentSearchError::NotReady);
+    }
+    let table_name = SearchPlaneService::local_epoch_engine_table_name(
+        SearchCorpusKind::Attachment,
+        active_epoch,
+    );
+    #[cfg(feature = "duckdb")]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+    #[cfg(not(feature = "duckdb"))]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    query_engine
+        .ensure_parquet_table_registered(table_name.as_str(), parquet_path.as_path())
+        .await?;
+
+    Ok(PreparedAttachmentRead {
+        query_engine,
+        table_name,
+    })
 }

@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::ReferenceSearchHit;
 use crate::search::reference_occurrence::ReferenceOccurrenceSearchError;
-use xiuxian_vector::SearchEngineContext;
 
 use super::candidates::ReferenceOccurrenceCandidate;
-use super::helpers::{sql_string_literal, string_column};
+use super::helpers::{sql_identifier, sql_string_literal, string_column};
 
 pub(super) async fn decode_reference_hits(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_name: &str,
     candidates: Vec<ReferenceOccurrenceCandidate>,
 ) -> Result<Vec<ReferenceSearchHit>, ReferenceOccurrenceSearchError> {
@@ -31,7 +31,7 @@ pub(super) async fn decode_reference_hits(
 }
 
 async fn load_hit_payloads_by_id(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_name: &str,
     candidates: &[ReferenceOccurrenceCandidate],
 ) -> Result<BTreeMap<String, String>, ReferenceOccurrenceSearchError> {
@@ -41,15 +41,17 @@ async fn load_hit_payloads_by_id(
 
     let sql = format!(
         "SELECT {id_column}, {hit_json_column} FROM {table_name} WHERE {id_column} IN ({ids})",
-        id_column = crate::search::reference_occurrence::schema::id_column(),
-        hit_json_column = crate::search::reference_occurrence::schema::hit_json_column(),
+        id_column = sql_identifier(crate::search::reference_occurrence::schema::id_column()),
+        hit_json_column =
+            sql_identifier(crate::search::reference_occurrence::schema::hit_json_column()),
+        table_name = sql_identifier(table_name),
         ids = candidates
             .iter()
             .map(|candidate| sql_string_literal(candidate.id.as_str()))
             .collect::<Vec<_>>()
             .join(", ")
     );
-    let batches = engine.sql_batches(sql.as_str()).await?;
+    let batches = engine.query_batches(sql.as_str()).await?;
     let mut payloads = BTreeMap::new();
 
     for batch in batches {

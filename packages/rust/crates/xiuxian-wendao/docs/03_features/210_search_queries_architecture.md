@@ -104,6 +104,63 @@ registration policy, and the additive runtime-stats, byte-metadata, and
 materialization-state slices as code-backed Wendao work. Qianji stage-local
 DuckDB pilots remain future work.
 
+The next bounded temp-storage slice is landed too. The same bounded markdown
+payload now also exposes `localTempStoragePeakBytes`, fed from DuckDB profiling
+metric `SYSTEM_PEAK_TEMP_DIR_SIZE` on the bounded local engine path. This keeps
+the shared SQL surface stable by default while making bounded DuckDB temp
+storage usage visible without introducing a broader profiling system.
+
+The next gateway-facing slice is landed too. Repo-backed gateway reads for
+`repo_entity` and `repo_content_chunk` now route published Parquet scans
+through a bounded `ParquetQueryEngine` seam under `src/duckdb/parquet.rs`.
+When `search.duckdb.enabled` is true in a `duckdb` build, those repo-backed
+gateway reads execute through DuckDB; otherwise they fall back to the current
+DataFusion engine. This is the first gateway read cutover under the RFC, while
+non-repo gateway handlers and local-corpus Lance writer removal remain future
+work.
+
+The next local-corpus gateway slice is landed too. The published `local_symbol`
+read lane now reuses the same bounded `ParquetQueryEngine`, so local-symbol
+search, autocomplete, and payload hydration no longer read directly from
+`SearchEngineContext`. When `search.duckdb.enabled` is true in a `duckdb`
+build, those published `local_symbol` parquet reads execute through DuckDB;
+otherwise they fall back to DataFusion. The unified in-memory symbol index
+behind `/search/symbols` remains a separate future migration question.
+
+The next local-corpus gateway slice is landed too. The published
+`reference_occurrence` read lane behind `/search/references` now reuses the
+same bounded `ParquetQueryEngine`, so the stage-one scan and payload
+hydration path no longer reads directly from `SearchEngineContext`. The SQL
+builder for this lane now quotes engine-facing identifiers such as `column`,
+which keeps the published parquet read path valid in both DataFusion and
+DuckDB. When `search.duckdb.enabled` is true in a `duckdb` build, those
+published `reference_occurrence` parquet reads execute through DuckDB;
+otherwise they fall back to DataFusion. Lance-backed reference-occurrence
+build ownership remains a separate future migration question.
+
+The next local-corpus gateway slice is landed too. The published `attachment`
+read lane behind `/search/attachments` now reuses the same bounded
+`ParquetQueryEngine`, so the stage-one scan and payload hydration path no
+longer reads directly from `SearchEngineContext`. The SQL builder for this
+lane now quotes engine-facing identifiers and table names as well, keeping the
+same published parquet read path valid in both DataFusion and DuckDB. When
+`search.duckdb.enabled` is true in a `duckdb` build, those published
+`attachment` parquet reads execute through DuckDB; otherwise they fall back to
+DataFusion. Lance-backed attachment build ownership remains a separate future
+migration question.
+
+The next local-corpus gateway slice is landed too. The published
+`knowledge_section` read lane behind the gateway knowledge search path now
+reuses the same bounded `ParquetQueryEngine`, so the stage-one scan and
+payload hydration path no longer read directly from `SearchEngineContext`.
+The SQL builder for this lane now quotes engine-facing identifiers and table
+names as well, keeping the same published parquet read path valid in both
+DataFusion and DuckDB. When `search.duckdb.enabled` is true in a `duckdb`
+build, those published `knowledge_section` parquet reads execute through
+DuckDB; otherwise they fall back to DataFusion. Knowledge intent/source merge
+orchestration and Lance-backed build ownership remain separate future
+migration questions.
+
 ## Native Flight
 
 Native Flight should continue to own Wendao-specific capabilities that are not

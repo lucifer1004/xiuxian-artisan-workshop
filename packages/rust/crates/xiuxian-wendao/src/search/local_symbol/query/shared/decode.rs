@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::AstSearchHit;
-use xiuxian_vector::SearchEngineContext;
 
 use super::types::{LocalSymbolCandidate, LocalSymbolSearchError};
 
 pub(crate) async fn decode_local_symbol_hits(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     candidates: Vec<LocalSymbolCandidate>,
 ) -> Result<Vec<AstSearchHit>, LocalSymbolSearchError> {
     let payloads = load_hit_payloads(engine, candidates.as_slice()).await?;
@@ -31,7 +31,7 @@ pub(crate) async fn decode_local_symbol_hits(
 }
 
 async fn load_hit_payloads(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     candidates: &[LocalSymbolCandidate],
 ) -> Result<BTreeMap<String, BTreeMap<String, String>>, LocalSymbolSearchError> {
     let mut ids_by_table = BTreeMap::<String, Vec<String>>::new();
@@ -54,7 +54,7 @@ async fn load_hit_payloads(
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        let batches = engine.sql_batches(sql.as_str()).await?;
+        let batches = engine.query_batches(sql.as_str()).await?;
         let table_payloads = payloads.entry(table_name.clone()).or_default();
         for batch in batches {
             let id = string_column(&batch, crate::search::local_symbol::schema::id_column())?;

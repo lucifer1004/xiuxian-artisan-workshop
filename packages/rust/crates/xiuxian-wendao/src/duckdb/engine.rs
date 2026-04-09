@@ -12,6 +12,8 @@ use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
 #[cfg(feature = "duckdb")]
 use arrow::datatypes::DataType;
 #[cfg(feature = "duckdb")]
+use duckdb::profiling::ProfilingInfo;
+#[cfg(feature = "duckdb")]
 use std::sync::{Mutex, MutexGuard};
 #[cfg(feature = "duckdb")]
 use uuid::Uuid;
@@ -102,6 +104,13 @@ pub trait LocalRelationEngine: Send + Sync {
         None
     }
 
+    /// Report the peak temp-storage bytes observed for the last bounded local
+    /// query when the engine exposes that detail.
+    #[must_use]
+    fn last_query_temp_storage_peak_bytes(&self) -> Option<u64> {
+        None
+    }
+
     /// Execute one SQL query and collect Arrow batches.
     ///
     /// # Errors
@@ -149,15 +158,16 @@ pub struct DuckDbLocalRelationEngine {
     runtime: SearchDuckDbRuntimeConfig,
     arrow_relation_store: DuckDbArrowRelationStore,
     registration_strategies: Mutex<HashMap<String, DuckDbRegistrationStrategy>>,
+    last_query_temp_storage_peak_bytes: Mutex<Option<u64>>,
 }
 
-/// Chosen DuckDB registration strategy for one request-scoped relation.
+/// Chosen `DuckDB` registration strategy for one request-scoped relation.
 #[cfg(feature = "duckdb")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DuckDbRegistrationStrategy {
     /// Keep the relation virtual through a request-scoped Arrow view.
     VirtualArrow,
-    /// Materialize the relation into a DuckDB table through the appender path.
+    /// Materialize the relation into a `DuckDB` table through the appender path.
     MaterializedAppender,
 }
 
@@ -179,7 +189,7 @@ impl DuckDbLocalRelationEngine {
     ///
     /// # Errors
     ///
-    /// Returns an error when the DuckDB runtime is disabled or when the host
+    /// Returns an error when the `DuckDB` runtime is disabled or when the host
     /// connection cannot be opened.
     pub fn configured() -> Result<Self, String> {
         let connection = SearchDuckDbConnection::configured()?;
@@ -211,6 +221,14 @@ impl DuckDbLocalRelationEngine {
             .map_err(|_| "duckdb registration strategy mutex is poisoned".to_string())
     }
 
+    fn lock_last_query_temp_storage_peak_bytes(
+        &self,
+    ) -> Result<MutexGuard<'_, Option<u64>>, String> {
+        self.last_query_temp_storage_peak_bytes
+            .lock()
+            .map_err(|_| "duckdb temp storage metric mutex is poisoned".to_string())
+    }
+
     fn from_connection(connection: SearchDuckDbConnection) -> Result<Self, String> {
         let runtime = connection.runtime().clone();
         let arrow_relation_store = DuckDbArrowRelationStore::new(Uuid::new_v4().to_string());
@@ -225,6 +243,7 @@ impl DuckDbLocalRelationEngine {
             runtime,
             arrow_relation_store,
             registration_strategies: Mutex::new(HashMap::new()),
+            last_query_temp_storage_peak_bytes: Mutex::new(None),
         })
     }
 
@@ -241,11 +260,11 @@ impl DuckDbLocalRelationEngine {
     fn register_virtual_relation(
         &self,
         table_name: &str,
-        schema: SchemaRef,
+        schema: &SchemaRef,
         batches: Vec<EngineRecordBatch>,
     ) -> Result<(), String> {
         self.arrow_relation_store
-            .insert(table_name, schema, batches)?;
+            .insert(table_name, Arc::clone(schema), batches)?;
         let guard = self.lock_connection()?;
         guard
             .connection()
@@ -263,11 +282,11 @@ impl DuckDbLocalRelationEngine {
     fn register_materialized_relation(
         &self,
         table_name: &str,
-        schema: SchemaRef,
+        schema: &SchemaRef,
         batches: Vec<EngineRecordBatch>,
     ) -> Result<(), String> {
         self.arrow_relation_store.remove(table_name)?;
-        let create_table_sql = build_duckdb_create_table_sql(table_name, &schema)?;
+        let create_table_sql = build_duckdb_create_table_sql(table_name, schema)?;
         let guard = self.lock_connection()?;
         let connection = guard.connection();
         connection
@@ -390,6 +409,12 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
             })
     }
 
+    fn last_query_temp_storage_peak_bytes(&self) -> Option<u64> {
+        self.lock_last_query_temp_storage_peak_bytes()
+            .ok()
+            .and_then(|value| *value)
+    }
+
     fn register_record_batches(
         &self,
         table_name: &str,
@@ -410,10 +435,10 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
         let strategy = self.registration_strategy_for_row_count(total_rows);
         match strategy {
             DuckDbRegistrationStrategy::VirtualArrow => {
-                self.register_virtual_relation(table_name, schema, batches)?
+                self.register_virtual_relation(table_name, &schema, batches)?;
             }
             DuckDbRegistrationStrategy::MaterializedAppender => {
-                self.register_materialized_relation(table_name, schema, batches)?
+                self.register_materialized_relation(table_name, &schema, batches)?;
             }
         }
         self.lock_registration_strategies()?
@@ -422,18 +447,50 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
     }
 
     async fn query_batches(&self, sql: &str) -> Result<Vec<EngineRecordBatch>, String> {
+        *self.lock_last_query_temp_storage_peak_bytes()? = None;
         let guard = self.lock_connection()?;
         let connection = guard.connection();
         let mut statement = connection.prepare(sql).map_err(|error| {
             format!("failed to prepare DuckDB local relation SQL `{sql}`: {error}")
         })?;
-        statement
+        let batches = statement
             .query_arrow([])
-            .map(|arrow| arrow.collect())
             .map_err(|error| {
                 format!("DuckDB local relation SQL execution failed for `{sql}`: {error}")
-            })
+            })?
+            .collect();
+        *self.lock_last_query_temp_storage_peak_bytes()? = connection
+            .get_profiling_info()
+            .as_ref()
+            .and_then(peak_temp_storage_bytes_from_profiling);
+        Ok(batches)
     }
+}
+
+#[cfg(feature = "duckdb")]
+const DUCKDB_SYSTEM_PEAK_TEMP_DIR_SIZE_METRIC: &str = "SYSTEM_PEAK_TEMP_DIR_SIZE";
+
+#[cfg(feature = "duckdb")]
+fn peak_temp_storage_bytes_from_profiling(info: &ProfilingInfo) -> Option<u64> {
+    profiling_metric_u64(info, DUCKDB_SYSTEM_PEAK_TEMP_DIR_SIZE_METRIC)
+}
+
+#[cfg(feature = "duckdb")]
+fn profiling_metric_u64(info: &ProfilingInfo, metric_name: &str) -> Option<u64> {
+    info.metrics
+        .get(metric_name)
+        .and_then(|value| parse_profiling_metric_u64(value))
+        .or_else(|| {
+            info.children
+                .iter()
+                .find_map(|child| profiling_metric_u64(child, metric_name))
+        })
+}
+
+#[cfg(feature = "duckdb")]
+fn parse_profiling_metric_u64(value: &str) -> Option<u64> {
+    let token = value.split_whitespace().next()?;
+    token.replace([',', '_'], "").parse().ok()
 }
 
 #[cfg(feature = "duckdb")]
@@ -500,7 +557,7 @@ fn build_duckdb_virtual_view_sql(
 }
 
 #[cfg(feature = "duckdb")]
-fn build_drop_duckdb_registered_relation_sql(table_name: &str) -> String {
+pub(crate) fn build_drop_duckdb_registered_relation_sql(table_name: &str) -> String {
     let quoted_table_name = quoted_duckdb_identifier(table_name);
     format!("DROP VIEW IF EXISTS {quoted_table_name};\nDROP TABLE IF EXISTS {quoted_table_name};")
 }
@@ -529,7 +586,7 @@ fn duckdb_sql_type(data_type: &DataType) -> Result<&'static str, String> {
 }
 
 #[cfg(feature = "duckdb")]
-fn ensure_duckdb_identifier(identifier: &str, label: &str) -> Result<(), String> {
+pub(crate) fn ensure_duckdb_identifier(identifier: &str, label: &str) -> Result<(), String> {
     let mut chars = identifier.chars();
     let Some(first) = chars.next() else {
         return Err(format!(
@@ -550,6 +607,6 @@ fn ensure_duckdb_identifier(identifier: &str, label: &str) -> Result<(), String>
 }
 
 #[cfg(feature = "duckdb")]
-fn quoted_duckdb_identifier(identifier: &str) -> String {
+pub(crate) fn quoted_duckdb_identifier(identifier: &str) -> String {
     format!("\"{identifier}\"")
 }

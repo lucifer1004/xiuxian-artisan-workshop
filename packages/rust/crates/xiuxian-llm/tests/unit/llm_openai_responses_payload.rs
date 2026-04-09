@@ -1,6 +1,6 @@
 #![cfg(feature = "provider-litellm")]
 
-//! Regression tests for OpenAI `/responses` payload normalization.
+//! Regression tests for `OpenAI` `/responses` payload normalization.
 
 use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
 use litellm_rs::core::types::content::ContentPart;
@@ -38,7 +38,7 @@ fn responses_payload_injects_empty_properties_for_object_schema_without_properti
 }
 
 #[test]
-fn responses_payload_serializes_assistant_tool_calls_before_tool_outputs() {
+fn responses_payload_serializes_assistant_tool_calls_before_tool_outputs() -> anyhow::Result<()> {
     let request = LiteChatRequest {
         model: "gpt-5-codex".to_string(),
         messages: vec![
@@ -83,21 +83,21 @@ fn responses_payload_serializes_assistant_tool_calls_before_tool_outputs() {
     };
 
     let payload = build_openai_responses_payload(&request).payload;
-    let input = payload["input"]
-        .as_array()
-        .expect("responses payload should include input array");
+    let input = payload["input"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("responses payload should include input array: {payload}")
+    })?;
     let function_call_index = input
         .iter()
         .position(|item| {
             item.get("type").and_then(serde_json::Value::as_str) == Some("function_call")
         })
-        .expect("assistant function_call should be emitted");
+        .ok_or_else(|| anyhow::anyhow!("assistant function_call should be emitted: {input:?}"))?;
     let function_output_index = input
         .iter()
         .position(|item| {
             item.get("type").and_then(serde_json::Value::as_str) == Some("function_call_output")
         })
-        .expect("tool output should be emitted");
+        .ok_or_else(|| anyhow::anyhow!("tool output should be emitted: {input:?}"))?;
 
     assert!(function_call_index < function_output_index);
     assert_eq!(input[function_call_index]["call_id"], json!("call_1"));
@@ -108,10 +108,11 @@ fn responses_payload_serializes_assistant_tool_calls_before_tool_outputs() {
     );
     assert_eq!(input[function_output_index]["call_id"], json!("call_1"));
     assert_eq!(input[function_output_index]["output"], json!("reloaded"));
+    Ok(())
 }
 
 #[test]
-fn responses_payload_normalizes_pipe_delimited_tool_call_ids() {
+fn responses_payload_normalizes_pipe_delimited_tool_call_ids() -> anyhow::Result<()> {
     let request = LiteChatRequest {
         model: "gpt-5-codex".to_string(),
         messages: vec![
@@ -138,26 +139,27 @@ fn responses_payload_normalizes_pipe_delimited_tool_call_ids() {
     };
 
     let payload = build_openai_responses_payload(&request).payload;
-    let input = payload["input"]
-        .as_array()
-        .expect("responses payload should include input array");
+    let input = payload["input"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("responses payload should include input array: {payload}")
+    })?;
     let function_call = input
         .iter()
         .find(|item| item.get("type").and_then(serde_json::Value::as_str) == Some("function_call"))
-        .expect("assistant function_call should be emitted");
+        .ok_or_else(|| anyhow::anyhow!("assistant function_call should be emitted: {input:?}"))?;
     let function_output = input
         .iter()
         .find(|item| {
             item.get("type").and_then(serde_json::Value::as_str) == Some("function_call_output")
         })
-        .expect("tool output should be emitted");
+        .ok_or_else(|| anyhow::anyhow!("tool output should be emitted: {input:?}"))?;
 
     assert_eq!(function_call["call_id"], json!("call_1"));
     assert_eq!(function_output["call_id"], json!("call_1"));
+    Ok(())
 }
 
 #[test]
-fn responses_payload_skips_tool_output_without_call_id() {
+fn responses_payload_skips_tool_output_without_call_id() -> anyhow::Result<()> {
     let request = LiteChatRequest {
         model: "gpt-5-codex".to_string(),
         messages: vec![
@@ -176,19 +178,21 @@ fn responses_payload_skips_tool_output_without_call_id() {
     };
 
     let payload = build_openai_responses_payload(&request).payload;
-    let input = payload["input"]
-        .as_array()
-        .expect("responses payload should include input array");
+    let input = payload["input"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("responses payload should include input array: {payload}")
+    })?;
     assert!(
         !input.iter().any(|item| {
             item.get("type").and_then(serde_json::Value::as_str) == Some("function_call_output")
         }),
         "tool output without call_id must be skipped to avoid invalid responses payload",
     );
+    Ok(())
 }
 
 #[test]
-fn responses_payload_serializes_tool_result_parts_into_function_call_output() {
+fn responses_payload_serializes_tool_result_parts_into_function_call_output() -> anyhow::Result<()>
+{
     let request = LiteChatRequest {
         model: "gpt-5-codex".to_string(),
         messages: vec![
@@ -219,16 +223,17 @@ fn responses_payload_serializes_tool_result_parts_into_function_call_output() {
     };
 
     let payload = build_openai_responses_payload(&request).payload;
-    let input = payload["input"]
-        .as_array()
-        .expect("responses payload should include input array");
+    let input = payload["input"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("responses payload should include input array: {payload}")
+    })?;
     let function_output = input
         .iter()
         .find(|item| {
             item.get("type").and_then(serde_json::Value::as_str) == Some("function_call_output")
         })
-        .expect("tool output should be emitted");
+        .ok_or_else(|| anyhow::anyhow!("tool output should be emitted: {input:?}"))?;
 
     assert_eq!(function_output["call_id"], json!("call_1"));
     assert_eq!(function_output["output"], json!(r#"{"ok":true}"#));
+    Ok(())
 }

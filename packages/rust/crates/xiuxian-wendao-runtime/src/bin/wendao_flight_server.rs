@@ -1,16 +1,26 @@
 //! Runtime-owned Arrow Flight server binary for the stable Wendao query and rerank routes.
 
+#[cfg(not(feature = "transport"))]
+use std::io;
+#[cfg(feature = "transport")]
 use std::io::{self, Write};
+#[cfg(feature = "transport")]
 use std::sync::Arc;
 
+#[cfg(feature = "transport")]
 use arrow_flight::flight_service_server::FlightServiceServer;
+#[cfg(feature = "transport")]
 use tokio::net::TcpListener;
+#[cfg(feature = "transport")]
 use tokio_stream::wrappers::TcpListenerStream;
+#[cfg(feature = "transport")]
 use tonic::transport::Server;
+#[cfg(feature = "transport")]
 use xiuxian_vector::{
     LanceDataType, LanceField, LanceFloat64Array, LanceInt32Array, LanceListArray,
     LanceListBuilder, LanceRecordBatch, LanceSchema, LanceStringArray, LanceStringBuilder,
 };
+#[cfg(feature = "transport")]
 use xiuxian_wendao_runtime::transport::{
     EffectiveRerankFlightHostSettings, REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DOC_ID_COLUMN,
     REPO_SEARCH_HIERARCHY_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
@@ -21,6 +31,12 @@ use xiuxian_wendao_runtime::transport::{
     resolve_effective_rerank_flight_host_settings, split_rerank_flight_host_overrides,
 };
 
+#[cfg(not(feature = "transport"))]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Err(io::Error::other("`wendao_flight_server` requires the `transport` feature").into())
+}
+
+#[cfg(feature = "transport")]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
@@ -122,6 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "transport")]
 fn build_utf8_list_array(rows: &[&[String]]) -> LanceListArray {
     let mut builder = LanceListBuilder::new(LanceStringBuilder::new());
     for row in rows {

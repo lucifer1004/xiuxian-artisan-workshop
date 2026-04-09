@@ -70,6 +70,7 @@ async fn studio_sql_flight_provider_queries_registered_reference_occurrence_tabl
             registered_input_bytes: None,
             result_bytes: None,
             local_relation_materialization_state: None,
+            local_temp_storage_peak_bytes: None,
             local_relation_engine: None,
             duckdb_registration_strategy: None,
             registered_input_batch_count: None,

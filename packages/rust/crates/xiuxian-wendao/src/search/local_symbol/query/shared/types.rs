@@ -1,3 +1,4 @@
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::AutocompleteSuggestion;
 use crate::search::ranking::{StreamingRerankSource, StreamingRerankTelemetry};
 use xiuxian_vector::VectorStoreError;
@@ -24,6 +25,12 @@ pub(crate) struct LocalSymbolAutocompleteExecution {
     pub(crate) suggestions: Vec<AutocompleteSuggestion>,
     pub(crate) telemetry: StreamingRerankTelemetry,
     pub(crate) source: StreamingRerankSource,
+}
+
+#[derive(Clone)]
+pub(crate) struct PreparedLocalSymbolRead {
+    pub(crate) query_engine: ParquetQueryEngine,
+    pub(crate) table_names: Vec<String>,
 }
 
 #[derive(Debug)]

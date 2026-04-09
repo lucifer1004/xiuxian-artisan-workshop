@@ -31,13 +31,18 @@ pub(crate) async fn search_repo_entity_symbol_results(
     };
     let PreparedRepoEntitySearch {
         _read_permit,
+        query_engine,
         engine_table_name,
         candidates,
         telemetry,
         source,
     } = prepared;
-    let rows =
-        load_hydrated_rows(service, engine_table_name.as_str(), candidates.as_slice()).await?;
+    let rows = load_hydrated_rows(
+        &query_engine,
+        engine_table_name.as_str(),
+        candidates.as_slice(),
+    )
+    .await?;
     let result = build_symbol_search_result(repo_id, candidates, &rows)?;
     service.record_query_telemetry(
         SearchCorpusKind::RepoEntity,

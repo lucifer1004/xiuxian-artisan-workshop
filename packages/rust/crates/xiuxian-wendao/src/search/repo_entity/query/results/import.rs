@@ -30,13 +30,18 @@ pub(crate) async fn search_repo_entity_import_results(
     };
     let PreparedRepoEntitySearch {
         _read_permit,
+        query_engine,
         engine_table_name,
         candidates,
         telemetry,
         source,
     } = prepared;
-    let rows =
-        load_hydrated_rows(service, engine_table_name.as_str(), candidates.as_slice()).await?;
+    let rows = load_hydrated_rows(
+        &query_engine,
+        engine_table_name.as_str(),
+        candidates.as_slice(),
+    )
+    .await?;
     let result = build_import_search_result(query.repo_id.as_str(), candidates, &rows)?;
     service.record_query_telemetry(
         SearchCorpusKind::RepoEntity,

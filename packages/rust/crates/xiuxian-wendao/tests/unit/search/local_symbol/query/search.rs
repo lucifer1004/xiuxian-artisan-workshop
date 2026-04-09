@@ -1,3 +1,7 @@
+#[cfg(feature = "duckdb")]
+use serial_test::serial;
+
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::SearchCorpusKind;
 use crate::search::local_symbol::query::search::search_local_symbols;
 use crate::search::local_symbol::query::shared::{
@@ -5,6 +9,8 @@ use crate::search::local_symbol::query::shared::{
 };
 use xiuxian_vector::ColumnarScanOptions;
 
+#[cfg(feature = "duckdb")]
+use super::fixtures::write_search_duckdb_runtime_override;
 use super::fixtures::{fixture_service, publish_local_symbol_hits, sample_hit};
 
 #[tokio::test]
@@ -92,31 +98,32 @@ async fn local_symbol_query_can_rerank_across_multiple_tables() {
         )
         .await
         .unwrap_or_else(|error| panic!("export parquet b: {error}"));
-    service
-        .search_engine()
+    #[cfg(feature = "duckdb")]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())
+        .unwrap_or_else(|error| panic!("build parquet query engine: {error}"));
+    #[cfg(not(feature = "duckdb"))]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    query_engine
         .ensure_parquet_table_registered(
             "local_symbol_project_a",
             service
                 .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_a")
                 .as_path(),
-            &[],
         )
         .await
-        .unwrap_or_else(|error| panic!("register parquet a: {error}"));
-    service
-        .search_engine()
+        .unwrap_or_else(|error| panic!("register parquet a via query engine: {error}"));
+    query_engine
         .ensure_parquet_table_registered(
             "local_symbol_project_b",
             service
                 .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_b")
                 .as_path(),
-            &[],
         )
         .await
-        .unwrap_or_else(|error| panic!("register parquet b: {error}"));
+        .unwrap_or_else(|error| panic!("register parquet b via query engine: {error}"));
 
     let execution = execute_local_symbol_search(
-        service.search_engine(),
+        &query_engine,
         &[
             "local_symbol_project_a".to_string(),
             "local_symbol_project_b".to_string(),
@@ -127,10 +134,39 @@ async fn local_symbol_query_can_rerank_across_multiple_tables() {
     .await
     .unwrap_or_else(|error| panic!("multi-table query should succeed: {error}"));
 
-    let hits = decode_local_symbol_hits(service.search_engine(), execution.candidates)
+    let hits = decode_local_symbol_hits(&query_engine, execution.candidates)
         .await
         .unwrap_or_else(|error| panic!("decode hits should succeed: {error}"));
     assert_eq!(hits.len(), 2);
     assert_eq!(hits[0].name, "AlphaSymbol");
     assert_eq!(hits[1].name, "BetaAlphaHelper");
+}
+
+#[cfg(feature = "duckdb")]
+#[tokio::test]
+#[serial]
+async fn local_symbol_query_reads_hits_from_published_epoch_with_duckdb_query_engine() {
+    let _temp = write_search_duckdb_runtime_override(
+        r#"[search.duckdb]
+enabled = true
+database_path = ":memory:"
+temp_directory = ".cache/duckdb/local-symbol-query-tmp"
+threads = 2
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write duckdb runtime override: {error}"));
+
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let service = fixture_service(&temp_dir);
+    let hits = vec![
+        sample_hit("AlphaSymbol", "src/lib.rs", 10),
+        sample_hit("BetaThing", "src/beta.rs", 20),
+    ];
+    publish_local_symbol_hits(&service, "fp-duckdb-search", &hits).await;
+
+    let results = search_local_symbols(&service, "alpha", 5)
+        .await
+        .unwrap_or_else(|error| panic!("query should succeed: {error}"));
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "AlphaSymbol");
 }

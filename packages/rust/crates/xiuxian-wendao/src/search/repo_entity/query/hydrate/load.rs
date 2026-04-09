@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
-use xiuxian_vector::SearchEngineContext;
-
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::SearchHit;
 use crate::search::repo_entity::query::hydrate::{
     engine_float64_column, engine_list_string_column, engine_list_string_values,
@@ -13,7 +12,7 @@ use crate::search::repo_entity::query::search::{
 };
 
 pub(crate) async fn hydrate_repo_entity_hits(
-    engine: &SearchEngineContext,
+    query_engine: &ParquetQueryEngine,
     table_name: &str,
     candidates: Vec<RepoEntityCandidate>,
 ) -> Result<Vec<SearchHit>, RepoEntitySearchError> {
@@ -21,7 +20,7 @@ pub(crate) async fn hydrate_repo_entity_hits(
         .iter()
         .map(|candidate| candidate.id.clone())
         .collect::<Vec<_>>();
-    let payloads = load_hit_payloads_by_id(engine, table_name, ids.as_slice()).await?;
+    let payloads = load_hit_payloads_by_id(query_engine, table_name, ids.as_slice()).await?;
     candidates
         .into_iter()
         .map(|candidate| {
@@ -40,7 +39,7 @@ pub(crate) async fn hydrate_repo_entity_hits(
 }
 
 pub(crate) async fn load_hydrated_rows_by_id(
-    engine: &SearchEngineContext,
+    query_engine: &ParquetQueryEngine,
     table_name: &str,
     ids: &[String],
     projected_columns: &[String],
@@ -55,7 +54,7 @@ pub(crate) async fn load_hydrated_rows_by_id(
         id_filter_expression(ids),
     );
     let mut rows = BTreeMap::new();
-    let batches = engine.sql_batches(sql.as_str()).await?;
+    let batches = query_engine.query_batches(sql.as_str()).await?;
 
     for batch in batches {
         let id = engine_string_column(&batch, "id")?;
@@ -115,7 +114,7 @@ pub(crate) async fn load_hydrated_rows_by_id(
 }
 
 pub(crate) async fn load_hit_payloads_by_id(
-    engine: &SearchEngineContext,
+    query_engine: &ParquetQueryEngine,
     table_name: &str,
     ids: &[String],
 ) -> Result<BTreeMap<String, String>, RepoEntitySearchError> {
@@ -129,7 +128,7 @@ pub(crate) async fn load_hit_payloads_by_id(
         id_filter_expression(ids),
     );
     let mut payloads = BTreeMap::new();
-    let batches = engine.sql_batches(sql.as_str()).await?;
+    let batches = query_engine.query_batches(sql.as_str()).await?;
 
     for batch in batches {
         let id = engine_string_column(&batch, "id")?;

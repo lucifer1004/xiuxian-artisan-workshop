@@ -65,6 +65,7 @@ xiuxian-skills = { path = "../xiuxian-skills" }
 xiuxian-window = { path = "../xiuxian-window" }
 xiuxian-tokenizer = { path = "../xiuxian-tokenizer" }
 xiuxian-zhixing = { path = "../xiuxian-zhixing" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 axum = { workspace = true, features = ["multipart"] }
 clap = { workspace = true }
 xiuxian-macros = { path = "../xiuxian-macros" }

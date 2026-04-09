@@ -82,6 +82,7 @@ async fn payload_from_query_engine_batches(
         local_relation_materialization_state: query_engine
             .relation_materialization_state(BOUNDED_WORK_MARKDOWN_TABLE_NAME)
             .map(|state| state.as_str().to_string()),
+        local_temp_storage_peak_bytes: query_engine.last_query_temp_storage_peak_bytes(),
         local_relation_engine: Some(query_engine.kind().as_str().to_string()),
         duckdb_registration_strategy: query_engine
             .relation_registration_strategy(BOUNDED_WORK_MARKDOWN_TABLE_NAME)

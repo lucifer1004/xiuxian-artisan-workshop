@@ -27,16 +27,19 @@ pub struct BootstrapTemplateLoadSummary {
 }
 
 /// Resolve project root with an explicit `PRJ_ROOT` override for tests.
+#[must_use]
 pub fn resolve_project_root(prj_root: Option<&str>, current_dir: &Path) -> PathBuf {
     resolve_project_root_with_prj_root_internal(prj_root, current_dir)
 }
 
 /// Resolve `PRJ_DATA_HOME` with an optional explicit override.
+#[must_use]
 pub fn resolve_prj_data_home(project_root: &Path, prj_data_home: Option<&str>) -> PathBuf {
     resolve_prj_data_home_with_env_internal(project_root, prj_data_home)
 }
 
 /// Resolve notebook root with env-over-config-over-default precedence.
+#[must_use]
 pub fn resolve_notebook_root(
     prj_data_home: &Path,
     env_notebook_path: Option<&str>,
@@ -50,6 +53,7 @@ pub fn resolve_notebook_root(
 }
 
 /// Resolve template globs with an optional resource-root override.
+#[must_use]
 pub fn resolve_template_globs(
     project_root: &Path,
     config_template_paths: Option<Vec<String>>,
@@ -80,6 +84,7 @@ pub fn load_skill_templates_from_embedded_registry(
 }
 
 /// Return the internal persona-registry size produced by bootstrap wiring.
+#[must_use]
 pub fn init_persona_registries_internal_len(
     project_root: &Path,
     xiuxian_cfg: &XiuxianConfig,

@@ -43,6 +43,7 @@ fn sql_query_metadata(query_surface: &SqlQuerySurface) -> SqlQueryMetadata {
         registered_input_bytes: None,
         result_bytes: None,
         local_relation_materialization_state: None,
+        local_temp_storage_peak_bytes: None,
         local_relation_engine: None,
         duckdb_registration_strategy: None,
         registered_input_batch_count: None,

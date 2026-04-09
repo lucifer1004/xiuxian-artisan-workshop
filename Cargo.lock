@@ -13930,6 +13930,7 @@ dependencies = [
  "xiuxian-qianhuan",
  "xiuxian-qianji",
  "xiuxian-skills",
+ "xiuxian-testing",
  "xiuxian-tokenizer",
  "xiuxian-types",
  "xiuxian-wendao",
@@ -14535,6 +14536,7 @@ dependencies = [
  "toml 0.8.23",
  "tonic",
  "xiuxian-config-core",
+ "xiuxian-testing",
  "xiuxian-vector",
  "xiuxian-wendao-core",
 ]

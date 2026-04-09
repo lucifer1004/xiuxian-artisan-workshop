@@ -1,3 +1,5 @@
+use num_traits::ToPrimitive;
+
 use crate::{Agent, SessionMemoryRecallDecision};
 
 /// Histogram buckets for end-to-end memory-recall pipeline latency.
@@ -178,7 +180,7 @@ fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
     if denominator == 0 {
         return 0.0;
     }
-    numerator as f32 / denominator as f32
+    numerator.to_f32().unwrap_or(f32::MAX) / denominator.to_f32().unwrap_or(f32::MAX)
 }
 
 fn now_unix_ms() -> u64 {

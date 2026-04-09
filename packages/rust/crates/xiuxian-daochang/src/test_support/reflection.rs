@@ -82,7 +82,7 @@ impl ReflectiveRuntimeStage {
 impl ReflectiveRuntime {
     /// Return the current lifecycle stage.
     #[must_use]
-    pub fn stage(&self) -> Option<ReflectiveRuntimeStage> {
+    pub fn stage(self) -> Option<ReflectiveRuntimeStage> {
         self.inner.stage().map(from_internal_stage)
     }
 

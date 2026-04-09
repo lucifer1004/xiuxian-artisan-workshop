@@ -43,6 +43,10 @@ pub struct SqlQueryMetadata {
     /// caller exposes that detail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_relation_materialization_state: Option<String>,
+    /// Peak temp-storage bytes observed for the last bounded local query when
+    /// the caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_temp_storage_peak_bytes: Option<u64>,
     /// Stable local relation-engine label for bounded local analytics when the
     /// caller exposes that detail.
     #[serde(default, skip_serializing_if = "Option::is_none")]

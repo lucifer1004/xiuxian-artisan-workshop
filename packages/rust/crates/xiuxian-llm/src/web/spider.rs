@@ -87,7 +87,7 @@ impl SpiderBridge {
         let html = page.get_html();
         let cleaned_html = clean_html(html.as_str());
 
-        let (markdown_content, _source) = resolve_markdown_content(
+        let (markdown_content, content_source) = resolve_markdown_content(
             cleaned_html.as_str(),
             html.as_str(),
             source_url.as_str(),
@@ -102,6 +102,17 @@ impl SpiderBridge {
 
         let mut metadata = HashMap::new();
         metadata.insert("engine".to_string(), "spider".to_string());
+        metadata.insert("crawler.stealth".to_string(), self.stealth_mode.to_string());
+        metadata.insert(
+            "crawler.content_source".to_string(),
+            content_source.to_string(),
+        );
+        let user_agent = website
+            .configuration
+            .user_agent
+            .as_deref()
+            .map_or_else(|| "spider-default".to_string(), ToString::to_string);
+        metadata.insert("crawler.user_agent".to_string(), user_agent);
         if let Some(meta) = page.metadata.as_deref()
             && let Some(description) = meta.description.as_deref()
         {

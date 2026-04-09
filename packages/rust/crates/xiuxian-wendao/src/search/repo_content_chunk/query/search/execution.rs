@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use xiuxian_vector::SearchEngineContext;
-
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::ranking::{RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry};
 
 use super::candidates::RepoContentChunkCandidate;
@@ -17,7 +16,7 @@ pub(super) struct RepoContentChunkSearchExecution {
 }
 
 pub(super) async fn execute_repo_content_search(
-    engine: &SearchEngineContext,
+    query_engine: &ParquetQueryEngine,
     table_name: &str,
     raw_needle: &str,
     language_filters: &HashSet<String>,
@@ -26,7 +25,7 @@ pub(super) async fn execute_repo_content_search(
 ) -> Result<RepoContentChunkSearchExecution, RepoContentChunkSearchError> {
     let query_lower = raw_needle.to_ascii_lowercase();
     let stage1_sql = build_repo_content_stage1_sql(table_name, language_filters, filters);
-    let batches = engine.sql_batches(stage1_sql.as_str()).await?;
+    let batches = query_engine.query_batches(stage1_sql.as_str()).await?;
     let mut telemetry = StreamingRerankTelemetry::new(window, None, None);
     let mut best_by_path =
         HashMap::<String, RepoContentChunkCandidate>::with_capacity(window.target);

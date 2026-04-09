@@ -1,5 +1,7 @@
 //! Memory recall metrics helpers exposed for integration tests.
 
+use num_traits::ToPrimitive;
+
 use crate::SessionMemoryRecallDecision;
 use crate::agent::memory_recall_metrics::{MemoryRecallMetricsSnapshot, MemoryRecallMetricsState};
 
@@ -8,7 +10,7 @@ pub fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
     if denominator == 0 {
         return 0.0;
     }
-    numerator as f32 / denominator as f32
+    numerator.to_f32().unwrap_or(f32::MAX) / denominator.to_f32().unwrap_or(f32::MAX)
 }
 
 #[derive(Default)]

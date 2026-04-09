@@ -12,6 +12,7 @@ mod arrow;
 #[cfg(feature = "duckdb")]
 mod connection;
 mod engine;
+mod parquet;
 mod runtime;
 
 #[cfg(test)]
@@ -25,5 +26,8 @@ pub use engine::DuckDbLocalRelationEngine;
 #[cfg(all(feature = "duckdb", test))]
 pub(crate) use engine::DuckDbRegistrationStrategy;
 pub use engine::{DataFusionLocalRelationEngine, LocalRelationEngine, LocalRelationEngineKind};
+#[cfg(feature = "duckdb")]
+pub use parquet::DuckDbParquetQueryEngine;
+pub use parquet::{DataFusionParquetQueryEngine, ParquetQueryEngine};
 pub use runtime::resolve_search_duckdb_runtime;
 pub use xiuxian_wendao_runtime::config::{DuckDbDatabasePath, SearchDuckDbRuntimeConfig};

@@ -66,7 +66,7 @@
         "qianji" = {
           depsDrvConfig = {
             mkDerivation = {
-              buildInputs = [ ];
+              buildInputs = [ pkgs.protobuf ];
             };
           };
         };

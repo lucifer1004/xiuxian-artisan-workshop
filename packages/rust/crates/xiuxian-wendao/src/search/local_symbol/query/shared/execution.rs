@@ -1,5 +1,5 @@
+use crate::duckdb::ParquetQueryEngine;
 use crate::search::ranking::{RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry};
-use xiuxian_vector::SearchEngineContext;
 
 use super::columns::{collect_candidates, collect_suggestions};
 use super::types::{
@@ -7,7 +7,7 @@ use super::types::{
 };
 
 pub(crate) async fn execute_local_symbol_search(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_names: &[String],
     query_lower: &str,
     window: RetainedWindow,
@@ -19,7 +19,7 @@ pub(crate) async fn execute_local_symbol_search(
             "SELECT {} FROM {table_name}",
             crate::search::local_symbol::schema::projected_columns().join(", "),
         );
-        let batches = engine.sql_batches(sql.as_str()).await?;
+        let batches = engine.query_batches(sql.as_str()).await?;
         for batch in batches {
             collect_candidates(
                 table_name.as_str(),
@@ -39,7 +39,7 @@ pub(crate) async fn execute_local_symbol_search(
 }
 
 pub(crate) async fn execute_local_symbol_autocomplete(
-    engine: &SearchEngineContext,
+    engine: &ParquetQueryEngine,
     table_names: &[String],
     normalized_prefix: &str,
     window: RetainedWindow,
@@ -52,7 +52,7 @@ pub(crate) async fn execute_local_symbol_autocomplete(
             "SELECT {} FROM {table_name}",
             crate::search::local_symbol::schema::suggestion_columns().join(", "),
         );
-        let batches = engine.sql_batches(sql.as_str()).await?;
+        let batches = engine.query_batches(sql.as_str()).await?;
         for batch in batches {
             collect_suggestions(
                 &batch,

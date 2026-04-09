@@ -95,3 +95,7 @@ pub(crate) fn nullable_value(array: EngineStringColumn<'_>, index: usize) -> Opt
 pub(crate) fn sql_string_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
+
+pub(crate) fn sql_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
