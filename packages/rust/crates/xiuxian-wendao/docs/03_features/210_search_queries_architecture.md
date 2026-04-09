@@ -124,8 +124,24 @@ read lane now reuses the same bounded `ParquetQueryEngine`, so local-symbol
 search, autocomplete, and payload hydration no longer read directly from
 `SearchEngineContext`. When `search.duckdb.enabled` is true in a `duckdb`
 build, those published `local_symbol` parquet reads execute through DuckDB;
-otherwise they fall back to DataFusion. The unified in-memory symbol index
-behind `/search/symbols` remains a separate future migration question.
+otherwise they fall back to DataFusion.
+
+The next symbol-route gateway slice is landed too. `/search/symbols` now
+reuses the published `local_symbol` read lane instead of reading from the
+in-memory `UnifiedSymbolIndex`. The handler keeps the existing response
+contract and pending/indexing behavior, filters the broader `local_symbol`
+workset back down to code-symbol results, and focused handler plus Flight
+provider tests now prove the route can return DuckDB-fed symbol hits without
+warming the old in-memory symbol index.
+
+The next local-symbol ownership slice is landed too. The `local_symbol` build
+owner now rewrites published partition tables directly to Parquet through a
+bounded local-publication helper instead of cloning and mutating Lance tables.
+Local epoch discovery is now Parquet-only, and `local_symbol` no longer
+participates in local Lance compaction scheduling because it no longer owns a
+local Lance publication store. Focused build, query, and gateway tests now
+prove the same published read contract without leaving behind fresh
+`local_symbol` `.lance` tables.
 
 The next local-corpus gateway slice is landed too. The published
 `reference_occurrence` read lane behind `/search/references` now reuses the
@@ -135,8 +151,14 @@ builder for this lane now quotes engine-facing identifiers such as `column`,
 which keeps the published parquet read path valid in both DataFusion and
 DuckDB. When `search.duckdb.enabled` is true in a `duckdb` build, those
 published `reference_occurrence` parquet reads execute through DuckDB;
-otherwise they fall back to DataFusion. Lance-backed reference-occurrence
-build ownership remains a separate future migration question.
+otherwise they fall back to DataFusion.
+
+The next reference-occurrence ownership slice is landed too. The
+`reference_occurrence` build owner now rewrites its published table directly
+to Parquet through the bounded local-publication helper instead of cloning and
+mutating a Lance table. The same published read contract stays in place, and
+the corpus no longer participates in local Lance compaction scheduling because
+it no longer owns a local Lance publication store.
 
 The next local-corpus gateway slice is landed too. The published `attachment`
 read lane behind `/search/attachments` now reuses the same bounded
@@ -146,8 +168,15 @@ lane now quotes engine-facing identifiers and table names as well, keeping the
 same published parquet read path valid in both DataFusion and DuckDB. When
 `search.duckdb.enabled` is true in a `duckdb` build, those published
 `attachment` parquet reads execute through DuckDB; otherwise they fall back to
-DataFusion. Lance-backed attachment build ownership remains a separate future
-migration question.
+DataFusion.
+
+The next attachment ownership slice is landed too. The `attachment` build
+owner now rewrites its published table directly to Parquet through the bounded
+local-publication helper instead of cloning and mutating a Lance table, so the
+same published read contract stays in place without a local Lance publication
+store. The corpus also no longer participates in local Lance compaction
+scheduling, and focused build plus query tests now prove the writer cut leaves
+no fresh `attachment` `.lance` tables behind.
 
 The next local-corpus gateway slice is landed too. The published
 `knowledge_section` read lane behind the gateway knowledge search path now
@@ -158,8 +187,47 @@ names as well, keeping the same published parquet read path valid in both
 DataFusion and DuckDB. When `search.duckdb.enabled` is true in a `duckdb`
 build, those published `knowledge_section` parquet reads execute through
 DuckDB; otherwise they fall back to DataFusion. Knowledge intent/source merge
-orchestration and Lance-backed build ownership remain separate future
-migration questions.
+orchestration remains a separate future migration question.
+
+The next knowledge ownership slice is landed too. The `knowledge_section`
+build owner now rewrites its published table directly to Parquet through the
+bounded local-publication helper instead of cloning and mutating a Lance
+table, so the same published read contract stays in place without a local
+Lance publication store. The corpus also no longer participates in local
+Lance compaction scheduling, and focused build plus query tests now prove the
+writer cut leaves no fresh `knowledge_section` `.lance` tables behind.
+
+The next gateway aggregation proof is landed too. `/search/intent` still does
+not own a separate parquet read engine. Instead, it composes the already
+migrated `knowledge_section`, `local_symbol`, and repo-intent lanes. The
+bounded internal transport metadata for this route now records query-engine
+labels for those source lanes, and focused handler plus Flight tests prove
+that the public route can return DuckDB-fed intent hits without changing the
+response contract or merge semantics.
+
+The next bounded diagnostics slice is landed too. The Studio search-index
+status route now computes its top-level total, phase counts,
+`compactionPending`, and aggregate maintenance summary through a bounded local
+relation-engine helper instead of pure ad-hoc Rust traversal. The public
+status payload stays unchanged, the route falls back to the existing Rust
+summary path if local diagnostics execution fails, and focused unit plus
+route-level tests now prove the same payload under both fallback and
+DuckDB-enabled runtime policy.
+
+The next local-publication boundary slice is landed too. Local epoch discovery
+for search-plane corpora now ignores legacy `.lance` artifacts and only
+observes Parquet publications, while local prewarm now rejects missing Parquet
+epochs instead of falling back to opening a local store. Focused construction
+and maintenance proofs now keep stale local `.lance` directories from holding
+search-plane read ownership open.
+
+The next local-maintenance retirement slice is landed too. Wendao no longer
+ships a local compaction queue or worker runtime for search-plane corpora:
+`publish_ready_and_maintain(...)` now performs a pure publish for local
+corpora, local maintenance runtime state is shutdown-only, and runtime status
+annotation no longer fabricates local compaction backlog or running views.
+Focused coordinator, maintenance, and status proofs now keep local compaction
+metadata idle while preserving the repo-backed compaction status path.
 
 ## Native Flight
 

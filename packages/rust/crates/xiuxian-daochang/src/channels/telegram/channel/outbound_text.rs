@@ -33,19 +33,17 @@ fn extract_text_from_value(value: &Value, depth: usize) -> Option<String> {
                 .get("type")
                 .and_then(Value::as_str)
                 .is_some_and(|kind| kind.eq_ignore_ascii_case("text"))
+                && let Some(text) = map.get("text").and_then(Value::as_str)
             {
-                if let Some(text) = map.get("text").and_then(Value::as_str) {
-                    return Some(text.to_string());
-                }
+                return Some(text.to_string());
             }
 
             for key in PREFERRED_TEXT_KEYS {
-                if let Some(candidate) = map.get(*key) {
-                    if let Some(text) = extract_text_from_value(candidate, depth - 1) {
-                        if !text.trim().is_empty() {
-                            return Some(text);
-                        }
-                    }
+                if let Some(candidate) = map.get(*key)
+                    && let Some(text) = extract_text_from_value(candidate, depth - 1)
+                    && !text.trim().is_empty()
+                {
+                    return Some(text);
                 }
             }
 

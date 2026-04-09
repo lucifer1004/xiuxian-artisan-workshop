@@ -185,11 +185,6 @@ pub(super) const fn projected_columns_with_hit_json() -> [&'static str; 14] {
     ]
 }
 
-#[cfg(test)]
-pub(super) const fn search_text_column() -> &'static str {
-    COLUMN_SEARCH_TEXT
-}
-
 pub(super) const fn attachment_ext_column() -> &'static str {
     COLUMN_ATTACHMENT_EXT
 }

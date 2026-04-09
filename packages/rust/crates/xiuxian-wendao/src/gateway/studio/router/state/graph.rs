@@ -3,9 +3,11 @@ use std::sync::Arc;
 use crate::gateway::studio::router::error::StudioApiError;
 use crate::gateway::studio::router::state::helpers::graph_include_dirs;
 use crate::gateway::studio::router::state::types::{GatewayState, StudioState};
+#[cfg(test)]
 use crate::gateway::studio::symbol_index::{SymbolIndexPhase, SymbolIndexStatus};
 use crate::gateway::studio::types::SearchIndexStatusResponse;
 use crate::link_graph::LinkGraphIndex;
+#[cfg(test)]
 use crate::unified_symbol::UnifiedSymbolIndex;
 
 impl GatewayState {
@@ -67,6 +69,7 @@ impl StudioState {
         Ok(index)
     }
 
+    #[cfg(test)]
     pub(crate) fn current_symbol_index(&self) -> Option<Arc<UnifiedSymbolIndex>> {
         self.symbol_index
             .read()
@@ -75,6 +78,7 @@ impl StudioState {
             .map(Arc::clone)
     }
 
+    #[cfg(test)]
     pub(crate) fn symbol_index_status(&self) -> Result<SymbolIndexStatus, StudioApiError> {
         let configured_projects = self.configured_projects();
 
@@ -98,6 +102,6 @@ impl StudioState {
 
     pub(crate) async fn search_index_status(&self) -> SearchIndexStatusResponse {
         let snapshot = self.search_plane.status_with_repo_runtime().await;
-        SearchIndexStatusResponse::from(&snapshot)
+        SearchIndexStatusResponse::from_snapshot_with_diagnostics(&snapshot).await
     }
 }

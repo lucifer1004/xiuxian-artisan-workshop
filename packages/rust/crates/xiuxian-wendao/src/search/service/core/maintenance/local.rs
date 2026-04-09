@@ -1,4 +1,4 @@
-use xiuxian_vector::{ColumnarScanOptions, VectorStoreError};
+use xiuxian_vector::VectorStoreError;
 
 use super::helpers::{LOCAL_MAINTENANCE_SHUTDOWN_MESSAGE, PREWARM_ROW_LIMIT};
 use crate::search::SearchCorpusKind;
@@ -11,21 +11,11 @@ impl SearchPlaneService {
     }
 
     pub(crate) fn stop_local_maintenance(&self) {
-        let worker_handle = {
-            let mut runtime = self
-                .local_maintenance
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            runtime.shutdown_requested = true;
-            runtime.running_compactions.clear();
-            runtime.compaction_queue.clear();
-            runtime.worker_running = false;
-            runtime.active_compaction = None;
-            runtime.worker_handle.take()
-        };
-        if let Some(worker_handle) = worker_handle {
-            worker_handle.abort();
-        }
+        let mut runtime = self
+            .local_maintenance
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        runtime.shutdown_requested = true;
     }
 
     pub(crate) async fn prewarm_epoch_table(
@@ -40,6 +30,11 @@ impl SearchPlaneService {
             ));
         }
         let table_names = self.local_epoch_table_names_for_reads(corpus, epoch);
+        if table_names.is_empty() {
+            return Err(VectorStoreError::TableNotFound(Self::table_name(
+                corpus, epoch,
+            )));
+        }
         let _ = self.coordinator.mark_prewarm_running(corpus, epoch);
         let result = async {
             for table_name in table_names {
@@ -97,32 +92,7 @@ impl SearchPlaneService {
             return Ok(());
         }
 
-        let store = self.open_store(corpus).await?;
-        store
-            .scan_record_batches_streaming_async(
-                table_name,
-                ColumnarScanOptions {
-                    projected_columns: projected_columns
-                        .iter()
-                        .map(|column| (*column).to_string())
-                        .collect(),
-                    batch_size: Some(PREWARM_ROW_LIMIT),
-                    fragment_readahead: Some(1),
-                    batch_readahead: Some(1),
-                    limit: Some(PREWARM_ROW_LIMIT),
-                    ..ColumnarScanOptions::default()
-                },
-                |_batch| async {
-                    if self.local_maintenance_shutdown_requested() {
-                        Err(VectorStoreError::General(
-                            LOCAL_MAINTENANCE_SHUTDOWN_MESSAGE.to_string(),
-                        ))
-                    } else {
-                        Ok::<(), VectorStoreError>(())
-                    }
-                },
-            )
-            .await
+        Err(VectorStoreError::TableNotFound(table_name.to_string()))
     }
 
     pub(crate) fn local_maintenance_shutdown_requested(&self) -> bool {

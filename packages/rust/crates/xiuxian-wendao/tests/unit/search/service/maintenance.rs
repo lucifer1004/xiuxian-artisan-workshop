@@ -1,7 +1,7 @@
 use crate::search::service::tests::support::*;
 
 #[tokio::test]
-async fn stop_local_maintenance_aborts_running_compaction_and_clears_runtime() {
+async fn stop_local_maintenance_marks_runtime_shutdown() {
     let temp_dir = temp_dir();
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
@@ -9,21 +9,6 @@ async fn stop_local_maintenance_aborts_running_compaction_and_clears_runtime() {
         service_test_manifest_keyspace(),
         SearchMaintenancePolicy::default(),
     );
-    let worker_handle = tokio::spawn(async {
-        std::future::pending::<()>().await;
-    });
-    {
-        let mut runtime = service
-            .local_maintenance
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        runtime
-            .running_compactions
-            .insert(SearchCorpusKind::LocalSymbol);
-        runtime.active_compaction = Some(SearchCorpusKind::LocalSymbol);
-        runtime.worker_running = true;
-        runtime.worker_handle = Some(worker_handle);
-    }
 
     service.stop_local_maintenance();
 
@@ -32,11 +17,6 @@ async fn stop_local_maintenance_aborts_running_compaction_and_clears_runtime() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     assert!(runtime.shutdown_requested);
-    assert!(runtime.running_compactions.is_empty());
-    assert!(runtime.compaction_queue.is_empty());
-    assert!(!runtime.worker_running);
-    assert!(runtime.worker_handle.is_none());
-    assert!(runtime.active_compaction.is_none());
 }
 
 #[tokio::test]
@@ -65,7 +45,36 @@ async fn prewarm_epoch_table_rejects_after_local_maintenance_shutdown() {
 }
 
 #[tokio::test]
-async fn publish_ready_and_maintain_skips_local_compaction_after_shutdown() {
+async fn prewarm_epoch_table_rejects_missing_local_parquet_publication() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, 7);
+    std::fs::create_dir_all(
+        service
+            .corpus_root(SearchCorpusKind::LocalSymbol)
+            .join(format!("{table_name}.lance")),
+    )
+    .unwrap_or_else(|error| panic!("create legacy lance dir: {error}"));
+
+    let Err(error) = service
+        .prewarm_epoch_table(SearchCorpusKind::LocalSymbol, 7, &["path"])
+        .await
+    else {
+        panic!("missing parquet publication should reject local prewarm");
+    };
+    assert!(matches!(
+        error,
+        xiuxian_vector::VectorStoreError::TableNotFound(name) if name == table_name
+    ));
+}
+
+#[tokio::test]
+async fn publish_ready_and_maintain_preserves_local_shutdown_without_compaction_side_effects() {
     let temp_dir = temp_dir();
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
@@ -91,18 +100,13 @@ async fn publish_ready_and_maintain_skips_local_compaction_after_shutdown() {
     let status = service
         .coordinator()
         .status_for(SearchCorpusKind::LocalSymbol);
-    assert!(status.maintenance.compaction_pending);
+    assert!(!status.maintenance.compaction_pending);
     assert!(!status.maintenance.compaction_running);
     let runtime = service
         .local_maintenance
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     assert!(runtime.shutdown_requested);
-    assert!(runtime.running_compactions.is_empty());
-    assert!(runtime.compaction_queue.is_empty());
-    assert!(!runtime.worker_running);
-    assert!(runtime.worker_handle.is_none());
-    assert!(runtime.active_compaction.is_none());
 }
 
 #[tokio::test]
@@ -169,7 +173,7 @@ fn service_disables_cache_for_explicit_test_paths() {
 }
 
 #[tokio::test]
-async fn compact_pending_corpus_updates_maintenance_status() {
+async fn publish_local_symbol_hits_keeps_local_compaction_metadata_idle() {
     let temp_dir = temp_dir();
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
@@ -189,34 +193,13 @@ async fn compact_pending_corpus_updates_maintenance_status() {
         "publish local symbol hits",
     );
 
-    ok_or_panic(
-        tokio::time::timeout(Duration::from_secs(5), async {
-            loop {
-                let status = service
-                    .coordinator()
-                    .status_for(SearchCorpusKind::LocalSymbol);
-                if !status.maintenance.compaction_pending
-                    && status.maintenance.last_compacted_at.is_some()
-                {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(20)).await;
-            }
-        })
-        .await,
-        "compaction should complete",
-    );
-
     let status_after = service
         .coordinator()
         .status_for(SearchCorpusKind::LocalSymbol);
     assert!(!status_after.maintenance.compaction_pending);
     assert_eq!(status_after.maintenance.publish_count_since_compaction, 0);
-    assert!(status_after.maintenance.last_compacted_at.is_some());
-    assert_eq!(
-        status_after.maintenance.last_compaction_reason.as_deref(),
-        Some("publish_threshold")
-    );
+    assert!(status_after.maintenance.last_compacted_at.is_none());
+    assert!(status_after.maintenance.last_compaction_reason.is_none());
     assert_eq!(status_after.fragment_count, Some(1));
 }
 

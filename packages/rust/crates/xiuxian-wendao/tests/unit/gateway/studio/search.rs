@@ -1473,7 +1473,8 @@ async fn search_symbols_requires_query() {
             q: Some("   ".to_string()),
             limit: None,
         },
-    );
+    )
+    .await;
 
     let Err(error) = result else {
         panic!("expected missing-query symbol search to fail");
@@ -1499,20 +1500,7 @@ async fn search_symbols_returns_payload() {
             "# alpha\n\nThis markdown file should not affect symbol search.\n",
         ),
     ]);
-    let warmed_index = xiuxian_wendao::gateway::studio::search::build_symbol_index(
-        fixture.state.studio.project_root.as_path(),
-        fixture.state.studio.config_root.as_path(),
-        fixture.state.studio.configured_projects().as_slice(),
-    );
-    fixture
-        .state
-        .studio
-        .symbol_index_coordinator
-        .set_ready_index_for_test(
-            fixture.state.studio.configured_projects().as_slice(),
-            Arc::clone(&fixture.state.studio.symbol_index),
-            warmed_index,
-        );
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = load_symbol_search_response(
         fixture.state.as_ref(),
@@ -1520,7 +1508,8 @@ async fn search_symbols_returns_payload() {
             q: Some("alpha".to_string()),
             limit: Some(10),
         },
-    );
+    )
+    .await;
 
     let Ok(response) = result else {
         panic!("expected symbol search request to succeed");
@@ -1568,19 +1557,13 @@ async fn search_symbols_returns_pending_payload_while_index_is_warming() {
         "packages/rust/crates/demo/src/lib.rs",
         "pub struct PendingSymbolIndex;\n",
     )]);
-    let projects = fixture.state.studio.configured_projects();
     fixture
         .state
         .studio
-        .symbol_index_coordinator
-        .set_status_for_test(
-            projects.as_slice(),
-            xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexStatus {
-                phase: xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexPhase::Indexing,
-                last_error: None,
-                updated_at: Some("2026-03-21T00:00:00Z".to_string()),
-            },
-        );
+        .ensure_local_symbol_index_started()
+        .unwrap_or_else(|error| {
+            panic!("expected local symbol build start to succeed: {error:?}");
+        });
 
     let result = load_symbol_search_response(
         fixture.state.as_ref(),
@@ -1588,7 +1571,8 @@ async fn search_symbols_returns_pending_payload_while_index_is_warming() {
             q: Some("pending".to_string()),
             limit: Some(10),
         },
-    );
+    )
+    .await;
 
     let Ok(response) = result else {
         panic!("expected pending symbol search request to succeed");
@@ -1621,20 +1605,7 @@ async fn search_symbols_respects_glob_dir_filters() {
         }],
         repo_projects: Vec::new(),
     });
-    let warmed_index = xiuxian_wendao::gateway::studio::search::build_symbol_index(
-        fixture.state.studio.project_root.as_path(),
-        fixture.state.studio.config_root.as_path(),
-        fixture.state.studio.configured_projects().as_slice(),
-    );
-    fixture
-        .state
-        .studio
-        .symbol_index_coordinator
-        .set_ready_index_for_test(
-            fixture.state.studio.configured_projects().as_slice(),
-            Arc::clone(&fixture.state.studio.symbol_index),
-            warmed_index,
-        );
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = load_symbol_search_response(
         fixture.state.as_ref(),
@@ -1642,7 +1613,8 @@ async fn search_symbols_respects_glob_dir_filters() {
             q: Some("GlobFilteredSymbol".to_string()),
             limit: Some(10),
         },
-    );
+    )
+    .await;
 
     let Ok(response) = result else {
         panic!("expected glob-filtered symbol search to succeed");

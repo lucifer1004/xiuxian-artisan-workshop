@@ -19,19 +19,6 @@ impl SearchCompactionReason {
     }
 }
 
-/// Pending compaction task derived from current corpus state.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SearchCompactionTask {
-    /// Corpus whose active epoch should be compacted.
-    pub corpus: SearchCorpusKind,
-    /// Active epoch to compact.
-    pub active_epoch: u64,
-    /// Published row count for the active epoch.
-    pub row_count: u64,
-    /// Policy reason that triggered compaction.
-    pub reason: SearchCompactionReason,
-}
-
 /// Single build token for one corpus epoch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchBuildLease {

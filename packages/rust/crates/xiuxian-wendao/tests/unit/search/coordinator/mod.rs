@@ -5,7 +5,7 @@ use crate::search::{
     SearchPlanePhase,
 };
 
-use super::{BeginBuildDecision, SearchCompactionReason, SearchPlaneCoordinator};
+use super::{BeginBuildDecision, SearchPlaneCoordinator};
 
 fn coordinator_with_policy(policy: SearchMaintenancePolicy) -> SearchPlaneCoordinator {
     SearchPlaneCoordinator::new(
@@ -75,7 +75,7 @@ fn schema_version_mismatch_forces_rebuild_even_with_same_fingerprint() {
 }
 
 #[test]
-fn maintenance_policy_marks_compaction_pending_after_threshold() {
+fn publish_ready_keeps_compaction_pending_disabled_for_parquet_published_corpora() {
     let coordinator = coordinator_with_policy(SearchMaintenancePolicy {
         publish_count_threshold: 2,
         row_delta_ratio_threshold: 0.90,
@@ -91,33 +91,23 @@ fn maintenance_policy_marks_compaction_pending_after_threshold() {
             .maintenance
             .compaction_pending
     );
+    assert_eq!(
+        coordinator
+            .status_for(SearchCorpusKind::RepoEntity)
+            .maintenance
+            .publish_count_since_compaction,
+        0
+    );
 
     let second = match coordinator.begin_build(SearchCorpusKind::RepoEntity, "fp-2", 1) {
         BeginBuildDecision::Started(lease) => lease,
         other => panic!("unexpected begin result: {other:?}"),
     };
     assert!(coordinator.publish_ready(&second, 110, 6));
-    assert!(
-        coordinator
-            .status_for(SearchCorpusKind::RepoEntity)
-            .maintenance
-            .compaction_pending
-    );
-
-    assert!(coordinator.mark_compaction_complete(
-        SearchCorpusKind::RepoEntity,
-        second.epoch,
-        110,
-        2,
-        SearchCompactionReason::PublishThreshold
-    ));
     let status = coordinator.status_for(SearchCorpusKind::RepoEntity);
     assert!(!status.maintenance.compaction_pending);
     assert_eq!(status.maintenance.publish_count_since_compaction, 0);
-    assert_eq!(
-        status.maintenance.last_compaction_reason.as_deref(),
-        Some("publish_threshold")
-    );
+    assert!(status.maintenance.last_compaction_reason.is_none());
 }
 
 #[test]

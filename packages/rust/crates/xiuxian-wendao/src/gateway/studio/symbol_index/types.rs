@@ -8,17 +8,6 @@ pub(crate) enum SymbolIndexPhase {
     Failed,
 }
 
-impl SymbolIndexPhase {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Idle => "idle",
-            Self::Indexing => "indexing",
-            Self::Ready => "ready",
-            Self::Failed => "failed",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SymbolIndexStatus {
     pub(crate) phase: SymbolIndexPhase,

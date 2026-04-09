@@ -1,20 +1,6 @@
 use std::collections::BTreeSet;
 
-use xiuxian_vector::{VectorStore, VectorStoreError};
-
 const DELETE_PATH_FILTER_BATCH_SIZE: usize = 100;
-
-pub(crate) async fn delete_paths_from_table(
-    store: &VectorStore,
-    table_name: &str,
-    column: &str,
-    paths: &BTreeSet<String>,
-) -> Result<(), VectorStoreError> {
-    for filter in path_delete_filters(column, paths) {
-        store.delete_where(table_name, filter.as_str()).await?;
-    }
-    Ok(())
-}
 
 #[must_use]
 pub(crate) fn path_delete_filters(column: &str, paths: &BTreeSet<String>) -> Vec<String> {

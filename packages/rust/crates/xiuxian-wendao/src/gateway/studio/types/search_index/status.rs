@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::definitions as search_index;
+use super::diagnostics::summarize_status_diagnostics_rollup;
 
 impl From<&crate::search::SearchPlaneStatusSnapshot> for search_index::SearchIndexStatusResponse {
     fn from(value: &crate::search::SearchPlaneStatusSnapshot) -> Self {
@@ -9,52 +10,96 @@ impl From<&crate::search::SearchPlaneStatusSnapshot> for search_index::SearchInd
             .iter()
             .map(search_index::SearchCorpusIndexStatus::from)
             .collect::<Vec<_>>();
-        let total = corpora.len();
-        let idle = corpora
-            .iter()
-            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Idle))
-            .count();
-        let indexing = corpora
-            .iter()
-            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Indexing))
-            .count();
-        let ready = corpora
-            .iter()
-            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Ready))
-            .count();
-        let failed = corpora
-            .iter()
-            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Failed))
-            .count();
-        let degraded = corpora
-            .iter()
-            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Degraded))
-            .count();
-        let compaction_pending = corpora
-            .iter()
-            .filter(|status| status.maintenance.compaction_pending)
-            .count();
+        let rollup = fallback_rollup_from_corpora(&corpora);
         let status_reason = summarize_response_status_reason(&corpora);
-        let maintenance_summary = summarize_response_maintenance(&corpora);
         let query_telemetry_summary = summarize_response_query_telemetry(&corpora);
         let repo_read_pressure = value
             .repo_read_pressure
             .as_ref()
             .map(search_index::SearchIndexRepoReadPressure::from);
         Self {
-            total,
-            idle,
-            indexing,
-            ready,
-            degraded,
-            failed,
-            compaction_pending,
+            total: rollup.total,
+            idle: rollup.idle,
+            indexing: rollup.indexing,
+            ready: rollup.ready,
+            degraded: rollup.degraded,
+            failed: rollup.failed,
+            compaction_pending: rollup.compaction_pending,
             status_reason,
-            maintenance_summary,
+            maintenance_summary: rollup.maintenance_summary,
             query_telemetry_summary,
             repo_read_pressure,
             corpora,
         }
+    }
+}
+
+impl search_index::SearchIndexStatusResponse {
+    pub(crate) async fn from_snapshot_with_diagnostics(
+        value: &crate::search::SearchPlaneStatusSnapshot,
+    ) -> Self {
+        let corpora = value
+            .corpora
+            .iter()
+            .map(search_index::SearchCorpusIndexStatus::from)
+            .collect::<Vec<_>>();
+        let rollup = match summarize_status_diagnostics_rollup(value).await {
+            Ok(rollup) => rollup,
+            Err(_) => fallback_rollup_from_corpora(&corpora),
+        };
+        let status_reason = summarize_response_status_reason(&corpora);
+        let query_telemetry_summary = summarize_response_query_telemetry(&corpora);
+        let repo_read_pressure = value
+            .repo_read_pressure
+            .as_ref()
+            .map(search_index::SearchIndexRepoReadPressure::from);
+        Self {
+            total: rollup.total,
+            idle: rollup.idle,
+            indexing: rollup.indexing,
+            ready: rollup.ready,
+            degraded: rollup.degraded,
+            failed: rollup.failed,
+            compaction_pending: rollup.compaction_pending,
+            status_reason,
+            maintenance_summary: rollup.maintenance_summary,
+            query_telemetry_summary,
+            repo_read_pressure,
+            corpora,
+        }
+    }
+}
+
+fn fallback_rollup_from_corpora(
+    corpora: &[search_index::SearchCorpusIndexStatus],
+) -> super::diagnostics::SearchIndexDiagnosticsRollup {
+    super::diagnostics::SearchIndexDiagnosticsRollup {
+        total: corpora.len(),
+        idle: corpora
+            .iter()
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Idle))
+            .count(),
+        indexing: corpora
+            .iter()
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Indexing))
+            .count(),
+        ready: corpora
+            .iter()
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Ready))
+            .count(),
+        failed: corpora
+            .iter()
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Failed))
+            .count(),
+        degraded: corpora
+            .iter()
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Degraded))
+            .count(),
+        compaction_pending: corpora
+            .iter()
+            .filter(|status| status.maintenance.compaction_pending)
+            .count(),
+        maintenance_summary: summarize_response_maintenance(corpora),
     }
 }
 

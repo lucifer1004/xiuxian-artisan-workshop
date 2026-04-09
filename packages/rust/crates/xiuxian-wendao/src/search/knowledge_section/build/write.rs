@@ -1,13 +1,10 @@
 use crate::search::knowledge_section::build::types::{
     KnowledgeSectionBuildPlan, KnowledgeSectionWriteResult,
 };
-use crate::search::knowledge_section::schema::{
-    knowledge_section_batches, knowledge_section_schema, path_column,
-};
-use crate::search::{
-    SearchBuildLease, SearchCorpusKind, SearchPlaneService, delete_paths_from_table,
-};
-use xiuxian_vector::{ColumnarScanOptions, VectorStoreError};
+use crate::search::knowledge_section::schema::{knowledge_section_batches, path_column};
+use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
+use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
+use xiuxian_vector::VectorStoreError;
 
 #[cfg(test)]
 use crate::gateway::studio::types::UiProjectConfig;
@@ -29,65 +26,30 @@ pub(super) async fn write_knowledge_section_epoch(
     lease: &SearchBuildLease,
     plan: &KnowledgeSectionBuildPlan,
 ) -> Result<KnowledgeSectionWriteResult, VectorStoreError> {
-    let store = service
-        .open_store(SearchCorpusKind::KnowledgeSection)
-        .await?;
     let table_name =
         SearchPlaneService::table_name(SearchCorpusKind::KnowledgeSection, lease.epoch);
-    let schema = knowledge_section_schema();
     let changed_batches = knowledge_section_batches(plan.changed_rows.as_slice())?;
-    if let Some(base_epoch) = plan.base_epoch {
+    let base_table_name = plan.base_epoch.and_then(|base_epoch| {
         let base_table_name =
             SearchPlaneService::table_name(SearchCorpusKind::KnowledgeSection, base_epoch);
-        store
-            .clone_table(base_table_name.as_str(), table_name.as_str(), true)
-            .await?;
-        delete_paths_from_table(
-            &store,
-            table_name.as_str(),
-            path_column(),
-            &plan.replaced_paths,
-        )
-        .await?;
-        if !changed_batches.is_empty() {
-            store
-                .merge_insert_record_batches(
-                    table_name.as_str(),
-                    schema.clone(),
-                    changed_batches,
-                    &["id".to_string()],
-                )
-                .await?;
-        }
-    } else {
-        store
-            .replace_record_batches(table_name.as_str(), schema.clone(), changed_batches)
-            .await?;
-    }
-    export_knowledge_section_epoch_parquet(service, lease.epoch).await?;
-    let table_info = store.get_table_info(table_name.as_str()).await?;
+        service
+            .local_table_exists(SearchCorpusKind::KnowledgeSection, base_table_name.as_str())
+            .then_some(base_table_name)
+    });
+    let parquet_stats = rewrite_local_publication_parquet(
+        service,
+        SearchCorpusKind::KnowledgeSection,
+        base_table_name.as_deref(),
+        table_name.as_str(),
+        path_column(),
+        &plan.replaced_paths,
+        &changed_batches,
+    )
+    .await?;
     Ok(KnowledgeSectionWriteResult {
-        row_count: table_info.num_rows,
-        fragment_count: u64::try_from(table_info.fragment_count).unwrap_or(u64::MAX),
+        row_count: parquet_stats.row_count,
+        fragment_count: parquet_stats.fragment_count,
     })
-}
-
-pub(super) async fn export_knowledge_section_epoch_parquet(
-    service: &SearchPlaneService,
-    epoch: u64,
-) -> Result<(), VectorStoreError> {
-    let store = service
-        .open_store(SearchCorpusKind::KnowledgeSection)
-        .await?;
-    let table_name = SearchPlaneService::table_name(SearchCorpusKind::KnowledgeSection, epoch);
-    let parquet_path = service.local_epoch_parquet_path(SearchCorpusKind::KnowledgeSection, epoch);
-    store
-        .write_vector_store_table_to_parquet_file(
-            table_name.as_str(),
-            parquet_path.as_path(),
-            ColumnarScanOptions::default(),
-        )
-        .await
 }
 
 #[cfg(test)]

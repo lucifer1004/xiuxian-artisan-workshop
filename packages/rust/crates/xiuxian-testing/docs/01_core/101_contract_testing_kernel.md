@@ -815,3 +815,28 @@ XML normalization test literal so the source-backed suite no longer trips the
 raw-string lint. The decisive outcome is that those owners also disappeared
 from the strict-clippy failure surface, which has now moved forward into the
 telegram/discord runtime and channel cluster.
+
+The next bounded follow-up stayed inside `xiuxian-daochang` again and closed
+the runtime/helper cluster under `tests/unit/agent/bootstrap/native_tools.rs`,
+`src/agent/tool_dispatch/helpers.rs`,
+`src/channels/discord/runtime/managed/replies/memory/runtime_status/json.rs`,
+`src/channels/discord/runtime/managed/replies/memory/snapshot/{available,not_found}.rs`,
+and `src/channels/discord/send.rs`. That slice aligned the native-tools
+fixtures with the live internal-authority contract by using `SKILL.md`
+frontmatter `tags`, switched the runtime-status JSON path to borrow the
+snapshot instead of consuming it, and tightened the remaining small clone and
+`#[must_use]` lint surfaces. The decisive outcome is that those owners no
+longer appear on the post-gate strict-clippy failure surface.
+
+The next bounded follow-up then closed the telegram channel utility cluster
+under `src/channels/telegram/channel/{acl/settings,acl_overrides,chunking,error,group_policy,listen,outbound_text,recipient_admin}.rs`,
+`src/channels/telegram/channel/markdown/markdown_v2.rs`, and
+`src/channels/telegram/channel/send_api/{media,request}.rs`. That slice split
+the largest ACL/polling helpers into smaller stages, derived the default
+group-policy mode, tightened the text extraction and send-adapter helpers, and
+removed the remaining clone-assignment and `map(...).unwrap_or_else(...)`
+surfaces Clippy was still flagging. The decisive outcome is that the entire
+telegram utility cluster disappeared from the strict-clippy head surface, so
+the remaining post-gate debt now starts deeper in telegram session/admin
+persistence and runtime loop-control code rather than in the basic channel
+helper layer.

@@ -4,8 +4,8 @@ mod state;
 mod types;
 
 pub use state::SearchPlaneCoordinator;
+pub(crate) use types::SearchCompactionReason;
 pub use types::{BeginBuildDecision, SearchBuildLease};
-pub(crate) use types::{SearchCompactionReason, SearchCompactionTask};
 
 #[cfg(test)]
 #[path = "../../../tests/unit/search/coordinator/mod.rs"]

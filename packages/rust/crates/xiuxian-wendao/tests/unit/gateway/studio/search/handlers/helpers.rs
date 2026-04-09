@@ -1,4 +1,12 @@
+#[cfg(feature = "duckdb")]
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
+
+use crate::gateway::studio::build_ast_index;
+use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
+#[cfg(feature = "duckdb")]
+use crate::set_link_graph_wendao_config_override;
 
 pub(crate) fn test_studio_state() -> crate::gateway::studio::router::StudioState {
     let nonce = format!(
@@ -17,6 +25,91 @@ pub(crate) fn test_studio_state() -> crate::gateway::studio::router::StudioState
         ),
         search_plane_root,
     )
+}
+
+pub(crate) fn configure_local_workspace(
+    studio: &mut crate::gateway::studio::router::StudioState,
+    root: &Path,
+) {
+    studio.project_root = root.to_path_buf();
+    studio.config_root = root.to_path_buf();
+    studio.set_ui_config(UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec![".".to_string()],
+        }],
+        repo_projects: Vec::new(),
+    });
+}
+
+#[cfg(feature = "duckdb")]
+pub(crate) fn write_search_duckdb_runtime_override(
+    body: &str,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(&config_path, body)?;
+    set_link_graph_wendao_config_override(&config_path.to_string_lossy());
+    Ok(temp)
+}
+
+pub(crate) async fn publish_local_symbol_index(
+    studio: &crate::gateway::studio::router::StudioState,
+) {
+    let projects = studio.configured_projects();
+    let hits = build_ast_index(
+        studio.project_root.as_path(),
+        studio.config_root.as_path(),
+        &projects,
+    );
+    let fingerprint = format!(
+        "test:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                studio.project_root.display(),
+                studio.config_root.display(),
+                hits.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    studio
+        .search_plane
+        .publish_local_symbol_hits(fingerprint.as_str(), &hits)
+        .await
+        .unwrap_or_else(|error| panic!("publish local symbol epoch: {error}"));
+}
+
+pub(crate) async fn publish_knowledge_section_index(
+    studio: &crate::gateway::studio::router::StudioState,
+) {
+    let projects = studio.configured_projects();
+    let fingerprint = format!(
+        "test:knowledge:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                studio.project_root.display(),
+                studio.config_root.display(),
+                projects.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    studio
+        .search_plane
+        .publish_knowledge_sections_from_projects(
+            studio.project_root.as_path(),
+            studio.config_root.as_path(),
+            &projects,
+            fingerprint.as_str(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("publish knowledge section epoch: {error}"));
 }
 
 pub(crate) async fn publish_repo_content_chunk_index(

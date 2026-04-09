@@ -140,6 +140,38 @@ The currently landed Wendao slices are:
 11. a bounded local-corpus reuse of the same Parquet query-engine seam for the
     published `knowledge_section` lane behind gateway knowledge search, again
     with engine-safe SQL generation and DuckDB selection policy
+12. a bounded gateway aggregation proof for `/search/intent`, where the route
+    now exposes internal source-lane query-engine metadata and focused tests
+    prove it composes DuckDB-fed `knowledge_section`, `local_symbol`, and
+    repo-intent lanes without changing the public contract
+13. a bounded gateway read-engine cutover for `/search/symbols`, where the
+    route now reuses the published `local_symbol` lane instead of the
+    in-memory `UnifiedSymbolIndex`, while preserving the existing response
+    contract and pending/indexing semantics
+14. a bounded build-owner cutover for `local_symbol`, where the corpus now
+    rewrites published partition tables directly to Parquet, uses Parquet-only
+    local epoch discovery, and no longer
+    participates in local Lance compaction scheduling
+15. a bounded build-owner cutover for `reference_occurrence`, where the corpus
+    now rewrites its published table directly to Parquet and no longer
+    participates in local Lance compaction scheduling
+16. a bounded build-owner cutover for `attachment`, where the corpus now
+    rewrites its published table directly to Parquet and no longer
+    participates in local Lance compaction scheduling
+17. a bounded build-owner cutover for `knowledge_section`, where the corpus
+    now rewrites its published table directly to Parquet and no longer
+    participates in local Lance compaction scheduling
+18. a bounded internal diagnostics rollup for the Studio search-index status
+    route, where top-level totals, phase counts, `compactionPending`, and the
+    aggregate maintenance summary now compute through the local
+    relation-engine seam while preserving the public payload and Rust fallback
+19. a bounded local-publication boundary cutover where local epoch discovery
+    now ignores legacy `.lance` artifacts and local prewarm rejects missing
+    Parquet publications instead of falling back to store scans
+20. a bounded local-maintenance retirement where local compaction queue and
+    worker state are removed, `publish_ready_and_maintain(...)` becomes a pure
+    local publish step, and runtime status no longer projects local
+    compaction backlog while preserving repo-backed compaction status
 
 Qianji does not yet have a stage-local DuckDB pilot, and the shared query
 system remains DataFusion-led.
@@ -406,8 +438,8 @@ reads:
    through that seam instead of reading directly from `SearchEngineContext`
 3. DuckDB-enabled Wendao hosts can execute those published local-symbol reads
    locally in DuckDB without changing response payloads
-4. the unified in-memory symbol index behind `/search/symbols` remains a
-   separate subsystem and is not part of this cut
+4. the unified in-memory symbol index behind `/search/symbols` remained a
+   separate subsystem and was not part of that first cut
 
 ### 10.4 Reference Occurrence Gateway Reads [landed in bounded form]
 
@@ -435,7 +467,8 @@ reads behind `/search/attachments`:
 3. the SQL builder for this lane now quotes engine-facing identifiers and
    table names so the same published parquet read path stays valid in both
    DataFusion and DuckDB
-4. Lance-backed attachment build ownership remains outside this cut
+4. this earlier read-engine cut deliberately left build ownership out of scope;
+   a later bounded storage-owner slice lands below
 
 ### 10.6 Knowledge Gateway Reads [landed in bounded form]
 
@@ -449,10 +482,122 @@ The next local-corpus gateway cut is now landed for published
 3. the SQL builder for this lane now quotes engine-facing identifiers and
    table names so the same published parquet read path stays valid in both
    DataFusion and DuckDB
-4. knowledge intent/source merge orchestration and Lance-backed build
-   ownership remain outside this cut
+4. this earlier read-engine cut deliberately left build ownership out of scope;
+   a later bounded storage-owner slice lands below
 
-### 10.7 Qianji Audit and Reduce Stages
+### 10.7 Intent Gateway Composition [landed in bounded form]
+
+The next gateway-facing bounded slice is now landed for `/search/intent`
+composition:
+
+1. `/search/intent` remains a gateway aggregation surface rather than a new
+   parquet-read owner
+2. additive internal transport metadata now records query-engine labels for
+   the `knowledge_section`, `local_symbol`, and repo-intent source lanes
+3. the existing repo-content transport metadata remains in place for the
+   Flight-backed repo source path
+4. focused handler and Flight tests now prove that the route composes
+   DuckDB-fed source lanes under `search.duckdb.enabled`
+5. public response and Flight contracts, cache semantics, and merge behavior
+   remain unchanged
+
+### 10.8 Symbols Gateway Reads [landed in bounded form]
+
+The next gateway-facing bounded slice is now landed for `/search/symbols`:
+
+1. the route now starts and reads from the published `local_symbol` search
+   plane instead of querying `UnifiedSymbolIndex::search_unified(...)`
+2. the bounded adapter maps published `AstSearchHit` payloads back into the
+   existing `SymbolSearchHit` contract without widening the public schema
+3. the handler keeps the existing partial response semantics when no published
+   local-symbol epoch is available yet
+4. the route filters the broader `local_symbol` corpus back down to code
+   symbol hits so the previous gateway payload shape remains stable
+5. focused handler and Flight-provider tests now prove that `/search/symbols`
+   can return DuckDB-fed symbol hits without warming the old in-memory symbol
+   index
+
+### 10.9 Local Symbol Build Ownership [landed in bounded form]
+
+The next bounded storage-owner slice is now landed for `local_symbol`:
+
+1. the `local_symbol` build owner now rewrites published partition tables
+   directly to Parquet through a bounded local-publication helper instead of
+   cloning and mutating Lance tables
+2. local epoch discovery is now Parquet-only, so already-migrated
+   local-symbol readers and gateway routes keep the same published contract
+3. `local_symbol` no longer participates in local Lance compaction scheduling
+   because it no longer owns a local Lance publication store
+4. later bounded slices land `reference_occurrence` and `attachment` build
+   ownership; `knowledge_section` remains future work
+
+### 10.10 Reference Occurrence Build Ownership [landed in bounded form]
+
+The next bounded storage-owner slice is now landed for `reference_occurrence`:
+
+1. the `reference_occurrence` build owner now rewrites its published table
+   directly to Parquet through the bounded local-publication helper instead of
+   cloning and mutating a Lance table
+2. the already-landed published read lane behind `/search/references` keeps
+   the same contract because it was already reading the Parquet publication
+3. `reference_occurrence` no longer participates in local Lance compaction
+   scheduling because it no longer owns a local Lance publication store
+4. a later bounded slice lands `attachment` build ownership; broader
+   retirement for `knowledge_section` remains future work
+
+### 10.11 Attachment Build Ownership [landed in bounded form]
+
+The next bounded storage-owner slice is now landed for `attachment`:
+
+1. the `attachment` build owner now rewrites its published table directly to
+   Parquet through the bounded local-publication helper instead of cloning and
+   mutating a Lance table
+2. the already-landed published read lane behind `/search/attachments` keeps
+   the same contract because it was already reading the Parquet publication
+3. `attachment` no longer participates in local Lance compaction scheduling
+   because it no longer owns a local Lance publication store
+4. a later bounded slice lands `knowledge_section` build ownership
+
+### 10.12 Knowledge Build Ownership [landed in bounded form]
+
+The next bounded storage-owner slice is now landed for `knowledge_section`:
+
+1. the `knowledge_section` build owner now rewrites its published table
+   directly to Parquet through the bounded local-publication helper instead of
+   cloning and mutating a Lance table
+2. the already-landed published read lane behind gateway knowledge search
+   keeps the same contract because it was already reading the Parquet
+   publication
+3. `knowledge_section` no longer participates in local Lance compaction
+   scheduling because it no longer owns a local Lance publication store
+4. knowledge intent/source merge orchestration remains future work
+
+### 10.13 Local Epoch Discovery and Prewarm [landed in bounded form]
+
+The next bounded local-publication compatibility slice is now landed:
+
+1. local epoch discovery for search-plane corpora now ignores legacy `.lance`
+   artifacts and only observes Parquet publications
+2. local prewarm now rejects missing Parquet publications instead of falling
+   back to opening a local store scan
+3. focused construction and maintenance tests now prove that stale local
+   `.lance` directories no longer keep search-plane read ownership alive
+
+### 10.14 Local Compaction Runtime Retirement [landed in bounded form]
+
+The next bounded local-maintenance retirement slice is now landed:
+
+1. Wendao no longer ships a local compaction queue or worker runtime for
+   search-plane corpora
+2. `publish_ready_and_maintain(...)` now performs a pure publish step for
+   local corpora instead of implying local compaction scheduling side effects
+3. local maintenance runtime state is now shutdown-only, and runtime status
+   annotation no longer projects local compaction backlog or running views
+4. focused coordinator, maintenance, and status tests now keep local
+   compaction metadata idle while preserving the repo-backed compaction
+   status path
+
+### 10.15 Qianji Audit and Reduce Stages
 
 The next likely pilot is stage-local relation analytics over workflow-held
 Arrow batches, especially:
@@ -465,17 +610,21 @@ Arrow batches, especially:
 These are relation-oriented workloads, but they still sit above retrieval and
 storage ownership.
 
-### 10.8 Repo and Runtime Diagnostics
+### 10.16 Repo and Runtime Diagnostics [partially landed in bounded form]
 
-Status, maintenance, and explain-facing analytics are a third candidate:
+The first bounded diagnostics slice is now landed for the Studio search-index
+status route:
 
-1. repo corpus status
-2. cache or degraded-state diagnostics
-3. maintenance and compaction summaries
-4. workflow-stage statistics
-
-These surfaces often benefit from local joins and aggregations without needing
-new external APIs.
+1. top-level totals, phase counts, `compactionPending`, and aggregate
+   maintenance summary now compute through a bounded local relation-engine
+   helper over a request-scoped in-memory relation
+2. the public `SearchIndexStatusResponse` payload remains unchanged, and the
+   route falls back to the existing Rust summary path if local diagnostics
+   execution fails
+3. focused unit and route-level tests now prove the same payload under both
+   fallback and DuckDB-enabled runtime policy
+4. broader repo/runtime status, degraded-state diagnostics, and explain-facing
+   status analytics remain future work
 
 ## 11. Telemetry and Explain
 
@@ -583,8 +732,33 @@ Revisit this direction if:
 8. published `knowledge_section` reads behind gateway knowledge search now
    reuse the same bounded Parquet query-engine seam, again with engine-safe
    SQL generation for both DataFusion and DuckDB
-9. broader performance gating, remaining gateway migration, and broader
-   diagnostics pilots are still open
+9. `/search/intent` now has a bounded composition proof that records internal
+   source-lane query-engine metadata and proves the route composes DuckDB-fed
+   `knowledge_section`, `local_symbol`, and repo-intent lanes without widening
+   the public contract
+10. `/search/symbols` now reuses the published `local_symbol` lane instead of
+    the in-memory `UnifiedSymbolIndex`, while preserving the existing route
+    contract and pending/indexing behavior
+11. `local_symbol` build ownership now rewrites published partition tables
+    directly to Parquet, uses Parquet-only local epoch discovery, and no
+    longer participates in local Lance compaction scheduling
+12. `reference_occurrence` build ownership now rewrites its published table
+    directly to Parquet and no longer participates in local Lance compaction
+    scheduling
+13. `attachment` build ownership now rewrites its published table directly to
+    Parquet and no longer participates in local Lance compaction scheduling
+14. `knowledge_section` build ownership now rewrites its published table
+    directly to Parquet and no longer participates in local Lance compaction
+    scheduling
+15. the Studio search-index status route now computes bounded diagnostics
+    rollups through the local relation-engine seam while preserving the
+    current payload contract and a Rust fallback path
+16. local epoch discovery now ignores legacy `.lance` artifacts and local
+    prewarm rejects missing Parquet publications instead of falling back to
+    store scans
+17. Wendao no longer ships a local compaction queue or worker runtime for
+    search-plane corpora, while repo-backed compaction status remains intact
+18. broader performance gating and broader diagnostics pilots are still open
 
 ### Phase 3: Qianji Pilot [future]
 

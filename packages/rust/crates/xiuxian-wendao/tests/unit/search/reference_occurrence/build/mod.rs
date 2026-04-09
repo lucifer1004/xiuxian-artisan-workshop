@@ -196,6 +196,7 @@ async fn reference_occurrence_incremental_refresh_reuses_unchanged_rows() {
             .exists(),
         "missing reference occurrence parquet export"
     );
+    assert_no_reference_occurrence_lance_tables(&service);
 }
 
 #[test]
@@ -239,4 +240,20 @@ fn fingerprint_projects_changes_when_scanned_file_metadata_changes() {
     .unwrap_or_else(|error| panic!("rewrite rust source: {error}"));
     let second = fingerprint_projects(project_root, project_root, &projects);
     assert_ne!(first, second);
+}
+
+fn assert_no_reference_occurrence_lance_tables(service: &SearchPlaneService) {
+    let corpus_root = service.corpus_root(SearchCorpusKind::ReferenceOccurrence);
+    let entries = std::fs::read_dir(corpus_root.as_path())
+        .unwrap_or_else(|error| panic!("read reference occurrence corpus root: {error}"));
+    for entry in entries {
+        let entry =
+            entry.unwrap_or_else(|error| panic!("read reference occurrence corpus entry: {error}"));
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        assert!(
+            !file_name.ends_with(".lance"),
+            "unexpected Lance table left behind for reference_occurrence: {file_name}"
+        );
+    }
 }

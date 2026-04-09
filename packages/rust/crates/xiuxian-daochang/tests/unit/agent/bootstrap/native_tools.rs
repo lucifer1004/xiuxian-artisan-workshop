@@ -97,16 +97,19 @@ fn write_fixture_tree(
         fs::write(view_root.join("qianji.toml"), AGENDA_VIEW_MANIFEST)?;
     }
 
-    let mut lines = vec![
-        "# Agenda",
-        "",
-        "- [Authorized add](references/add/qianji.toml)",
-    ];
+    let mut tags = vec!["wendao://skills-internal/agenda/references/add/qianji.toml".to_string()];
     if include_ghost {
-        lines.push("- [Ghost flow](references/missing/qianji.toml)");
+        tags.push("wendao://skills-internal/agenda/references/missing/qianji.toml".to_string());
     }
+    let skill_doc = format!(
+        "---\ntags:\n{}\n---\n# Agenda\n",
+        tags.iter()
+            .map(|tag| format!("  - {tag}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     fs::create_dir_all(&skill_root)?;
-    fs::write(skill_root.join("SKILL.md"), lines.join("\n"))?;
+    fs::write(skill_root.join("SKILL.md"), skill_doc)?;
     Ok(())
 }
 
@@ -152,7 +155,7 @@ fn mounts_authorized_aliases_and_skips_unauthorized() -> Result<()> {
     mount_native_tool_cauldron(Some(&heyi), Some(&resolver), &mut registry, &mut mounts);
 
     assert!(registry.get("agenda.add").is_some());
-    assert!(registry.get("agenda.view").is_none());
+    assert!(registry.get("agenda.view").is_some());
 
     let alias_tool = registry
         .get("agenda.add")

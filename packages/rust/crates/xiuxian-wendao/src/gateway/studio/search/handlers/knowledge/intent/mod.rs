@@ -11,3 +11,5 @@ pub use entry::build_intent_search_response;
 #[cfg(test)]
 pub(crate) use entry::load_intent_search_response_with_metadata;
 pub(crate) use types::IntentSearchTransportMetadata;
+#[cfg(test)]
+pub(crate) use types::configured_parquet_query_engine_label;

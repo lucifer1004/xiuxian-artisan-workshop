@@ -7,6 +7,7 @@ mod corpus;
 /// Shared lexical fuzzy-search utilities.
 pub mod fuzzy;
 mod knowledge_section;
+mod local_publication_parquet;
 mod local_symbol;
 mod manifest;
 mod project_fingerprint;
@@ -21,6 +22,7 @@ mod repo_publication_parquet;
 pub(crate) mod repo_search;
 mod repo_staging;
 mod service;
+#[cfg(test)]
 mod staged_mutation;
 mod status;
 /// Shared Tantivy-backed search primitives.
@@ -68,7 +70,6 @@ pub(crate) use service::RepoSearchAvailability;
 pub(crate) use service::RepoSearchPublicationState;
 pub(crate) use service::RepoSearchQueryCacheKeyInput;
 pub use service::SearchPlaneService;
-pub(crate) use staged_mutation::delete_paths_from_table;
 pub use status::{
     SearchCorpusIssue, SearchCorpusIssueCode, SearchCorpusIssueFamily, SearchCorpusIssueSummary,
     SearchCorpusStatus, SearchCorpusStatusAction, SearchCorpusStatusReason,

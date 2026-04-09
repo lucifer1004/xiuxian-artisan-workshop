@@ -4,18 +4,12 @@ use xiuxian_wendao_runtime::transport::{
     SEARCH_KNOWLEDGE_ROUTE, SEARCH_SYMBOLS_ROUTE, SearchFlightRouteProvider,
 };
 
-use super::{
-    StudioSearchFlightRouteProvider, first_string, make_gateway_state_with_docs,
-    make_gateway_state_with_search_routes,
-};
+use super::{StudioSearchFlightRouteProvider, first_string, make_gateway_state_with_search_routes};
 use crate::gateway::studio::router::{GatewayState, StudioState};
 
 #[tokio::test]
 async fn studio_search_flight_provider_dispatches_symbol_route() {
-    let fixture = make_gateway_state_with_docs(&[(
-        "packages/rust/crates/demo/src/lib.rs",
-        "pub struct AlphaService;\npub fn alpha_handler() {}\n",
-    )]);
+    let fixture = make_gateway_state_with_search_routes().await;
     let provider = StudioSearchFlightRouteProvider::new(Arc::clone(&fixture.state));
 
     let batch = provider

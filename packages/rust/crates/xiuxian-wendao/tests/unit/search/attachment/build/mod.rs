@@ -187,6 +187,7 @@ async fn attachment_incremental_refresh_reuses_unchanged_rows() {
             .exists(),
         "missing attachment parquet export"
     );
+    assert_no_attachment_lance_tables(&service);
 }
 
 async fn wait_for_attachment_ready(service: &SearchPlaneService, previous_epoch: Option<u64>) {
@@ -203,4 +204,19 @@ async fn wait_for_attachment_ready(service: &SearchPlaneService, previous_epoch:
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     panic!("attachment build did not reach ready state");
+}
+
+fn assert_no_attachment_lance_tables(service: &SearchPlaneService) {
+    let corpus_root = service.corpus_root(SearchCorpusKind::Attachment);
+    let entries = std::fs::read_dir(corpus_root.as_path())
+        .unwrap_or_else(|error| panic!("read attachment corpus root: {error}"));
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|error| panic!("read attachment corpus entry: {error}"));
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        assert!(
+            !file_name.ends_with(".lance"),
+            "unexpected Lance table left behind for attachment: {file_name}"
+        );
+    }
 }

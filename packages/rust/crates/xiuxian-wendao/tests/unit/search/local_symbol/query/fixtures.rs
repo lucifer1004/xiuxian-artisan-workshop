@@ -1,16 +1,11 @@
-#[cfg(feature = "duckdb")]
-use std::fs;
 use std::path::PathBuf;
 
 use crate::gateway::studio::types::{AstSearchHit, StudioNavigationTarget};
-use crate::search::local_symbol::schema::{local_symbol_batches, local_symbol_schema};
-use crate::search::{
-    BeginBuildDecision, SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace,
-    SearchPlaneService,
-};
+use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
 #[cfg(feature = "duckdb")]
 use crate::set_link_graph_wendao_config_override;
-use xiuxian_vector::ColumnarScanOptions;
+#[cfg(feature = "duckdb")]
+use std::fs;
 
 pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
     SearchPlaneService::with_paths(
@@ -93,38 +88,7 @@ pub(super) async fn publish_local_symbol_hits(
     build_id: &str,
     hits: &[AstSearchHit],
 ) {
-    let lease = match service.coordinator().begin_build(
-        SearchCorpusKind::LocalSymbol,
-        build_id,
-        SearchCorpusKind::LocalSymbol.schema_version(),
-    ) {
-        BeginBuildDecision::Started(lease) => lease,
-        other => panic!("unexpected begin decision: {other:?}"),
-    };
-    let store = service
-        .open_store(SearchCorpusKind::LocalSymbol)
+    crate::search::local_symbol::build::publish_local_symbol_hits(service, build_id, hits)
         .await
-        .unwrap_or_else(|error| panic!("open store: {error}"));
-    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
-    store
-        .replace_record_batches(
-            table_name.as_str(),
-            local_symbol_schema(),
-            local_symbol_batches(hits).unwrap_or_else(|error| panic!("batches: {error}")),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("replace record batches: {error}"));
-    store
-        .write_vector_store_table_to_parquet_file(
-            table_name.as_str(),
-            service
-                .local_epoch_parquet_path(SearchCorpusKind::LocalSymbol, lease.epoch)
-                .as_path(),
-            ColumnarScanOptions::default(),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("export parquet: {error}"));
-    service
-        .coordinator()
-        .publish_ready(&lease, hits.len() as u64, 1);
+        .unwrap_or_else(|error| panic!("publish local symbol hits: {error}"));
 }

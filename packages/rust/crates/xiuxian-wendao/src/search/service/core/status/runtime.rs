@@ -1,6 +1,4 @@
-use super::helpers::{
-    LocalCompactionRuntimeView, RepoCompactionRuntimeView, RepoPrewarmRuntimeView,
-};
+use super::helpers::{RepoCompactionRuntimeView, RepoPrewarmRuntimeView};
 #[cfg(test)]
 use crate::repo_index::RepoIndexStatusResponse;
 use crate::search::service::core::types::{
@@ -66,12 +64,6 @@ impl SearchPlaneService {
     }
 
     pub(super) fn annotate_runtime_status(&self, status: &mut crate::search::SearchCorpusStatus) {
-        if let Some(local_compaction) = self.local_compaction_runtime_view(status.corpus) {
-            status.maintenance.compaction_running |= local_compaction.is_running;
-            status.maintenance.compaction_queue_depth = local_compaction.queue_depth;
-            status.maintenance.compaction_queue_position = local_compaction.queue_position;
-            status.maintenance.compaction_queue_aged |= local_compaction.queue_aged;
-        }
         if let Some(repo_prewarm) = self.repo_prewarm_runtime_view(status.corpus) {
             status.maintenance.prewarm_running |= repo_prewarm.is_running;
             status.maintenance.prewarm_queue_depth = status
@@ -117,45 +109,6 @@ impl SearchPlaneService {
         }
         status.last_query_telemetry = self.query_telemetry_for(status.corpus);
         annotate_status_reason(status);
-    }
-
-    fn local_compaction_runtime_view(
-        &self,
-        corpus: SearchCorpusKind,
-    ) -> Option<LocalCompactionRuntimeView> {
-        if matches!(
-            corpus,
-            SearchCorpusKind::RepoEntity | SearchCorpusKind::RepoContentChunk
-        ) {
-            return None;
-        }
-        let runtime = self
-            .local_maintenance
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let queue_depth = u32::try_from(runtime.compaction_queue.len()).unwrap_or(u32::MAX);
-        let queue_position = runtime
-            .compaction_queue
-            .iter()
-            .position(|queued| queued.task.corpus == corpus)
-            .and_then(|index| u32::try_from(index.saturating_add(1)).ok());
-        let queue_aged = runtime
-            .compaction_queue
-            .iter()
-            .find(|queued| queued.task.corpus == corpus)
-            .is_some_and(|queued| {
-                Self::local_compaction_is_aged(
-                    queued.task.reason,
-                    queued.enqueue_sequence,
-                    runtime.next_enqueue_sequence,
-                )
-            });
-        Some(LocalCompactionRuntimeView {
-            is_running: runtime.active_compaction == Some(corpus),
-            queue_depth,
-            queue_position,
-            queue_aged,
-        })
     }
 
     fn repo_compaction_runtime_view(

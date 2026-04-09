@@ -14,6 +14,11 @@ pub(crate) fn merge_intent_hits(
     repo_merge: RepoIntentMerge,
     code_biased: bool,
 ) -> IntentMergedResults {
+    #[cfg(test)]
+    let source_transport = (
+        source_hits.knowledge_query_engine,
+        source_hits.local_symbol_query_engine,
+    );
     let mut hits = Vec::new();
     let knowledge_hit_count = source_hits.knowledge_hits.len();
     hits.extend(source_hits.knowledge_hits);
@@ -33,13 +38,22 @@ pub(crate) fn merge_intent_hits(
             .into_iter()
             .map(|hit| repo_content_hit_to_intent_hit(hit, code_biased)),
     );
+    #[cfg(test)]
+    let mut transport = repo_merge.transport;
+    #[cfg(not(test))]
+    let transport = repo_merge.transport;
+    #[cfg(test)]
+    {
+        transport.knowledge_query_engine = source_transport.0;
+        transport.local_symbol_query_engine = source_transport.1;
+    }
 
     IntentMergedResults {
         hits,
         knowledge_hit_count,
         local_symbol_hit_count,
         repo_hit_count,
-        transport: repo_merge.transport,
+        transport,
         partial: source_hits.knowledge_indexing
             || source_hits.local_symbol_indexing
             || !repo_merge.pending_repos.is_empty()

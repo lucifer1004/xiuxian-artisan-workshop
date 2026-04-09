@@ -16,6 +16,4 @@ pub(crate) use plan::{fingerprint_projects, plan_attachment_build};
 #[cfg(test)]
 pub(crate) use types::AttachmentBuildError;
 pub(crate) use types::{AttachmentBuildPlan, AttachmentWriteResult};
-#[cfg(test)]
-pub(crate) use write::export_attachment_epoch_parquet;
 pub(crate) use write::write_attachment_epoch;

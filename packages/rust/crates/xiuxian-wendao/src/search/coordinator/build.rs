@@ -97,11 +97,15 @@ impl SearchPlaneCoordinator {
         }
 
         let now = timestamp_now();
-        let publish_count = runtime
-            .status
-            .maintenance
-            .publish_count_since_compaction
-            .saturating_add(1);
+        let publish_count = if lease.corpus.supports_local_store_compaction() {
+            runtime
+                .status
+                .maintenance
+                .publish_count_since_compaction
+                .saturating_add(1)
+        } else {
+            0
+        };
         runtime.status.phase = SearchPlanePhase::Ready;
         runtime.status.active_epoch = Some(lease.epoch);
         runtime.status.staging_epoch = None;
@@ -113,11 +117,13 @@ impl SearchPlaneCoordinator {
         runtime.status.updated_at = Some(now);
         runtime.status.last_error = None;
         runtime.status.maintenance.publish_count_since_compaction = publish_count;
-        runtime.status.maintenance.compaction_pending = self.maintenance_policy.should_compact(
-            publish_count,
-            runtime.last_compacted_row_count,
-            row_count,
-        );
+        runtime.status.maintenance.compaction_pending =
+            lease.corpus.supports_local_store_compaction()
+                && self.maintenance_policy.should_compact(
+                    publish_count,
+                    runtime.last_compacted_row_count,
+                    row_count,
+                );
         true
     }
 

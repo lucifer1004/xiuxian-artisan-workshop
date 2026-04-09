@@ -108,20 +108,9 @@ pub(crate) struct RepoMaintenanceRuntime {
     pub(crate) active_task: Option<RepoMaintenanceTaskKey>,
 }
 
-pub(crate) struct QueuedLocalCompactionTask {
-    pub(crate) task: crate::search::coordinator::SearchCompactionTask,
-    pub(crate) enqueue_sequence: u64,
-}
-
 #[derive(Default)]
 pub(crate) struct LocalMaintenanceRuntime {
-    pub(crate) running_compactions: BTreeSet<SearchCorpusKind>,
     pub(crate) shutdown_requested: bool,
-    pub(crate) compaction_queue: VecDeque<QueuedLocalCompactionTask>,
-    pub(crate) next_enqueue_sequence: u64,
-    pub(crate) worker_running: bool,
-    pub(crate) worker_handle: Option<JoinHandle<()>>,
-    pub(crate) active_compaction: Option<SearchCorpusKind>,
 }
 
 #[derive(Debug, Clone, Default)]

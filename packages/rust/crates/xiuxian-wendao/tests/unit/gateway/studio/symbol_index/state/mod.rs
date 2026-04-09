@@ -7,22 +7,6 @@ use crate::unified_symbol::UnifiedSymbolIndex;
 
 #[cfg(test)]
 impl SymbolIndexCoordinator {
-    pub(crate) fn set_status_for_test(
-        &self,
-        projects: &[UiProjectConfig],
-        status: SymbolIndexStatus,
-    ) {
-        *self
-            .active_fingerprint
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some(fingerprint_projects(projects));
-        *self
-            .status
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
-    }
-
     #[allow(clippy::needless_pass_by_value)]
     pub(crate) fn set_ready_index_for_test(
         &self,

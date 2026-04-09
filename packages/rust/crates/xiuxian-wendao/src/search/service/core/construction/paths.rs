@@ -35,7 +35,10 @@ impl SearchPlaneService {
         }
 
         let legacy_table_name = Self::table_name(corpus, epoch);
-        if self.local_table_exists(corpus, legacy_table_name.as_str()) {
+        if self
+            .local_table_parquet_path(corpus, legacy_table_name.as_str())
+            .exists()
+        {
             table_names.push(legacy_table_name);
         }
         table_names
@@ -105,9 +108,7 @@ impl SearchPlaneService {
 
     #[must_use]
     pub(crate) fn local_table_exists(&self, corpus: SearchCorpusKind, table_name: &str) -> bool {
-        self.corpus_root(corpus)
-            .join(format!("{table_name}.lance"))
-            .exists()
+        self.local_table_parquet_path(corpus, table_name).exists()
     }
 
     #[must_use]
@@ -175,29 +176,30 @@ impl SearchPlaneService {
         corpus: SearchCorpusKind,
         epoch: u64,
     ) -> Vec<String> {
-        let root = self.corpus_root(corpus);
         let prefix = format!("{}_epoch_{epoch}_part_", corpus.as_str());
-        let Ok(entries) = std::fs::read_dir(root) else {
-            return Vec::new();
-        };
+        let mut table_names = std::collections::BTreeSet::new();
 
-        entries
-            .filter_map(Result::ok)
-            .filter_map(|entry| {
+        let parquet_root = self.corpus_root(corpus).join("parquet");
+        if let Ok(entries) = std::fs::read_dir(parquet_root) {
+            for entry in entries.filter_map(Result::ok) {
                 let Ok(file_type) = entry.file_type() else {
-                    return None;
+                    continue;
                 };
-                if !file_type.is_dir() {
-                    return None;
+                if !file_type.is_file() {
+                    continue;
                 }
 
                 let file_name = entry.file_name();
                 let file_name = file_name.to_string_lossy();
-                let table_name = file_name.strip_suffix(".lance")?;
-                table_name
-                    .starts_with(prefix.as_str())
-                    .then(|| table_name.to_string())
-            })
-            .collect()
+                let Some(table_name) = file_name.strip_suffix(".parquet") else {
+                    continue;
+                };
+                if table_name.starts_with(prefix.as_str()) {
+                    table_names.insert(table_name.to_string());
+                }
+            }
+        }
+
+        table_names.into_iter().collect()
     }
 }

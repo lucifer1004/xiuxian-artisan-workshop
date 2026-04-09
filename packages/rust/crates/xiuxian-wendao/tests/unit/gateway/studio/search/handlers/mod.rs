@@ -4,6 +4,11 @@ mod intent;
 mod query;
 mod repo_content;
 
+#[cfg(feature = "duckdb")]
+pub(crate) use helpers::{
+    configure_local_workspace, publish_knowledge_section_index, publish_local_symbol_index,
+    write_search_duckdb_runtime_override,
+};
 pub(crate) use helpers::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
     test_studio_state,

@@ -3,6 +3,8 @@ use crate::gateway::studio::router::{
     map_repo_intelligence_error,
 };
 use crate::gateway::studio::search::handlers::knowledge::intent::IntentSearchTransportMetadata;
+#[cfg(test)]
+use crate::gateway::studio::search::handlers::knowledge::intent::configured_parquet_query_engine_label;
 use crate::gateway::studio::types::SearchHit;
 use crate::search::repo_search::search_repo_intent_outcome;
 
@@ -32,6 +34,8 @@ pub(super) async fn build_repo_intent_merge(
             .map(|repository| repository.id)
             .collect::<Vec<_>>()
     };
+    #[cfg(test)]
+    let has_repo_ids = !repo_ids.is_empty();
 
     let outcome = search_repo_intent_outcome(&studio.search_plane, repo_ids, raw_query, limit)
         .await
@@ -42,8 +46,28 @@ pub(super) async fn build_repo_intent_merge(
                 Some(error),
             )
         })?;
+    #[cfg(test)]
+    let repo_query_engine = if has_repo_ids {
+        Some(
+            configured_parquet_query_engine_label(&studio.search_plane).map_err(|error| {
+                StudioApiError::internal(
+                    "REPO_INTENT_QUERY_ENGINE_FAILED",
+                    "Failed to resolve repo-intent query-engine metadata",
+                    Some(error),
+                )
+            })?,
+        )
+    } else {
+        None
+    };
     Ok(RepoIntentMerge {
         transport: IntentSearchTransportMetadata {
+            #[cfg(test)]
+            knowledge_query_engine: None,
+            #[cfg(test)]
+            local_symbol_query_engine: None,
+            #[cfg(test)]
+            repo_query_engine,
             #[cfg(test)]
             repo_content_transport: outcome.repo_content_available.then_some("flight_contract"),
         },

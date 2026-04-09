@@ -6,6 +6,7 @@ use pulldown_cmark::{Event, Options, Parser, TagEnd};
 /// Split a message into chunks that respect Telegram's 4096 character limit.
 /// Each chunk stays under the limit even after adding continuation markers.
 #[doc(hidden)]
+#[must_use]
 pub fn split_message_for_telegram(message: &str) -> Vec<String> {
     let max_chunk_chars = TELEGRAM_MAX_MESSAGE_LENGTH.saturating_sub(chunk_marker_reserve_chars());
     if max_chunk_chars == 0 {
@@ -119,11 +120,13 @@ fn markdown_block_boundaries(message: &str) -> Vec<usize> {
 /// Reserve space for continuation markers when splitting.
 /// Keep this as character-count based so future non-ASCII marker text remains safe.
 #[doc(hidden)]
+#[must_use]
 pub fn chunk_marker_reserve_chars() -> usize {
     CHUNK_CONTINUED_PREFIX.chars().count() + CHUNK_CONTINUES_SUFFIX.chars().count()
 }
 
 #[doc(hidden)]
+#[must_use]
 pub fn decorate_chunk_for_telegram(chunk: &str, index: usize, total_chunks: usize) -> String {
     if total_chunks <= 1 {
         return chunk.to_string();
@@ -145,8 +148,7 @@ fn byte_index_after_n_chars(text: &str, n: usize) -> usize {
 
     text.char_indices()
         .nth(n)
-        .map(|(idx, _)| idx)
-        .unwrap_or(text.len())
+        .map_or(text.len(), |(idx, _)| idx)
 }
 
 fn choose_split_boundary(search_area: &str, max_boundary: usize, max_chars: usize) -> usize {

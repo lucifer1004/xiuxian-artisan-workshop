@@ -185,6 +185,7 @@ async fn local_symbol_incremental_refresh_reuses_unchanged_rows() {
             "missing local symbol parquet export for {table_name}"
         );
     }
+    assert_no_local_symbol_lance_tables(&service);
 }
 
 #[tokio::test]
@@ -242,6 +243,7 @@ async fn local_symbol_build_writes_partitioned_epoch_tables_for_multiple_scopes(
             "missing local symbol parquet export for {table_name}"
         );
     }
+    assert_no_local_symbol_lance_tables(&service);
 
     let alpha = search_local_symbols(&service, "alpha", 10)
         .await
@@ -271,6 +273,21 @@ fn only_partition(plan: &LocalSymbolBuildPlan) -> &LocalSymbolPartitionBuildPlan
         panic!("single partition");
     };
     partition
+}
+
+fn assert_no_local_symbol_lance_tables(service: &SearchPlaneService) {
+    let corpus_root = service.corpus_root(SearchCorpusKind::LocalSymbol);
+    let entries = std::fs::read_dir(corpus_root.as_path())
+        .unwrap_or_else(|error| panic!("read local symbol corpus root: {error}"));
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|error| panic!("read local symbol corpus entry: {error}"));
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        assert!(
+            !file_name.ends_with(".lance"),
+            "unexpected Lance table left behind for local_symbol: {file_name}"
+        );
+    }
 }
 
 async fn wait_for_local_symbol_ready(service: &SearchPlaneService, previous_epoch: Option<u64>) {

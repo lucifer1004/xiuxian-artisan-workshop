@@ -12,10 +12,10 @@ use xiuxian_wendao_runtime::transport::{
 
 use super::build_studio_search_flight_service_with_repo_provider;
 use crate::gateway::studio::router::{GatewayState, StudioState};
-use crate::gateway::studio::search::build_symbol_index;
 use crate::gateway::studio::search::handlers::tests::test_studio_state;
 use crate::gateway::studio::test_support::init_git_repository;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
+use crate::gateway::studio::{build_ast_index, search::build_symbol_index};
 
 pub(super) struct GatewayStateFixture {
     _temp_dir: TempDir,
@@ -102,16 +102,7 @@ pub(super) async fn make_gateway_state_with_search_routes() -> GatewayStateFixtu
     });
 
     let configured_projects = studio.configured_projects();
-    let warmed_index = build_symbol_index(
-        studio.project_root.as_path(),
-        studio.config_root.as_path(),
-        configured_projects.as_slice(),
-    );
-    studio.symbol_index_coordinator.set_ready_index_for_test(
-        configured_projects.as_slice(),
-        Arc::clone(&studio.symbol_index),
-        warmed_index,
-    );
+    publish_local_symbol_index(&studio).await;
 
     let fingerprint_seed = format!(
         "{}:{}:{}",
@@ -165,6 +156,32 @@ pub(super) async fn make_gateway_state_with_search_routes() -> GatewayStateFixtu
         .unwrap_or_else(|error| panic!("publish attachments: {error}"));
 
     gateway_state_fixture(temp_dir, studio)
+}
+
+async fn publish_local_symbol_index(studio: &StudioState) {
+    let hits = build_ast_index(
+        studio.project_root.as_path(),
+        studio.config_root.as_path(),
+        studio.configured_projects().as_slice(),
+    );
+    let fingerprint = format!(
+        "test:local-symbol:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                studio.project_root.display(),
+                studio.config_root.display(),
+                hits.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    studio
+        .search_plane
+        .publish_local_symbol_hits(fingerprint.as_str(), &hits)
+        .await
+        .unwrap_or_else(|error| panic!("publish local symbols: {error}"));
 }
 
 pub(super) fn make_gateway_state_with_repo(repo_files: &[(&str, &str)]) -> GatewayStateFixture {

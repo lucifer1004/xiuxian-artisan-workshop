@@ -1,7 +1,17 @@
+#[cfg(test)]
+use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::{AstSearchHit, SearchHit};
+#[cfg(test)]
+use crate::search::SearchPlaneService;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct IntentSearchTransportMetadata {
+    #[cfg(test)]
+    pub(crate) knowledge_query_engine: Option<&'static str>,
+    #[cfg(test)]
+    pub(crate) local_symbol_query_engine: Option<&'static str>,
+    #[cfg(test)]
+    pub(crate) repo_query_engine: Option<&'static str>,
     #[cfg(test)]
     pub(crate) repo_content_transport: Option<&'static str>,
 }
@@ -18,6 +28,10 @@ pub(crate) struct IntentSourceHits {
     pub(crate) local_symbol_hits: Vec<AstSearchHit>,
     pub(crate) knowledge_indexing: bool,
     pub(crate) local_symbol_indexing: bool,
+    #[cfg(test)]
+    pub(crate) knowledge_query_engine: Option<&'static str>,
+    #[cfg(test)]
+    pub(crate) local_symbol_query_engine: Option<&'static str>,
 }
 
 #[derive(Debug, Clone)]
@@ -30,4 +44,16 @@ pub(crate) struct IntentMergedResults {
     pub(crate) partial: bool,
     pub(crate) pending_repos: Vec<String>,
     pub(crate) skipped_repos: Vec<String>,
+}
+
+#[cfg(test)]
+pub(crate) fn configured_parquet_query_engine_label(
+    service: &SearchPlaneService,
+) -> Result<&'static str, String> {
+    #[cfg(feature = "duckdb")]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())
+        .map_err(|error| error.to_string())?;
+    #[cfg(not(feature = "duckdb"))]
+    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    Ok(query_engine.kind().as_str())
 }

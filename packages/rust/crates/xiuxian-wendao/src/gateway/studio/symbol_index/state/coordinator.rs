@@ -108,6 +108,7 @@ impl SymbolIndexCoordinator {
         maybe_spawn_build(self, projects, index_cache, fingerprint);
     }
 
+    #[cfg(test)]
     pub(crate) fn ensure_started(
         self: &Arc<Self>,
         projects: Vec<UiProjectConfig>,

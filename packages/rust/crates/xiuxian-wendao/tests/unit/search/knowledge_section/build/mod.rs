@@ -181,6 +181,7 @@ async fn knowledge_section_incremental_refresh_reuses_unchanged_rows() {
             .exists(),
         "missing knowledge section parquet export"
     );
+    assert_no_knowledge_section_lance_tables(&service);
 }
 
 async fn wait_for_knowledge_section_ready(
@@ -200,6 +201,22 @@ async fn wait_for_knowledge_section_ready(
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     panic!("knowledge section build did not reach ready state");
+}
+
+fn assert_no_knowledge_section_lance_tables(service: &SearchPlaneService) {
+    let corpus_root = service.corpus_root(SearchCorpusKind::KnowledgeSection);
+    let entries = std::fs::read_dir(corpus_root.as_path())
+        .unwrap_or_else(|error| panic!("read knowledge-section corpus root: {error}"));
+    for entry in entries {
+        let entry =
+            entry.unwrap_or_else(|error| panic!("read knowledge-section corpus entry: {error}"));
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        assert!(
+            !file_name.ends_with(".lance"),
+            "unexpected Lance table left behind for knowledge_section: {file_name}"
+        );
+    }
 }
 
 #[test]

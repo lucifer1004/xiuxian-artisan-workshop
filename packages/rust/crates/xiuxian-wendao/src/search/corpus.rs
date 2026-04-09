@@ -69,6 +69,19 @@ impl SearchCorpusKind {
     pub const fn is_repo_backed(self) -> bool {
         matches!(self, Self::RepoEntity | Self::RepoContentChunk)
     }
+
+    /// Whether the local corpus still owns a Lance-backed publication store that can compact.
+    #[must_use]
+    pub const fn supports_local_store_compaction(self) -> bool {
+        match self {
+            Self::KnowledgeSection
+            | Self::Attachment
+            | Self::LocalSymbol
+            | Self::ReferenceOccurrence
+            | Self::RepoEntity
+            | Self::RepoContentChunk => false,
+        }
+    }
 }
 
 impl std::fmt::Display for SearchCorpusKind {

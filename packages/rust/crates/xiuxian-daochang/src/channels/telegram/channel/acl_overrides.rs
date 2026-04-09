@@ -153,16 +153,16 @@ pub fn build_telegram_acl_overrides_from_settings(
 fn build_control_command_rules(
     control: Option<&TelegramAclControlSettings>,
 ) -> Result<Vec<TelegramCommandAdminRule>> {
-    control
-        .and_then(|acl| acl.rules.as_ref())
-        .map(|rules| {
+    control.and_then(|acl| acl.rules.as_ref()).map_or_else(
+        || Ok(Vec::new()),
+        |rules| {
             rules
                 .iter()
                 .enumerate()
                 .map(build_control_command_rule)
                 .collect()
-        })
-        .unwrap_or_else(|| Ok(Vec::new()))
+        },
+    )
 }
 
 fn build_control_command_rule(

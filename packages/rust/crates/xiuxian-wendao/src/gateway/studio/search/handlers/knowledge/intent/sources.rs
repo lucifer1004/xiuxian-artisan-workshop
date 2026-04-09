@@ -1,5 +1,7 @@
 use crate::gateway::studio::router::{StudioApiError, StudioState};
 use crate::gateway::studio::search::handlers::knowledge::helpers::is_index_not_ready;
+#[cfg(test)]
+use crate::gateway::studio::search::handlers::knowledge::intent::types::configured_parquet_query_engine_label;
 use crate::gateway::studio::search::handlers::knowledge::intent::types::{
     IntentIndexState, IntentSourceHits,
 };
@@ -10,6 +12,21 @@ pub(crate) async fn search_intent_sources(
     candidate_limit: usize,
     index_state: &IntentIndexState,
 ) -> Result<IntentSourceHits, StudioApiError> {
+    #[cfg(test)]
+    let shared_query_engine =
+        if index_state.knowledge_config_missing && index_state.symbol_config_missing {
+            None
+        } else {
+            Some(
+                configured_parquet_query_engine_label(&studio.search_plane).map_err(|error| {
+                    StudioApiError::internal(
+                        "INTENT_SOURCE_QUERY_ENGINE_FAILED",
+                        "Failed to resolve intent source query-engine metadata",
+                        Some(error),
+                    )
+                })?,
+            )
+        };
     let (knowledge_result, symbol_result) = tokio::join!(
         async {
             if index_state.knowledge_config_missing {
@@ -38,6 +55,14 @@ pub(crate) async fn search_intent_sources(
         local_symbol_hits,
         knowledge_indexing,
         local_symbol_indexing,
+        #[cfg(test)]
+        knowledge_query_engine: (!index_state.knowledge_config_missing)
+            .then_some(shared_query_engine)
+            .flatten(),
+        #[cfg(test)]
+        local_symbol_query_engine: (!index_state.symbol_config_missing)
+            .then_some(shared_query_engine)
+            .flatten(),
     })
 }
 

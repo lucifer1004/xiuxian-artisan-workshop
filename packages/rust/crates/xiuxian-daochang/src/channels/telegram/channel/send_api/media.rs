@@ -200,7 +200,7 @@ impl TelegramChannel {
             .multipart(form)
             .send()
             .await
-            .map_err(TelegramApiError::from_reqwest)?;
+            .map_err(|error| TelegramApiError::from_reqwest(&error))?;
         Self::validate_telegram_response(response).await
     }
 
@@ -275,7 +275,7 @@ impl TelegramChannel {
             .multipart(form)
             .send()
             .await
-            .map_err(TelegramApiError::from_reqwest)?;
+            .map_err(|error| TelegramApiError::from_reqwest(&error))?;
         Self::validate_telegram_response(response).await
     }
 }

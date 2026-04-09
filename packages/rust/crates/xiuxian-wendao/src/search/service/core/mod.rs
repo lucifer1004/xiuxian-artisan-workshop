@@ -11,8 +11,6 @@ mod telemetry;
 mod types;
 
 #[cfg(test)]
-pub(crate) use types::QueuedLocalCompactionTask;
-#[cfg(test)]
 pub(crate) use types::RepoMaintenanceTaskKind;
 #[cfg(test)]
 pub(crate) use types::RepoPrewarmTask;

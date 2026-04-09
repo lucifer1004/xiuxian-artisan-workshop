@@ -25,13 +25,6 @@ pub(super) struct RepoTableSummary {
     pub(super) updated_at: Option<String>,
 }
 
-pub(super) struct LocalCompactionRuntimeView {
-    pub(super) is_running: bool,
-    pub(super) queue_depth: u32,
-    pub(super) queue_position: Option<u32>,
-    pub(super) queue_aged: bool,
-}
-
 pub(super) struct RepoPrewarmRuntimeView {
     pub(super) is_running: bool,
     pub(super) queue_depth: u32,

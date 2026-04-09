@@ -1,18 +1,15 @@
-use xiuxian_vector::{ColumnarScanOptions, VectorStoreError};
+use xiuxian_vector::VectorStoreError;
 
+use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
 use crate::search::local_symbol::build::{LocalSymbolBuildPlan, LocalSymbolWriteResult};
-use crate::search::local_symbol::schema::{local_symbol_batches, local_symbol_schema, path_column};
-use crate::search::{
-    SearchBuildLease, SearchCorpusKind, SearchPlaneService, delete_paths_from_table,
-};
+use crate::search::local_symbol::schema::{local_symbol_batches, path_column};
+use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
 
 pub(crate) async fn write_local_symbol_epoch(
     service: &SearchPlaneService,
     lease: &SearchBuildLease,
     plan: &LocalSymbolBuildPlan,
 ) -> Result<LocalSymbolWriteResult, VectorStoreError> {
-    let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
-    let schema = local_symbol_schema();
     let mut row_count = 0_u64;
     let mut fragment_count = 0_u64;
 
@@ -24,61 +21,36 @@ pub(crate) async fn write_local_symbol_epoch(
         );
         let changed_batches = local_symbol_batches(partition_plan.changed_hits.as_slice())?;
 
-        if let Some(base_epoch) = plan.base_epoch {
+        let base_table_name = plan.base_epoch.and_then(|base_epoch| {
             let base_table_name = SearchPlaneService::local_partition_table_name(
                 SearchCorpusKind::LocalSymbol,
                 base_epoch,
                 partition_id.as_str(),
             );
-            if service.local_table_exists(SearchCorpusKind::LocalSymbol, base_table_name.as_str()) {
-                store
-                    .clone_table(base_table_name.as_str(), table_name.as_str(), true)
-                    .await?;
-                delete_paths_from_table(
-                    &store,
-                    table_name.as_str(),
-                    path_column(),
-                    &partition_plan.replaced_paths,
-                )
-                .await?;
-                if !changed_batches.is_empty() {
-                    store
-                        .merge_insert_record_batches(
-                            table_name.as_str(),
-                            schema.clone(),
-                            changed_batches,
-                            &["id".to_string()],
-                        )
-                        .await?;
-                }
-            } else if !changed_batches.is_empty() {
-                store
-                    .replace_record_batches(table_name.as_str(), schema.clone(), changed_batches)
-                    .await?;
-            } else {
-                continue;
-            }
-        } else if !changed_batches.is_empty() {
-            store
-                .replace_record_batches(table_name.as_str(), schema.clone(), changed_batches)
-                .await?;
-        } else {
+            service
+                .local_table_exists(SearchCorpusKind::LocalSymbol, base_table_name.as_str())
+                .then_some(base_table_name)
+        });
+
+        if base_table_name.is_none() && changed_batches.is_empty() {
             continue;
         }
 
-        let table_info = store.get_table_info(table_name.as_str()).await?;
-        store
-            .write_vector_store_table_to_parquet_file(
-                table_name.as_str(),
-                service
-                    .local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str())
-                    .as_path(),
-                ColumnarScanOptions::default(),
-            )
-            .await?;
-        row_count = row_count.saturating_add(table_info.num_rows);
-        fragment_count = fragment_count
-            .saturating_add(u64::try_from(table_info.fragment_count).unwrap_or(u64::MAX));
+        let parquet_stats = rewrite_local_publication_parquet(
+            service,
+            SearchCorpusKind::LocalSymbol,
+            base_table_name.as_deref(),
+            table_name.as_str(),
+            path_column(),
+            &partition_plan.replaced_paths,
+            &changed_batches,
+        )
+        .await?;
+        if parquet_stats.row_count == 0 {
+            continue;
+        }
+        row_count = row_count.saturating_add(parquet_stats.row_count);
+        fragment_count = fragment_count.saturating_add(parquet_stats.fragment_count);
     }
 
     Ok(LocalSymbolWriteResult {

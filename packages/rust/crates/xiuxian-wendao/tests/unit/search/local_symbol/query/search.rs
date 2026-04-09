@@ -7,7 +7,8 @@ use crate::search::local_symbol::query::search::search_local_symbols;
 use crate::search::local_symbol::query::shared::{
     decode_local_symbol_hits, execute_local_symbol_search, retained_window,
 };
-use xiuxian_vector::ColumnarScanOptions;
+use crate::search::local_symbol::schema::local_symbol_batches;
+use xiuxian_vector::write_lance_batches_to_parquet_file;
 
 #[cfg(feature = "duckdb")]
 use super::fixtures::write_search_duckdb_runtime_override;
@@ -53,51 +54,27 @@ async fn local_symbol_query_reads_hits_from_published_epoch() {
 async fn local_symbol_query_can_rerank_across_multiple_tables() {
     let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let service = fixture_service(&temp_dir);
-    let store = service
-        .open_store(SearchCorpusKind::LocalSymbol)
-        .await
-        .unwrap_or_else(|error| panic!("open store: {error}"));
     let hits_a = vec![sample_hit("AlphaSymbol", "src/lib.rs", 10)];
     let hits_b = vec![sample_hit("BetaAlphaHelper", "src/beta.rs", 20)];
+    let batches_a =
+        local_symbol_batches(&hits_a).unwrap_or_else(|error| panic!("batches a: {error}"));
+    let batches_b =
+        local_symbol_batches(&hits_b).unwrap_or_else(|error| panic!("batches b: {error}"));
 
-    store
-        .replace_record_batches(
-            "local_symbol_project_a",
-            crate::search::local_symbol::schema::local_symbol_schema(),
-            crate::search::local_symbol::schema::local_symbol_batches(&hits_a)
-                .unwrap_or_else(|error| panic!("batches a: {error}")),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("replace record batches a: {error}"));
-    store
-        .replace_record_batches(
-            "local_symbol_project_b",
-            crate::search::local_symbol::schema::local_symbol_schema(),
-            crate::search::local_symbol::schema::local_symbol_batches(&hits_b)
-                .unwrap_or_else(|error| panic!("batches b: {error}")),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("replace record batches b: {error}"));
-    store
-        .write_vector_store_table_to_parquet_file(
-            "local_symbol_project_a",
-            service
-                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_a")
-                .as_path(),
-            ColumnarScanOptions::default(),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("export parquet a: {error}"));
-    store
-        .write_vector_store_table_to_parquet_file(
-            "local_symbol_project_b",
-            service
-                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_b")
-                .as_path(),
-            ColumnarScanOptions::default(),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("export parquet b: {error}"));
+    write_lance_batches_to_parquet_file(
+        service
+            .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_a")
+            .as_path(),
+        &batches_a,
+    )
+    .unwrap_or_else(|error| panic!("write parquet a: {error}"));
+    write_lance_batches_to_parquet_file(
+        service
+            .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_b")
+            .as_path(),
+        &batches_b,
+    )
+    .unwrap_or_else(|error| panic!("write parquet b: {error}"));
     #[cfg(feature = "duckdb")]
     let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())
         .unwrap_or_else(|error| panic!("build parquet query engine: {error}"));

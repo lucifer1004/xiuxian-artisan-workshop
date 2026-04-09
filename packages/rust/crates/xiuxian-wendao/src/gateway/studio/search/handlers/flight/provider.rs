@@ -91,6 +91,7 @@ impl SearchFlightRouteProvider for StudioSearchFlightRouteProvider {
                     limit: Some(limit),
                 },
             )
+            .await
             .map_err(|error| {
                 format!(
                     "studio aggregate Flight provider failed to build symbol response for `{query_text}`: {error:?}"

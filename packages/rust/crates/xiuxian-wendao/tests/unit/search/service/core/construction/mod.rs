@@ -58,3 +58,29 @@ fn repo_search_parallelism_reuses_repo_read_budget() {
     assert_eq!(service.repo_search_parallelism(2), 2);
     assert_eq!(service.repo_search_parallelism(0), 1);
 }
+
+#[test]
+fn local_epoch_table_names_for_reads_ignores_legacy_lance_dirs() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let project_root = PathBuf::from("/tmp/search-plane-service");
+    let storage_root = temp_dir.path().join("search_plane");
+    let manifest_keyspace = manifest_keyspace_for_project(project_root.as_path());
+    let service = SearchPlaneService::with_paths(
+        project_root,
+        storage_root,
+        manifest_keyspace,
+        SearchMaintenancePolicy::default(),
+    );
+
+    let corpus_root = service.corpus_root(crate::search::SearchCorpusKind::LocalSymbol);
+    std::fs::create_dir_all(corpus_root.join("local_symbol_epoch_7.lance"))
+        .unwrap_or_else(|error| panic!("create legacy lance dir: {error}"));
+
+    let table_names =
+        service.local_epoch_table_names_for_reads(crate::search::SearchCorpusKind::LocalSymbol, 7);
+
+    assert!(
+        table_names.is_empty(),
+        "legacy local .lance directories should no longer be discovered"
+    );
+}

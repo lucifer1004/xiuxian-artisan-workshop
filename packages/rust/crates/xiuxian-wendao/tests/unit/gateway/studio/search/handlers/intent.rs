@@ -1,3 +1,5 @@
+#[cfg(feature = "duckdb")]
+use serial_test::serial;
 use std::fs;
 use std::sync::Arc;
 
@@ -5,6 +7,12 @@ use crate::gateway::studio::search::handlers::code_search::search::build_repo_co
 use crate::gateway::studio::search::handlers::knowledge::build_intent_search_response;
 use crate::gateway::studio::search::handlers::knowledge::load_intent_search_response_with_metadata;
 use crate::gateway::studio::search::handlers::queries::SearchQuery;
+#[cfg(feature = "duckdb")]
+use crate::gateway::studio::search::handlers::tests::write_search_duckdb_runtime_override;
+#[cfg(feature = "duckdb")]
+use crate::gateway::studio::search::handlers::tests::{
+    configure_local_workspace, publish_knowledge_section_index, publish_local_symbol_index,
+};
 use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
     test_studio_state,
@@ -164,6 +172,159 @@ async fn load_intent_search_response_reports_repo_content_flight_transport_metad
     .unwrap_or_else(|error| panic!("intent search response with metadata: {error:?}"));
 
     assert_eq!(response.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert_eq!(metadata.repo_content_transport, Some("flight_contract"));
+}
+
+#[cfg(feature = "duckdb")]
+#[tokio::test]
+#[serial]
+async fn load_intent_search_response_reports_duckdb_local_source_query_engines() {
+    let _temp = write_search_duckdb_runtime_override(
+        r#"[search.duckdb]
+enabled = true
+database_path = ":memory:"
+temp_directory = ".cache/duckdb/intent-local-source-tmp"
+threads = 2
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write duckdb runtime override: {error}"));
+
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join("notes"))
+        .unwrap_or_else(|error| panic!("create notes dir: {error}"));
+    fs::create_dir_all(workspace.join("src"))
+        .unwrap_or_else(|error| panic!("create src dir: {error}"));
+    fs::write(
+        workspace.join("notes/duckdb_focus.md"),
+        "# duckdb_focus\n\nThis note documents the duckdb_focus workflow.\n",
+    )
+    .unwrap_or_else(|error| panic!("write note: {error}"));
+    fs::write(workspace.join("src/lib.rs"), "pub fn duckdb_focus() {}\n")
+        .unwrap_or_else(|error| panic!("write source file: {error}"));
+
+    let mut studio = test_studio_state();
+    configure_local_workspace(&mut studio, workspace.as_path());
+    publish_knowledge_section_index(&studio).await;
+    publish_local_symbol_index(&studio).await;
+
+    let (response, metadata) = load_intent_search_response_with_metadata(
+        &studio,
+        SearchQuery {
+            q: Some("duckdb_focus".to_string()),
+            intent: Some("debug_lookup".to_string()),
+            repo: None,
+            limit: Some(10),
+        },
+    )
+    .await
+    .unwrap_or_else(|error| panic!("intent search response with local duckdb metadata: {error:?}"));
+
+    assert_eq!(response.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.path == "notes/duckdb_focus.md"),
+        "expected knowledge hit in intent response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        response.hits.iter().any(|hit| hit.path == "src/lib.rs"),
+        "expected local symbol hit in intent response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(metadata.knowledge_query_engine, Some("duckdb"));
+    assert_eq!(metadata.local_symbol_query_engine, Some("duckdb"));
+    assert_eq!(metadata.repo_query_engine, None);
+}
+
+#[cfg(feature = "duckdb")]
+#[tokio::test]
+#[serial]
+async fn load_intent_search_response_reports_duckdb_repo_query_engine() {
+    let _temp = write_search_duckdb_runtime_override(
+        r#"[search.duckdb]
+enabled = true
+database_path = ":memory:"
+temp_directory = ".cache/duckdb/intent-repo-source-tmp"
+threads = 2
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write duckdb runtime override: {error}"));
+
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let valid_repo = temp.path().join("ValidPkg");
+    fs::create_dir_all(valid_repo.join("src"))
+        .unwrap_or_else(|error| panic!("create valid src: {error}"));
+    fs::write(
+        valid_repo.join("Project.toml"),
+        "name = \"ValidPkg\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write project: {error}"));
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(valid_repo.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let snapshot = Arc::new(RepoIndexSnapshot {
+        repo_id: "valid".to_string(),
+        analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
+    });
+    publish_repo_content_chunk_index(
+        &studio,
+        "valid",
+        vec![RepoCodeDocument {
+            path: "src/ValidPkg.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module ValidPkg\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+            size_bytes: 62,
+            modified_unix_ms: 0,
+        }],
+    )
+    .await;
+    studio.repo_index.set_snapshot_for_test(&snapshot);
+    studio.repo_index.set_status_for_test(RepoIndexEntryStatus {
+        repo_id: "valid".to_string(),
+        phase: RepoIndexPhase::Ready,
+        queue_position: None,
+        last_error: None,
+        last_revision: Some("abc123".to_string()),
+        updated_at: Some("2026-03-22T00:00:00Z".to_string()),
+        attempt_count: 1,
+    });
+
+    let (_response, metadata) = load_intent_search_response_with_metadata(
+        &studio,
+        SearchQuery {
+            q: Some("lang:julia reexport".to_string()),
+            intent: Some("debug_lookup".to_string()),
+            repo: Some("valid".to_string()),
+            limit: Some(10),
+        },
+    )
+    .await
+    .unwrap_or_else(|error| panic!("intent search response with repo duckdb metadata: {error:?}"));
+
+    assert_eq!(metadata.repo_query_engine, Some("duckdb"));
     assert_eq!(metadata.repo_content_transport, Some("flight_contract"));
 }
 
