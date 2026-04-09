@@ -3,6 +3,8 @@
 //! Extracts symbols (functions, classes, etc.) from source code using ast-grep
 //! patterns. Part of The Cartographer.
 
+use std::fmt;
+use std::fmt::Write as _;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -18,6 +20,12 @@ use crate::patterns::{
 };
 use crate::types::{SearchConfig, SearchMatch, Symbol, SymbolKind};
 
+fn append_fmt(buffer: &mut String, args: fmt::Arguments<'_>) {
+    buffer
+        .write_fmt(args)
+        .unwrap_or_else(|_| unreachable!("writing to String cannot fail"));
+}
+
 /// High-performance AST-based symbol extractor for code navigation.
 ///
 /// Extracts symbols (functions, classes, etc.) from source code using ast-grep
@@ -26,7 +34,11 @@ pub struct TagExtractor;
 
 impl TagExtractor {
     /// Generate a symbolic outline for a file
-    /// Returns formatted string ready for LLM consumption
+    /// Returns formatted string ready for LLM consumption.
+    ///
+    /// # Errors
+    ///
+    /// Returns `TagError` when the file cannot be read safely.
     pub fn outline_file<P: AsRef<Path>>(
         path: P,
         language: Option<&str>,
@@ -37,7 +49,7 @@ impl TagExtractor {
         let lang = match language {
             Some(l) => match SupportLang::from_str(l) {
                 Ok(lang) => lang,
-                Err(_) => return Ok(format!("[No outline available for {}", l)),
+                Err(_) => return Ok(format!("[No outline available for {l}")),
             },
             None => {
                 if let Some(lang) = SupportLang::from_path(path) {
@@ -53,7 +65,7 @@ impl TagExtractor {
             SupportLang::Rust => Self::extract_rust(&content),
             SupportLang::JavaScript => Self::extract_js(&content),
             SupportLang::TypeScript => Self::extract_ts(&content),
-            _ => return Ok(format!("[No outline available for {:?}", lang)),
+            _ => return Ok(format!("[No outline available for {lang:?}]")),
         };
 
         if symbols.is_empty() {
@@ -62,18 +74,25 @@ impl TagExtractor {
 
         // Build CCA-style outline
         let mut output = String::new();
-        output.push_str(&format!("// OUTLINE: {}\n", path.display()));
-        output.push_str(&format!("// Total symbols: {}\n", symbols.len()));
+        append_fmt(
+            &mut output,
+            format_args!("// OUTLINE: {}\n", path.display()),
+        );
+        append_fmt(
+            &mut output,
+            format_args!("// Total symbols: {}\n", symbols.len()),
+        );
 
         for sym in &symbols {
             let kind_str = format!("{:?}", sym.kind).to_lowercase();
-            output.push_str(&format!(
-                "L{: <4} {: <12} {} {}\n",
-                sym.line,
-                format!("[{}]", kind_str),
-                sym.name,
-                sym.signature
-            ));
+            let kind_label = format!("[{kind_str}]");
+            append_fmt(
+                &mut output,
+                format_args!(
+                    "L{: <4} {: <12} {} {}\n",
+                    sym.line, kind_label, sym.name, sym.signature
+                ),
+            );
         }
 
         Ok(output)
@@ -91,7 +110,12 @@ impl TagExtractor {
     /// * `language` - Optional language hint (python, rust, javascript, typescript)
     ///
     /// # Returns
-    /// Formatted string showing all matches with context
+    /// Formatted string showing all matches with context.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SearchError` when the file cannot be read, the language cannot
+    /// be resolved, or the pattern is invalid for the selected language.
     pub fn search_file<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -109,10 +133,10 @@ impl TagExtractor {
                 if let Some(lang) = SupportLang::from_path(path) {
                     lang
                 } else {
-                    let ext = path
-                        .extension()
-                        .map(|e| e.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
+                    let ext = path.extension().map_or_else(
+                        || "unknown".to_string(),
+                        |extension| extension.to_string_lossy().to_string(),
+                    );
                     return Err(SearchError::UnsupportedLanguage(ext));
                 }
             }
@@ -130,12 +154,18 @@ impl TagExtractor {
 
         // Build formatted output
         let mut output = String::new();
-        output.push_str(&format!("// SEARCH: {}\n", path.display()));
-        output.push_str(&format!("// Pattern: {}\n", pattern));
-        output.push_str(&format!("// Total matches: {}\n", matches.len()));
+        append_fmt(&mut output, format_args!("// SEARCH: {}\n", path.display()));
+        append_fmt(&mut output, format_args!("// Pattern: {pattern}\n"));
+        append_fmt(
+            &mut output,
+            format_args!("// Total matches: {}\n", matches.len()),
+        );
 
         for m in &matches {
-            output.push_str(&format!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content));
+            append_fmt(
+                &mut output,
+                format_args!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content),
+            );
         }
 
         Ok(output)
@@ -149,7 +179,12 @@ impl TagExtractor {
     /// * `config` - Search configuration
     ///
     /// # Returns
-    /// Formatted string showing all matches across files
+    /// Formatted string showing all matches across files.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SearchError` when a readable file contains an invalid pattern
+    /// match context for the selected language.
     pub fn search_directory<P: AsRef<Path>>(
         dir: P,
         pattern: &str,
@@ -158,16 +193,19 @@ impl TagExtractor {
         use walkdir::WalkDir;
 
         let dir = dir.as_ref();
+        let SearchConfig {
+            file_pattern: _file_pattern,
+            max_file_size,
+            max_matches_per_file,
+            languages: _languages,
+        } = config;
         let mut all_matches: Vec<SearchMatch> = Vec::new();
         let mut file_count = 0;
 
         let walker = WalkDir::new(dir).follow_links(false).into_iter();
 
         for entry in walker {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+            let Ok(entry) = entry else { continue };
 
             if !entry.file_type().is_file() {
                 continue;
@@ -190,33 +228,28 @@ impl TagExtractor {
                 _ => None,
             };
 
-            if lang.is_none() {
-                continue;
-            }
-
-            let lang = lang.unwrap();
+            let Some(lang) = lang else { continue };
 
             // Check file size
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.len() > config.max_file_size {
-                    continue;
-                }
+            if let Ok(metadata) = entry.metadata()
+                && metadata.len() > max_file_size
+            {
+                continue;
             }
 
             file_count += 1;
 
-            match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    let matches = Self::search_content(&content, pattern, lang, path)?;
-                    all_matches.extend(matches);
-
-                    if all_matches.len() >= config.max_matches_per_file * 10 {
-                        // Stop if we have too many matches
-                        break;
-                    }
-                }
-                Err(_) => continue,
+            let Ok(content) = std::fs::read_to_string(path) else {
+                continue;
             };
+
+            let matches = Self::search_content(&content, pattern, lang, path)?;
+            all_matches.extend(matches);
+
+            if all_matches.len() >= max_matches_per_file * 10 {
+                // Stop if we have too many matches
+                break;
+            }
         }
 
         if all_matches.is_empty() {
@@ -229,19 +262,28 @@ impl TagExtractor {
 
         // Group matches by file
         let mut output = String::new();
-        output.push_str(&format!("// SEARCH: {}\n", dir.display()));
-        output.push_str(&format!("// Pattern: {}\n", pattern));
-        output.push_str(&format!("// Files searched: {}\n", file_count));
-        output.push_str(&format!("// Total matches: {}\n", all_matches.len()));
+        append_fmt(&mut output, format_args!("// SEARCH: {}\n", dir.display()));
+        append_fmt(&mut output, format_args!("// Pattern: {pattern}\n"));
+        append_fmt(
+            &mut output,
+            format_args!("// Files searched: {file_count}\n"),
+        );
+        append_fmt(
+            &mut output,
+            format_args!("// Total matches: {}\n", all_matches.len()),
+        );
 
         // Group by file
         let mut current_file = String::new();
         for m in all_matches {
             if m.path != current_file {
-                current_file = m.path.clone();
-                output.push_str(&format!("\n// File: {}\n", current_file));
+                current_file.clone_from(&m.path);
+                append_fmt(&mut output, format_args!("\n// File: {current_file}\n"));
             }
-            output.push_str(&format!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content));
+            append_fmt(
+                &mut output,
+                format_args!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content),
+            );
         }
 
         Ok(output)
@@ -278,13 +320,11 @@ impl TagExtractor {
                 let env = m.get_env();
                 let vars: Vec<String> = env
                     .get_matched_variables()
-                    .filter_map(|mv| {
-                        // Extract capture name from MetaVariable
-                        match mv {
-                            MetaVariable::Capture(name, _) => Some(name.to_string()),
-                            MetaVariable::MultiCapture(name) => Some(name.to_string()),
-                            MetaVariable::Dropped(_) | MetaVariable::Multiple => None,
+                    .filter_map(|mv| match mv {
+                        MetaVariable::Capture(name, _) | MetaVariable::MultiCapture(name) => {
+                            Some(name.clone())
                         }
+                        MetaVariable::Dropped(_) | MetaVariable::Multiple => None,
                     })
                     .collect();
                 for key in &vars {
@@ -324,7 +364,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("class {}", name);
+                let sig = format!("class {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Class,
@@ -340,7 +380,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("def {}", name);
+                let sig = format!("def {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Function,
@@ -356,7 +396,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("async def {}", name);
+                let sig = format!("async def {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::AsyncFunction,
@@ -385,7 +425,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("struct {}", name);
+                let sig = format!("struct {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Struct,
@@ -401,7 +441,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("fn {}", name);
+                let sig = format!("fn {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Function,
@@ -417,7 +457,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("enum {}", name);
+                let sig = format!("enum {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Enum,
@@ -433,7 +473,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("trait {}", name);
+                let sig = format!("trait {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Trait,
@@ -449,7 +489,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("impl {}", name);
+                let sig = format!("impl {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Impl,
@@ -477,7 +517,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("class {}", name);
+                let sig = format!("class {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Class,
@@ -493,7 +533,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("function {}", name);
+                let sig = format!("function {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Function,
@@ -524,7 +564,7 @@ impl TagExtractor {
             if let Some(m) = pattern.match_node(node.clone()) {
                 let name = Self::get_capture(&m, "NAME");
                 let line = m.start_pos().line();
-                let sig = format!("interface {}", name);
+                let sig = format!("interface {name}");
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Interface,

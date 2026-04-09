@@ -8,19 +8,20 @@ use super::{
 use std::path::PathBuf;
 
 #[test]
-fn scenario_case_summary_block_renders_with_qianhuan_template() {
+fn scenario_case_summary_block_renders_with_qianhuan_template()
+-> Result<(), crate::error::QianjiError> {
     let summary = FlowhubScenarioCaseSummary {
         file_name: "codex-plan.mmd".to_string(),
         merimind_graph_name: "codex-plan".to_string(),
     };
 
-    let rendered =
-        render_scenario_case_summary_block("plan", &summary).expect("render scenario case");
+    let rendered = render_scenario_case_summary_block("plan", &summary)?;
 
     assert_eq!(
         rendered,
         "Graph name: codex-plan\nPath: ./plan/codex-plan.mmd"
     );
+    Ok(())
 }
 
 #[test]

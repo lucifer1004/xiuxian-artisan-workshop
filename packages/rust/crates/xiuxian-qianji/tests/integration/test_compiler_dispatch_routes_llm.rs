@@ -3,8 +3,10 @@
 #![cfg(feature = "llm")]
 
 use async_trait::async_trait;
+use futures::stream;
 use std::path::Path;
 use std::sync::Arc;
+use xiuxian_llm::llm::client::ChatStream;
 use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
 use xiuxian_qianji::QianjiCompiler;
@@ -42,7 +44,13 @@ impl LlmClient for StubLlmClient {
     async fn chat(&self, _request: ChatRequest) -> LlmResult<String> {
         Ok("ok".to_string())
     }
+
+    async fn chat_stream(&self, _request: ChatRequest) -> LlmResult<ChatStream> {
+        Ok(Box::pin(stream::iter(vec![Ok("ok".to_string())])))
+    }
 }
+
+xiuxian_testing::crate_test_policy_harness!();
 
 fn build_compiler_with_client(
     index_root: &Path,

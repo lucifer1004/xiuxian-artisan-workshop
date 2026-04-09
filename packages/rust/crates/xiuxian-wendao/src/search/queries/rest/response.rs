@@ -8,7 +8,7 @@ use crate::search::queries::sql::SqlQueryPayload;
 #[serde(tag = "query_language", content = "payload", rename_all = "snake_case")]
 pub enum RestQueryPayload {
     /// SQL response rendered by the shared query system.
-    Sql(SqlQueryPayload),
+    Sql(Box<SqlQueryPayload>),
     /// GraphQL response rendered by the shared query system.
     Graphql(GraphqlQueryPayload),
 }

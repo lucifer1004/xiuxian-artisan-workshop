@@ -88,7 +88,7 @@ impl ZhixingHeyi {
             return Ok(rendered);
         }
 
-        let tasks = self.graph.get_entities_by_type("OTHER(Task)");
+        let tasks = self.graph.get_entities_by_type("TASK");
         let mut active_tasks = Vec::with_capacity(tasks.len());
         let mut max_carryover = 0;
 

@@ -3,6 +3,7 @@ pub(crate) mod git;
 pub(crate) mod root;
 pub(crate) mod state;
 #[cfg(test)]
+#[path = "../../../../tests/unit/gateway/studio/perf_support/mod.rs"]
 mod tests;
 pub(crate) mod workspace;
 

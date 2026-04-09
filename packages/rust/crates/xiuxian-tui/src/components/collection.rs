@@ -13,13 +13,17 @@ pub struct PanelCollection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Panel layout strategy for `PanelCollection` rendering.
 pub enum PanelLayout {
+    /// Stack panels vertically from top to bottom.
     Vertical,
+    /// Place panels side by side horizontally.
     Horizontal,
 }
 
 impl PanelCollection {
     /// Create a new empty collection
+    #[must_use]
     pub fn new() -> Self {
         Self {
             panels: Vec::new(),
@@ -45,11 +49,13 @@ impl PanelCollection {
     }
 
     /// Get the number of panels
+    #[must_use]
     pub fn len(&self) -> usize {
         self.panels.len()
     }
 
     /// Check if empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.panels.is_empty()
     }
@@ -80,6 +86,7 @@ impl PanelCollection {
     }
 
     /// Get a reference to the focused panel
+    #[must_use]
     pub fn focused_panel(&self) -> Option<&FoldablePanel> {
         self.panels.get(self.focused_index)
     }
@@ -90,11 +97,13 @@ impl PanelCollection {
     }
 
     /// Get all panels (reference)
-    pub fn all_panels(&self) -> &Vec<FoldablePanel> {
+    #[must_use]
+    pub fn all_panels(&self) -> &[FoldablePanel] {
         &self.panels
     }
 
     /// Get focused index
+    #[must_use]
     pub fn focused_index(&self) -> usize {
         self.focused_index
     }
@@ -118,7 +127,9 @@ impl PanelCollection {
             .panels
             .iter()
             .map(|p| {
-                let expanded_lines = p.line_count().min(MAX_EXPANDED_HEIGHT as usize) as u16;
+                let expanded_lines =
+                    u16::try_from(p.line_count().min(usize::from(MAX_EXPANDED_HEIGHT)))
+                        .unwrap_or(MAX_EXPANDED_HEIGHT);
                 Constraint::Length(match *p.state() {
                     PanelState::Folded => FOLDED_HEIGHT,
                     PanelState::Expanded => expanded_lines.saturating_add(2),

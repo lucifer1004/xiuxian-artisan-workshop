@@ -17,6 +17,26 @@ Current ownership:
 - transport negotiation and Flight client/server helpers
 - runtime artifact resolve/render helpers
 
+## Bounded DuckDB Runtime Lane
+
+The bounded DuckDB direction is tracked in
+[RFC: DuckDB as a Bounded In-Process Analytic Lane for Wendao and Qianji](../../../../../docs/rfcs/2026-04-08-wendao-qianji-duckdb-bounded-analytics-rfc.md).
+
+The first runtime-owned slice for that lane is now landed under
+`src/config/duckdb/`. `xiuxian-wendao-runtime` owns only the Wendao
+host-side runtime concerns for this lane:
+
+- typed host config resolution
+- temp/spill directory policy
+- connection/bootstrap helpers that depend on deployment context
+
+Arrow remains a default substrate in this crate rather than a transport-only
+optional dependency gate. The transport feature still gates transport-facing
+logic, but Arrow and Arrow Flight stay first-class runtime dependencies.
+
+It must not become the home for DuckDB query semantics, search-plane
+registration logic, or Qianji workflow-stage orchestration.
+
 ## Non-Goals
 
 Do not use `xiuxian-wendao-runtime` as the home for:

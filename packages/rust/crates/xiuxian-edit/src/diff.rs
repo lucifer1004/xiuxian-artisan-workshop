@@ -14,6 +14,7 @@ use similar::{ChangeTag, TextDiff};
 ///
 /// # Returns
 /// A string containing the unified diff with `+`, `-`, and ` ` prefixes.
+#[must_use]
 pub fn generate_unified_diff(original: &str, modified: &str) -> String {
     let diff = TextDiff::from_lines(original, modified);
     let mut output = String::new();
@@ -40,3 +41,7 @@ pub fn generate_unified_diff(original: &str, modified: &str) -> String {
 
     output
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/diff.rs"]
+mod tests;

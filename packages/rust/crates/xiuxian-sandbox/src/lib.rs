@@ -13,6 +13,8 @@
 //! 3. Rust executor reads JSON, spawns nsjail/seatbelt
 //! 4. Rust monitors resources and returns results
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 use pyo3::prelude::*;
 
 pub mod executor;

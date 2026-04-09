@@ -52,6 +52,8 @@
 //! let q_value = q_table.get_q("ep-001");
 //! ```
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 // ============================================================================
 // Core modules
 // ============================================================================

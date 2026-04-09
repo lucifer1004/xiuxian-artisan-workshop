@@ -42,6 +42,7 @@ pub enum TuiEvent {
 
 impl TuiEvent {
     /// Check if this is a quit event
+    #[must_use]
     pub fn is_quit(&self) -> bool {
         self == &TuiEvent::Quit
     }
@@ -58,8 +59,8 @@ pub enum Event {
     Error(String),
 }
 
-/// Convert Crossterm event to TuiEvent
-fn map_crossterm_event(event: CrosstermEvent) -> Option<TuiEvent> {
+/// Convert Crossterm event to `TuiEvent`.
+fn map_crossterm_event(event: &CrosstermEvent) -> Option<TuiEvent> {
     match event {
         CrosstermEvent::Key(KeyEvent {
             code,
@@ -68,19 +69,19 @@ fn map_crossterm_event(event: CrosstermEvent) -> Option<TuiEvent> {
             ..
         }) => {
             // Ctrl-o: Toggle panel
-            if modifiers.contains(KeyModifiers::CONTROL) && code == event::KeyCode::Char('o') {
+            if modifiers.contains(KeyModifiers::CONTROL) && *code == event::KeyCode::Char('o') {
                 return Some(TuiEvent::TogglePanel);
             }
             // Ctrl-c: Quit
-            if modifiers.contains(KeyModifiers::CONTROL) && code == event::KeyCode::Char('c') {
+            if modifiers.contains(KeyModifiers::CONTROL) && *code == event::KeyCode::Char('c') {
                 return Some(TuiEvent::Quit);
             }
             // Tab: Next panel
-            if code == event::KeyCode::Tab {
+            if *code == event::KeyCode::Tab {
                 return Some(TuiEvent::NextPanel);
             }
             // BackTab: Previous panel (Shift+Tab)
-            if modifiers.contains(KeyModifiers::SHIFT) && code == event::KeyCode::BackTab {
+            if modifiers.contains(KeyModifiers::SHIFT) && *code == event::KeyCode::BackTab {
                 return Some(TuiEvent::PrevPanel);
             }
             // Arrow keys for scrolling
@@ -88,17 +89,17 @@ fn map_crossterm_event(event: CrosstermEvent) -> Option<TuiEvent> {
                 event::KeyCode::Down | event::KeyCode::Char('j') => Some(TuiEvent::ScrollDown),
                 event::KeyCode::Up | event::KeyCode::Char('k') => Some(TuiEvent::ScrollUp),
                 event::KeyCode::Backspace => Some(TuiEvent::Backspace),
-                event::KeyCode::Char(c) => Some(TuiEvent::Char(c)),
+                event::KeyCode::Char(c) => Some(TuiEvent::Char(*c)),
                 _ => None,
             }
         }
-        CrosstermEvent::Resize(width, height) => Some(TuiEvent::Resize(width, height)),
+        CrosstermEvent::Resize(width, height) => Some(TuiEvent::Resize(*width, *height)),
         _ => None,
     }
 }
 
 /// Event handler configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct EventHandlerConfig {
     /// Tick rate in milliseconds
     pub tick_rate: Duration,
@@ -126,6 +127,7 @@ pub struct EventHandler {
 
 impl EventHandler {
     /// Create a new event handler
+    #[must_use]
     pub fn new(config: EventHandlerConfig) -> Self {
         let (sender, receiver) = mpsc::channel();
 
@@ -139,19 +141,27 @@ impl EventHandler {
                 let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
                 // Poll for events with timeout
-                if event::poll(timeout).expect("Failed to poll events") {
-                    if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                        // Handle Ctrl-c specially to exit
-                        if key.modifiers.contains(KeyModifiers::CONTROL)
-                            && key.code == event::KeyCode::Char('c')
-                        {
-                            let _ = sender.send(Event::Input(TuiEvent::Quit));
-                            break;
-                        }
+                match event::poll(timeout) {
+                    Ok(true) => {
+                        if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                            // Handle Ctrl-c specially to exit
+                            if key.modifiers.contains(KeyModifiers::CONTROL)
+                                && key.code == event::KeyCode::Char('c')
+                            {
+                                let _ = sender.send(Event::Input(TuiEvent::Quit));
+                                break;
+                            }
 
-                        if let Some(tui_event) = map_crossterm_event(CrosstermEvent::Key(key)) {
-                            let _ = sender.send(Event::Input(tui_event));
+                            if let Some(tui_event) = map_crossterm_event(&CrosstermEvent::Key(key))
+                            {
+                                let _ = sender.send(Event::Input(tui_event));
+                            }
                         }
+                    }
+                    Ok(false) => {}
+                    Err(error) => {
+                        let _ = sender.send(Event::Error(format!("event poll failed: {error}")));
+                        break;
                     }
                 }
 
@@ -169,12 +179,20 @@ impl EventHandler {
         }
     }
 
-    /// Receive the next event (blocking)
+    /// Receive the next event (blocking).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`mpsc::RecvError`] when the input thread has terminated.
     pub fn next(&self) -> Result<Event, mpsc::RecvError> {
         self.receiver.recv()
     }
 
-    /// Try to receive an event (non-blocking)
+    /// Try to receive an event (non-blocking).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`mpsc::TryRecvError`] when the channel is disconnected.
     pub fn try_next(&self) -> Result<Option<Event>, mpsc::TryRecvError> {
         self.receiver.try_recv().map(Some)
     }
@@ -188,6 +206,7 @@ pub struct BroadcastEventHandler {
 
 impl BroadcastEventHandler {
     /// Create a new broadcast handler
+    #[must_use]
     pub fn new() -> (Self, mpsc::Sender<Event>) {
         let (tx, rx) = mpsc::channel();
         (
@@ -199,24 +218,33 @@ impl BroadcastEventHandler {
         )
     }
 
-    /// Receive next event
+    /// Receive next event.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`mpsc::RecvError`] when the channel is disconnected.
     pub fn recv(&mut self) -> Result<Event, mpsc::RecvError> {
         self.rx.recv()
     }
 }
 
-/// Subscribe to omni-events for custom TuiEvents
+/// Subscribe to omni-events for custom `TuiEvents`.
 pub struct EventSubscriber {
     rx: broadcast::Receiver<xiuxian_event::OmniEvent>,
 }
 
 impl EventSubscriber {
     /// Create a new subscriber
+    #[must_use]
     pub fn new(rx: broadcast::Receiver<xiuxian_event::OmniEvent>) -> Self {
         Self { rx }
     }
 
-    /// Receive the next omni-event (blocking)
+    /// Receive the next omni-event (blocking).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`broadcast::error::RecvError`] when the broadcast channel closes or lags.
     pub fn recv(&mut self) -> Result<xiuxian_event::OmniEvent, broadcast::error::RecvError> {
         // Use blocking receive for sync TUI
         loop {
@@ -244,19 +272,5 @@ pub fn disable_raw_mode_safe() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_tui_event_quit() {
-        assert!(TuiEvent::Quit.is_quit());
-        assert!(!TuiEvent::TogglePanel.is_quit());
-    }
-
-    #[test]
-    fn test_event_handler_config() {
-        let config = EventHandlerConfig::default();
-        assert_eq!(config.tick_rate, Duration::from_millis(250));
-        assert!(!config.enable_mouse);
-    }
-}
+#[path = "../../tests/unit/event/mod.rs"]
+mod tests;

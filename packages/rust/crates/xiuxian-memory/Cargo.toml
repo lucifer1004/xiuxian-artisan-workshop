@@ -16,6 +16,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
 log = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

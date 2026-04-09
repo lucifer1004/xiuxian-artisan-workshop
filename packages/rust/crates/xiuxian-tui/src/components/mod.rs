@@ -9,3 +9,7 @@ pub use collection::{PanelCollection, PanelLayout};
 pub use layout::AppLayout;
 pub use panel::{FOLDED_HEIGHT, FoldablePanel, MAX_EXPANDED_HEIGHT, PanelState};
 pub use tui_app::TuiApp;
+
+#[cfg(test)]
+#[path = "../../tests/unit/components/mod.rs"]
+mod tests;

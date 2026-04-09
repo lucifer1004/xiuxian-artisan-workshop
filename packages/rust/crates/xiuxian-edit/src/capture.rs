@@ -86,3 +86,7 @@ fn extract_variadic_fallback(replacement: &str, original_text: &str) -> String {
 
     new_text
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/capture.rs"]
+mod tests;

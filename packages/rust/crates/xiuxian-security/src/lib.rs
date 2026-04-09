@@ -15,6 +15,8 @@
 //!
 //! Patterns follow ODF-REP Security Standards.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 mod permissions;
 mod sandbox;
 mod scanner;

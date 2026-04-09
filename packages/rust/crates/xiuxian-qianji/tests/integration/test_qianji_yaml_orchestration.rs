@@ -12,7 +12,7 @@ use xiuxian_qianhuan::{PersonaRegistry, ThousandFacesOrchestrator};
 use xiuxian_qianji::{QianjiCompiler, QianjiScheduler};
 use xiuxian_wendao::LinkGraphIndex;
 
-const DIAMOND_DAG_TOML: &str = include_str!("../resources/tests/diamond_dag.toml");
+const DIAMOND_DAG_TOML: &str = include_str!("../../resources/tests/diamond_dag.toml");
 
 #[tokio::test]
 async fn test_qianji_native_toml_orchestration_diamond() {
@@ -33,3 +33,5 @@ async fn test_qianji_native_toml_orchestration_diamond() {
     assert_eq!(result["A"], "done");
     assert_eq!(result["D"], "done");
 }
+
+xiuxian_testing::crate_test_policy_harness!();

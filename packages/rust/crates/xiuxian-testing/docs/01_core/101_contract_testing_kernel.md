@@ -507,3 +507,217 @@ longer reports `src/gateway/studio/vfs/mod.rs`,
 parallel compatibility path. The next milestone therefore starts at the now
 fronting `gateway/studio/search/handlers/*`, `gateway/studio/router/*`,
 `gateway/studio/startup_health/*`, and `gateway/openapi/*` tree.
+
+That gateway control-plane milestone has landed too. The live Wendao gate no
+longer reports `src/gateway/studio/mod.rs`,
+`src/gateway/studio/startup_health/{mod,probe}.rs`,
+`src/gateway/studio/router/mod.rs`,
+`src/gateway/studio/router/config/mod.rs`,
+`src/gateway/studio/router/state/mod.rs`,
+`src/gateway/studio/router/{sanitization,retrieval_arrow}.rs`,
+`src/gateway/openapi/document.rs`, or
+`src/gateway/openapi/paths/shared/mod.rs`. Their old source-resident
+`tests.rs` files, the `src/gateway/studio/router/tests/*` tree, and the
+source-owned `src/gateway/studio/test_support.rs` helper now mount from
+canonical `tests/unit/...` locations instead. The next milestone therefore
+starts directly at the remaining live front: `gateway/studio/search/handlers/*`,
+`gateway/studio/perf_support/mod.rs`, and the deeper
+`gateway/studio/router/handlers/*` tree.
+
+That search-handlers plus perf-support milestone has landed too. The live
+Wendao gate no longer reports any owner from
+`src/gateway/studio/search/handlers/*` or
+`src/gateway/studio/perf_support/mod.rs`. The old source-resident
+`handlers/tests/*`, `handlers/flight/tests/*`, `handlers/test_prelude.rs`,
+`handlers/ast/{http,tests}.rs`, `handlers/attachments/tests.rs`,
+`handlers/code_search/search/*`, and `perf_support/tests.rs` now mount from
+canonical `tests/unit/gateway/studio/...` locations, and the remaining inline
+`flight/repo_search.rs` plus `knowledge/intent/flight.rs` suites were
+externalized beside them. The next milestone therefore starts directly at the
+remaining `gateway/studio/router/handlers/*` tree.
+
+That final `gateway/studio/router/handlers/*` milestone has landed too. The
+old source-resident `graph/tests/*` tree and
+`repo/analysis/search/tests.rs` now mount from canonical
+`tests/unit/gateway/studio/router/handlers/...` locations, and the remaining
+inline suites for `capabilities/deployment`, `graph/{flight,topology_flight}`,
+`repo/parse`, `repo/analysis/{flight,overview_flight,index_status_flight,projected_page_index_tree_flight,refine_doc_flight,sync_flight}`,
+and `repo/analysis/search/{import,service}` were externalized beside them.
+Both live Wendao shared harnesses now pass, so `xiuxian-wendao` no longer
+carries crate-local `xiuxian-testing-gate` debt for either `--lib` or
+`--test unit_test`.
+
+The next bounded consumer follow-up has landed too. `xiuxian-types` now
+follows the same canonical split layout:
+`src/lib.rs -> tests/unit/lib_policy.rs` for `cargo test --lib`, plus
+`tests/unit_test.rs` as the root harness target. Its old root test files
+`tests/skill_definition.rs` and `tests/test_scenarios.rs` were moved under
+`tests/unit/`, so the crate no longer depends on root-level scattered test
+files to satisfy the shared gate.
+
+`xiuxian-zhenfa` now passes the same shared gate in all three relevant entry
+points: `cargo test --lib`, `cargo test --test unit_test`, and
+`cargo test --test integration_test`. The remaining test-only modules in
+`src/transmuter/streaming/mod.rs` were collapsed into one canonical
+`#[path = "../../../tests/unit/transmuter/streaming/mod.rs"] mod tests;`
+mount, and the former source-resident helper implementations now live under
+`tests/unit/transmuter/streaming/{arc_types_support,formatter_support}.rs`
+instead of staying in `src/`.
+
+The next bounded consumer milestone has landed too. `xiuxian-ast` now uses
+the same canonical split harness shape:
+`src/lib.rs -> tests/unit/lib_policy.rs` for `cargo test --lib`, plus
+`tests/unit_test.rs`, `tests/integration_test.rs`, `tests/scenarios_test.rs`,
+and `tests/performance_test.rs` as explicit root harness targets. Its old
+scattered root test files were absorbed into canonical `tests/unit/`,
+`tests/integration/`, and `tests/performance/` trees, the obsolete root
+`tests/mod.rs` entrypoint is gone, and the remaining source-resident inline
+suites in `src/julia_tree_sitter.rs` and `src/modelica_tree_sitter.rs` now
+mount canonical `tests/unit/{julia_tree_sitter,modelica_tree_sitter}.rs`
+files instead. All five shared harness entrypoints now pass, and the crate
+also clears `cargo clippy -p xiuxian-ast --lib --tests --all-features -- -D warnings`
+without reintroducing source-resident test logic.
+
+The next bounded consumer milestone then landed in `xiuxian-skills`. That
+crate now follows the same canonical split harness shape:
+`src/lib.rs -> tests/unit/lib_policy.rs` for the source-side gate, plus
+`tests/unit_test.rs`, `tests/integration_test.rs`, and
+`tests/performance_test.rs` as explicit root harness targets. The old root
+test scatter was absorbed into canonical `tests/unit/`, `tests/integration/`,
+and `tests/performance/` trees, the remaining source-resident test owners in
+`src/knowledge/scanner/`, `src/skills/metadata/index/`,
+`src/skills/resource/`, `src/skills/skill_command/{annotations,category}/`,
+and `src/skills/scanner/references/` now mount canonical `tests/unit/...`
+files, and the integration support helpers are mounted once at the
+`integration_test.rs` root and consumed through `crate::...` paths instead of
+duplicated local `mod` declarations. All shared harness entrypoints now pass,
+and the crate also clears `cargo clippy -p xiuxian-skills --lib --tests -- -D warnings`
+without leaving source-resident test logic behind.
+
+The next bounded consumer milestone then landed in `xiuxian-qianji`. That
+crate already had the source-side `--lib` harness in `src/lib.rs` and the
+older `tests/scenarios_test.rs` root harness, but a large dormant slice still
+lived under nested `tests/integration/*.rs` and `tests/unit/*.rs` files that
+were not mounted by any canonical root target. The remediation added
+`tests/integration_test.rs` and `tests/unit_test.rs`, attached the shared
+`crate_test_policy_harness!()` macro to the dormant nested suites, and kept
+the existing explicit `[[test]]` Cargo targets intact. Activating those
+dormant suites exposed real drift in relative resource paths, nested support
+imports, evolved `ContextAnnotator` and `NodeDefinition` contracts,
+`PersonaRegistry` mutability, older mock `LlmClient` stubs, and dormant
+clippy debt in both `flowhub` and the newly live suites; those issues were
+fixed in the same milestone. The decisive outcome is that `xiuxian-qianji`
+now passes the shared gate in `--lib`, `--test scenarios_test`,
+`--test integration_test`, and `--test unit_test`, and it also clears
+`cargo clippy -p xiuxian-qianji --lib --tests --features llm -- -D warnings`
+without leaving dormant nested tests disconnected from the default crate
+surface.
+
+The next bounded consumer milestone then landed as a utility-pack cleanup
+covering `xiuxian-config-core`, `xiuxian-event`, `xiuxian-executor`, and
+`xiuxian-logging`. Each crate now follows the same canonical split harness
+shape: `src/lib.rs -> tests/unit/lib_policy.rs` for the source-side gate plus
+`tests/unit_test.rs` as the root harness target, with the former root-scatter
+tests moved under `tests/unit/`. `xiuxian-config-core` also externalized the
+remaining inline `resolve/precedence.rs` suite onto
+`tests/unit/resolve/precedence.rs`, so no source-owned test body remains in
+that crate. Activating `xiuxian-executor` exposed two stale historical test
+files that referenced other crates entirely; those misplaced suites were
+replaced with crate-local `ast_analyzer`, `command_analysis`, and
+`nu_bridge` coverage that matches the package's current public API. The
+decisive outcome is that all four crates now trigger and pass the shared gate
+as part of their default `cargo test` surfaces, and the touched pack also
+clears `cargo clippy -p xiuxian-config-core -p xiuxian-event -p xiuxian-executor -p xiuxian-logging --lib --tests -- -D warnings`.
+
+The next bounded consumer milestone then landed as a small-consumer pack
+covering `xiuxian-lance`, `xiuxian-memory`, `xiuxian-sandbox`,
+`xiuxian-security`, and `xiuxian-window`. Each crate now follows the same
+canonical split harness shape: `src/lib.rs -> tests/unit/lib_policy.rs` for
+the source-side gate plus `tests/unit_test.rs` as the root harness target,
+with the former root-scattered tests moved or collapsed under
+`tests/unit/`. This wave removed the old root aggregators and helper wrappers
+from those crates, including `xiuxian-lance/tests/mod.rs`,
+`xiuxian-memory/tests/{core.rs,lib_unit.rs}`,
+`xiuxian-security/tests/{mod.rs,sandbox_unit.rs,test_security.rs}`, and the
+single-file roots in `xiuxian-sandbox` and `xiuxian-window`. The decisive
+outcome is that all five crates now trigger and pass the shared gate as part
+of their default `cargo test` surfaces, and the touched pack also clears
+`cargo clippy -p xiuxian-lance -p xiuxian-memory -p xiuxian-sandbox -p xiuxian-security -p xiuxian-window --lib --tests -- -D warnings`.
+
+The next bounded consumer milestone then landed as a small-consumer pack
+covering `xiuxian-macros`, `xiuxian-tokenizer`, and `xiuxian-tags`. Each
+crate now follows the same canonical split harness shape:
+`src/lib.rs -> tests/unit/lib_policy.rs` for the source-side gate plus
+`tests/unit_test.rs` as the root harness target, with the former
+root-scattered tests absorbed into canonical `tests/unit/...` trees.
+`xiuxian-tokenizer` no longer depends on `tests/mod.rs`, and the migrated
+benchmark suite now points at `xiuxian_tokenizer::...` instead of the older
+`omni_tokenizer::...` path drift. `xiuxian-macros` kept the existing
+config-overlay coverage but refreshed the stale plaintext API-key expectation
+to match the current merge contract, and its `bench_case!` smoke test was
+stabilized so the harness does not depend on zero-versus-nonzero nanosecond
+timing. `xiuxian-tags` promoted `patterns` to a real public surface and
+cleared the newly live strict-clippy debt in `src/extractor.rs`, including
+missing `# Errors` docs, `write!`-based formatting, `let ... else` cleanup,
+and removing the old `unwrap()` path in directory search. The decisive
+outcome is that all three crates now trigger and pass the shared gate as part
+of both `cargo test --lib` and `cargo test --test unit_test`, and the touched
+pack also clears
+`cargo clippy -p xiuxian-macros -p xiuxian-tokenizer -p xiuxian-tags --lib --tests -- -D warnings`.
+
+The next bounded consumer milestone then landed as a utility-pack cleanup
+covering `xiuxian-io`, `xiuxian-edit`, and `xiuxian-tui`. Each crate now
+follows the same canonical split harness shape:
+`src/lib.rs -> tests/unit/lib_policy.rs` for the source-side gate plus
+`tests/unit_test.rs` as the root harness target, with the former root test
+scatter absorbed into canonical `tests/unit/...` trees. `xiuxian-io`
+externalized the remaining `discover` inline suite and restored the real
+library ownership that its tests already assumed by wiring `discover` and the
+feature-gated `assembler` surface through `src/lib.rs`. `xiuxian-edit`
+externalized the remaining `src/batch.rs` inline suite and cleared the newly
+live strict-clippy debt across `batch`, `diff`, `editor`, and `types`
+without suppressions. `xiuxian-tui` removed the old root wrappers and
+auxiliary `tests/*_module` directories, externalized the remaining `event`
+and `socket` inline suites, moved the demo/CLI/state/component coverage onto
+canonical `tests/unit/...` mounts, promoted `demo_cli_args` to the public
+crate surface so the example contract matches the library exports, and
+cleared the newly live strict-clippy debt in `socket`, `event`, `renderer`,
+`components`, and the migrated `state` suite. The decisive outcome is that
+all three crates now trigger and pass the shared gate as part of their
+default `cargo test` surfaces, and the touched pack also clears
+`cargo clippy -p xiuxian-io -p xiuxian-edit -p xiuxian-tui --lib --tests -- -D warnings`.
+
+The next bounded consumer milestone then landed in `xiuxian-memory-engine`.
+That crate now follows the same canonical split harness shape:
+`src/lib.rs -> tests/unit/lib_policy.rs` for the source-side gate plus
+`tests/unit_test.rs` as the root harness target, with the former flat
+root-scattered `tests/test_*.rs` suites absorbed into canonical
+`tests/unit/...` files and mounted explicitly from the root harness. The old
+shared helper under `tests/common/mod.rs` was moved to
+`tests/unit/common/mod.rs`, and the migrated suites now consume it through
+`crate::common` instead of local per-file `mod common;` declarations. The
+decisive outcome is that `xiuxian-memory-engine` now triggers and passes the
+shared gate as part of default `cargo test`, `cargo test --lib`, and
+`cargo test --test unit_test`, while keeping the full migrated suite live,
+and it also clears
+`cargo clippy -p xiuxian-memory-engine --lib --tests -- -D warnings`.
+
+The next bounded consumer milestone then landed as a Wendao-adjacent plugin
+pack spanning `xiuxian-wendao-builtin`, `xiuxian-wendao-core`, and
+`xiuxian-wendao-modelica`. All three crates now mount the canonical
+source-side harness in `src/lib.rs`, own explicit `tests/unit_test.rs` root
+targets, and keep their remaining test bodies under canonical
+`tests/unit/...` or `tests/integration/...` trees. `xiuxian-wendao-modelica`
+also accepted the snapshot namespace migration onto
+`tests/unit/plugin/snapshots/` plus
+`tests/integration/snapshots/integration_test__modelica_plugin__*.snap`,
+proving the canonical layout works for both source-backed unit suites and a
+migrated integration target. While validating that pack, the newly exposed
+strict-clippy debt was also closed in the dependency chain:
+`xiuxian-wendao-core/tests/unit/artifacts/payload.rs` no longer uses
+`expect()`, `xiuxian-wendao-runtime` now passes `doc_markdown`, and
+`xiuxian-wendao` cleared the bounded `large_enum_variant` and warning blockers
+that sat under the pack's `--all-features` clippy lane. The decisive outcome
+is that the plugin pack now passes the shared gate as part of default
+`cargo test` and clears
+`cargo clippy -p xiuxian-wendao-core -p xiuxian-wendao-builtin -p xiuxian-wendao-modelica --lib --tests --all-features -- -D warnings`.

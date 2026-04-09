@@ -14,6 +14,7 @@ mod references;
 mod status;
 mod symbols;
 #[cfg(test)]
+#[path = "../../../../../tests/unit/gateway/studio/search/handlers/test_prelude.rs"]
 mod test_prelude;
 
 #[cfg(test)]
@@ -48,4 +49,5 @@ pub(crate) use symbols::load_symbol_search_response;
 mod studio_search_tests;
 
 #[cfg(test)]
+#[path = "../../../../../tests/unit/gateway/studio/search/handlers/mod.rs"]
 pub(crate) mod tests;

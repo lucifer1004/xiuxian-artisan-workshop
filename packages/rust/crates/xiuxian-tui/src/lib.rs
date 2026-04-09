@@ -3,8 +3,11 @@
 //! Provides terminal UI rendering with foldable panels and event-driven updates.
 //! Integrates with omni-events for reactive state management.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 pub mod cli_args;
 pub mod components;
+pub mod demo_cli_args;
 pub mod event;
 pub mod renderer;
 pub mod socket;
@@ -25,6 +28,10 @@ pub fn init_logger() {
 }
 
 /// Main entry point for running the TUI application
+///
+/// # Errors
+///
+/// Returns an error when the renderer or caller-provided app setup fails.
 pub fn run_tui<F>(title: &str, app_creator: F) -> Result<(), Box<dyn Error>>
 where
     F: FnOnce(&mut AppState) -> Result<(), Box<dyn Error>>,
@@ -37,7 +44,7 @@ where
     // Create application state
     app_creator(&mut state)?;
 
-    info!("Starting TUI application: {}", title);
+    info!("Starting TUI application: {title}");
 
     // Run the main event loop
     renderer.run(&mut state)

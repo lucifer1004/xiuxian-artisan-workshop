@@ -31,6 +31,42 @@ pub struct SqlQueryMetadata {
     pub result_batch_count: usize,
     /// Count of rows returned across all result batches.
     pub result_row_count: usize,
+    /// Count of array-backed bytes registered into the bounded local relation
+    /// before query execution when the caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registered_input_bytes: Option<u64>,
+    /// Count of array-backed bytes returned across all result batches when the
+    /// caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result_bytes: Option<u64>,
+    /// Stable bounded local relation materialization-state label when the
+    /// caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_relation_materialization_state: Option<String>,
+    /// Stable local relation-engine label for bounded local analytics when the
+    /// caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_relation_engine: Option<String>,
+    /// Stable `DuckDB` registration-strategy label when the bounded local engine
+    /// exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duckdb_registration_strategy: Option<String>,
+    /// Count of input batches registered into the bounded local relation before
+    /// query execution when the caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registered_input_batch_count: Option<usize>,
+    /// Count of rows registered into the bounded local relation before query
+    /// execution when the caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registered_input_row_count: Option<usize>,
+    /// Milliseconds spent registering the bounded local relation before query
+    /// execution when the caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration_time_ms: Option<u64>,
+    /// Milliseconds spent executing the bounded local SQL statement when the
+    /// caller exposes that detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_query_execution_time_ms: Option<u64>,
 }
 
 /// Stable description of one SQL result column.

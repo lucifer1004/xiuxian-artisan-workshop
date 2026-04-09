@@ -5,6 +5,7 @@ mod julia;
 #[cfg(feature = "julia")]
 mod planned_search;
 #[cfg(all(test, feature = "julia"))]
+#[path = "../../tests/unit/test_support/mod.rs"]
 mod tests;
 
 #[cfg(feature = "julia")]

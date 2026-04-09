@@ -8,6 +8,8 @@
 //! This establishes Rust as the Single Source of Truth (SSOT) for type definitions,
 //! allowing Python and LLM consumers to dynamically retrieve authoritative schemas.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

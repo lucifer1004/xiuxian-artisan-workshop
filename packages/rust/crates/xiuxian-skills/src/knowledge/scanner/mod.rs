@@ -27,6 +27,7 @@ mod metadata;
 mod scan;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/knowledge/scanner.rs"]
 mod tests;
 
 /// Knowledge Scanner - Scans and indexes knowledge documents.

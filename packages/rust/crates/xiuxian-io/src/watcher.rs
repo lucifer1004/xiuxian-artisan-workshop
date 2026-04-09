@@ -322,3 +322,7 @@ pub async fn watch_path<P: AsRef<Path>>(
     };
     start_file_watcher::<fn(WatcherResult)>(config, None).await
 }
+
+#[cfg(all(test, feature = "notify"))]
+#[path = "../tests/unit/watcher.rs"]
+mod tests;

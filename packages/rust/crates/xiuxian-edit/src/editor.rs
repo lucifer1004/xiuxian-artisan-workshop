@@ -3,6 +3,7 @@
 //! Provides AST-based code modification using ast-grep patterns.
 //! Part of The Surgeon.
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -14,7 +15,7 @@ use crate::diff::generate_unified_diff;
 use crate::error::EditError;
 use crate::types::{EditConfig, EditLocation, EditResult};
 
-/// StructuralEditor - AST-based code modification engine.
+/// `StructuralEditor` - AST-based code modification engine.
 ///
 /// Uses ast-grep patterns for surgical precision in code refactoring.
 /// Part of The Surgeon.
@@ -46,6 +47,10 @@ impl StructuralEditor {
     ///
     /// # Returns
     /// `EditResult` containing original, modified content, diff, and edit locations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EditError`] when the language or pattern is invalid.
     pub fn replace(
         content: &str,
         pattern: &str,
@@ -130,12 +135,16 @@ impl StructuralEditor {
     ///
     /// # Returns
     /// `EditResult` with changes (file is modified only if `config.preview_only` is false).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EditError`] when the file cannot be read, written, or structurally rewritten.
     pub fn replace_in_file<P: AsRef<Path>>(
         path: P,
         pattern: &str,
         replacement: &str,
         language: Option<&str>,
-        config: EditConfig,
+        config: &EditConfig,
     ) -> Result<EditResult, EditError> {
         let path = path.as_ref();
         let content = xiuxian_io::read_text_safe(path, config.max_file_size)?;
@@ -146,10 +155,10 @@ impl StructuralEditor {
                 if let Some(lang) = SupportLang::from_path(path) {
                     format!("{lang:?}").to_lowercase()
                 } else {
-                    let ext = path
-                        .extension()
-                        .map(|e| e.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
+                    let ext = path.extension().map_or_else(
+                        || "unknown".to_string(),
+                        |e| e.to_string_lossy().to_string(),
+                    );
                     return Err(EditError::UnsupportedLanguage(ext));
                 }
             }
@@ -159,7 +168,7 @@ impl StructuralEditor {
 
         if !config.preview_only && result.count > 0 {
             std::fs::write(path, &result.modified)
-                .map_err(|e| EditError::Replacement(format!("Failed to write file: {}", e)))?;
+                .map_err(|e| EditError::Replacement(format!("Failed to write file: {e}")))?;
         }
 
         Ok(result)
@@ -168,6 +177,10 @@ impl StructuralEditor {
     /// Preview structural replace (no file modification).
     ///
     /// Convenience method that always previews without modifying files.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EditError`] when the file cannot be read or the rewrite cannot be computed.
     pub fn preview<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -179,7 +192,7 @@ impl StructuralEditor {
             pattern,
             replacement,
             language,
-            EditConfig {
+            &EditConfig {
                 preview_only: true,
                 ..Default::default()
             },
@@ -189,6 +202,10 @@ impl StructuralEditor {
     /// Apply structural replace (modify file).
     ///
     /// **Use with caution** - this modifies the file in place.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EditError`] when the file cannot be read, written, or structurally rewritten.
     pub fn apply<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -200,7 +217,7 @@ impl StructuralEditor {
             pattern,
             replacement,
             language,
-            EditConfig {
+            &EditConfig {
                 preview_only: false,
                 ..Default::default()
             },
@@ -210,13 +227,14 @@ impl StructuralEditor {
     /// Format edit result for display.
     ///
     /// Returns a human-readable summary of the changes.
+    #[must_use]
     pub fn format_result(result: &EditResult, path: Option<&str>) -> String {
         let mut output = String::new();
 
         if let Some(p) = path {
-            output.push_str(&format!("// EDIT: {}\n", p));
+            let _ = writeln!(output, "// EDIT: {p}");
         }
-        output.push_str(&format!("// Replacements: {}\n", result.count));
+        let _ = writeln!(output, "// Replacements: {}", result.count);
 
         if result.count == 0 {
             output.push_str("[No matches found]\n");
@@ -225,10 +243,11 @@ impl StructuralEditor {
 
         output.push_str("\n// Changes:\n");
         for edit in &result.edits {
-            output.push_str(&format!(
-                "L{}: \"{}\" -> \"{}\"\n",
+            let _ = writeln!(
+                output,
+                "L{}: \"{}\" -> \"{}\"",
                 edit.line, edit.original_text, edit.new_text
-            ));
+            );
         }
 
         output.push_str("\n// Diff:\n");
@@ -237,3 +256,7 @@ impl StructuralEditor {
         output
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/editor.rs"]
+mod tests;

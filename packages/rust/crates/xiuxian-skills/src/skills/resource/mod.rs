@@ -5,6 +5,7 @@
 mod scan;
 
 #[cfg(test)]
+#[path = "../../../tests/unit/skills/resource.rs"]
 mod tests;
 
 /// Scanner for @`skill_resource` decorated functions.

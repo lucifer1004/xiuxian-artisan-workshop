@@ -29,7 +29,6 @@ quick-xml = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
-xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

@@ -23,7 +23,18 @@ impl KnowledgeGraph {
         if let Some(existing_id) = entities_by_name.get(&entity.name)
             && let Some(existing) = entities.get_mut(existing_id)
         {
+            if existing.entity_type.to_string() != type_str {
+                if let Some(ids) = entities_by_type.get_mut(&existing.entity_type.to_string()) {
+                    ids.retain(|id| id != existing_id);
+                }
+                entities_by_type
+                    .entry(type_str.clone())
+                    .or_default()
+                    .push(existing_id.clone());
+                existing.entity_type = entity.entity_type;
+            }
             existing.description = entity.description;
+            existing.metadata = entity.metadata;
             existing.source = entity.source.or(existing.source.clone());
             existing.aliases = entity.aliases;
             existing.confidence = entity.confidence;

@@ -10,7 +10,7 @@ use xiuxian_qianhuan::{
 use xiuxian_qianji::{QianjiCompiler, QianjiEngine, QianjiScheduler};
 use xiuxian_wendao::LinkGraphIndex;
 
-const PRECISION_RESEARCH_TOML: &str = include_str!("../resources/tests/precision_research.toml");
+const PRECISION_RESEARCH_TOML: &str = include_str!("../../resources/tests/precision_research.toml");
 
 #[tokio::test]
 async fn test_qianji_high_precision_research_loop()
@@ -55,3 +55,5 @@ async fn test_qianji_high_precision_research_loop()
     assert_eq!(result["calibration_status"], "passed");
     Ok(())
 }
+
+xiuxian_testing::crate_test_policy_harness!();

@@ -37,3 +37,7 @@ pub fn decode_buffer(buffer: Vec<u8>) -> Result<String, IoError> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/detect.rs"]
+mod tests;

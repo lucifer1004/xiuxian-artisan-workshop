@@ -1,6 +1,8 @@
 //! Agenda validation pipeline integration tests.
 
 use async_trait::async_trait;
+#[cfg(feature = "llm")]
+use futures::stream;
 use serde_json::json;
 #[cfg(feature = "llm")]
 use std::collections::HashMap;
@@ -8,6 +10,8 @@ use std::sync::Arc;
 #[cfg(feature = "llm")]
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
+#[cfg(feature = "llm")]
+use xiuxian_llm::llm::client::ChatStream;
 #[cfg(feature = "llm")]
 use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 #[cfg(feature = "llm")]
@@ -29,6 +33,8 @@ fn agenda_validation_manifest_toml() -> &'static str {
         panic!("expected embedded agenda validation workflow at {AGENDA_VALIDATION_WORKFLOW_URI}")
     })
 }
+
+xiuxian_testing::crate_test_policy_harness!();
 
 fn parse_agenda_validation_manifest() -> QianjiManifest {
     let manifest_toml = agenda_validation_manifest_toml();
@@ -158,6 +164,13 @@ impl LlmClient for StaticScoreLlmClient {
         }
         Ok(self.response.clone())
     }
+
+    async fn chat_stream(&self, request: ChatRequest) -> LlmResult<ChatStream> {
+        if let Ok(mut models) = self.seen_models.lock() {
+            models.push(request.model);
+        }
+        Ok(Box::pin(stream::iter(vec![Ok(self.response.clone())])))
+    }
 }
 
 #[cfg(feature = "llm")]
@@ -173,7 +186,7 @@ async fn agenda_validation_pipeline_compiles_and_runs_happy_path() {
         "Safety rules".to_string(),
         None,
     ));
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "agenda_steward".to_string(),
         name: "Agenda Steward".to_string(),

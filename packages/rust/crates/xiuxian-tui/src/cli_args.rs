@@ -27,3 +27,7 @@ pub struct CliArgs {
     #[command(flatten)]
     pub logging: LogCliArgs,
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/cli_args.rs"]
+mod tests;

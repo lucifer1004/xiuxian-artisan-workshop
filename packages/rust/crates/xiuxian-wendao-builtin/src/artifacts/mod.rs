@@ -4,6 +4,7 @@ mod gateway;
 #[cfg(feature = "julia")]
 mod openapi;
 #[cfg(test)]
+#[path = "../../tests/unit/artifacts/mod.rs"]
 mod tests;
 
 pub use dispatch::{

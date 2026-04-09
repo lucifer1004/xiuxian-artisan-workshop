@@ -33,6 +33,7 @@ anyhow = { workspace = true }
 
 # Reuse common types
 xiuxian-types = { path = "../xiuxian-types" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 # Vector operations for embedding similarity (using our own simple implementation)
 # lance-linalg = "2.0"  # Deferred

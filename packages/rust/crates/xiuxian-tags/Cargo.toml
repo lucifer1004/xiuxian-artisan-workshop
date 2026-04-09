@@ -13,6 +13,7 @@ xiuxian-io = { path = "../xiuxian-io" }
 serde_yaml = { workspace = true }
 tree-sitter = "0.26"
 walkdir = "2"
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]
 tempfile = "3"

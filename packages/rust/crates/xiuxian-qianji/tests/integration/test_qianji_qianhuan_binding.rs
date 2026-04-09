@@ -55,6 +55,8 @@ output_key = "agenda_draft_xml"
     assert_eq!(binding.output_key.as_deref(), Some("agenda_draft_xml"));
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[tokio::test]
 async fn annotation_node_uses_qianhuan_binding_fields() {
     let manifest_toml = r#"
@@ -81,7 +83,7 @@ template_target = "critique_report.md"
         None,
     ));
 
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "binding_tester".to_string(),
         name: "Binding Tester".to_string(),
@@ -144,7 +146,7 @@ output_key = "critic_snapshot_xml"
         None,
     ));
 
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "binding_tester".to_string(),
         name: "Binding Tester".to_string(),
@@ -223,7 +225,7 @@ input_keys = ["$wendao://skills/agenda-management/references/agenda_flow.toml"]
         None,
     ));
 
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "binding_tester".to_string(),
         name: "Binding Tester".to_string(),
@@ -281,7 +283,7 @@ input_keys = ["$raw_facts_selector"]
         None,
     ));
 
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "binding_tester".to_string(),
         name: "Binding Tester".to_string(),

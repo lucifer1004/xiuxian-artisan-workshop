@@ -33,13 +33,18 @@
 //! let content = read_text_safe_async("file.txt", 1024 * 1024).await?;
 //! ```
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 // ============================================================================
 // Module Declarations (ODF-REP: Atomic Structure)
 // ============================================================================
 
+#[cfg(feature = "assembler")]
+mod assembler;
 mod async_io;
 mod detect;
 mod dirs;
+mod discover;
 mod error;
 mod sync;
 #[cfg(feature = "notify")]
@@ -49,8 +54,13 @@ mod watcher;
 // Public Re-exports
 // ============================================================================
 
+#[cfg(feature = "assembler")]
+pub use assembler::{AssemblyResult, ContextAssembler};
 pub use async_io::read_text_safe_async;
 pub use dirs::{PrjDirs, get_cache_home, get_config_home, get_data_home};
+pub use discover::{
+    DiscoverOptions, count_files_in_dir, discover_files, discover_files_in_dir, should_skip_path,
+};
 pub use error::IoError;
 pub use sync::read_text_safe;
 #[cfg(feature = "notify")]

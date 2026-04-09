@@ -12,6 +12,7 @@ publish = false
 xiuxian-ast = { path = "../xiuxian-ast" }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 xiuxian-macros = { path = "../xiuxian-macros" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-types = { path = "../xiuxian-types" }
 
 # Serialization
@@ -44,7 +45,6 @@ log = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 insta = { workspace = true }
-xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

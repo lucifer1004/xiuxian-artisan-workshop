@@ -7,12 +7,11 @@ use xiuxian_wendao_runtime::transport::{
 };
 
 use crate::gateway::studio::router::GatewayState;
-
-use super::super::knowledge::intent::flight::load_intent_search_flight_response;
-use super::super::knowledge::load_knowledge_search_flight_response;
-use super::super::queries::{ReferenceSearchQuery, SymbolSearchQuery};
-use super::super::references::load_reference_search_flight_response;
-use super::super::symbols::load_symbol_search_flight_response;
+use crate::gateway::studio::search::handlers::knowledge::intent::flight::load_intent_search_flight_response;
+use crate::gateway::studio::search::handlers::knowledge::load_knowledge_search_flight_response;
+use crate::gateway::studio::search::handlers::queries::{ReferenceSearchQuery, SymbolSearchQuery};
+use crate::gateway::studio::search::handlers::references::load_reference_search_flight_response;
+use crate::gateway::studio::search::handlers::symbols::load_symbol_search_flight_response;
 
 /// Studio-backed aggregate Flight provider for the currently-aligned semantic
 /// search families.

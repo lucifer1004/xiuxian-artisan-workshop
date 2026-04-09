@@ -11,6 +11,10 @@ mod model;
 mod scan;
 mod values;
 
+#[cfg(test)]
+#[path = "../../../../tests/unit/skills/scanner/references.rs"]
+mod tests;
+
 pub(super) fn scan_references(skill_path: &Path, skill_name: &str) -> Vec<ReferenceRecord> {
     scan::scan_references(skill_path, skill_name)
 }

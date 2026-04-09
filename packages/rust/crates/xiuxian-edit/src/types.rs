@@ -39,6 +39,7 @@ pub struct EditLocation {
 /// Configuration for edit operations.
 ///
 /// Controls behavior like file size limits and preview mode.
+#[derive(Debug, Clone, Copy)]
 pub struct EditConfig {
     /// Maximum file size in bytes (default 1MB).
     pub max_file_size: u64,

@@ -52,3 +52,7 @@ pub async fn read_text_safe_async<P: AsRef<Path>>(
 
     decode_buffer(buffer)
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/async_io.rs"]
+mod tests;

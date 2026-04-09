@@ -12,6 +12,7 @@ serde = { workspace = true }
 toml = { workspace = true }
 thiserror = { workspace = true }
 xiuxian-macros = { path = "../xiuxian-macros" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

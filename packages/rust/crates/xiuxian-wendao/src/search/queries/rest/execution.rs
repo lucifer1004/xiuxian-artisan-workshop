@@ -16,6 +16,7 @@ pub async fn query_rest_payload(
     match request {
         RestQueryRequest::Sql { query } => query_sql_payload(service, query)
             .await
+            .map(Box::new)
             .map(RestQueryPayload::Sql),
         RestQueryRequest::Graphql { document } => query_graphql_payload(service, document)
             .await

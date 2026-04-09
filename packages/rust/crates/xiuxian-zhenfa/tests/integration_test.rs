@@ -1,5 +1,7 @@
 //! Cargo entry point for xiuxian-zhenfa integration tests.
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[path = "integration/client.rs"]
 mod client;
 #[path = "integration/context_extensions.rs"]

@@ -1,9 +1,9 @@
 //! Skeptic node: performs formal audit on Analyzer output.
 
-use crate::contracts::{FlowInstruction, QianjiMechanism, QianjiOutput};
-use crate::safety::logic::{Invariant, Proposition};
 use async_trait::async_trait;
 use serde_json::json;
+use xiuxian_qianji::contracts::{FlowInstruction, QianjiMechanism, QianjiOutput};
+use xiuxian_qianji::safety::logic::{Invariant, Proposition};
 
 /// Formally audits LLM traces using LTL-inspired invariants.
 pub struct FormalAuditMechanism {
@@ -12,6 +12,8 @@ pub struct FormalAuditMechanism {
     /// Target nodes to trigger if audit fails.
     pub retry_target_ids: Vec<String>,
 }
+
+xiuxian_testing::crate_test_policy_harness!();
 
 #[async_trait]
 impl QianjiMechanism for FormalAuditMechanism {

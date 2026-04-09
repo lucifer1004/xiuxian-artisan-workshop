@@ -36,7 +36,7 @@ impl FoldablePanel {
     pub fn new<S: Into<String>>(title: S, content: &str) -> Self {
         Self {
             title: title.into(),
-            content: content.lines().map(|s| s.to_string()).collect(),
+            content: content.lines().map(ToString::to_string).collect(),
             state: PanelState::Folded,
             scroll_offset: 0,
             max_lines: 100,
@@ -63,11 +63,13 @@ impl FoldablePanel {
     }
 
     /// Check if the panel is expanded
+    #[must_use]
     pub fn is_expanded(&self) -> bool {
         self.state == PanelState::Expanded
     }
 
     /// Get panel state
+    #[must_use]
     pub fn state(&self) -> &PanelState {
         &self.state
     }
@@ -78,13 +80,14 @@ impl FoldablePanel {
     }
 
     /// Get the title
+    #[must_use]
     pub fn title(&self) -> &str {
         &self.title
     }
 
     /// Update the content
     pub fn set_content(&mut self, content: &str) {
-        self.content = content.lines().map(|s| s.to_string()).collect();
+        self.content = content.lines().map(ToString::to_string).collect();
     }
 
     /// Append content
@@ -110,11 +113,13 @@ impl FoldablePanel {
     }
 
     /// Get the number of content lines
+    #[must_use]
     pub fn line_count(&self) -> usize {
         self.content.len()
     }
 
     /// Calculate the required height
+    #[must_use]
     pub fn required_height(&self) -> u16 {
         match self.state {
             PanelState::Folded => FOLDED_HEIGHT,
@@ -155,7 +160,7 @@ impl FoldablePanel {
         let content = match self.state {
             PanelState::Folded => {
                 let line_count = self.content.len();
-                format!(" [{} lines hidden] ", line_count)
+                format!(" [{line_count} lines hidden] ")
             }
             PanelState::Expanded => {
                 let visible_content: Vec<&str> = self
@@ -163,7 +168,7 @@ impl FoldablePanel {
                     .iter()
                     .skip(self.scroll_offset as usize)
                     .take(MAX_EXPANDED_HEIGHT as usize - 2)
-                    .map(|s| s.as_str())
+                    .map(String::as_str)
                     .collect();
 
                 if visible_content.is_empty() {

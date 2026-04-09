@@ -24,6 +24,8 @@ struct ProbedAnnotator {
     delay: Duration,
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 impl ProbedAnnotator {
     fn enter(&self) {
         let inflight = self.probe_inflight.fetch_add(1, Ordering::SeqCst) + 1;
@@ -112,7 +114,7 @@ fn annotator(
 }
 
 fn test_registry() -> Arc<PersonaRegistry> {
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "test_critic".to_string(),
         name: "Test Critic".to_string(),

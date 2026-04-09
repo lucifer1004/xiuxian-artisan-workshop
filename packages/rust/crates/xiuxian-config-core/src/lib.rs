@@ -10,6 +10,8 @@
 //! - `first_some!` - Resolves the first `Some(...)` candidate from an ordered
 //!   precedence chain.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 pub use xiuxian_macros::crate_resources_dir;
 
 /// Resolve the first `Some(...)` candidate from an ordered precedence chain.

@@ -193,6 +193,8 @@ fn build_compiler(index_root: &Path) -> Result<QianjiCompiler, Box<dyn std::erro
     Ok(QianjiCompiler::new(index, orchestrator, registry, None))
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[test]
 fn compiler_dispatches_knowledge_task_via_stateless_lane() -> Result<(), Box<dyn std::error::Error>>
 {

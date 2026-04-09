@@ -101,6 +101,8 @@ pub mod analyzers;
 /// Bridges contract-testing findings into Wendao knowledge ingestion payloads.
 pub mod contract_feedback;
 pub mod dependency_indexer;
+/// Bounded local relation-engine seam and DuckDB host bridge.
+pub mod duckdb;
 pub mod enhancer;
 pub mod gateway;
 pub mod ingress;

@@ -1,14 +1,24 @@
 use std::fs;
 use std::path::Path;
 
-use datafusion::prelude::SessionConfig;
+use crate::duckdb::DataFusionLocalRelationEngine;
 use tempfile::tempdir;
-use xiuxian_vector::SearchEngineContext;
+#[cfg(feature = "duckdb")]
+use xiuxian_wendao_runtime::config::{
+    DEFAULT_SEARCH_DUCKDB_MATERIALIZE_THRESHOLD_ROWS, DEFAULT_SEARCH_DUCKDB_PREFER_VIRTUAL_ARROW,
+};
 
-use super::query::query_bounded_work_markdown_payload;
+use super::query::{
+    query_bounded_work_markdown_payload, query_bounded_work_markdown_payload_with_engine,
+};
 use super::register::{
     BOUNDED_WORK_MARKDOWN_TABLE_NAME, bootstrap_bounded_work_markdown_query_engine,
     build_bounded_work_markdown_rows, register_bounded_work_markdown_table,
+};
+#[cfg(feature = "duckdb")]
+use crate::duckdb::{
+    DuckDbDatabasePath, DuckDbLocalRelationEngine, DuckDbRegistrationStrategy,
+    SearchDuckDbRuntimeConfig,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -57,9 +67,7 @@ async fn registers_bounded_work_markdown_rows_into_sql_surface() -> TestResult {
         "expected a normalized heading_path row for plan implement section"
     );
 
-    let mut config = SessionConfig::new().with_information_schema(true);
-    config.options_mut().execution.collect_statistics = true;
-    let query_engine = SearchEngineContext::new_with_config(config);
+    let query_engine = DataFusionLocalRelationEngine::new_with_information_schema();
     let registered_rows =
         register_bounded_work_markdown_table(&query_engine, root).map_err(std::io::Error::other)?;
     assert_eq!(registered_rows.len(), rows.len());
@@ -166,6 +174,34 @@ async fn queries_bounded_work_markdown_payload() -> TestResult {
     assert_eq!(payload.metadata.registered_column_count, 7);
     assert!(
         payload
+            .metadata
+            .registered_input_bytes
+            .is_some_and(|bytes| bytes > 0)
+    );
+    assert!(payload.metadata.result_bytes.is_some_and(|bytes| bytes > 0));
+    assert_eq!(
+        payload
+            .metadata
+            .local_relation_materialization_state
+            .as_deref(),
+        Some("materialized")
+    );
+    assert_eq!(
+        payload.metadata.local_relation_engine.as_deref(),
+        Some("datafusion")
+    );
+    assert_eq!(payload.metadata.duckdb_registration_strategy, None);
+    assert_eq!(payload.metadata.registered_input_batch_count, Some(1));
+    assert!(
+        payload
+            .metadata
+            .registered_input_row_count
+            .is_some_and(|count| count > 0)
+    );
+    assert!(payload.metadata.registration_time_ms.is_some());
+    assert!(payload.metadata.local_query_execution_time_ms.is_some());
+    assert!(
+        payload
             .batches
             .iter()
             .flat_map(|batch| batch.rows.iter())
@@ -181,6 +217,157 @@ async fn queries_bounded_work_markdown_payload() -> TestResult {
                 |row| row.get("heading_path").and_then(serde_json::Value::as_str)
                     == Some("Blueprint/Scope")
             )
+    );
+    Ok(())
+}
+
+#[cfg(feature = "duckdb")]
+#[tokio::test]
+async fn queries_bounded_work_markdown_payload_with_duckdb_local_relation_engine() -> TestResult {
+    let temp_dir = tempdir()?;
+    let root = temp_dir.path();
+    write_bounded_work_fixture(
+        root,
+        "blueprint/overview.md",
+        "# Blueprint\n\n## Scope\n- [ ] Keep aligned\n",
+        "plan/steps.md",
+        "# Plan\n\n## Validate\n- [ ] Query markdown\n",
+    )?;
+
+    let query_engine = DuckDbLocalRelationEngine::from_runtime(SearchDuckDbRuntimeConfig {
+        enabled: true,
+        database_path: DuckDbDatabasePath::InMemory,
+        temp_directory: root.join(".cache/duckdb-markdown/tmp"),
+        threads: 2,
+        materialize_threshold_rows: DEFAULT_SEARCH_DUCKDB_MATERIALIZE_THRESHOLD_ROWS,
+        prefer_virtual_arrow: DEFAULT_SEARCH_DUCKDB_PREFER_VIRTUAL_ARROW,
+    })
+    .map_err(std::io::Error::other)?;
+
+    let payload = query_bounded_work_markdown_payload_with_engine(
+        root,
+        "select path, heading_path from markdown where surface = 'plan' order by path, heading_path",
+        &query_engine,
+    )
+    .await
+    .map_err(std::io::Error::other)?;
+    assert_eq!(
+        query_engine.registered_strategy("markdown")?,
+        Some(DuckDbRegistrationStrategy::VirtualArrow)
+    );
+
+    assert_eq!(
+        payload.metadata.registered_tables,
+        vec!["markdown".to_string()]
+    );
+    assert_eq!(payload.metadata.registered_table_count, 1);
+    assert_eq!(payload.metadata.result_batch_count, 1);
+    assert!(
+        payload
+            .metadata
+            .registered_input_bytes
+            .is_some_and(|bytes| bytes > 0)
+    );
+    assert!(payload.metadata.result_bytes.is_some_and(|bytes| bytes > 0));
+    assert_eq!(
+        payload
+            .metadata
+            .local_relation_materialization_state
+            .as_deref(),
+        Some("virtual")
+    );
+    assert_eq!(
+        payload.metadata.local_relation_engine.as_deref(),
+        Some("duckdb")
+    );
+    assert_eq!(
+        payload.metadata.duckdb_registration_strategy.as_deref(),
+        Some("virtual_arrow")
+    );
+    assert_eq!(payload.metadata.registered_input_batch_count, Some(1));
+    assert!(
+        payload
+            .metadata
+            .registered_input_row_count
+            .is_some_and(|count| count > 0)
+    );
+    assert!(payload.metadata.registration_time_ms.is_some());
+    assert!(payload.metadata.local_query_execution_time_ms.is_some());
+    assert!(
+        payload
+            .batches
+            .iter()
+            .flat_map(|batch| batch.rows.iter())
+            .any(|row| row.get("path").and_then(serde_json::Value::as_str)
+                == Some("plan/steps.md"))
+    );
+    assert!(
+        payload
+            .batches
+            .iter()
+            .flat_map(|batch| batch.rows.iter())
+            .any(
+                |row| row.get("heading_path").and_then(serde_json::Value::as_str)
+                    == Some("Plan/Validate")
+            )
+    );
+    Ok(())
+}
+
+#[cfg(feature = "duckdb")]
+#[tokio::test]
+async fn queries_bounded_work_markdown_payload_with_duckdb_materialized_local_relation_engine()
+-> TestResult {
+    let temp_dir = tempdir()?;
+    let root = temp_dir.path();
+    write_bounded_work_fixture(
+        root,
+        "blueprint/overview.md",
+        "# Blueprint\n\n## Scope\n- [ ] Keep aligned\n",
+        "plan/steps.md",
+        "# Plan\n\n## Validate\n- [ ] Query markdown\n",
+    )?;
+
+    let query_engine = DuckDbLocalRelationEngine::from_runtime(SearchDuckDbRuntimeConfig {
+        enabled: true,
+        database_path: DuckDbDatabasePath::InMemory,
+        temp_directory: root.join(".cache/duckdb-markdown-materialized/tmp"),
+        threads: 2,
+        materialize_threshold_rows: 0,
+        prefer_virtual_arrow: true,
+    })
+    .map_err(std::io::Error::other)?;
+
+    let payload = query_bounded_work_markdown_payload_with_engine(
+        root,
+        "select path, heading_path from markdown where surface = 'plan' order by path, heading_path",
+        &query_engine,
+    )
+    .await
+    .map_err(std::io::Error::other)?;
+    assert_eq!(
+        query_engine.registered_strategy("markdown")?,
+        Some(DuckDbRegistrationStrategy::MaterializedAppender)
+    );
+    assert_eq!(
+        payload
+            .metadata
+            .local_relation_materialization_state
+            .as_deref(),
+        Some("materialized")
+    );
+    assert_eq!(
+        payload.metadata.duckdb_registration_strategy.as_deref(),
+        Some("materialized_appender")
+    );
+    assert!(payload.metadata.result_bytes.is_some_and(|bytes| bytes > 0));
+    assert!(
+        payload
+            .batches
+            .iter()
+            .flat_map(|batch| batch.rows.iter())
+            .any(|row| row.get("path").and_then(serde_json::Value::as_str)
+                == Some("plan/steps.md"))
     );
     Ok(())
 }

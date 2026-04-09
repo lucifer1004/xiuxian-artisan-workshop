@@ -47,3 +47,7 @@ pub fn read_text_safe<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String,
 
     decode_buffer(buffer)
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/sync.rs"]
+mod tests;

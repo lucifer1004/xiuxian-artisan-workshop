@@ -31,6 +31,8 @@ weight = 1.0
     );
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[test]
 fn manifest_requires_llm_returns_true_when_llm_task_exists() {
     let manifest = r#"

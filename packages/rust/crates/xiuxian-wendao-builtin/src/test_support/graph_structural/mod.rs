@@ -1,5 +1,6 @@
 mod julia;
 #[cfg(test)]
+#[path = "../../../tests/unit/test_support/graph_structural/mod.rs"]
 mod tests;
 
 pub use julia::{

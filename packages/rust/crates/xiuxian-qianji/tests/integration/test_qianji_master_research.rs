@@ -3,11 +3,15 @@
 #[cfg(feature = "llm")]
 use async_trait::async_trait;
 #[cfg(feature = "llm")]
+use futures::stream;
+#[cfg(feature = "llm")]
 use serde_json::json;
 #[cfg(feature = "llm")]
 use std::collections::HashMap;
 #[cfg(feature = "llm")]
 use std::sync::Arc;
+#[cfg(feature = "llm")]
+use xiuxian_llm::llm::client::ChatStream;
 #[cfg(feature = "llm")]
 use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 #[cfg(feature = "llm")]
@@ -29,10 +33,18 @@ impl LlmClient for MockLlmClient {
     async fn chat(&self, _request: ChatRequest) -> LlmResult<String> {
         Ok("Research Conclusion: Logic is verified via Synapse-Audit.".to_string())
     }
+
+    async fn chat_stream(&self, _request: ChatRequest) -> LlmResult<ChatStream> {
+        Ok(Box::pin(stream::iter(vec![Ok(
+            "Research Conclusion: Logic is verified via Synapse-Audit.".to_string(),
+        )])))
+    }
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[cfg(feature = "llm")]
-const MASTER_RESEARCH_TOML: &str = include_str!("../resources/tests/master_research.toml");
+const MASTER_RESEARCH_TOML: &str = include_str!("../../resources/tests/master_research.toml");
 
 #[cfg(feature = "llm")]
 #[tokio::test]
@@ -42,7 +54,7 @@ async fn test_qianji_master_research_array_flow()
     let index = Arc::new(LinkGraphIndex::build(temp.path())?);
     let orchestrator = Arc::new(ThousandFacesOrchestrator::new("Rules".to_string(), None));
 
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "artisan-engineer".to_string(),
         name: "Artisan".to_string(),

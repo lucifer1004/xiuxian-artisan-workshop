@@ -38,6 +38,10 @@ pub struct SocketClient;
 
 impl SocketClient {
     /// Connect to an existing Unix socket and forward events to a channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the Unix socket cannot be connected.
     pub fn connect(
         socket_path: &str,
         tx: std::sync::mpsc::Sender<SocketEvent>,
@@ -52,7 +56,7 @@ impl SocketClient {
                 let mut line = String::new();
                 match reader.read_line(&mut line) {
                     Ok(0) => {
-                        info!("Socket client reached EOF on {}", socket_path);
+                        info!("Socket client reached EOF on {socket_path}");
                         break;
                     }
                     Ok(_) => {
@@ -63,20 +67,17 @@ impl SocketClient {
                         match serde_json::from_str::<SocketEvent>(line) {
                             Ok(event) => {
                                 if tx.send(event).is_err() {
-                                    warn!("Socket client receiver dropped for {}", socket_path);
+                                    warn!("Socket client receiver dropped for {socket_path}");
                                     break;
                                 }
                             }
                             Err(error) => {
-                                warn!(
-                                    "Failed to parse socket event from {}: {}",
-                                    socket_path, error
-                                );
+                                warn!("Failed to parse socket event from {socket_path}: {error}");
                             }
                         }
                     }
                     Err(error) => {
-                        error!("Socket client read error on {}: {}", socket_path, error);
+                        error!("Socket client read error on {socket_path}: {error}");
                         break;
                     }
                 }
@@ -100,12 +101,13 @@ impl fmt::Debug for SocketServer {
         f.debug_struct("SocketServer")
             .field("socket_path", &self.socket_path)
             .field("running", &self.running.load(Ordering::SeqCst))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
 impl SocketServer {
     /// Create a new socket server
+    #[must_use]
     pub fn new(socket_path: &str) -> Self {
         Self {
             socket_path: socket_path.to_string(),
@@ -116,11 +118,16 @@ impl SocketServer {
 
     /// Set callback for received events
     pub fn set_event_callback(&self, callback: EventCallback) {
-        let mut cb = self.event_callback.lock().unwrap();
-        *cb = Some(callback);
+        if let Ok(mut cb) = self.event_callback.lock() {
+            *cb = Some(callback);
+        }
     }
 
     /// Start the server in a background thread
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the socket path cannot be bound.
     pub fn start(&self) -> anyhow::Result<thread::JoinHandle<()>> {
         let socket_path = Path::new(&self.socket_path);
 
@@ -141,7 +148,7 @@ impl SocketServer {
 
         // Start background thread
         let handle = thread::spawn(move || {
-            Self::run_loop(listener_clone, running, callback);
+            Self::run_loop(&listener_clone, &running, &callback);
         });
 
         info!("Socket server started on {}", self.socket_path);
@@ -150,9 +157,9 @@ impl SocketServer {
 
     /// Main server loop
     fn run_loop(
-        listener: UnixListener,
-        running: Arc<AtomicBool>,
-        callback: Arc<Mutex<Option<EventCallback>>>,
+        listener: &UnixListener,
+        running: &Arc<AtomicBool>,
+        callback: &Arc<Mutex<Option<EventCallback>>>,
     ) {
         let mut connections = Vec::new();
 
@@ -168,7 +175,7 @@ impl SocketServer {
                     // No pending connections, continue
                 }
                 Err(e) => {
-                    error!("Accept error: {}", e);
+                    error!("Accept error: {e}");
                 }
             }
 
@@ -187,12 +194,13 @@ impl SocketServer {
                         if !line.is_empty() {
                             if let Ok(event) = serde_json::from_str::<SocketEvent>(line) {
                                 info!("Received event: {} from {}", event.topic, event.source);
-                                let cb = callback.lock().unwrap();
-                                if let Some(ref callback) = *cb {
+                                if let Ok(cb) = callback.lock()
+                                    && let Some(ref callback) = *cb
+                                {
                                     callback(event.clone());
                                 }
                             } else {
-                                warn!("Failed to parse event: {}", line);
+                                warn!("Failed to parse event: {line}");
                             }
                         }
                     }
@@ -200,7 +208,7 @@ impl SocketServer {
                         // No data available
                     }
                     Err(e) => {
-                        error!("Read error: {}", e);
+                        error!("Read error: {e}");
                         dead_connections.push(i);
                     }
                 }
@@ -232,12 +240,17 @@ impl SocketServer {
     }
 
     /// Check if running
+    #[must_use]
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::SeqCst)
     }
 }
 
 /// Send an event through Unix socket (for testing)
+///
+/// # Errors
+///
+/// Returns an error when the socket cannot be opened or the event cannot be serialized.
 pub fn send_event(socket_path: &str, event: &SocketEvent) -> anyhow::Result<()> {
     let mut stream = UnixStream::connect(socket_path)?;
 
@@ -249,62 +262,5 @@ pub fn send_event(socket_path: &str, event: &SocketEvent) -> anyhow::Result<()> 
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_socket_server_start_stop() {
-        let temp_dir = TempDir::new().unwrap();
-        let socket_path = temp_dir.path().join("test.sock");
-
-        let server = SocketServer::new(socket_path.to_str().unwrap());
-        server.start().unwrap();
-
-        assert!(server.is_running());
-        assert!(Path::new(&socket_path).exists());
-
-        server.stop();
-        assert!(!server.is_running());
-    }
-
-    #[test]
-    fn test_send_and_receive_event() {
-        let temp_dir = TempDir::new().unwrap();
-        let socket_path = temp_dir.path().join("test.sock");
-
-        let received = Arc::new(Mutex::new(Vec::new()));
-        let received_clone = received.clone();
-
-        let server = SocketServer::new(socket_path.to_str().unwrap());
-        server.set_event_callback(Box::new(move |event| {
-            let mut r = received_clone.lock().unwrap();
-            r.push(event);
-        }));
-
-        server.start().unwrap();
-
-        // Give server time to start
-        std::thread::sleep(Duration::from_millis(100));
-
-        // Send event
-        let event = SocketEvent {
-            source: "test".to_string(),
-            topic: "test/event".to_string(),
-            payload: serde_json::json!({"message": "hello"}),
-            timestamp: "2026-01-31T00:00:00".to_string(),
-        };
-        send_event(socket_path.to_str().unwrap(), &event).unwrap();
-
-        // Give time for event to be processed
-        std::thread::sleep(Duration::from_millis(200));
-
-        server.stop();
-
-        let r = received.lock().unwrap();
-        assert_eq!(r.len(), 1);
-        assert_eq!(r[0].source, "test");
-        assert_eq!(r[0].topic, "test/event");
-    }
-}
+#[path = "../tests/unit/socket.rs"]
+mod tests;

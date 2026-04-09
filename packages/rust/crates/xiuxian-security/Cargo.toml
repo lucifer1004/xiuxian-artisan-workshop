@@ -10,6 +10,7 @@ regex = "1.10"
 once_cell = "1.19"
 serde = { workspace = true }
 thiserror = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

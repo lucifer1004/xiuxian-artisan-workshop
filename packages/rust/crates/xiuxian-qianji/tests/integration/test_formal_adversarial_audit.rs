@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
 use xiuxian_qianhuan::{PersonaRegistry, ThousandFacesOrchestrator};
-use xiuxian_qianji::{
-    FlowInstruction, QianjiCompiler, QianjiMechanism, QianjiOutput, QianjiScheduler,
-};
+use xiuxian_qianji::{FlowInstruction, QianjiMechanism, QianjiOutput, QianjiScheduler};
 use xiuxian_wendao::LinkGraphIndex;
 
 // A slightly smarter Mock that "learns" from audit failures
@@ -32,12 +30,14 @@ impl QianjiMechanism for SelfHealingMock {
     }
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[tokio::test]
-async fn test_formal_adversarial_audit_convergence() {
-    let temp = tempfile::tempdir().unwrap();
-    let index = Arc::new(LinkGraphIndex::build(temp.path()).unwrap());
-    let orchestrator = Arc::new(ThousandFacesOrchestrator::new("Rules".to_string(), None));
-    let registry = Arc::new(PersonaRegistry::with_builtins());
+async fn test_formal_adversarial_audit_convergence() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let _index = Arc::new(LinkGraphIndex::build(temp.path())?);
+    let _orchestrator = Arc::new(ThousandFacesOrchestrator::new("Rules".to_string(), None));
+    let _registry = Arc::new(PersonaRegistry::with_builtins());
 
     let mut engine = xiuxian_qianji::QianjiEngine::new();
     let analyzer = Arc::new(SelfHealingMock);
@@ -53,10 +53,12 @@ async fn test_formal_adversarial_audit_convergence() {
     engine.add_link(a, s, None, 1.0);
 
     let scheduler = QianjiScheduler::new(engine);
-    let result = scheduler.run(json!({})).await.expect("Execution failed");
+    let result = scheduler.run(json!({})).await?;
 
-    // Final state should be 'passed' after one retry
     assert_eq!(result["audit_status"], "passed");
-    let trace = result["analysis_trace"].as_array().unwrap();
+    let Some(trace) = result["analysis_trace"].as_array() else {
+        return Err(std::io::Error::other("analysis_trace should be an array").into());
+    };
     assert_eq!(trace[0]["predicate"], "Fixed");
+    Ok(())
 }

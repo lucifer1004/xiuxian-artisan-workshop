@@ -34,6 +34,7 @@ xiuxian-macros = { path = "../xiuxian-macros" }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 litellm-rs = { workspace = true, features = ["redis"] }
 spider = { version = "2.45.29", default-features = false, features = ["basic"] }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]
 tempfile = "3.10"

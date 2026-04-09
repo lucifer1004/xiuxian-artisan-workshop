@@ -20,6 +20,7 @@ modelica = ["xiuxian-wendao-builtin/modelica"]
 tree-sitter = ["modelica", "xiuxian-wendao-builtin/modelica-tree-sitter"]
 performance = ["xiuxian-testing/performance"]
 performance-stress = ["performance"]
+duckdb = ["dep:duckdb"]
 
 [[bin]]
 name = "wendao"
@@ -130,6 +131,7 @@ notify-debouncer-full = "0.7.0"
 reqwest = { workspace = true }
 tantivy = "0.25"
 graphql-parser = "0.4"
+duckdb = { version = "=1.10501.0", default-features = false, features = ["bundled", "appender-arrow"], optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

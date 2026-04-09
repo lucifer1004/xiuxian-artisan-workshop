@@ -347,8 +347,10 @@ fn summarize_scenario_case(
     let merimind_graph_name = std::fs::read_to_string(path)
         .ok()
         .and_then(|source| parse_mermaid_flowchart(&source, &file_stem, known_module_names).ok())
-        .map(|flowchart| flowchart.merimind_graph_name)
-        .unwrap_or_else(|| file_stem.clone());
+        .map_or_else(
+            || file_stem.clone(),
+            |flowchart| flowchart.merimind_graph_name,
+        );
 
     Some(FlowhubScenarioCaseSummary {
         file_name,

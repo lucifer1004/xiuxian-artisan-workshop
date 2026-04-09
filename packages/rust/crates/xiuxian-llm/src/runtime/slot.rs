@@ -352,47 +352,5 @@ pub struct ResidencyToken {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::executor::NoopExecutor;
-
-    use super::*;
-
-    #[test]
-    fn slot_state_transitions() {
-        let metadata = ModelMetadata {
-            model_root: PathBuf::from("/nonexistent"),
-            weights_size_bytes: 1024,
-            has_quantized_snapshot: false,
-            model_kind: "test",
-        };
-        let slot = ModelSlot::vacant(
-            ModelSlotId::new("test"),
-            ExecutorId::new("test-executor"),
-            metadata,
-        );
-
-        assert_eq!(slot.state(), SlotState::Vacant);
-
-        // Vacant -> Hibernated
-        let prev = slot.hibernate();
-        assert_eq!(prev, SlotState::Vacant);
-        assert_eq!(slot.state(), SlotState::Hibernated);
-
-        // Hibernated -> Active
-        let executor =
-            Arc::new(Box::new(NoopExecutor::new("test-executor")) as Box<dyn ModelExecutor>);
-        let prev = slot.activate(Arc::clone(&executor));
-        assert_eq!(prev, SlotState::Hibernated);
-        assert_eq!(slot.state(), SlotState::Active);
-
-        // Active -> Hibernated
-        let prev = slot.evict();
-        assert_eq!(prev, SlotState::Active);
-        assert_eq!(slot.state(), SlotState::Hibernated);
-
-        // -> Vacant
-        let prev = slot.vacate();
-        assert_eq!(prev, SlotState::Hibernated);
-        assert_eq!(slot.state(), SlotState::Vacant);
-    }
-}
+#[path = "../../tests/unit/runtime/slot.rs"]
+mod tests;

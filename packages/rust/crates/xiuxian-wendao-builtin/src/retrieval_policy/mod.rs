@@ -1,5 +1,6 @@
 mod projection;
 #[cfg(test)]
+#[path = "../../tests/unit/retrieval_policy/mod.rs"]
 mod tests;
 
 pub use projection::{

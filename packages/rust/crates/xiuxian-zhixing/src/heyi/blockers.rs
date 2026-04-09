@@ -9,7 +9,7 @@ impl ZhixingHeyi {
     /// # Errors
     /// Returns `Error::Logic` when at least one stale task blocks the user.
     pub fn check_heart_demon_blocker(&self) -> Result<()> {
-        let tasks = self.graph.get_entities_by_type("OTHER(Task)");
+        let tasks = self.graph.get_entities_by_type("TASK");
         let stale_count = tasks
             .into_iter()
             .filter_map(|entity| entity.metadata.get(ATTR_JOURNAL_CARRYOVER).cloned())

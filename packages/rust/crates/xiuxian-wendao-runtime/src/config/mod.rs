@@ -1,4 +1,5 @@
 mod constants;
+mod duckdb;
 mod memory;
 mod models;
 mod resolve;
@@ -18,6 +19,12 @@ pub use constants::{
     DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX, LINK_GRAPH_CANDIDATE_MULTIPLIER_ENV,
     LINK_GRAPH_HYBRID_MIN_HITS_ENV, LINK_GRAPH_HYBRID_MIN_TOP_SCORE_ENV,
     LINK_GRAPH_MAX_SOURCES_ENV, LINK_GRAPH_ROWS_PER_SOURCE_ENV,
+};
+pub use duckdb::{
+    DEFAULT_SEARCH_DUCKDB_DATABASE_PATH, DEFAULT_SEARCH_DUCKDB_MATERIALIZE_THRESHOLD_ROWS,
+    DEFAULT_SEARCH_DUCKDB_PREFER_VIRTUAL_ARROW, DEFAULT_SEARCH_DUCKDB_THREADS, DuckDbDatabasePath,
+    SearchDuckDbRuntimeConfig, default_search_duckdb_temp_directory,
+    resolve_search_duckdb_runtime_with_settings,
 };
 pub use memory::{
     DEFAULT_MEMORY_JULIA_COMPUTE_BASE_URL, DEFAULT_MEMORY_JULIA_COMPUTE_CALIBRATION_ROUTE,

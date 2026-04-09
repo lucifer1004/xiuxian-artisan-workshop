@@ -31,6 +31,7 @@ xiuxian-io = { path = "../xiuxian-io", features = ["notify"] }
 redis = { workspace = true }
 xiuxian-zhenfa = { path = "../xiuxian-zhenfa", optional = true }
 xiuxian-wendao = { path = "../xiuxian-wendao", optional = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]
 tempfile = "3"

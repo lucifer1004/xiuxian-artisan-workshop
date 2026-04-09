@@ -5,4 +5,5 @@ mod spider;
 pub use spider::{SpiderBridge, WebContext};
 
 #[cfg(test)]
+#[path = "../../tests/unit/web/mod.rs"]
 mod tests;

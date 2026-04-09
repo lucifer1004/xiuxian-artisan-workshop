@@ -2,6 +2,7 @@ mod provider;
 mod repo_search;
 mod service;
 #[cfg(test)]
+#[path = "../../../../../../tests/unit/gateway/studio/search/handlers/flight/mod.rs"]
 mod tests;
 
 #[cfg(test)]

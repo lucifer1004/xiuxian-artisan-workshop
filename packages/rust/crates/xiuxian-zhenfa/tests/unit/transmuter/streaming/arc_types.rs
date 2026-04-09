@@ -89,7 +89,8 @@ fn arc_streaming_outcome_helpers_cover_success_and_failure() {
 
 #[test]
 fn converts_from_standard_event() {
-    let standard = super::super::ZhenfaStreamingEvent::Thought(std::sync::Arc::from("test"));
+    let standard =
+        crate::transmuter::streaming::ZhenfaStreamingEvent::Thought(std::sync::Arc::from("test"));
     let arc: ArcStreamingEvent = standard.into();
 
     assert_eq!(arc.text_content(), Some("test"));

@@ -141,3 +141,7 @@ impl Default for ContextAssembler {
         Self::new()
     }
 }
+
+#[cfg(all(test, feature = "assembler"))]
+#[path = "../tests/unit/assembler.rs"]
+mod tests;

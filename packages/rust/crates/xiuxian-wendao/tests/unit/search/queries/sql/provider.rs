@@ -67,6 +67,15 @@ async fn studio_sql_flight_provider_queries_registered_reference_occurrence_tabl
             registered_view_source_count: 0,
             result_batch_count: 1,
             result_row_count: 1,
+            registered_input_bytes: None,
+            result_bytes: None,
+            local_relation_materialization_state: None,
+            local_relation_engine: None,
+            duckdb_registration_strategy: None,
+            registered_input_batch_count: None,
+            registered_input_row_count: None,
+            registration_time_ms: None,
+            local_query_execution_time_ms: None,
         }
     );
 }

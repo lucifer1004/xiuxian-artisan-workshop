@@ -8,6 +8,7 @@ mod topology;
 mod topology_flight;
 
 #[cfg(test)]
+#[path = "../../../../../../tests/unit/gateway/studio/router/handlers/graph/mod.rs"]
 mod tests;
 
 pub(crate) use flight::StudioGraphNeighborsFlightRouteProvider;

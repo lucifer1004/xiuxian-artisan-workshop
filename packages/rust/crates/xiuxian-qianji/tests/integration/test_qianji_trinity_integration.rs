@@ -11,7 +11,7 @@ use std::sync::Arc;
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
 use xiuxian_qianji::executors::annotation::ContextAnnotator;
 use xiuxian_qianji::executors::calibration::SynapseCalibrator;
-use xiuxian_qianji::{QianjiEngine, QianjiScheduler};
+use xiuxian_qianji::{NodeQianhuanExecutionMode, QianjiEngine, QianjiScheduler};
 use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 #[tokio::test]
@@ -29,6 +29,11 @@ async fn test_qianji_trinity_integration() {
         orchestrator: orchestrator.clone(),
         registry: registry.clone(),
         persona_id: "artisan-engineer".to_string(),
+        template_target: None,
+        execution_mode: NodeQianhuanExecutionMode::Isolated,
+        input_keys: vec!["raw_facts".to_string()],
+        history_key: "qianhuan_history".to_string(),
+        output_key: "annotated_prompt".to_string(),
     });
     let calibrator = Arc::new(SynapseCalibrator {
         target_node_id: "Annotator".to_string(),
@@ -52,3 +57,5 @@ async fn test_qianji_trinity_integration() {
             .contains("<system_prompt_injection>")
     );
 }
+
+xiuxian_testing::crate_test_policy_harness!();

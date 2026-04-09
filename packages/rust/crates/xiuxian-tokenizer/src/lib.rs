@@ -13,6 +13,8 @@
 //! let truncated = truncate(text, 5);
 //! ```
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 use std::sync::OnceLock;
 use thiserror::Error;
 

@@ -1,5 +1,7 @@
 //! Xiuxian-Zhenfa (Matrix Gateway): native-first tool microkernel with an optional JSON-RPC HTTP gateway.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 mod client;
 mod contracts;
 mod gateway;

@@ -62,6 +62,24 @@ impl ZhixingWendaoIndexer {
         summary: &mut ZhixingIndexSummary,
     ) -> Result<usize> {
         let agenda_entity_name = format!("Agenda {date}");
+        let source_path = file.display().to_string();
+
+        let task_ids = self
+            .graph
+            .get_entities_by_type("TASK")
+            .into_iter()
+            .filter(|entity| {
+                entity.metadata.get("agenda_date") == Some(&json!(date))
+                    && entity.source.as_deref() == Some(source_path.as_str())
+            })
+            .map(|entity| entity.id)
+            .collect::<Vec<_>>();
+
+        for task_id in task_ids {
+            self.graph
+                .remove_entity(&task_id)
+                .map_err(|error| Error::Internal(format!("Graph operation failed: {error}")))?;
+        }
 
         // 1. Remove existing task links for this agenda document
         self.graph.remove_relations_for_source(&agenda_entity_name);

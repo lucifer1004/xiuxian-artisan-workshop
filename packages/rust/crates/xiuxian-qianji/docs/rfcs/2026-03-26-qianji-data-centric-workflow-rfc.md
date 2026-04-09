@@ -140,6 +140,19 @@ This preserves causal clarity:
 2. Qianji explains why a workflow step ran
 3. Zhenfa renders both in a single user-facing stream
 
+### 5.1.5 Bounded local relation engines remain downstream helpers
+
+Stage-local relation analytics may later use a bounded in-process execution
+helper over already materialized Arrow batches. The current bounded DuckDB
+direction is tracked in
+[RFC: DuckDB as a Bounded In-Process Analytic Lane for Wendao and Qianji](../../../../../../docs/rfcs/2026-04-08-wendao-qianji-duckdb-bounded-analytics-rfc.md).
+
+That direction does not change the ownership split defined in this RFC:
+
+1. Wendao still owns retrieval planning and storage policy
+2. Qianji still owns workflow-stage orchestration and relation handoff
+3. checkpoint persistence and transient coordination do not move into DuckDB
+
 ## 6. Implementation Phases
 
 ### Phase 1: Arrow Interface Handoff

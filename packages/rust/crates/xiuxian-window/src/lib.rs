@@ -3,6 +3,8 @@
 //! Ring-buffer of turn metadata for context building without holding full history in memory.
 //! Python can use this via `PyO3` when feature "pybindings" is enabled.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 mod turn_slot;
 mod window;
 

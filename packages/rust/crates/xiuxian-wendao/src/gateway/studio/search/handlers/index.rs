@@ -1,11 +1,10 @@
 use std::path::Path;
 
+use crate::gateway::studio::search::source_index;
 #[cfg(test)]
 use crate::gateway::studio::types::AstSearchHit;
 use crate::gateway::studio::types::UiProjectConfig;
 use crate::unified_symbol::UnifiedSymbolIndex;
-
-use super::super::source_index;
 
 #[cfg(test)]
 pub fn build_ast_index(

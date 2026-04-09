@@ -80,7 +80,7 @@ fn detect_language(path: &Path) -> String {
     use xiuxian_ast::SupportLang;
 
     if let Some(lang) = SupportLang::from_path(path) {
-        return format!("{:?}", lang).to_lowercase();
+        return format!("{lang:?}").to_lowercase();
     }
     "python".to_string()
 }
@@ -90,6 +90,7 @@ impl StructuralEditor {
     ///
     /// This is the "heavy equipment" function that takes a directory and
     /// applies structural refactoring across all matching files in parallel.
+    #[must_use]
     pub fn batch_replace(
         root: &Path,
         search_pattern: &str,
@@ -114,10 +115,7 @@ impl StructuralEditor {
             .threads(num_workers)
             .build()
             .filter_map(|result| {
-                let entry = match result {
-                    Ok(e) => e,
-                    Err(_) => return None,
-                };
+                let Ok(entry) = result else { return None };
                 let path = entry.path();
                 if !path.is_file() {
                     return None;
@@ -126,10 +124,10 @@ impl StructuralEditor {
                 for skip_dir in &config.skip_dirs {
                     if let Some(parent) = path.parent() {
                         for component in parent.components() {
-                            if let std::path::Component::Normal(os_str) = component {
-                                if os_str.to_string_lossy() == *skip_dir {
-                                    return None;
-                                }
+                            if let std::path::Component::Normal(os_str) = component
+                                && os_str.to_string_lossy() == *skip_dir
+                            {
+                                return None;
                             }
                         }
                     }
@@ -149,7 +147,7 @@ impl StructuralEditor {
             let content = match std::fs::read_to_string(&path) {
                 Ok(c) => c,
                 Err(e) => {
-                    errors.insert(path.display().to_string(), format!("Read error: {}", e));
+                    errors.insert(path.display().to_string(), format!("Read error: {e}"));
                     return;
                 }
             };
@@ -163,18 +161,15 @@ impl StructuralEditor {
                         total_replacements.fetch_add(result.count, Ordering::Relaxed);
                         modified_files.insert(path.display().to_string(), result.count);
 
-                        if !config.dry_run {
-                            if let Err(e) = std::fs::write(&path, &result.modified) {
-                                errors.insert(
-                                    path.display().to_string(),
-                                    format!("Write error: {}", e),
-                                );
-                            }
+                        if !config.dry_run
+                            && let Err(e) = std::fs::write(&path, &result.modified)
+                        {
+                            errors.insert(path.display().to_string(), format!("Write error: {e}"));
                         }
                     }
                 }
                 Err(e) => {
-                    errors.insert(path.display().to_string(), format!("Edit error: {}", e));
+                    errors.insert(path.display().to_string(), format!("Edit error: {e}"));
                 }
             }
         });
@@ -204,8 +199,8 @@ fn matches_glob(path: &Path, pattern: &str) -> bool {
             return true;
         }
         path_str.ends_with(suffix) || path_str.contains(suffix)
-    } else if pattern.starts_with('*') {
-        file_name.ends_with(&pattern[1..])
+    } else if let Some(stripped) = pattern.strip_prefix('*') {
+        file_name.ends_with(stripped)
     } else if pattern.contains('*') {
         let parts: Vec<&str> = pattern.split('*').collect();
         if parts.len() == 1 {
@@ -226,79 +221,5 @@ fn matches_glob(path: &Path, pattern: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_batch_replace_python() {
-        let dir = TempDir::new().expect("Create temp dir");
-
-        let file1 = dir.path().join("test1.py");
-        File::create(&file1)
-            .expect("Create file")
-            .write_all(b"print('hello')\nprint('world')\n")
-            .expect("Write content");
-
-        let file2 = dir.path().join("test2.py");
-        File::create(&file2)
-            .expect("Create file")
-            .write_all(b"print('foo')\n")
-            .expect("Write content");
-
-        let config = BatchConfig {
-            file_pattern: "**/*.py".to_string(),
-            dry_run: true,
-            ..Default::default()
-        };
-
-        let stats = StructuralEditor::batch_replace(
-            dir.path(),
-            "print($ARGS)",
-            "logger.info($ARGS)",
-            &config,
-        );
-
-        assert_eq!(stats.files_scanned, 2);
-        assert_eq!(stats.files_changed, 2);
-        assert_eq!(stats.replacements, 3);
-    }
-
-    #[test]
-    fn test_batch_replace_apply() {
-        let dir = TempDir::new().expect("Create temp dir");
-
-        let file = dir.path().join("test.py");
-        File::create(&file)
-            .expect("Create file")
-            .write_all(b"print('hello')\n")
-            .expect("Write content");
-
-        let config = BatchConfig {
-            file_pattern: "**/*.py".to_string(),
-            dry_run: false,
-            ..Default::default()
-        };
-
-        let stats = StructuralEditor::batch_replace(
-            dir.path(),
-            "print($ARGS)",
-            "logger.info($ARGS)",
-            &config,
-        );
-
-        assert_eq!(stats.files_changed, 1);
-
-        let content = std::fs::read_to_string(&file).expect("Read file");
-        assert!(content.contains("logger.info"));
-    }
-
-    #[test]
-    fn test_matches_glob() {
-        assert!(matches_glob(Path::new("test.py"), "*.py"));
-        assert!(matches_glob(Path::new("test.py"), "**/*.py"));
-        assert!(!matches_glob(Path::new("test.rs"), "*.py"));
-    }
-}
+#[path = "../tests/unit/batch.rs"]
+mod tests;

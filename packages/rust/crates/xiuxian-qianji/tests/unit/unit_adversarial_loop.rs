@@ -11,6 +11,8 @@ struct SelfResolvingProspector {
     pub retry_count: Arc<std::sync::atomic::AtomicU32>,
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[async_trait]
 impl QianjiMechanism for SelfResolvingProspector {
     async fn execute(&self, _context: &serde_json::Value) -> Result<QianjiOutput, String> {
@@ -30,7 +32,8 @@ impl QianjiMechanism for SelfResolvingProspector {
 }
 
 #[tokio::test]
-async fn test_adversarial_retry_loop_convergence() {
+async fn test_adversarial_retry_loop_convergence() -> Result<(), xiuxian_qianji::error::QianjiError>
+{
     let mut engine = QianjiEngine::new();
 
     let retry_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
@@ -51,8 +54,9 @@ async fn test_adversarial_retry_loop_convergence() {
     let scheduler = QianjiScheduler::new(engine);
 
     // Initial run triggers fail (0.9) -> retry -> success (0.01)
-    let result = scheduler.run(json!({})).await.expect("Execution failed");
+    let result = scheduler.run(json!({})).await?;
 
     assert_eq!(result["calibration_status"], "passed");
     assert_eq!(retry_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+    Ok(())
 }

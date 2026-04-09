@@ -179,7 +179,7 @@ fn check_flowhub_root(root: &Path) -> Result<FlowhubCheckReport, QianjiError> {
 fn check_flowhub_module(module_dir: &Path) -> Result<FlowhubCheckReport, QianjiError> {
     let mut diagnostics = Vec::new();
     let candidate = module_candidate_from_dir(module_dir)?;
-    let known_module_names = load_known_module_names_for_module(module_dir)?;
+    let known_module_names = load_known_module_names_for_module(module_dir);
     let mut visited = BTreeSet::new();
     let checked_modules = validate_candidate(
         &candidate,
@@ -687,18 +687,18 @@ fn mermaid_file_is_contracted(
     })
 }
 
-fn load_known_module_names_for_module(module_dir: &Path) -> Result<Vec<String>, QianjiError> {
+fn load_known_module_names_for_module(module_dir: &Path) -> Vec<String> {
     let Some(root_dir) = module_dir.parent() else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
     let root_manifest_path = root_dir.join("qianji.toml");
     if !root_manifest_path.is_file() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
 
     match load_flowhub_root_manifest(&root_manifest_path) {
-        Ok(manifest) => Ok(manifest.contract.register),
-        Err(_) => Ok(Vec::new()),
+        Ok(manifest) => manifest.contract.register,
+        Err(_) => Vec::new(),
     }
 }
 

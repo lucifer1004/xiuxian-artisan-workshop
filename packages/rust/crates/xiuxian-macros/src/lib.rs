@@ -18,9 +18,11 @@
 //! - [`assert_timing!`] - Assert timing constraint for benchmarks
 //! - [`bench_case!`] - Create a benchmark test case
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Expr};
+use syn::{Expr, parse_macro_input};
 
 mod zhenfa_tool;
 

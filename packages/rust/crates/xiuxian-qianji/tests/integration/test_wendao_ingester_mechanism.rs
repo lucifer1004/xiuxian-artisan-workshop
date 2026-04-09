@@ -43,6 +43,8 @@ async fn wendao_ingester_emits_structured_entity_without_persistence() {
     assert_eq!(relation["relation_type"], "RELATED_TO");
 }
 
+xiuxian_testing::crate_test_policy_harness!();
+
 #[tokio::test]
 async fn wendao_ingester_best_effort_records_persistence_error() {
     let mechanism = WendaoIngesterMechanism {

@@ -17,6 +17,7 @@ walkdir = { workspace = true }
 inventory = "0.3"
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-ast = { path = "../xiuxian-ast", optional = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]
 insta = { workspace = true }

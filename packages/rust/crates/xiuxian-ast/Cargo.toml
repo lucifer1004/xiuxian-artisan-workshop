@@ -28,6 +28,7 @@ regex = "1"
 # File traversal
 walkdir = { workspace = true }
 xiuxian-io = { path = "../xiuxian-io" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 tree-sitter = "0.26.5"
 tree-sitter-python = "0.25.0"
 tree-sitter-julia = { version = "0.23.1", optional = true }
@@ -36,7 +37,6 @@ libloading = { version = "0.9", optional = true }
 [dev-dependencies]
 insta = { workspace = true }
 tempfile = { workspace = true }
-xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

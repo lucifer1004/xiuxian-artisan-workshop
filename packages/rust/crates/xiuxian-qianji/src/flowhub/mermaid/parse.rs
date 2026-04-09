@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::fmt;
 
 use merman_core::{Engine, ParseOptions, RenderSemanticModel};
+use regex::Regex;
 
 use super::model::{MermaidEdge, MermaidFlowchart, MermaidNode, MermaidNodeKind};
 
@@ -31,6 +33,8 @@ pub(crate) fn parse_mermaid_flowchart(
     merimind_graph_name: &str,
     registered_module_names: &[String],
 ) -> Result<MermaidFlowchart, MermaidParseError> {
+    validate_explicit_node_labels(source)?;
+
     let parsed = Engine::new()
         .parse_diagram_for_render_model_sync(source, ParseOptions::strict())
         .map_err(|error| MermaidParseError::new(error.to_string()))?
@@ -83,6 +87,39 @@ pub(crate) fn parse_mermaid_flowchart(
         nodes,
         edges,
     })
+}
+
+fn validate_explicit_node_labels(source: &str) -> Result<(), MermaidParseError> {
+    let explicit_node_pattern = Regex::new(
+        r#"(?m)\b(?P<id>[A-Za-z][A-Za-z0-9_]*)\[(?:"(?P<quoted>[^"\n]+)"|(?P<plain>[^\]\n]+))\]"#,
+    )
+    .map_err(|error| MermaidParseError::new(error.to_string()))?;
+    let mut labels_by_id = BTreeMap::<String, String>::new();
+
+    for captures in explicit_node_pattern.captures_iter(source) {
+        let node_id = captures["id"].trim();
+        let label = captures
+            .name("quoted")
+            .or_else(|| captures.name("plain"))
+            .map_or("", |value| value.as_str().trim());
+        if label.is_empty() {
+            continue;
+        }
+
+        match labels_by_id.get(node_id) {
+            Some(previous_label) if previous_label != label => {
+                return Err(MermaidParseError::new(format!(
+                    "conflicting labels for Mermaid node `{node_id}`: `{previous_label}` vs `{label}`"
+                )));
+            }
+            Some(_) => {}
+            None => {
+                labels_by_id.insert(node_id.to_string(), label.to_string());
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

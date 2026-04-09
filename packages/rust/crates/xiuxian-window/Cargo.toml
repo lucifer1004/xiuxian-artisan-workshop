@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 serde = { workspace = true }
 pyo3 = { workspace = true, optional = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [features]
 default = []

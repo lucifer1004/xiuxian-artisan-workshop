@@ -8,6 +8,8 @@
 //! `xiuxian-wendao-core` is intended to be consumable by runtime helpers and
 //! plugin crates without pulling in deployment-dependent behavior.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 /// Stable artifact payload and launch-spec records.
 pub mod artifacts;
 /// Stable capability-binding and contract-version records.

@@ -72,6 +72,8 @@ impl ZhixingHeyi {
     /// # Errors
     /// Returns an error when journal persistence fails.
     pub async fn add_task(&self, title: &str, scheduled_at: Option<String>) -> Result<String> {
+        self.check_heart_demon_blocker()?;
+
         let journal = JournalEntry::new(title.to_string());
         self.storage.record_journal(&journal).await?;
 

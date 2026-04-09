@@ -9,4 +9,5 @@ mod heuristics;
 pub use build::build_annotations;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/skills/skill_command/annotations.rs"]
 mod tests;

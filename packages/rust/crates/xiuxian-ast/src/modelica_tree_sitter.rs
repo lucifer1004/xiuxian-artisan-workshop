@@ -593,28 +593,5 @@ fn extract_documentation(code: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::TreeSitterModelicaParser;
-
-    #[test]
-    fn parse_modelica_file_summary() {
-        let mut parser = match TreeSitterModelicaParser::new() {
-            Ok(p) => p,
-            Err(_) => return,
-        };
-
-        let code = r#"
-package MyPackage
-  model MyModel
-    Real y;
-  equation
-    y = 10 * 2;
-  end MyModel;
-end MyPackage;
-"#;
-
-        let summary = parser.parse_file_summary(code).unwrap();
-        assert_eq!(summary.symbols[0].equations.len(), 1);
-        assert!(summary.symbols[0].equations[0].contains("y = 10 * 2"));
-    }
-}
+#[path = "../tests/unit/modelica_tree_sitter.rs"]
+mod tests;

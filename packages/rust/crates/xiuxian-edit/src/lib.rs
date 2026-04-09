@@ -51,6 +51,8 @@
 //! );
 //! ```
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 // ============================================================================
 // Module Declarations (ODF-REP: Atomic Structure)
 // ============================================================================

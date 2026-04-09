@@ -15,3 +15,7 @@ pub struct DemoArgs {
     #[arg(short, long, action = clap::ArgAction::SetTrue)]
     pub demo: bool,
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/demo_cli_args.rs"]
+mod tests;

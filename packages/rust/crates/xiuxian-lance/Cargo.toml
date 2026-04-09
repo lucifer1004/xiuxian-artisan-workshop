@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 lance = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

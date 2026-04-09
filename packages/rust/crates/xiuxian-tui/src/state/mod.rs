@@ -937,3 +937,7 @@ impl Default for AppState {
         Self::new("Omni TUI".to_string())
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/state/mod.rs"]
+mod tests;

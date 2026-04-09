@@ -40,6 +40,15 @@ fn sql_query_metadata(query_surface: &SqlQuerySurface) -> SqlQueryMetadata {
         registered_view_source_count: query_surface.registered_view_source_count(),
         result_batch_count: 0,
         result_row_count: 0,
+        registered_input_bytes: None,
+        result_bytes: None,
+        local_relation_materialization_state: None,
+        local_relation_engine: None,
+        duckdb_registration_strategy: None,
+        registered_input_batch_count: None,
+        registered_input_row_count: None,
+        registration_time_ms: None,
+        local_query_execution_time_ms: None,
     }
 }
 

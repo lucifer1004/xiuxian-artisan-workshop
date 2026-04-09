@@ -25,6 +25,7 @@ xiuxian-event = { path = "../xiuxian-event" }
 # Type definitions
 xiuxian-types = { path = "../xiuxian-types" }
 xiuxian-logging = { path = "../xiuxian-logging" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 # Logging (workspace managed)
 log = { workspace = true }

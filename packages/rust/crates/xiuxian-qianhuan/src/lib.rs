@@ -5,6 +5,8 @@
 //! - Entry tag: `<qa><q>...</q><a>...</a><source>...</source></qa>`
 //! - `<source>` is optional.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 /// Synapse-Audit calibration primitives for adversarial alignment checks.
 pub mod calibration;
 mod config;

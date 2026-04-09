@@ -16,6 +16,7 @@ modelica-tree-sitter = ["modelica", "xiuxian-wendao-modelica/tree-sitter"]
 [dependencies]
 serde_yaml = { workspace = true }
 serde_json = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false, features = ["transport"] }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }

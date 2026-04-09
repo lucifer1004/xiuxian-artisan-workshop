@@ -4,7 +4,7 @@ use xiuxian_qianji::executors::MockMechanism;
 use xiuxian_qianji::{QianjiEngine, QianjiScheduler};
 
 #[tokio::test]
-async fn test_qianji_dag_parallel_execution() {
+async fn test_qianji_dag_parallel_execution() -> Result<(), xiuxian_qianji::error::QianjiError> {
     let mut engine = QianjiEngine::new();
 
     let a_mech = Arc::new(MockMechanism {
@@ -36,10 +36,13 @@ async fn test_qianji_dag_parallel_execution() {
     engine.add_link(c, d, None, 1.0);
 
     let scheduler = QianjiScheduler::new(engine);
-    let result = scheduler.run(json!({})).await.expect("Execution failed");
+    let result = scheduler.run(json!({})).await?;
 
     assert_eq!(result["A"], "done");
     assert_eq!(result["B"], "done");
     assert_eq!(result["C"], "done");
     assert_eq!(result["D"], "done");
+    Ok(())
 }
+
+xiuxian_testing::crate_test_policy_harness!();

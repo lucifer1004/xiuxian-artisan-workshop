@@ -1,6 +1,6 @@
 #[cfg(not(feature = "llm"))]
-use crate::common::{AGENDA_FACTS, AGENDA_FLOW_URI_FROM_ALIAS};
-use crate::common::{AGENDA_FLOW_URI_CANONICAL, AGENDA_OVERRIDE_RESOURCES};
+use super::common::{AGENDA_FACTS, AGENDA_FLOW_URI_FROM_ALIAS};
+use super::common::{AGENDA_FLOW_URI_CANONICAL, AGENDA_OVERRIDE_RESOURCES};
 use serde_json::json;
 use xiuxian_qianji::{BootcampRunOptions, BootcampVfsMount, run_scenario, run_workflow};
 

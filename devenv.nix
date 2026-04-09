@@ -84,6 +84,7 @@ in
     pkgs.ngrok
     pkgs.nodejs
     pkgs.tree
+    pkgs.duckdb
   ];
 
   dotenv.enable = true;

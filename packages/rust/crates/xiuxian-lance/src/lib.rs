@@ -1,5 +1,7 @@
 //! Utilities for working with Arrow record batches.
 
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+
 use std::sync::Arc;
 
 use lance::deps::arrow_array::{

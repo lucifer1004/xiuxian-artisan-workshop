@@ -7,4 +7,5 @@ pub use skill_entry::SkillIndexEntry;
 pub use tool_entry::IndexToolEntry;
 
 #[cfg(test)]
+#[path = "../../../../tests/unit/skills/metadata/index.rs"]
 mod tests;

@@ -17,17 +17,17 @@
 //! Raw Stream → Parser → LogicGate → CognitiveSupervisor → Output
 //! ```
 
-#[cfg(test)]
-mod arc_types;
 mod claude;
 mod codex;
-#[cfg(test)]
-mod formatter;
 mod gemini;
 mod logic_gate;
 mod pipeline;
 mod supervisor;
 mod traits;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/transmuter/streaming/mod.rs"]
+mod tests;
 
 pub use claude::ClaudeStreamingParser;
 pub use codex::CodexStreamingParser;

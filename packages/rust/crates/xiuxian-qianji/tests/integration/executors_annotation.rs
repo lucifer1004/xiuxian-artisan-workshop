@@ -56,3 +56,5 @@ async fn context_annotator_can_load_persona_via_wendao_uri() {
         "wendao://skills/agenda-management/references/draft_agenda.j2"
     );
 }
+
+xiuxian_testing::crate_test_policy_harness!();

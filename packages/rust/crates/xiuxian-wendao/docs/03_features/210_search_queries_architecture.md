@@ -40,6 +40,70 @@ This means Flight is not a replacement for DataFusion. Flight is a transport
 or business-protocol surface. DataFusion remains the query planning and
 execution engine for the shared queries system.
 
+The bounded DuckDB analytics proposal is tracked separately in
+[RFC: DuckDB as a Bounded In-Process Analytic Lane for Wendao and Qianji](../../../../../../docs/rfcs/2026-04-08-wendao-qianji-duckdb-bounded-analytics-rfc.md).
+That RFC keeps the external Flight contract unchanged and keeps the shared
+query system DataFusion-led; DuckDB is explicitly scoped only to internal
+request-scoped or bounded-lived analytic execution.
+
+The first bounded implementation slice under that RFC is now landed too.
+`xiuxian-wendao` has a local `src/duckdb/` bridge that exposes one bounded
+local relation-engine seam, and the bounded-work markdown lane now uses that
+seam while remaining DataFusion-backed. DuckDB-specific execution is still
+feature-gated scaffolding rather than the default shared query core.
+
+The next bounded pilot under the same RFC is landed too. The bounded-work
+markdown query owner now exposes an explicit
+`query_bounded_work_markdown_payload_with_engine(...)` helper, and the new
+`DuckDbLocalRelationEngine` can register Arrow batches through
+`appender-arrow` and return Arrow-native query batches. The default
+`query_bounded_work_markdown_payload(...)` path still instantiates the
+DataFusion engine explicitly, so the shared query system remains DataFusion-led
+while the DuckDB pilot stays opt-in and request-scoped.
+
+The next engine-policy slice under the same RFC is landed too.
+`DuckDbLocalRelationEngine` now honors the published `search.duckdb`
+registration policy instead of always materializing relations. Small bounded
+worksets now register as request-scoped DuckDB temp views over a
+Wendao-owned Arrow virtual table, while larger worksets or explicitly
+non-virtual configurations fall back to appender-backed materialization. This
+keeps the default shared query core unchanged while making the DuckDB pilot's
+runtime policy real.
+
+The next explain-facing slice under the same RFC is landed too. The bounded
+markdown SQL payload now exposes additive local-engine metadata:
+`localRelationEngine`, `duckdbRegistrationStrategy`, and
+`registeredInputRowCount` are filled for the bounded local relation-engine
+helper, while the shared SQL service continues to omit those fields by
+default. This keeps the shared SQL surface stable while making the bounded
+DuckDB pilot's execution choice visible.
+
+The next bounded runtime-stats slice is landed too. The same bounded markdown
+payload now also exposes `registeredInputBatchCount`, `registrationTimeMs`,
+and `localQueryExecutionTimeMs` for the bounded local relation-engine helper.
+This still keeps the shared SQL surface stable by default while making the
+bounded pilot's registration and execution cost visible to explain consumers.
+
+The next bounded byte-metadata slice is landed too. The same bounded markdown
+payload now also exposes `registeredInputBytes` and `resultBytes` for the
+bounded local relation-engine helper. This keeps the shared SQL surface stable
+by default while making the bounded pilot's input and output memory footprint
+visible to explain consumers.
+
+The next bounded materialization-state slice is landed too. The same bounded
+markdown payload now also exposes `localRelationMaterializationState`, so the
+bounded local relation-engine helper reports whether it materialized the
+relation or kept it virtual. This keeps the shared SQL surface stable by
+default while making the bounded pilot's materialization behavior explicit
+across both DataFusion and DuckDB paths.
+
+The canonical DuckDB RFC is now synchronized with the same bounded rollout
+status too. It records the landed RFC and boundary slice, the local
+relation-engine seam, the bounded markdown pilot, the request-scoped
+registration policy, and the additive runtime-stats, byte-metadata, and
+materialization-state slices as code-backed Wendao work. Qianji stage-local
+DuckDB pilots remain future work.
+
 ## Native Flight
 
 Native Flight should continue to own Wendao-specific capabilities that are not

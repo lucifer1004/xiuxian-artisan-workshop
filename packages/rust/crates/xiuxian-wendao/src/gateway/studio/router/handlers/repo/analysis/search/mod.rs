@@ -7,6 +7,7 @@ mod service;
 mod symbol;
 
 #[cfg(test)]
+#[path = "../../../../../../../../tests/unit/gateway/studio/router/handlers/repo/analysis/search/mod.rs"]
 mod tests;
 
 pub use example::example_search;

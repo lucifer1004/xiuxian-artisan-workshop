@@ -1,5 +1,6 @@
 mod julia;
 #[cfg(test)]
+#[path = "../../../tests/unit/test_support/planned_search/mod.rs"]
 mod tests;
 
 pub use julia::{
