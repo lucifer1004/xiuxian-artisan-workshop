@@ -15,6 +15,7 @@ mod constants;
 mod ids;
 mod lookup;
 mod page_indices;
+mod pattern_symbols;
 mod passages;
 mod ppr;
 mod rank;

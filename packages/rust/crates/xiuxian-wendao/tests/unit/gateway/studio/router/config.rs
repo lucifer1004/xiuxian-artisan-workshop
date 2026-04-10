@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
 use axum::Json;
-#[cfg(feature = "julia")]
 use axum::body::to_bytes;
 use axum::extract::State;
-#[cfg(feature = "julia")]
 use axum::extract::{Path, Query};
 
 use crate::analyzers::bootstrap_builtin_registry;
@@ -14,19 +12,15 @@ use crate::gateway::studio::router::{
     GatewayState, StudioState, load_ui_config_from_wendao_toml, studio_wendao_overlay_toml_path,
 };
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
-#[cfg(feature = "julia")]
 use crate::gateway::studio::types::UiPluginArtifact;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
 use crate::repo_index::RepoIndexPhase;
 use crate::search::SearchPlaneService;
-#[cfg(feature = "julia")]
 use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
 use chrono::DateTime;
-#[cfg(feature = "julia")]
 use serial_test::serial;
 use std::fs;
-#[cfg(feature = "julia")]
 use xiuxian_wendao_builtin::{
     linked_builtin_julia_gateway_artifact_base_url,
     linked_builtin_julia_gateway_artifact_expected_toml_fragments,
@@ -320,7 +314,6 @@ async fn symbol_index_status_records_first_deferred_bootstrap_activation() {
     );
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 #[serial]
 async fn plugin_artifact_handler_returns_resolved_artifact() {
@@ -400,7 +393,6 @@ async fn plugin_artifact_handler_returns_resolved_artifact() {
     );
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 #[serial]
 async fn plugin_artifact_handler_returns_canonical_json_shape() {
@@ -457,7 +449,6 @@ async fn plugin_artifact_handler_returns_canonical_json_shape() {
     );
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 #[serial]
 async fn plugin_artifact_handler_returns_toml_when_requested() {

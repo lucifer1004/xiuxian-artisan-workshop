@@ -175,7 +175,6 @@ metadata:
 | --------------- | ---------------------------------------- |
 | `git.status`    | Show working tree status                 |
 | `git.commit`    | Commit staged changes                    |
-| `git.smart_commit` | Smart Commit workflow (human-in-loop) |
 ```
 
 ## Example Skills

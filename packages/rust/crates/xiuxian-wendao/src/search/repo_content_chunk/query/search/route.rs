@@ -30,7 +30,7 @@ pub(crate) async fn search_repo_content_chunks_with_filters(
     else {
         return Ok(Vec::new());
     };
-    if !publication.is_datafusion_readable() {
+    if !publication.is_parquet_query_readable() {
         return Ok(Vec::new());
     }
 
@@ -46,9 +46,9 @@ pub(crate) async fn search_repo_content_chunks_with_filters(
         publication.publication_id.as_str(),
     );
     #[cfg(feature = "duckdb")]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+    let query_engine = ParquetQueryEngine::configured()?;
     #[cfg(not(feature = "duckdb"))]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    let query_engine = ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
     query_engine
         .ensure_parquet_table_registered(engine_table_name.as_str(), parquet_path.as_path())
         .await?;

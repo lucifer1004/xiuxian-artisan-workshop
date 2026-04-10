@@ -36,7 +36,7 @@ impl AttachmentSearchFlightRouteProvider for StudioAttachmentSearchFlightRoutePr
         ext_filters: &std::collections::HashSet<String>,
         kind_filters: &std::collections::HashSet<String>,
         case_sensitive: bool,
-    ) -> Result<xiuxian_vector::LanceRecordBatch, String> {
+    ) -> Result<xiuxian_vector_store::LanceRecordBatch, String> {
         let mut ext = ext_filters.iter().cloned().collect::<Vec<_>>();
         ext.sort();
         let mut kind = kind_filters.iter().cloned().collect::<Vec<_>>();

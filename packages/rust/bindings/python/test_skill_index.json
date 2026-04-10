@@ -685,7 +685,7 @@
   },
   {
     "name": "\"git\"",
-    "description": "\"Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness\"",
+    "description": "\"Git integration with staging safeguards and commit helpers\"",
     "version": "\"2.0.0\"",
     "path": "assets/skills/git",
     "tools": [
@@ -720,30 +720,6 @@
       {
         "name": "route_after_prepare",
         "description": "Route after prepare stage based on preparation results. Returns: \"execute\" if all checks passed (will interrupt before execute) \"END\" if there are issues (empty, security_violation, error)  status = s"
-      },
-      {
-        "name": "build_workflow",
-        "description": "Build the Smart Commit Workflow StateGraph. Flow: prepare -> (interrupt) -> execute The graph interrupts before 'execute' node, allowing: 1. LLM to receive the diff and staged files 2. LLM to analyze "
-      },
-      {
-        "name": "start_workflow",
-        "description": "Start a new smart commit workflow. Runs the graph until it reaches the interrupt point (before execute). Args: project_root: Project root path workflow_id: Unique ID for this workflow session Returns:"
-      },
-      {
-        "name": "approve_workflow",
-        "description": "Approve a pending commit and resume the workflow. Args: message: LLM-generated commit message workflow_id: Same workflow ID used when starting Returns: Final state after commit execution  config = {\"c"
-      },
-      {
-        "name": "reject_workflow",
-        "description": "Reject/cancel a pending commit. Args: workflow_id: Same workflow ID used when starting Returns: Final state after rejection  config = {\"configurable\": {\"thread_id\": workflow_id}} _workflow.update_stat"
-      },
-      {
-        "name": "get_workflow_status",
-        "description": "Get the current status of a workflow. Args: workflow_id: The workflow checkpoint ID Returns: Current state or None if not found  config = {\"configurable\": {\"thread_id\": workflow_id}} snapshot = _workf"
-      },
-      {
-        "name": "format_review_card",
-        "description": "Generate a review card from the current state for LLM consumption. This format is designed to be passed back to the LLM for analysis and message generation. Args: state: Current CommitState Returns: F"
       },
       {
         "name": "add",
@@ -906,10 +882,6 @@
         "description": "Delete a branch. cmd = [\"git\", \"branch\"] if force: cmd.append(\"-D\") else: cmd.append(\"-d\") cmd.append(branch_name) return _run(cmd)"
       },
       {
-        "name": "create_initial_state",
-        "description": "Factory function to create initial CommitState. Args: project_root: Path to project root workflow_id: Unique ID for state persistence Returns: Initialized CommitState  return { \"project_root\": project"
-      },
-      {
         "name": "get_diff",
         "description": "Show working directory or staged changes. cmd = [\"git\", \"diff\"] if staged: cmd.append(\"--staged\") if filename: cmd.append(filename) return _run(cmd)"
       },
@@ -924,54 +896,6 @@
       {
         "name": "get_staged_diff_stat",
         "description": "Get staged diff statistics. return _run([\"git\", \"diff\", \"--cached\", \"--stat\"])"
-      },
-      {
-        "name": "node_check_env",
-        "description": "Check the current Git environment. Returns: Dict with is_dirty, current_branch, and files_changed  try: status_output = git_status(short=True) is_dirty = bool(status_output and status_output.strip()) "
-      },
-      {
-        "name": "node_stash",
-        "description": "Stash current changes. Returns: Dict with stashed_hash  try: message = f\"Auto-stash by Omni Living Skill - {state.intent}\" result = git_stash_save(message) stashed_hash = None for line in result.split"
-      },
-      {
-        "name": "node_switch_branch",
-        "description": "Switch to the target branch. Returns: Dict with success status and result message  if not state.target_branch: return { \"error_message\": \"No target branch specified\", \"current_step\": WorkflowStep.ERRO"
-      },
-      {
-        "name": "node_add",
-        "description": "Stage all changes for commit. Returns: Dict with success status  try: result = git_add(\".\") return { \"current_step\": WorkflowStep.ADD.value, \"result_message\": result or \"All changes staged\", } except "
-      },
-      {
-        "name": "node_commit",
-        "description": "Commit staged changes. Returns: Dict with commit_hash and result message  if not state.commit_message: return { \"error_message\": \"No commit message provided\", \"current_step\": WorkflowStep.ERROR.value,"
-      },
-      {
-        "name": "node_pop_stash",
-        "description": "Apply stashed changes and remove from stash. Returns: Dict with result message  if not state.stashed_hash: return { \"result_message\": \"No stashed changes to apply\", \"current_step\": WorkflowStep.POP.va"
-      },
-      {
-        "name": "route_by_intent",
-        "description": "Route to the appropriate workflow based on user intent. Args: state: Current GitWorkflowState Returns: Next node name  intent = state.intent.lower() if intent in (\"hotfix\", \"pr\"): return \"handle_dirty"
-      },
-      {
-        "name": "route_dirty_branch",
-        "description": "Route based on whether the working tree is dirty. Args: state: Current GitWorkflowState Returns: Next node name  if state.is_dirty: return \"stash\" return \"switch_branch\""
-      },
-      {
-        "name": "route_after_switch",
-        "description": "Route after branch switch based on intent. Args: state: Current GitWorkflowState Returns: Next node name  intent = state.intent.lower() if intent == \"hotfix\" and state.stashed_hash: return \"add\" elif "
-      },
-      {
-        "name": "route_after_commit",
-        "description": "Route after commit based on whether we need to pop stash. Args: state: Current GitWorkflowState Returns: Next node name  if state.stashed_hash and state.intent.lower() == \"hotfix\": return \"pop_stash\" "
-      },
-      {
-        "name": "create_workflow",
-        "description": "Create the Git workflow StateGraph. Returns: Configured StateGraph ready to be compiled  workflow = StateGraph(GitWorkflowState) workflow.add_node(\"check_env\", node_check_env) workflow.add_node(\"stash"
-      },
-      {
-        "name": "format_workflow_result",
-        "description": "Format the workflow result using Jinja2 template. Args: state: The final GitWorkflowState Returns: Formatted result string from template  if state.error_message: return render_error( error_type=\"workf"
       },
       {
         "name": "_run",
@@ -994,20 +918,8 @@
         "description": "Run lefthook pre-commit checks. Returns: Tuple of (success, report_message, lefthook_output)  if not shutil.which(\"lefthook\"): return True, \"\", \"\" lh_version, _, _ = _run([\"lefthook\", \"--version\"], cw"
       },
       {
-        "name": "prepare_commit",
-        "description": "[Phase 1] Prepare for commit: stage, lefthook, re-stage, return diff. Args: project_root: Project root path (auto-injected via inject_root) message: Optional commit message for scope validation Return"
-      },
-      {
-        "name": "format_prepare_result",
-        "description": "Format the prepare_commit result for LLM consumption. Constructs complete output including security status in Controller Layer. LLM should always see security feedback (passed or warning). Args: prep_"
-      },
-      {
         "name": "stage_and_scan",
         "description": "Stage files and capture diff for LLM analysis. Workflow: 1. git add . - Stage ALL files (including untracked) 2. Check sensitive files - UNSTAGE them (not just warn) 3. Run lefthook pre-commit (may re"
-      },
-      {
-        "name": "create_initial_state",
-        "description": "Factory function to create an initial GitWorkflowState. Args: intent: The high-level user intent target_branch: Target branch for the operation commit_message: Commit message if applicable **kwargs: A"
       },
       {
         "name": "format_state_for_output",

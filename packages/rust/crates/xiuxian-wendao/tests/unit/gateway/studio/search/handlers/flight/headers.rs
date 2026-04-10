@@ -1,5 +1,4 @@
 use tonic::metadata::MetadataMap;
-#[cfg(feature = "julia")]
 use xiuxian_wendao_runtime::transport::{
     WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_REPO_HEADER, WENDAO_REFINE_DOC_ENTITY_ID_HEADER,
     WENDAO_REFINE_DOC_REPO_HEADER, WENDAO_REFINE_DOC_USER_HINTS_HEADER,
@@ -212,7 +211,6 @@ pub(super) fn populate_markdown_analysis_headers(metadata: &mut MetadataMap, pat
     );
 }
 
-#[cfg(feature = "julia")]
 pub(super) fn populate_code_ast_analysis_headers(
     metadata: &mut MetadataMap,
     path: &str,
@@ -236,7 +234,6 @@ pub(super) fn populate_code_ast_analysis_headers(
     }
 }
 
-#[cfg(feature = "julia")]
 pub(super) fn populate_repo_doc_coverage_headers(
     metadata: &mut MetadataMap,
     repo_id: &str,
@@ -264,7 +261,6 @@ pub(super) fn populate_repo_doc_coverage_headers(
     }
 }
 
-#[cfg(feature = "julia")]
 pub(super) fn populate_repo_overview_headers(metadata: &mut MetadataMap, repo_id: &str) {
     populate_schema_headers(metadata);
     insert_header(
@@ -340,7 +336,6 @@ pub(super) fn populate_repo_sync_headers(
     }
 }
 
-#[cfg(feature = "julia")]
 pub(super) fn populate_repo_projected_page_index_tree_headers(
     metadata: &mut MetadataMap,
     repo_id: &str,
@@ -361,7 +356,6 @@ pub(super) fn populate_repo_projected_page_index_tree_headers(
     );
 }
 
-#[cfg(feature = "julia")]
 pub(super) fn populate_refine_doc_headers(
     metadata: &mut MetadataMap,
     repo_id: &str,

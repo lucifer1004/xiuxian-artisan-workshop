@@ -182,9 +182,6 @@ impl LinkGraphIndex {
         style_anchors: &[String],
         hits: &[LinkGraphDisplayHit],
     ) -> Option<LinkGraphCcsAudit> {
-        use crate::link_graph::LinkGraphCcsAudit;
-        use crate::zhenfa_router::{audit_search_payload, evaluate_alignment};
-
         if style_anchors.is_empty() {
             return None;
         }
@@ -201,18 +198,57 @@ impl LinkGraphIndex {
             })
             .collect();
 
-        // Run CCS audit using the zhenfa router audit module
-        let audit = audit_search_payload(&evidence, style_anchors);
-        let verdict = evaluate_alignment(style_anchors, &evidence);
+        let (ccs_score, passed, missing_anchors) =
+            evaluate_ccs_audit(style_anchors, evidence.as_slice());
 
         // Build the CCS audit result for payload
         Some(LinkGraphCcsAudit {
-            ccs_score: audit.ccs_score,
-            passed: audit.passed && verdict.is_aligned,
+            ccs_score,
+            passed,
             compensated: false,
-            missing_anchors: audit.missing_anchors,
+            missing_anchors,
         })
     }
+}
+
+#[cfg(feature = "zhenfa-router")]
+fn evaluate_ccs_audit(anchors: &[String], evidence: &[String]) -> (f64, bool, Vec<String>) {
+    use crate::zhenfa_router::{audit_search_payload, evaluate_alignment};
+
+    let audit = audit_search_payload(evidence, anchors);
+    let verdict = evaluate_alignment(anchors, evidence);
+    (
+        audit.ccs_score,
+        audit.passed && verdict.is_aligned,
+        audit.missing_anchors,
+    )
+}
+
+#[cfg(not(feature = "zhenfa-router"))]
+fn evaluate_ccs_audit(anchors: &[String], evidence: &[String]) -> (f64, bool, Vec<String>) {
+    let mut matches = 0_usize;
+    let mut missing_anchors = Vec::new();
+
+    for anchor in anchors {
+        let anchor_lower = anchor.to_lowercase();
+        let found = evidence
+            .iter()
+            .any(|item| item.to_lowercase().contains(&anchor_lower));
+        if found {
+            matches += 1;
+        } else {
+            missing_anchors.push(anchor.clone());
+        }
+    }
+
+    let ccs_score = if anchors.is_empty() {
+        1.0
+    } else {
+        matches as f64 / anchors.len() as f64
+    };
+    let is_aligned = (1.0 - ccs_score) < 0.05;
+    let passed = ccs_score >= 0.70 && is_aligned;
+    (ccs_score, passed, missing_anchors)
 }
 
 fn coactivated_neighbor_node_ids(

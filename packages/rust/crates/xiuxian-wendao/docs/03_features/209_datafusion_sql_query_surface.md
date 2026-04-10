@@ -11,11 +11,21 @@
 ## Overview
 
 `xiuxian-wendao` exposes a request-scoped SQL surface on top of the
-search plane. Each SQL request builds a fresh DataFusion session, registers the
-currently readable search-plane corpora, then executes a read-only SQL query
-through the shared query core and SQL execution seam used by the SQL Flight
-provider, FlightSQL, GraphQL, and the CLI `query` adapters through one shared
-`SearchQueryService` ownership seam.
+search plane. Each SQL request still builds a fresh request-scoped discovery
+surface, registers the currently readable search-plane corpora, then executes
+a read-only SQL query through the shared query core and SQL execution seam
+used by the SQL Flight provider, FlightSQL, GraphQL, and the CLI `query`
+adapters through one shared `SearchQueryService` ownership seam.
+
+That remaining shared core is now named explicitly as a request-scoped
+DataFusion query core in the code paths that still own discovery catalogs,
+logical-view assembly, and non-routed fallback execution.
+
+That execution seam is no longer "DataFusion only" for every query. Simple
+single-table statements over published Parquet corpora can now route through
+the bounded `ParquetQueryEngine`; in `duckdb` builds that routed lane is now
+DuckDB-owned, while discovery catalogs, logical views, and multi-source
+statements still fall back to the DataFusion-led shared SQL core.
 
 The surface is intentionally request-scoped:
 
@@ -35,13 +45,28 @@ The current bounded migration direction is:
 
 So this feature doc is active, but transitional.
 
+More concretely, this SQL surface belongs to the same-layer search execution
+residue that should migrate away from DataFusion over time. It is not the
+retained live Arrow compute case.
+
+That transitional boundary is now reflected in the Wendao service API too:
+non-`duckdb` fallback code exposes the retained baseline as
+`SearchPlaneService::datafusion_query_engine()`, not as a generic
+`search_engine()` handle.
+
+The surrounding publication terminology is now narrowed the same way:
+published corpora are treated as Parquet/query-engine readable, not as
+"DataFusion-readable," because the owned storage format is Parquet and the
+shared SQL plus FlightSQL lanes now select the execution kernel separately.
+
 ## SQL Surface Layers
 
 The SQL lane lives under `src/search/queries/`:
 
 - `core/`: shared request-scoped `SearchEngineContext + SqlQuerySurface`
-  assembly
-- `execution/`: transport-neutral SQL execution results and payload rendering
+  assembly, now named explicitly as the residual DataFusion query core
+- `execution/`: transport-neutral SQL execution results, bounded published
+  Parquet routing, and payload rendering
 - `provider/`: SQL Flight entrypoint, route execution, and app metadata
 - `registration/`: request-scoped DataFusion session setup, table/view
   registration, and stable SQL naming
@@ -50,13 +75,35 @@ The SQL lane lives under `src/search/queries/`:
 
 The core registration flow is:
 
-1. open the shared request-scoped query core
-2. create a request-scoped `SearchEngineContext`
+1. open the shared request-scoped DataFusion query core
+2. create a request-scoped DataFusion `SearchEngineContext`
 3. register readable local and repo-backed corpora
 4. register stable logical views
 5. register Wendao discovery catalogs
-6. execute the client SQL query
+6. execute the client SQL query through the shared SQL seam; simple
+   single-table published-Parquet statements may route through
+   `ParquetQueryEngine`, which is DuckDB-owned in `duckdb` builds and remains
+   a DataFusion baseline only in non-`duckdb` builds; discovery,
+   logical-view, and multi-source queries still execute through the
+   DataFusion-led fallback
 7. return Arrow batches plus structured SQL app metadata
+
+The remaining FlightSQL discovery path is narrower now too.
+`CommandGetDbSchemas` and `CommandGetTables` now build one request-scoped
+`SqlQuerySurface` directly from publication metadata plus logical-view
+contracts through `SearchQueryService::open_sql_surface()`, without opening
+the request-scoped DataFusion query core. `include_schema=true` still rebuilds
+each table schema from `SqlQuerySurface.columns`, so the public discovery
+contract stays stable while the residual DataFusion owner line no longer
+includes FlightSQL discovery itself.
+
+The routed shared-SQL path is narrower now too. When a simple single-table
+query resolves directly to published Parquet through `ParquetQueryEngine`, the
+shared SQL seam now builds result metadata from
+`SearchQueryService::open_sql_surface()` instead of opening the request-scoped
+DataFusion query core just to read back the same request-scoped SQL surface.
+Non-routed discovery, logical-view, and multi-source fallback still keep the
+residual DataFusion owner line unchanged.
 
 ## Stable SQL Objects
 
@@ -243,6 +290,11 @@ ORDER BY repo_id, name;
 - Prefer stable SQL names such as `reference_occurrence`, `local_symbol`,
   `repo_content_chunk`, and `repo_entity` instead of internal engine table
   names.
+- Expect simple single-table base-table statements over published corpora to
+  be eligible for bounded `ParquetQueryEngine` routing, while discovery
+  catalogs, logical views, and multi-source queries still stay on the shared
+  request-scoped SQL fallback. In `duckdb` builds that routed published
+  Parquet lane is now DuckDB-owned.
 - Use the Wendao catalogs first when you need stable contract semantics such as
   `column_origin_kind` or logical-view source membership.
 - Use `information_schema` when you need portable SQL metadata queries.

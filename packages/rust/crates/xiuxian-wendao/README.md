@@ -35,8 +35,11 @@ the Rust implementation now lives on the Julia line in
 crate. The same Julia-owned line now also owns parser-summary transport
 discovery for both languages, so plain `plugins = ["julia"]` and
 `plugins = ["modelica"]` repository config can resolve the standard
-`WendaoSearch.jl` solver-demo parser-summary endpoint without repo-local Rust
+`WendaoSearch.jl` parser-summary endpoint without repo-local Rust
 AST fallback or per-repository inline transport blocks.
+The builtin plugin bundle now links that Julia-owned Julia plus Modelica line
+by default as well, so builtin registry bootstrap no longer treats those two
+repo-intelligence plugins as an optional second bundle.
 The remaining `xiuxian-ast` dependency in `xiuxian-wendao` is now only for
 the general local workspace languages that still use ast-grep or Python
 tree-sitter. Julia and Modelica no longer have Rust-local AST ownership in
@@ -48,7 +51,37 @@ production handler lives under
 `src/search/repo_search/` seam, and consumes Julia-owned native parser
 publications for both `plugins = ["julia"]` and `plugins = ["modelica"]`
 repositories. The gateway no longer path-mounts a test-only code-search
-implementation or keeps a second Rust-local Julia or Modelica AST route.
+implementation or keeps a second Rust-local Julia or Modelica AST route. The
+focused gateway `code_search` proofs for plain Julia and plain Modelica plugin
+repositories now also live on the default unit-test surface instead of hiding
+behind a Julia-only test gate. The linked `studio_repo_sync_api` Modelica
+proofs now follow the same rule: repo overview, module search, repo index,
+repo sync, projected pages, planner, gap reports, and symbol search all
+execute on the default unit-test surface through the Julia-owned native
+parser routes, with environment drift normalized in the test seam instead of
+reviving a Rust-local AST path.
+The repo-backed Flight analysis route-wiring proofs now follow the same rule
+too. `analysis/code-ast`, `analysis/repo-overview`,
+`analysis/repo-doc-coverage`, `analysis/repo-projected-page-index-tree`, and
+`analysis/refine-doc` now boot the linked Julia parser-summary service
+through the shared repo fixture and run on the default unit-test surface
+without a Julia-only gate.
+That same shared fixture can now also target the canonical process-managed
+`wendaosearch-parser-summary` parser-summary service when
+`RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST=1` is set, so focused gateway
+`code_search` and `code_ast` proofs can validate the formal `process.nix`
+startup path instead of only the self-spawn test helper.
+The same default-surface rule now covers the focused repo-intelligence
+integration proofs that most directly back gateway search outcomes:
+`repo_symbol_search` and `repo_overview` Modelica integration tests no longer
+hide behind a Julia-only test gate, and their snapshots are pinned to the
+native parser's current Modelica span contract.
+
+Studio `code_ast` now follows the same rule. The repo-aware analysis loader
+under `src/gateway/studio/router/handlers/analysis/service/code_ast.rs`
+materializes repository analysis through the Julia-owned native parser line
+for both plain Julia and plain Modelica plugin repositories, so the gateway no
+longer needs a second Rust-local Julia or Modelica code-AST execution path.
 
 ### Memory-Family Julia Layering
 
@@ -265,8 +298,8 @@ flat handler file or a root `.rs` barrel.
 The next search-boundary cleanup is now explicit too: native Flight remains the
 Wendao business protocol surface, while SQL, FlightSQL, GraphQL, REST-style
 query entrypoints, and the future CLI `query` command should all consume one
-shared `queries/` system over the same DataFusion execution core. The canonical
-architecture note is
+shared `queries/` system over the same request-scoped SQL execution seam. The
+canonical architecture note is
 [`docs/03_features/210_search_queries_architecture.md`](docs/03_features/210_search_queries_architecture.md).
 
 The first non-Flight consumer under that architecture is now the CLI adapter:
@@ -275,17 +308,48 @@ The first non-Flight consumer under that architecture is now the CLI adapter:
 calling a Flight-only provider abstraction directly.
 
 The next non-SQL adapter slice is now landed too: GraphQL stays folder-first
-under `search/queries/graphql/` and behaves like a DataFusion-ecosystem
-table-query frontend over the request-scoped SQL surface instead of growing a
-GraphQL-only business DSL. The CLI now exposes the same adapter directly with
+under `search/queries/graphql/` and behaves like a table-query frontend that
+translates GraphQL documents into SQL text over the request-scoped SQL
+surface instead of growing a GraphQL-only business DSL or a GraphQL-local
+dataframe planner. The CLI now exposes the same adapter directly with
 `wendao query graphql --document ...`.
 
 The next protocol adapter slice is landed too: FlightSQL now lives under
 `search/queries/flightsql/` as a dedicated server over the same
-request-scoped SQL/DataFusion execution seam. The first cut is intentionally
+request-scoped SQL execution seam. The first cut is intentionally
 narrow: `CommandStatementQuery`, minimal `CommandGetSqlInfo`, one shared-query
 service builder, and `wendao_search_flightsql_server`, without widening the
 native Wendao business Flight router.
+
+The next shared-SQL cutover is landed too: the canonical SQL execution seam
+now reuses the same published-Parquet routing helper for simple single-table
+queries over active local corpora and concrete repo publication source tables.
+That means SQL, FlightSQL, and GraphQL-to-SQL can all hit the same bounded
+`ParquetQueryEngine` lane for eligible table queries. In `duckdb` builds that
+routed published-Parquet lane is now DuckDB-owned, while discovery catalogs,
+logical views, and multi-source statements still stay on the shared fallback
+path.
+
+The next residual naming cutover is landed too: the remaining shared fallback
+now names itself explicitly as a request-scoped DataFusion query core instead
+of a generic query core, so the surviving owner line for discovery catalogs,
+logical views, and non-routed execution is visible in code and docs.
+
+The next bounded FlightSQL discovery cutover is landed too:
+`CommandGetDbSchemas` and `CommandGetTables` now build the request-scoped
+discovery surface directly from publication metadata and logical-view
+contracts instead of opening the residual DataFusion query core. Meanwhile
+`include_schema=true` still rebuilds table schemas from
+`SqlQuerySurface.columns`, so the public FlightSQL discovery contract stays
+stable while the residual DataFusion owner line no longer includes FlightSQL
+discovery itself.
+
+The next bounded shared-SQL follow-up is landed too: when an eligible SQL
+statement routes directly to published Parquet, the shared SQL seam now builds
+its response metadata from the same request-scoped `SqlQuerySurface` instead
+of opening the residual DataFusion query core just to recover discovery
+metadata. Non-routed discovery, logical-view, and multi-source fallback still
+stay on the shared DataFusion core.
 
 The canonical shared-query implementation owner is now `src/search/queries/`.
 The former gateway-side `src/gateway/studio/search/queries/` shadow tree is

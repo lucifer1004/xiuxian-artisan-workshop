@@ -35,7 +35,7 @@ Before integration, the two cores operated independently:
 │  link_graph/policy.py   │  ✗  │  recall.py              │
 │  link_graph_navigator.py│     │  rust_vector.py         │
 │  link_graph_enhancer.py         │     │  indexer.py             │
-│  unified_knowledge.py   │     │  vector_schema.py       │
+│  unified_knowledge.py   │     │  Arrow Flight query surface │
 └─────────────────────────┘     └─────────────────────────┘
          ✗ No data sharing
          ✗ No cross-ranking

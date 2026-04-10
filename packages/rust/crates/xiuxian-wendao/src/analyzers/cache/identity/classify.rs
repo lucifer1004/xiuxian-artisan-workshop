@@ -31,6 +31,7 @@ pub(crate) fn analysis_fingerprint_mode(
     })
 }
 
+#[cfg(feature = "zhenfa-router")]
 pub(crate) fn change_affects_analysis_identity(
     relative_path: &str,
     plugin_ids: &[String],

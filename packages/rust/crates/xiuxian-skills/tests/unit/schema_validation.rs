@@ -25,27 +25,27 @@ fn sample_metadata() -> SkillMetadata {
 #[test]
 fn test_tool_record_json_serialization_schema() -> Result<(), Box<dyn std::error::Error>> {
     let tool = ToolRecord {
-        tool_name: "git.smart_commit".to_string(),
-        description: "Execute git.smart_commit".to_string(),
+        tool_name: "git.commit".to_string(),
+        description: "Execute git.commit".to_string(),
         skill_name: "git".to_string(),
         file_path: "assets/skills/git/scripts/commit.py".to_string(),
-        function_name: "smart_commit".to_string(),
+        function_name: "commit".to_string(),
         execution_mode: "script".to_string(),
-        keywords: vec!["git".to_string(), "smart_commit".to_string()],
+        keywords: vec!["git".to_string(), "commit".to_string()],
         intents: vec![],
         file_hash: "abc123".to_string(),
         input_schema: "{}".to_string(),
-        docstring: "Smart commit workflow".to_string(),
+        docstring: "Create git commit".to_string(),
         category: "commit".to_string(),
         annotations: ToolAnnotations::default(),
-        parameters: vec!["action".to_string()],
+        parameters: vec!["message".to_string()],
         skill_tools_refers: vec![],
         resource_uri: String::new(),
     };
 
     let json = serde_json::to_string(&tool)?;
     let deserialized: ToolRecord = serde_json::from_str(&json)?;
-    assert_eq!(deserialized.tool_name, "git.smart_commit");
+    assert_eq!(deserialized.tool_name, "git.commit");
     assert!(!deserialized.tool_name.starts_with("git.git."));
 
     Ok(())

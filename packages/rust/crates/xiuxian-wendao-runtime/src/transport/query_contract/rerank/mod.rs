@@ -5,6 +5,7 @@ mod scoring;
 mod types;
 
 pub use contract::{RERANK_ROUTE, WENDAO_RERANK_DIMENSION_HEADER};
+pub use types::RerankScoreWeights;
 #[cfg(feature = "transport")]
 pub use contract::{WENDAO_RERANK_MIN_FINAL_SCORE_HEADER, WENDAO_RERANK_TOP_K_HEADER};
 #[cfg(feature = "transport")]
@@ -22,4 +23,4 @@ pub use response::{
 #[cfg(feature = "transport")]
 pub use scoring::{score_rerank_request_batch, score_rerank_request_batch_with_weights};
 #[cfg(feature = "transport")]
-pub use types::{RerankScoreWeights, RerankScoredCandidate};
+pub use types::RerankScoredCandidate;

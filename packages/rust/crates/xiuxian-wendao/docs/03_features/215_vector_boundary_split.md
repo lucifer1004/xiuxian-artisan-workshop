@@ -1,0 +1,52 @@
+# Wendao Vector Boundary Split
+
+## Purpose
+
+`xiuxian-wendao` currently mixes two concerns too closely:
+
+1. lightweight Arrow/DataFusion substrate helpers used by bounded local
+   analytics, parser-adjacent helper surfaces, and request-scoped SQL payloads
+2. Lance-backed vector-store ownership from `xiuxian-vector`
+
+That boundary matters for downstream consumers such as `xiuxian-qianji`. Qianji
+uses non-vector Wendao surfaces such as link-graph core build/search, skill
+VFS, contract-feedback, gateway OpenAPI helpers, and bounded-work markdown
+query payloads. Those consumers should not inherit `lance` unless they actually
+request vector-store behavior.
+
+## Current Slice
+
+The active bounded slice for this feature does three things:
+
+1. move generic Arrow/DataFusion substrate ownership out of
+   `xiuxian-vector`
+2. add an explicit `vector-store` feature boundary in `xiuxian-wendao`
+3. retarget `xiuxian-qianji` to the non-vector Wendao surface and prove the
+   compile-graph change with `cargo tree`
+
+This is intentionally narrower than a full search-plane rearchitecture. The
+goal is compile-time ownership clarity first.
+
+## Target Boundary
+
+The target package boundary is:
+
+1. a lightweight substrate crate owns generic Arrow `RecordBatch` aliases,
+   request-scoped DataFusion helpers, and other non-Lance compute primitives
+2. `xiuxian-vector` owns Lance-backed vector retrieval and vector-store
+   persistence
+3. `xiuxian-wendao` exposes non-vector product surfaces without a mandatory
+   vector-store dependency and gates vector-only behavior explicitly
+
+## Acceptance Signals
+
+The feature is aligned only when all of the following are true:
+
+1. Qianji's normal dependency tree no longer includes `xiuxian-vector`
+2. Qianji's normal dependency tree no longer includes `lance`
+3. touched Wendao and Qianji slices still compile with focused cargo checks
+4. bounded-work markdown payload contracts remain stable for Qianji callers
+
+## Stable References
+
+- [DuckDB bounded analytics RFC](../../../../../docs/rfcs/2026-04-08-wendao-qianji-duckdb-bounded-analytics-rfc.md)

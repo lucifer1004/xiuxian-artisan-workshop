@@ -40,18 +40,20 @@ pub use repo::{
     validate_repo_overview_request, validate_repo_projected_page_index_tree_request,
     validate_repo_sync_request,
 };
+pub use rerank::{
+    RerankScoreWeights, RERANK_ROUTE, WENDAO_RERANK_DIMENSION_HEADER,
+};
 #[cfg(feature = "transport")]
 pub use rerank::{
     RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
     RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
     RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
-    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RerankScoreWeights,
+    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
     RerankScoredCandidate, WENDAO_RERANK_MIN_FINAL_SCORE_HEADER, WENDAO_RERANK_TOP_K_HEADER,
     score_rerank_request_batch, score_rerank_request_batch_with_weights,
     validate_rerank_request_batch, validate_rerank_request_schema, validate_rerank_response_batch,
     validate_rerank_response_schema,
 };
-pub use rerank::{RERANK_ROUTE, WENDAO_RERANK_DIMENSION_HEADER};
 pub use search::{
     REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN,
     REPO_SEARCH_HIERARCHY_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,

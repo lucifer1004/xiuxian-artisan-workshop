@@ -1,3 +1,4 @@
+mod native_routes;
 mod payload;
 
 use crate::gateway::studio::router::tests::{repo_project, studio_with_repo_projects};

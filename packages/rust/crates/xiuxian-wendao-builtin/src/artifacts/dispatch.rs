@@ -1,7 +1,6 @@
 use serde_yaml::Value;
 use xiuxian_wendao_core::artifacts::{PluginArtifactPayload, PluginArtifactSelector};
 
-#[cfg(feature = "julia")]
 use xiuxian_wendao_julia::compatibility::link_graph::{
     LinkGraphJuliaRerankRuntimeConfig, julia_deployment_artifact_selector,
     render_julia_plugin_artifact_toml_for_selector,
@@ -9,7 +8,6 @@ use xiuxian_wendao_julia::compatibility::link_graph::{
 };
 
 /// Resolve one builtin plugin artifact for the current linked builtin bundle.
-#[cfg(feature = "julia")]
 #[must_use]
 pub fn resolve_builtin_plugin_artifact_for_selector(
     selector: &PluginArtifactSelector,
@@ -24,7 +22,6 @@ pub fn resolve_builtin_plugin_artifact_for_selector(
 
 /// Resolve one builtin plugin artifact for the current linked builtin bundle
 /// from merged Wendao settings.
-#[cfg(feature = "julia")]
 #[must_use]
 pub fn resolve_builtin_plugin_artifact_for_selector_with_settings(
     selector: &PluginArtifactSelector,
@@ -41,7 +38,6 @@ pub fn resolve_builtin_plugin_artifact_for_selector_with_settings(
 ///
 /// Returns an error when the selected builtin artifact cannot be serialized
 /// into TOML.
-#[cfg(feature = "julia")]
 pub fn render_builtin_plugin_artifact_toml_for_selector(
     selector: &PluginArtifactSelector,
     julia_rerank: &LinkGraphJuliaRerankRuntimeConfig,
@@ -60,7 +56,6 @@ pub fn render_builtin_plugin_artifact_toml_for_selector(
 ///
 /// Returns an error when the selected builtin artifact cannot be serialized
 /// into TOML.
-#[cfg(feature = "julia")]
 pub fn render_builtin_plugin_artifact_toml_for_selector_with_settings(
     selector: &PluginArtifactSelector,
     settings: &Value,

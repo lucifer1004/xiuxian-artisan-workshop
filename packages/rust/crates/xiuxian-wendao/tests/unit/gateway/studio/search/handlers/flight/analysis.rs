@@ -1,4 +1,3 @@
-#[cfg(feature = "julia")]
 use xiuxian_wendao_runtime::transport::{
     ANALYSIS_CODE_AST_ROUTE, ANALYSIS_REFINE_DOC_ROUTE, ANALYSIS_REPO_DOC_COVERAGE_ROUTE,
     ANALYSIS_REPO_OVERVIEW_ROUTE, ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE,
@@ -13,7 +12,6 @@ use super::{
     populate_markdown_analysis_headers, populate_repo_index_headers,
     populate_repo_index_status_headers, populate_repo_sync_headers,
 };
-#[cfg(feature = "julia")]
 use super::{
     populate_code_ast_analysis_headers, populate_refine_doc_headers,
     populate_repo_doc_coverage_headers, populate_repo_overview_headers,
@@ -37,7 +35,6 @@ async fn build_studio_search_flight_service_wires_markdown_analysis_routes() {
     .await;
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn build_studio_search_flight_service_wires_code_ast_analysis_routes() {
     let fixture = make_gateway_state_with_repo(&[
@@ -61,7 +58,6 @@ async fn build_studio_search_flight_service_wires_code_ast_analysis_routes() {
     .await;
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn build_studio_search_flight_service_wires_repo_overview_routes() {
     let fixture = make_gateway_state_with_repo(&[
@@ -159,7 +155,6 @@ async fn build_studio_search_flight_service_wires_repo_sync_routes() {
     .await;
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn build_studio_search_flight_service_wires_repo_doc_coverage_routes() {
     let fixture = make_gateway_state_with_repo(&[
@@ -188,7 +183,6 @@ async fn build_studio_search_flight_service_wires_repo_doc_coverage_routes() {
     .await;
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn build_studio_search_flight_service_wires_repo_projected_page_index_tree_routes() {
     let fixture = make_gateway_state_with_repo(&[
@@ -223,7 +217,6 @@ async fn build_studio_search_flight_service_wires_repo_projected_page_index_tree
     .await;
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn build_studio_search_flight_service_wires_refine_doc_routes() {
     let fixture = make_gateway_state_with_repo(&[

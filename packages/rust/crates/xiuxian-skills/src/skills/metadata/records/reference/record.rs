@@ -21,7 +21,7 @@ pub struct ReferenceRecord {
     /// List of skills this reference applies to; derived from `for_tools` (skill part of each `skill.tool`) or from path when `for_tools` is absent.
     #[serde(default, deserialize_with = "de_string_or_vec")]
     pub for_skills: Vec<String>,
-    /// If set, list of full tool names this reference is for (e.g. `["git.smart_commit", "researcher.run_research_graph"]`).
+    /// If set, list of full tool names this reference is for (e.g. `["git.commit", "researcher.run_research_graph"]`).
     #[serde(default, deserialize_with = "de_opt_string_or_vec", alias = "for_tool")]
     pub for_tools: Option<Vec<String>>,
     /// Document type: `"reference"` for references/*.md; `"comprehensive"` reserved for SKILL.md.

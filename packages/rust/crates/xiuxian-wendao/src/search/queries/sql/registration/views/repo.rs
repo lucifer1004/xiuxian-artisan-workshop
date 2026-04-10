@@ -1,15 +1,17 @@
 use std::collections::BTreeMap;
 
-use xiuxian_vector::SearchEngineContext;
+#[cfg(not(feature = "duckdb"))]
+use xiuxian_vector_store::SearchEngineContext;
 
 use crate::search::SearchCorpusKind;
 
-use super::super::{RegisteredSqlTable, RegisteredSqlViewSource, naming};
+use crate::search::queries::sql::registration::{
+    RegisteredSqlTable, RegisteredSqlViewSource, naming,
+};
 
-pub(crate) async fn register_repo_logical_views(
-    query_engine: &SearchEngineContext,
+pub(crate) fn collect_repo_logical_views(
     tables: &mut BTreeMap<String, RegisteredSqlTable>,
-) -> Result<Vec<RegisteredSqlViewSource>, String> {
+) -> Vec<RegisteredSqlViewSource> {
     let mut view_sources = Vec::new();
     for corpus in [
         SearchCorpusKind::RepoContentChunk,
@@ -30,17 +32,6 @@ pub(crate) async fn register_repo_logical_views(
         }
 
         let logical_view_name = naming::repo_logical_view_name(corpus);
-        let view_sql =
-            build_repo_logical_view_sql(corpus, logical_view_name.as_str(), &repo_tables);
-        query_engine
-            .session()
-            .sql(view_sql.as_str())
-            .await
-            .map_err(|error| {
-                format!(
-                    "studio SQL Flight provider failed to register repo logical view `{logical_view_name}`: {error}"
-                )
-            })?;
         view_sources.extend(repo_tables.iter().enumerate().map(|(index, table)| {
             RegisteredSqlViewSource::logical(logical_view_name.as_str(), table, index + 1)
         }));
@@ -50,10 +41,60 @@ pub(crate) async fn register_repo_logical_views(
         );
     }
 
-    Ok(view_sources)
+    view_sources
 }
 
-fn build_repo_logical_view_sql(
+#[cfg(not(feature = "duckdb"))]
+pub(crate) async fn register_repo_logical_views(
+    query_engine: &SearchEngineContext,
+    tables: &BTreeMap<String, RegisteredSqlTable>,
+) -> Result<(), String> {
+    for (logical_view_name, view_sql) in collect_repo_logical_view_sqls(tables) {
+        query_engine
+            .session()
+            .sql(view_sql.as_str())
+            .await
+            .map_err(|error| {
+                format!(
+                    "studio SQL Flight provider failed to register repo logical view `{logical_view_name}`: {error}"
+                )
+            })?;
+    }
+    Ok(())
+}
+
+pub(crate) fn collect_repo_logical_view_sqls(
+    tables: &BTreeMap<String, RegisteredSqlTable>,
+) -> Vec<(String, String)> {
+    let mut statements = Vec::new();
+    for corpus in [
+        SearchCorpusKind::RepoContentChunk,
+        SearchCorpusKind::RepoEntity,
+    ] {
+        let mut repo_tables = tables
+            .values()
+            .filter(|table| table.scope == "repo" && table.corpus == corpus.to_string())
+            .cloned()
+            .collect::<Vec<_>>();
+        repo_tables.sort_by(|left, right| {
+            left.repo_id
+                .cmp(&right.repo_id)
+                .then(left.sql_table_name.cmp(&right.sql_table_name))
+        });
+        if repo_tables.is_empty() {
+            continue;
+        }
+
+        let logical_view_name = naming::repo_logical_view_name(corpus);
+        statements.push((
+            logical_view_name.clone(),
+            build_repo_logical_view_sql(corpus, logical_view_name.as_str(), &repo_tables),
+        ));
+    }
+    statements
+}
+
+pub(crate) fn build_repo_logical_view_sql(
     corpus: SearchCorpusKind,
     view_name: &str,
     repo_tables: &[RegisteredSqlTable],

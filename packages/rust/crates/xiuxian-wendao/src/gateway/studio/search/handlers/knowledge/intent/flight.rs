@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 use async_trait::async_trait;
-use xiuxian_vector::{
+use xiuxian_vector_store::{
     LanceArrayRef, LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema,
     LanceStringArray,
 };

@@ -13,15 +13,14 @@ use serial_test::serial;
 
 use crate::duckdb::{
     DataFusionLocalRelationEngine, DuckDbDatabasePath, LocalRelationEngine,
-    LocalRelationEngineKind, LocalRelationRegistrationHint, ParquetQueryEngine,
-    resolve_search_duckdb_runtime,
+    LocalRelationEngineKind, resolve_search_duckdb_runtime,
 };
 #[cfg(feature = "duckdb")]
 use crate::duckdb::{
-    DuckDbLocalRelationEngine, DuckDbRegistrationStrategy, SearchDuckDbRuntimeConfig,
+    DuckDbLocalRelationEngine, DuckDbRegistrationStrategy, LocalRelationRegistrationHint,
+    ParquetQueryEngine, SearchDuckDbRuntimeConfig,
 };
 use crate::link_graph::set_link_graph_wendao_config_override;
-use xiuxian_vector::SearchEngineContext;
 #[cfg(feature = "duckdb")]
 use xiuxian_wendao_runtime::config::{
     DEFAULT_SEARCH_DUCKDB_MATERIALIZE_THRESHOLD_ROWS, DEFAULT_SEARCH_DUCKDB_PREFER_VIRTUAL_ARROW,
@@ -243,18 +242,17 @@ threads = 2
 #[cfg(feature = "duckdb")]
 #[test]
 #[serial]
-fn configured_parquet_query_engine_uses_duckdb_when_enabled() -> TestResult {
+fn configured_parquet_query_engine_uses_duckdb_in_duckdb_build() -> TestResult {
     let _temp = write_search_duckdb_runtime_override(
         r#"[search.duckdb]
-enabled = true
+enabled = false
 database_path = ":memory:"
 temp_directory = ".cache/duckdb/repo-query-tmp"
 threads = 2
 "#,
     )?;
 
-    let engine = ParquetQueryEngine::configured(SearchEngineContext::new())
-        .map_err(std::io::Error::other)?;
+    let engine = ParquetQueryEngine::configured().map_err(std::io::Error::other)?;
     assert_eq!(engine.kind(), LocalRelationEngineKind::DuckDb);
 
     Ok(())

@@ -1,4 +1,4 @@
-use arrow::datatypes::{DataType, Field};
+use arrow::datatypes::{DataType, Field, Schema};
 
 use crate::search::SearchCorpusKind;
 
@@ -157,6 +157,21 @@ impl SqlQuerySurface {
             .filter(|table| table.sql_object_kind == "view")
             .count()
     }
+
+    pub(crate) fn arrow_schema_for_table(&self, sql_table_name: &str) -> Schema {
+        let mut fields = self
+            .columns
+            .iter()
+            .filter(|column| column.sql_table_name == sql_table_name)
+            .collect::<Vec<_>>();
+        fields.sort_by_key(|column| column.ordinal_position);
+        Schema::new(
+            fields
+                .into_iter()
+                .map(|column| column.arrow_field.clone())
+                .collect::<Vec<_>>(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,6 +179,7 @@ pub(crate) struct RegisteredSqlColumn {
     pub(crate) sql_table_name: String,
     pub(crate) engine_table_name: String,
     pub(crate) column_name: String,
+    pub(crate) arrow_field: Field,
     pub(crate) source_column_name: Option<String>,
     pub(crate) data_type: String,
     pub(crate) is_nullable: bool,
@@ -180,6 +196,7 @@ impl RegisteredSqlColumn {
         table: &RegisteredSqlTable,
         ordinal_position: usize,
         column_name: impl Into<String>,
+        arrow_field: &Field,
         source_column_name: Option<String>,
         data_type: impl Into<String>,
         is_nullable: bool,
@@ -189,6 +206,11 @@ impl RegisteredSqlColumn {
             sql_table_name: table.sql_table_name.clone(),
             engine_table_name: table.engine_table_name.clone(),
             column_name: column_name.into(),
+            arrow_field: Field::new(
+                arrow_field.name().clone(),
+                arrow_field.data_type().clone(),
+                arrow_field.is_nullable(),
+            ),
             source_column_name,
             data_type: data_type.into(),
             is_nullable,
@@ -213,6 +235,7 @@ impl RegisteredSqlColumn {
             table,
             ordinal_position,
             column_name,
+            field,
             source_column_name,
             canonical_sql_data_type_name(field.data_type()),
             field.is_nullable(),

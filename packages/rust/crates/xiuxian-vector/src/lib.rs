@@ -1,15 +1,24 @@
 //! xiuxian-vector - High-Performance Embedded Vector Database using `LanceDB`
 
+#[cfg(feature = "vector-store")]
 use std::path::PathBuf;
+#[cfg(feature = "vector-store")]
 use std::sync::Arc;
+#[cfg(feature = "vector-store")]
 use std::sync::atomic::AtomicU64;
 
+#[cfg(feature = "vector-store")]
 use anyhow::Result;
+#[cfg(feature = "vector-store")]
 use dashmap::DashMap;
+#[cfg(feature = "vector-store")]
 use lance::dataset::Dataset;
+#[cfg(feature = "vector-store")]
 use tokio::sync::RwLock;
 
+#[cfg(feature = "vector-store")]
 use ops::DatasetCache;
+#[cfg(feature = "vector-store")]
 use ops::DatasetCacheConfig;
 
 // ============================================================================
@@ -21,10 +30,13 @@ pub use arrow_codec::{
     attach_record_batch_metadata, attach_record_batch_trace_id, decode_record_batches_ipc,
     encode_record_batch_ipc, encode_record_batches_ipc,
 };
+#[cfg(feature = "vector-store")]
 pub use lance::deps::arrow_array::ListArray as LanceListArray;
+#[cfg(feature = "vector-store")]
 pub use lance::deps::arrow_array::builder::{
     ListBuilder as LanceListBuilder, StringBuilder as LanceStringBuilder,
 };
+#[cfg(feature = "vector-store")]
 pub use lance::deps::arrow_array::{
     Array as LanceArray, ArrayRef as LanceArrayRef, BooleanArray as LanceBooleanArray,
     FixedSizeListArray as LanceFixedSizeListArray, Float32Array as LanceFloat32Array,
@@ -32,9 +44,11 @@ pub use lance::deps::arrow_array::{
     RecordBatch as LanceRecordBatch, StringArray as LanceStringArray,
     UInt32Array as LanceUInt32Array, UInt64Array as LanceUInt64Array,
 };
+#[cfg(feature = "vector-store")]
 pub use lance::deps::arrow_schema::{
     DataType as LanceDataType, Field as LanceField, Schema as LanceSchema,
 };
+#[cfg(feature = "vector-store")]
 pub use xiuxian_lance::{
     CATEGORY_COLUMN, CONTENT_COLUMN, DEFAULT_DIMENSION, FILE_PATH_COLUMN, ID_COLUMN,
     INTENTS_COLUMN, METADATA_COLUMN, ROUTING_KEYWORDS_COLUMN, SKILL_NAME_COLUMN, THREAD_ID_COLUMN,
@@ -56,10 +70,12 @@ pub use xiuxian_skills::skills::{
 // ============================================================================
 
 pub use error::VectorStoreError;
+#[cfg(feature = "vector-store")]
 pub use keyword::{
     HybridSearchResult, KEYWORD_WEIGHT, KeywordIndex, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT,
     apply_rrf, apply_weighted_rrf, distance_to_score, rrf_term, rrf_term_batch,
 };
+#[cfg(feature = "vector-store")]
 pub use ops::{
     AgenticSearchConfig, ColumnarScanOptions, CompactionStats, FragmentInfo, IndexBuildProgress,
     IndexStats, IndexStatus, IndexThresholds, MergeInsertStats, MigrateResult, MigrationItem,
@@ -75,33 +91,49 @@ pub use query_support::{
     retrieval_result_columns, retrieval_result_schema, retrieval_rows_from_record_batch,
     retrieval_rows_to_record_batch,
 };
+#[cfg(feature = "vector-store")]
 pub use search::SearchOptions;
 pub use search_engine::{
-    SearchEngineContext, SearchEnginePartitionColumn, engine_batch_to_lance_batch,
-    engine_batches_to_lance_batches, lance_batch_to_engine_batch, lance_batches_to_engine_batches,
-    write_engine_batches_to_parquet_file, write_lance_batches_to_parquet_file,
+    SearchEngineContext, SearchEnginePartitionColumn,
 };
+#[cfg(feature = "vector-store")]
+pub use search_engine::{
+    engine_batch_to_lance_batch, engine_batches_to_lance_batches, lance_batch_to_engine_batch,
+    lance_batches_to_engine_batches, write_engine_batches_to_parquet_file,
+    write_lance_batches_to_parquet_file,
+};
+#[cfg(feature = "vector-store")]
 pub use search_impl::json_to_lance_where;
+#[cfg(feature = "vector-store")]
 pub use skill::{ToolSearchOptions, ToolSearchRequest, ToolSearchResult};
 
 // ============================================================================
 // Module Declarations
 // ============================================================================
 
+#[cfg(feature = "vector-store")]
 pub mod batch;
 pub mod error;
+#[cfg(feature = "vector-store")]
 pub mod index;
+#[cfg(feature = "vector-store")]
 pub mod keyword;
+#[cfg(feature = "vector-store")]
 pub mod ops;
 /// Arrow-native retrieval batch helpers used by Wendao query-core adapters.
 pub mod query_support;
+#[cfg(feature = "vector-store")]
 pub mod search;
+#[cfg(feature = "vector-store")]
 pub mod search_cache;
 pub mod search_engine;
+#[cfg(feature = "vector-store")]
 pub mod skill;
+#[cfg(feature = "vector-store")]
 pub mod test_support;
 
 mod arrow_codec;
+#[cfg(feature = "vector-store")]
 #[path = "search/search_impl/mod.rs"]
 mod search_impl;
 
@@ -112,12 +144,15 @@ xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs"
 // ============================================================================
 
 /// Per-table query metrics (in-process; not persisted). Used by [`crate::ops::observability::get_query_metrics`].
+#[cfg(feature = "vector-store")]
 pub type QueryMetricsCell = Arc<(AtomicU64, AtomicU64)>; // (query_count, last_query_ms; 0 means None)
 
 /// Callback for index build progress (Started / Progress / Done). Set optionally for polling or UI.
+#[cfg(feature = "vector-store")]
 pub type IndexProgressCallback = Arc<dyn Fn(crate::ops::IndexBuildProgress) + Send + Sync>;
 
 /// High-performance embedded vector database using `LanceDB`.
+#[cfg(feature = "vector-store")]
 #[derive(Clone)]
 pub struct VectorStore {
     base_path: PathBuf,
@@ -141,11 +176,16 @@ pub struct VectorStore {
 // Vector Store Implementations (Included via include!)
 // ----------------------------------------------------------------------------
 
+#[cfg(feature = "vector-store")]
 include!("ops/core.rs");
+#[cfg(feature = "vector-store")]
 include!("ops/writer_impl.rs");
+#[cfg(feature = "vector-store")]
 include!("ops/admin_impl.rs");
+#[cfg(feature = "vector-store")]
 include!("skill/ops_impl.rs");
 
+#[cfg(feature = "vector-store")]
 impl VectorStore {
     /// Check if a metadata value matches the filter conditions.
     #[must_use]

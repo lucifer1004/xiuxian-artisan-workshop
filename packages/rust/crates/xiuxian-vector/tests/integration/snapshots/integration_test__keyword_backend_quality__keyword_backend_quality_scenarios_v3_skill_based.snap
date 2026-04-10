@@ -34,16 +34,16 @@ expression: report
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "1.0000",
       "p_at_5": "0.2000",
-      "query": "safe_commit_pipeline",
+      "query": "git_commit_changes",
       "r_at_5": "1.0000",
       "success_at_1": "1.0000",
-      "text": "安全提交 需要扫描并审批 commit workflow",
-      "top1": "git.smart_commit"
+      "text": "commit code with staged changes",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
@@ -158,16 +158,16 @@ expression: report
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "1.0000",
       "p_at_5": "0.2000",
-      "query": "safe_commit_pipeline",
+      "query": "git_commit_changes",
       "r_at_5": "1.0000",
       "success_at_1": "1.0000",
-      "text": "安全提交 需要扫描并审批 commit workflow",
-      "top1": "git.smart_commit"
+      "text": "commit code with staged changes",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [

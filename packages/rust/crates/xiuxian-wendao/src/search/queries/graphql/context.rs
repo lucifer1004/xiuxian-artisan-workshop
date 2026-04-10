@@ -13,7 +13,7 @@ impl GraphqlExecutionContext {
         Self::default()
     }
 
-    /// Attach the shared query service used by DataFusion-backed fields.
+    /// Attach the shared query service used by GraphQL table-query fields.
     #[must_use]
     pub(crate) fn with_query_service(mut self, query_service: SearchQueryService) -> Self {
         self.query_service = Some(query_service);

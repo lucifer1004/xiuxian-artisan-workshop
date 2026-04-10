@@ -11,21 +11,23 @@
 ## Overview
 
 `xiuxian-wendao` now exposes GraphQL as another adapter over the shared
-`search/queries/` system. The first GraphQL slice is intentionally narrow: it
-proves that GraphQL can stay inside the Apache Arrow / DataFusion ecosystem as
-a table-query frontend without introducing a GraphQL-only planner.
+`search/queries/` system. The current GraphQL slice is intentionally narrow:
+it proves that GraphQL can stay a table-query frontend without introducing a
+GraphQL-only planner or a GraphQL-local dataframe execution path.
 
 The first GraphQL surface follows the ROAPI-style shape:
 
 - the root field name is a SQL-visible table or view name
 - query operators are expressed as GraphQL arguments
-- execution is delegated into the request-scoped SQL/DataFusion surface
+- the adapter translates the parsed GraphQL table query into SQL text
+- execution is delegated into the shared request-scoped SQL surface
 
 ## Design Rules
 
 - GraphQL document parsing stays inside `search/queries/graphql/`.
 - GraphQL root fields must map to SQL-visible tables or logical views.
-- GraphQL operators must compile into DataFusion dataframe operators.
+- GraphQL operators must compile into SQL text, not adapter-local dataframe
+  operators.
 - The GraphQL adapter should return GraphQL-style JSON data, but it should not
   own new business semantics that already exist elsewhere in Wendao.
 
@@ -53,7 +55,7 @@ Example:
 }
 ```
 
-The initial operator set matches the DataFusion-frontend shape used by ROAPI:
+The initial operator set matches the narrow ROAPI-style table-query shape:
 
 - `filter`
 - `sort`

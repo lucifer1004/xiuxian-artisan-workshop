@@ -1,19 +1,22 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use arrow::array::ArrayRef;
 use arrow::compute::cast;
 use arrow::datatypes::{DataType, Field, Schema};
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 use crate::duckdb::{LocalRelationEngineKind, ParquetQueryEngine};
 use crate::search::queries::SearchQueryService;
-use crate::search::queries::sql::execute_sql_query;
+use crate::search::queries::sql::execution::service::SqlQueryExecutionRoute;
+use crate::search::queries::sql::execution::service::execute_sql_query_with_route;
+use crate::search::queries::sql::try_execute_published_parquet_query;
 use crate::search::{SearchCorpusKind, SearchPlaneService};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum FlightSqlStatementRoute {
-    SharedSql,
+    SharedSql {
+        engine_kind: LocalRelationEngineKind,
+    },
     LocalParquet {
         corpus: SearchCorpusKind,
         table_name: String,
@@ -41,9 +44,23 @@ pub(super) async fn execute_flightsql_statement_query(
         return Ok(result);
     }
 
-    let (_metadata, batches) = execute_sql_query(service, query_text).await?.into_parts();
+    let (route, result) = execute_sql_query_with_route(service, query_text).await?;
+    let (_metadata, batches) = result.into_parts();
     Ok(FlightSqlStatementExecution {
-        route: FlightSqlStatementRoute::SharedSql,
+        route: match route {
+            SqlQueryExecutionRoute::SharedSql { engine_kind } => {
+                FlightSqlStatementRoute::SharedSql { engine_kind }
+            }
+            SqlQueryExecutionRoute::LocalParquet {
+                corpus,
+                table_name,
+                engine_kind,
+            } => FlightSqlStatementRoute::LocalParquet {
+                corpus,
+                table_name,
+                engine_kind,
+            },
+        },
         batches,
     })
 }
@@ -53,234 +70,20 @@ async fn try_execute_published_parquet_statement_query(
     query_engine: Option<&ParquetQueryEngine>,
     query_text: &str,
 ) -> Result<Option<FlightSqlStatementExecution>, String> {
-    let Some(target) = resolve_published_parquet_statement_target(service, query_text).await else {
+    let Some(result) =
+        try_execute_published_parquet_query(service, query_engine, query_text).await?
+    else {
         return Ok(None);
     };
-    let query_engine = query_engine
-        .cloned()
-        .map(Ok)
-        .unwrap_or_else(|| configured_parquet_query_engine(service))?;
-    let engine_kind = query_engine.kind();
-    query_engine
-        .ensure_parquet_table_registered(target.table_name.as_str(), target.parquet_path.as_path())
-        .await
-        .map_err(|error| {
-            format!(
-                "FlightSQL failed to register published parquet table `{}`: {error}",
-                target.table_name
-            )
-        })?;
-    let batches = normalize_flightsql_statement_batches(
-        query_engine
-            .query_batches(query_text)
-            .await
-            .map_err(|error| {
-                format!(
-                    "FlightSQL published parquet statement execution failed for `{query_text}`: {error}"
-                )
-            })?,
-    )?;
+    let batches = normalize_flightsql_statement_batches(result.batches)?;
     Ok(Some(FlightSqlStatementExecution {
         route: FlightSqlStatementRoute::LocalParquet {
-            corpus: target.corpus,
-            table_name: target.table_name,
-            engine_kind,
+            corpus: result.corpus,
+            table_name: result.table_name,
+            engine_kind: result.engine_kind,
         },
         batches,
     }))
-}
-
-#[cfg(feature = "duckdb")]
-pub(super) fn configured_parquet_query_engine(
-    service: &SearchPlaneService,
-) -> Result<ParquetQueryEngine, String> {
-    ParquetQueryEngine::configured(service.search_engine().clone()).map_err(|error| {
-        format!("FlightSQL failed to configure published parquet query engine: {error}")
-    })
-}
-
-#[cfg(not(feature = "duckdb"))]
-pub(super) fn configured_parquet_query_engine(
-    service: &SearchPlaneService,
-) -> Result<ParquetQueryEngine, String> {
-    Ok(ParquetQueryEngine::configured(
-        service.search_engine().clone(),
-    ))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ResolvedLocalParquetStatementTarget {
-    corpus: SearchCorpusKind,
-    table_name: String,
-    parquet_path: PathBuf,
-}
-
-async fn resolve_published_parquet_statement_target(
-    service: &SearchPlaneService,
-    query_text: &str,
-) -> Option<ResolvedLocalParquetStatementTarget> {
-    let table_name = extract_single_source_table_name(query_text)?;
-    if let Some(target) = resolve_active_local_corpus(service, table_name.as_str()) {
-        return Some(target);
-    }
-    if let Some(target) =
-        resolve_local_symbol_source_table_statement_target(service, table_name.as_str())
-    {
-        return Some(target);
-    }
-    resolve_repo_source_table_statement_target(service, table_name.as_str()).await
-}
-
-fn resolve_active_local_corpus(
-    service: &SearchPlaneService,
-    table_name: &str,
-) -> Option<ResolvedLocalParquetStatementTarget> {
-    let corpus = match table_name {
-        "reference_occurrence" => SearchCorpusKind::ReferenceOccurrence,
-        "attachment" => SearchCorpusKind::Attachment,
-        "knowledge_section" => SearchCorpusKind::KnowledgeSection,
-        _ => return None,
-    };
-    let active_epoch = service.coordinator().status_for(corpus).active_epoch?;
-    let parquet_path = service.local_epoch_parquet_path(corpus, active_epoch);
-    if !parquet_path.exists() {
-        return None;
-    }
-    Some(ResolvedLocalParquetStatementTarget {
-        corpus,
-        table_name: table_name.to_string(),
-        parquet_path,
-    })
-}
-
-fn resolve_local_symbol_source_table_statement_target(
-    service: &SearchPlaneService,
-    table_name: &str,
-) -> Option<ResolvedLocalParquetStatementTarget> {
-    let active_epoch = service
-        .coordinator()
-        .status_for(SearchCorpusKind::LocalSymbol)
-        .active_epoch?;
-    let source_table_names =
-        service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
-    if !source_table_names.iter().any(|source| source == table_name) {
-        return None;
-    }
-    let parquet_path = service.local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name);
-    if !parquet_path.exists() {
-        return None;
-    }
-    Some(ResolvedLocalParquetStatementTarget {
-        corpus: SearchCorpusKind::LocalSymbol,
-        table_name: table_name.to_string(),
-        parquet_path,
-    })
-}
-
-async fn resolve_repo_source_table_statement_target(
-    service: &SearchPlaneService,
-    table_name: &str,
-) -> Option<ResolvedLocalParquetStatementTarget> {
-    if !table_name.starts_with("repo_entity_repo_")
-        && !table_name.starts_with("repo_content_chunk_repo_")
-    {
-        return None;
-    }
-
-    let repo_records = service.repo_corpus_snapshot_for_reads().await;
-    for ((corpus, repo_id), record) in repo_records {
-        let expected_table_name = match corpus {
-            SearchCorpusKind::RepoEntity => {
-                SearchPlaneService::repo_entity_table_name(repo_id.as_str())
-            }
-            SearchCorpusKind::RepoContentChunk => {
-                SearchPlaneService::repo_content_chunk_table_name(repo_id.as_str())
-            }
-            SearchCorpusKind::LocalSymbol
-            | SearchCorpusKind::KnowledgeSection
-            | SearchCorpusKind::Attachment
-            | SearchCorpusKind::ReferenceOccurrence => continue,
-        };
-        if expected_table_name != table_name {
-            continue;
-        }
-
-        let publication = record.publication?;
-        if !publication.is_datafusion_readable() {
-            return None;
-        }
-        let parquet_path =
-            service.repo_publication_parquet_path(corpus, publication.table_name.as_str());
-        if !parquet_path.exists() {
-            return None;
-        }
-
-        return Some(ResolvedLocalParquetStatementTarget {
-            corpus,
-            table_name: table_name.to_string(),
-            parquet_path,
-        });
-    }
-
-    None
-}
-
-fn extract_single_source_table_name(query_text: &str) -> Option<String> {
-    let trimmed = query_text.trim();
-    if trimmed.is_empty() || (trimmed.contains(';') && !trimmed.ends_with(';')) {
-        return None;
-    }
-
-    let tokens = trimmed
-        .trim_end_matches(';')
-        .split_whitespace()
-        .collect::<Vec<_>>();
-    let first = tokens.first()?;
-    if !first.eq_ignore_ascii_case("select") {
-        return None;
-    }
-
-    for token in &tokens {
-        if token.eq_ignore_ascii_case("join")
-            || token.eq_ignore_ascii_case("union")
-            || token.eq_ignore_ascii_case("intersect")
-            || token.eq_ignore_ascii_case("except")
-        {
-            return None;
-        }
-    }
-
-    let from_index = tokens
-        .iter()
-        .position(|token| token.eq_ignore_ascii_case("from"))?;
-    let table_token = tokens.get(from_index + 1)?.trim_end_matches(',');
-    if table_token.is_empty()
-        || table_token.starts_with('(')
-        || table_token.contains(',')
-        || table_token.contains('.')
-    {
-        return None;
-    }
-    normalize_sql_identifier(table_token)
-}
-
-fn normalize_sql_identifier(token: &str) -> Option<String> {
-    if token.len() >= 2 && token.starts_with('"') && token.ends_with('"') {
-        let inner = token[1..token.len() - 1].replace("\"\"", "\"");
-        if inner.is_empty() || inner.contains('.') {
-            return None;
-        }
-        return Some(inner);
-    }
-
-    if token
-        .chars()
-        .all(|char| char == '_' || char.is_ascii_alphanumeric())
-    {
-        return Some(token.to_ascii_lowercase());
-    }
-
-    None
 }
 
 fn normalize_flightsql_statement_batches(

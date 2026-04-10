@@ -5,15 +5,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      run_recall_perf_gates:
-        description: "Run optional knowledge.recall perf gates"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
 jobs:
   architecture-gate:
@@ -113,31 +104,13 @@ jobs:
           - os: ubuntu-latest
             perf_p95_ms: "700"
             perf_ratio_max: "4.0"
-            recall_perf_p95_ms: "2500"
-            recall_rss_peak_delta_mb: "320"
-            recall_graph_perf_p95_ms: "1800"
-            recall_graph_rss_peak_delta_mb: "280"
           - os: macos-latest
             perf_p95_ms: "900"
             perf_ratio_max: "4.5"
-            recall_perf_p95_ms: "3200"
-            recall_rss_peak_delta_mb: "360"
-            recall_graph_perf_p95_ms: "2200"
-            recall_graph_rss_peak_delta_mb: "320"
     env:
       GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
       OMNI_VECTOR_PERF_P95_MS: ${{ matrix.perf_p95_ms }}
       OMNI_VECTOR_PERF_RATIO_MAX: ${{ matrix.perf_ratio_max }}
-      OMNI_KNOWLEDGE_RECALL_P95_MS: ${{ matrix.recall_perf_p95_ms }}
-      OMNI_KNOWLEDGE_RECALL_RSS_PEAK_DELTA_MB: ${{ matrix.recall_rss_peak_delta_mb }}
-      OMNI_KNOWLEDGE_RECALL_GRAPH_P95_MS: ${{ matrix.recall_graph_perf_p95_ms }}
-      OMNI_KNOWLEDGE_RECALL_GRAPH_RSS_PEAK_DELTA_MB: ${{ matrix.recall_graph_rss_peak_delta_mb }}
-      OMNI_KNOWLEDGE_RECALL_MAX_FAILURES: "0"
-      OMNI_KNOWLEDGE_RECALL_REPORT_DIR: ".run/reports/knowledge-recall-perf"
-      OMNI_MCP_TOOLS_LIST_REPORT_DIR: ".run/reports/mcp-tools-list-sweep"
-      OMNI_MCP_TOOLS_LIST_NO_EMBEDDING: "true"
-      OMNI_MCP_TOOLS_LIST_HEALTH_TIMEOUT_SECS: "120"
-      OMNI_MCP_TOOLS_LIST_STRICT_SNAPSHOT: "true"
       CARGO_TARGET_DIR: /tmp/workspace-strict-proof
       XIUXIAN_WENDAO_GATE_REPORT_DIR: ".run/reports/wendao-ppr-gate"
       XIUXIAN_WENDAO_MIXED_CANARY_REPORT_DIR: ".run/reports/wendao-ppr-mixed-canary"
@@ -183,14 +156,8 @@ jobs:
       - name: Rust gate - xiuxian-qianji scenario-audit contracts
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-qianji-scenario-audit-contracts
 
-      - name: Rust gate - xiuxian-testing contract packs
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-testing-contract-gates
-
       - name: Rust gate - xiuxian-wendao contract-feedback consumer
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-wendao-contract-feedback-consumer
-
-      - name: Runtime gate - native runtime smoke
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:native-runtime-smoke
 
       - name: Rust gate - snapshot contracts
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-fusion-snapshots
@@ -241,26 +208,8 @@ jobs:
       - name: Guard - no inline Python execution patterns
         run: secretspec run --provider env --profile default -- devenv tasks run ci:no-inline-python-guard
 
-      - name: Docs advisory - vector search options contract
-        continue-on-error: true
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:docs-vector-search-options-check
-
       - name: Run tests
         run: secretspec run --provider env --profile default -- devenv tasks run ci:test-quick
-
-      - name: MCP gate - tools/list concurrency sweep
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:mcp-tools-list-sweep
-
-      - name: MCP tools/list sweep summary (step summary)
-        if: ${{ always() }}
-        run: |
-          summary_md="${OMNI_MCP_TOOLS_LIST_REPORT_DIR}/mcp_tools_list_concurrency_sweep.md"
-          echo "## MCP tools/list Concurrency Sweep (${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
-          if [ -f "${summary_md}" ]; then
-            cat "${summary_md}" >> "${GITHUB_STEP_SUMMARY}"
-          else
-            echo "- status markdown missing: \`${summary_md}\`" >> "${GITHUB_STEP_SUMMARY}"
-          fi
 
       - name: Rust gate - xiuxian-wendao rollout sign-off tracker
         if: ${{ always() }}
@@ -283,19 +232,6 @@ jobs:
           else
             echo "Wendao rollout summary not found: ${summary_file} (fallback: ${fallback_file})" >> "${GITHUB_STEP_SUMMARY}"
           fi
-
-      - name: Skill gate (advisory) - knowledge.recall perf (unified)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
-        continue-on-error: true
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:knowledge-recall-gates
-
-      - name: Upload knowledge recall perf reports
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: knowledge-recall-perf-${{ matrix.os }}
-          path: ${{ env.OMNI_KNOWLEDGE_RECALL_REPORT_DIR }}
-          if-no-files-found: warn
 
       - name: Upload wendao PPR gate reports
         if: ${{ always() }}

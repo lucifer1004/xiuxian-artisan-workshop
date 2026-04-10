@@ -1,6 +1,7 @@
 //! Error types for vector store operations.
 
 use datafusion::error::DataFusionError;
+#[cfg(feature = "vector-store")]
 pub use lance::deps::arrow_schema::ArrowError;
 use parquet::errors::ParquetError;
 use thiserror::Error;
@@ -18,10 +19,12 @@ pub enum VectorStoreError {
     JoinError(#[from] JoinError), // Added
 
     /// `LanceDB` error
+    #[cfg(feature = "vector-store")]
     #[error("LanceDB error: {0}")]
     LanceDB(#[from] lance::Error),
 
     /// Arrow error
+    #[cfg(feature = "vector-store")]
     #[error("Arrow error: {0}")]
     Arrow(#[from] ArrowError),
 

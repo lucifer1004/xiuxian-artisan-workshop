@@ -401,7 +401,7 @@ SKILL.md and all indexed fields are **English-only**. We do not know what langua
 - **Config**: `router.translation.model` (optional; else uses `inference.model`), `router.translation.fallback_to_original` (default `true`).
 - **Model**: Any LLM usable via LiteLLM (e.g. Pangu, MiniMax, or the default inference model). Set `router.translation.model` to a dedicated translation model if desired.
 - **Flow**: In `HybridSearch.search()`, if translation is enabled and the query is not already likely English, the query is sent to the LLM for translation; the English result is used for both embedding and keyword search.
-- **Implementation**: `omni.core.router.translate.translate_query_to_english()`; uses the LLM provider from `omni.foundation.services.llm.provider`; heuristic skips the call when the query is already mostly ASCII/English.
+- **Implementation**: `omni.core.router.translate.translate_query_to_english()`; uses the LLM provider from `xiuxian_foundation.services.llm.provider`; heuristic skips the call when the query is already mostly ASCII/English.
 - **Speed (fast path)**: Before calling the LLM, a **rule-based fallback** is tried. If the query matches a known pattern (e.g. “研究” or “分析” + URL), the effective English phrase is built immediately (e.g. “Help me research &lt;url&gt;”) and the LLM is **skipped**, saving roughly 10+ seconds per request. LLM is used only when no pattern matches.
 
 ### Confidence calibration

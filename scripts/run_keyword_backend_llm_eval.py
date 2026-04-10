@@ -8,7 +8,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from omni.foundation.services.keyword_eval import (
+from xiuxian_foundation.services.keyword_eval import (
     evaluate_keyword_backends_multi_model,
     evaluate_keyword_backends_with_llm,
 )

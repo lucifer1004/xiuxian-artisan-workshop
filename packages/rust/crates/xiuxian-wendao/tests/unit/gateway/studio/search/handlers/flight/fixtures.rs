@@ -12,6 +12,7 @@ use xiuxian_wendao_runtime::transport::{
 
 use super::build_studio_search_flight_service_with_repo_provider;
 use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::gateway::studio::search::handlers::tests::linked_parser_summary::ensure_linked_julia_parser_summary_service;
 use crate::gateway::studio::search::handlers::tests::test_studio_state;
 use crate::gateway::studio::test_support::init_git_repository;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
@@ -185,6 +186,8 @@ async fn publish_local_symbol_index(studio: &StudioState) {
 }
 
 pub(super) fn make_gateway_state_with_repo(repo_files: &[(&str, &str)]) -> GatewayStateFixture {
+    ensure_linked_julia_parser_summary_service()
+        .unwrap_or_else(|error| panic!("ensure linked Julia parser-summary service: {error}"));
     let temp_dir = tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     init_git_repository(temp_dir.path().join("repo"));
     for (path, contents) in repo_files {

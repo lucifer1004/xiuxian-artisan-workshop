@@ -9,13 +9,24 @@ publish = false
 default-run = "wendao"
 
 [features]
-default = ["zhenfa-router", "julia"]
+default = [
+  "builtin-plugins",
+  "zhenfa-router",
+  "julia",
+  "search-runtime",
+  "studio",
+  "vector-store",
+]
 pybindings = ["pyo3"]
-zhenfa-router = ["dep:axum", "dep:tower"]
+zhenfa-router = ["dep:axum", "dep:tower", "search-runtime"]
 julia = [
-  "xiuxian-wendao-builtin/julia",
   "dep:xiuxian-wendao-julia",
 ]
+builtin-plugins = ["dep:xiuxian-wendao-builtin"]
+runtime-transport = ["xiuxian-wendao-runtime/transport"]
+vector-store = ["dep:xiuxian-vector-store"]
+search-runtime = ["vector-store", "runtime-transport"]
+studio = ["search-runtime"]
 performance = ["xiuxian-testing/performance"]
 performance-stress = ["performance"]
 duckdb = ["dep:duckdb"]
@@ -23,6 +34,27 @@ duckdb = ["dep:duckdb"]
 [[bin]]
 name = "wendao"
 path = "src/bin/wendao.rs"
+required-features = ["studio", "zhenfa-router"]
+
+[[bin]]
+name = "export_types"
+path = "src/bin/export_types.rs"
+required-features = ["studio"]
+
+[[bin]]
+name = "wendao_search_flight_server"
+path = "src/bin/wendao_search_flight_server.rs"
+required-features = ["studio", "zhenfa-router"]
+
+[[bin]]
+name = "wendao_search_flightsql_server"
+path = "src/bin/wendao_search_flightsql_server.rs"
+required-features = ["studio", "julia"]
+
+[[bin]]
+name = "wendao_search_seed_sample"
+path = "src/bin/wendao_search_seed_sample.rs"
+required-features = ["studio", "julia"]
 
 [[bench]]
 name = "wendao_performance"
@@ -61,14 +93,15 @@ anyhow = { workspace = true }
 xiuxian-types = { path = "../xiuxian-types" }
 xiuxian-skills = { path = "../xiuxian-skills" }
 xiuxian-logging = { path = "../xiuxian-logging" }
-xiuxian-vector = { path = "../xiuxian-vector" }
+xiuxian-vector = { path = "../xiuxian-vector", default-features = false }
+xiuxian-vector-store = { path = "../xiuxian-vector-store", optional = true }
 xiuxian-io = { path = "../xiuxian-io" }
 xiuxian-git-repo = { path = "../xiuxian-git-repo" }
 xiuxian-llm = { path = "../xiuxian-llm" }
-xiuxian-wendao-builtin = { path = "../xiuxian-wendao-builtin", default-features = false }
+xiuxian-wendao-builtin = { path = "../xiuxian-wendao-builtin", default-features = false, optional = true }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }
-xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false, features = ["transport"] }
+xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false }
 xiuxian-ast = { path = "../xiuxian-ast" }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 xiuxian-testing = { path = "../xiuxian-testing" }
@@ -106,6 +139,7 @@ unicode-normalization = "0.1"
 arrow = { workspace = true }
 arrow-flight = { workspace = true, features = ["flight-sql"] }
 datafusion = { workspace = true }
+parquet = { workspace = true }
 tonic = { version = "0.14.5", default-features = false, features = ["transport"] }
 tonic-web = "0.14"
 

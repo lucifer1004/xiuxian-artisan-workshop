@@ -126,10 +126,10 @@ impl SearchPlaneService {
     ) -> Option<RepoIndexEntryStatus> {
         let entity_publication = entity_record
             .and_then(|record| record.publication.as_ref())
-            .filter(|publication| publication.is_datafusion_readable());
+            .filter(|publication| publication.is_parquet_query_readable());
         let content_publication = content_record
             .and_then(|record| record.publication.as_ref())
-            .filter(|publication| publication.is_datafusion_readable());
+            .filter(|publication| publication.is_parquet_query_readable());
         let runtime = entity_record
             .and_then(|record| record.runtime.as_ref())
             .or_else(|| content_record.and_then(|record| record.runtime.as_ref()))

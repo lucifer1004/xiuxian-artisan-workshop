@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::search::ranking::{RetainedWindow, StreamingRerankTelemetry, trim_ranked_string_map};
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 use super::error::KnowledgeSectionSearchError;
 use super::helpers::{

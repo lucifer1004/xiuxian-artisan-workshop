@@ -1,4 +1,4 @@
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 use crate::search::attachment::build::{AttachmentBuildPlan, AttachmentWriteResult};
 use crate::search::attachment::schema::{attachment_batches, source_path_column};

@@ -6,7 +6,7 @@ use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
 use arrow::record_batch::RecordBatch;
 use thiserror::Error;
 use xiuxian_llm::embedding::openai_compat::embed_openai_compatible;
-use xiuxian_vector::{SearchOptions, VectorStore, VectorStoreError, distance_to_score};
+use xiuxian_vector_store::{SearchOptions, VectorStore, VectorStoreError, distance_to_score};
 #[cfg(feature = "julia")]
 use xiuxian_wendao_runtime::transport::{
     PluginArrowVectorStoreRequestBuildError, build_plugin_arrow_request_batch_from_vector_store,

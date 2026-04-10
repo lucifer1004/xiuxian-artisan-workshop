@@ -5,6 +5,9 @@
 The Modelica repo-intelligence lane now lives here too. There is no separate
 `xiuxian-wendao-modelica` Rust crate to maintain; both Julia and Modelica
 plugins ride the same Julia-owned parser and Arrow Flight integration line.
+The default `xiuxian-wendao-builtin` registry bundle now links that shared
+Julia plus Modelica line unconditionally, so the builtin registry no longer
+needs a feature-gated second plugin bundle for these languages.
 
 ## Verification Status
 
@@ -37,12 +40,13 @@ plugins ride the same Julia-owned parser and Arrow Flight integration line.
 - Julia and Modelica parser-summary transport discovery now also works with
   plain repository plugin ids. `plugins = ["julia"]` and
   `plugins = ["modelica"]` default to the standard
-  `WendaoSearch.jl --config config/live/solver_demo.toml` base URL
-  `http://127.0.0.1:41080` for parser-summary routes, while tests pin the same
+  `WendaoSearch.jl --config config/live/parser_summary.toml` base URL
+  `http://127.0.0.1:41081` for parser-summary routes, while tests pin the same
   contract through linked in-process base URLs instead of inlining
   `parser_summary_transport` into every repo fixture
 - linked `WendaoSearch.jl` parser-summary test services now leave the live
   `gRPCServer` runtime dependency under the package's own
+  `scripts/run_parser_summary_service.jl` launcher and the delegated
   `scripts/run_search_service.jl` bootstrap: the launcher still honors
   `WENDAO_FLIGHT_GRPCSERVER_PATH` when an explicit local checkout is needed,
   reuses a vendored `.cache/vendor/gRPCServer.jl` checkout when present, and
@@ -57,6 +61,18 @@ plugins ride the same Julia-owned parser and Arrow Flight integration line.
   live process manager UI, and absence of those files usually means the
   background service is still running from an older process-compose generation
   that predates the current launcher
+- the repository now also exposes one canonical process-managed
+  `wendaosearch-parser-summary` background service for the native Julia and Modelica
+  parser-summary lane; unlike `wendaosearch-solver-demo`, it launches
+  the package-owned `config/live/parser_summary.toml` through
+  `scripts/run_parser_summary_service.jl` and is the intended managed-service
+  surface for gateway `code_search` and `code_ast` integration
+- the Rust gateway parser-summary test seam now also understands that managed
+  service directly: setting `RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST=1` makes the
+  linked parser-summary helper bind to `wendaosearch-parser-summary` instead of
+  self-spawning an in-process Julia service, so focused gateway search or
+  code-AST proofs can exercise the same process-managed service shape that
+  `process.nix` owns
 - Julia test support now lives under `tests/unit/plugin/` plus
   `tests/unit/memory/mod.rs` instead of production `src/` files, while
   `src/lib.rs` mounts `tests/unit/lib_policy.rs` and `tests/unit_test.rs`
@@ -86,6 +102,12 @@ plugins ride the same Julia-owned parser and Arrow Flight integration line.
   `direnv exec . cargo test -p xiuxian-wendao search_intent_routes_code_search_to_plain_julia_plugin_repository --features julia,zhenfa-router -- --nocapture`
   and
   `direnv exec . cargo test -p xiuxian-wendao search_intent_routes_code_search_to_plain_modelica_plugin_repository --features julia,zhenfa-router -- --nocapture`
+- the linked host gateway now also proves the same native parser route through
+  the repo-aware Studio `analysis/code-ast` loader for both plain Julia and
+  plain Modelica plugin repositories:
+  `direnv exec . cargo test -p xiuxian-wendao load_code_ast_analysis_response_supports_plain_julia_plugin_repository --features julia,zhenfa-router -- --nocapture`
+  and
+  `direnv exec . cargo test -p xiuxian-wendao load_code_ast_analysis_response_supports_plain_modelica_plugin_repository --features julia,zhenfa-router -- --nocapture`
 
 ## Ownership Boundary
 
@@ -104,7 +126,7 @@ plugins ride the same Julia-owned parser and Arrow Flight integration line.
   Julia or Modelica AST fallback for repo-intelligence or the incremental
   safety probe; file-summary and root-summary now resolve through either an
   explicit `parser_summary_transport` binding or the standard mounted
-  `WendaoSearch.jl` solver-demo endpoint, and if the native parser-summary
+  `WendaoSearch.jl` parser-summary endpoint, and if the native parser-summary
   route is unavailable or contract-invalid, the Rust caller fails that
   operation explicitly.
 - `xiuxian-wendao-julia` also owns the runtime-level memory-family thin compat
@@ -178,6 +200,9 @@ plugins ride the same Julia-owned parser and Arrow Flight integration line.
   repo-search seam plus the repo publications materialized from this crate's
   Julia-owned parser-summary line. It does not keep a second Rust-local Julia
   or Modelica AST execution path.
+- `xiuxian-wendao` gateway `code_ast` now consumes the same Julia-owned native
+  parser publications through the repo-aware analysis loader and does not keep
+  a second Rust-local Julia or Modelica code-AST execution path.
 - `xiuxian-wendao` now consumes this crate through a normal Cargo dependency instead of sibling-source inclusion.
 
 ## Public Surface

@@ -13,7 +13,7 @@ impl SearchPlaneService {
         corpus: SearchCorpusKind,
         repo_id: &str,
         revision: &str,
-        require_datafusion_readable: bool,
+        require_parquet_query_readable: bool,
     ) -> Option<SearchRepoPublicationRecord> {
         let publication = self
             .repo_corpus_record_for_reads(corpus, repo_id)
@@ -23,7 +23,7 @@ impl SearchPlaneService {
                 repo_publication_matches_revision(
                     publication,
                     revision,
-                    require_datafusion_readable,
+                    require_parquet_query_readable,
                 )
             });
         if let Some(publication) = publication.as_ref() {
@@ -128,12 +128,12 @@ impl SearchPlaneService {
             .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, repo_id)
             .await
             .and_then(|record| record.publication)
-            .filter(SearchRepoPublicationRecord::is_datafusion_readable);
+            .filter(SearchRepoPublicationRecord::is_parquet_query_readable);
         let content_publication = self
             .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, repo_id)
             .await
             .and_then(|record| record.publication)
-            .filter(SearchRepoPublicationRecord::is_datafusion_readable);
+            .filter(SearchRepoPublicationRecord::is_parquet_query_readable);
 
         let Some(entity_publication) = entity_publication else {
             return false;
@@ -236,7 +236,7 @@ impl SearchPlaneService {
         repo_id: &str,
         documents: &[crate::repo_index::RepoCodeDocument],
         source_revision: Option<&str>,
-    ) -> Result<(), xiuxian_vector::VectorStoreError> {
+    ) -> Result<(), xiuxian_vector_store::VectorStoreError> {
         crate::search::repo_content_chunk::publish_repo_content_chunks(
             self,
             repo_id,
@@ -295,7 +295,7 @@ impl SearchPlaneService {
         analysis: &crate::analyzers::RepositoryAnalysisOutput,
         documents: &[crate::repo_index::RepoCodeDocument],
         source_revision: Option<&str>,
-    ) -> Result<(), xiuxian_vector::VectorStoreError> {
+    ) -> Result<(), xiuxian_vector_store::VectorStoreError> {
         crate::search::repo_entity::publish_repo_entities(
             self,
             repo_id,
@@ -437,8 +437,8 @@ impl SearchPlaneService {
 fn repo_publication_matches_revision(
     publication: &SearchRepoPublicationRecord,
     revision: &str,
-    require_datafusion_readable: bool,
+    require_parquet_query_readable: bool,
 ) -> bool {
     publication.source_revision.as_deref() == Some(revision)
-        && (!require_datafusion_readable || publication.is_datafusion_readable())
+        && (!require_parquet_query_readable || publication.is_parquet_query_readable())
 }

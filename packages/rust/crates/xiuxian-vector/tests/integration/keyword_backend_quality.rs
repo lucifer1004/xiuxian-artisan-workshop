@@ -548,11 +548,11 @@ fn codex_skill_docs() -> Vec<ToolDoc> {
             vec!["find related notes", "semantic notebook search"],
         ),
         (
-            "git.smart_commit",
-            "Guided git commit workflow with security scan and approval steps.",
+            "git.commit",
+            "Create git commits from staged changes.",
             "git",
-            vec!["git", "commit", "workflow", "security scan"],
-            vec!["safe commit", "approved commit flow"],
+            vec!["git", "commit", "staged", "changes"],
+            vec!["commit code", "staged changes"],
         ),
         (
             "crawl4ai.crawl_url",
@@ -668,9 +668,9 @@ fn scenarios_v3_skill_based() -> Vec<ScenarioQueryV2> {
             ],
         },
         ScenarioQueryV2 {
-            name: "safe_commit_pipeline",
-            query: "安全提交 需要扫描并审批 commit workflow",
-            relevant: &[("git.smart_commit", 3)],
+            name: "git_commit_changes",
+            query: "commit code with staged changes",
+            relevant: &[("git.commit", 3)],
         },
         ScenarioQueryV2 {
             name: "crawl_docs_then_summarize",

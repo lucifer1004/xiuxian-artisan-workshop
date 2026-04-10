@@ -21,5 +21,5 @@ pub(crate) struct AttachmentWriteResult {
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AttachmentBuildError {
     #[error(transparent)]
-    Storage(#[from] xiuxian_vector::VectorStoreError),
+    Storage(#[from] xiuxian_vector_store::VectorStoreError),
 }

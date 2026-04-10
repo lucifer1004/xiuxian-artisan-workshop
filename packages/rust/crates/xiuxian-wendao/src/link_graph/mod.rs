@@ -44,12 +44,14 @@ pub use context_snapshot::{
     valkey_quantum_context_snapshot_save, valkey_quantum_context_snapshot_save_with_valkey,
 };
 pub(crate) use index::IndexedSection;
+#[cfg(feature = "vector-store")]
 pub use index::search::quantum_fusion::openai_ignition::{
     OpenAiCompatibleSemanticIgnition, OpenAiCompatibleSemanticIgnitionError,
 };
 pub use index::search::quantum_fusion::scoring::{
     BatchQuantumScorer, BatchQuantumScorerError, QUANTUM_SALIENCY_COLUMN,
 };
+#[cfg(feature = "vector-store")]
 pub use index::search::quantum_fusion::vector_ignition::VectorStoreSemanticIgnition;
 pub use index::{
     LinkGraphCacheBuildMeta, LinkGraphIndex, LinkGraphRefreshMode, QuantumContextBuildError,

@@ -37,6 +37,7 @@ pub(crate) fn ranked_example_matches(
     ranked_example_matches_from_index(query, examples, metadata_lookup, &lookup, &index, limit)
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn ranked_example_matches_with_artifacts(
     query: &str,
     examples: &[ExampleRecord],

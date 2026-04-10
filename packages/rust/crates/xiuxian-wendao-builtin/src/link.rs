@@ -1,6 +1,5 @@
 // Keep builtin plugin crates linked so their `inventory`-submitted registrars
 // remain visible to the bootstrap bundle without widening any host-facing API.
-#[cfg(feature = "julia")]
 use xiuxian_wendao_julia as _;
 
 /// Ensure builtin plugin crates stay linked into the current host build.

@@ -1,10 +1,8 @@
 //! Integration tests for Repo Intelligence symbol search flow.
 
-#[cfg(feature = "julia")]
 use std::fs;
 use std::process::Command;
 
-#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
     assert_repo_json_snapshot, create_sample_julia_repo, sample_projection_analysis,
@@ -37,7 +35,6 @@ fn symbol_search_matches_symbol_name() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_symbol_search_matches_external_symbols() -> TestResult {
     let temp = tempfile::tempdir()?;

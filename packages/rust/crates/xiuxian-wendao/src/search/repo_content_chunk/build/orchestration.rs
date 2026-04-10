@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 use crate::repo_index::RepoCodeDocument;
 use crate::search::repo_content_chunk::build::plan::plan_repo_content_chunk_build;

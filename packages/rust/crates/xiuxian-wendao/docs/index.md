@@ -47,6 +47,7 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 - [[03_features/212_flightsql_query_surface]]: First FlightSQL statement-query and sql-info adapter over the shared SQL surface.
 - [[03_features/213_rest_query_surface]]: First thin REST-style request/response adapter over the shared query service.
 - [[03_features/214_config_import_overlay]]: Canonical import-based config merge model for Wendao runtime settings, gateway startup config, and Studio UI overlays.
+- [[03_features/215_vector_boundary_split]]: Explicit separation between lightweight Arrow/DataFusion substrate ownership and Lance-backed vector-store ownership.
 
 ## 📁 05_research: Theoretical Hardening
 

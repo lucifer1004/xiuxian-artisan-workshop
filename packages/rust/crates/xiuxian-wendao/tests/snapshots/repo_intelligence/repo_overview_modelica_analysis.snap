@@ -180,7 +180,7 @@ expression: value
     "symbols": [
       {
         "kind": "type",
-        "line_end": 2,
+        "line_end": 4,
         "line_start": 2,
         "module_id": "repo:modelica-demo:module:DemoLib.Controllers",
         "name": "PI",

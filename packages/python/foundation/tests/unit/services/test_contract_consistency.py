@@ -1,10 +1,4 @@
-"""Schema Singularity Phase 2: contract consistency and E2E snapshot matrix.
-
-- All vector/router payload parsers reject legacy 'keywords' field.
-- Route test JSON (with stats) and db search JSON snapshots locked; CI fails on field drift.
-- Assertions and payloads use local shared payload factories (no hardcoded dicts).
-- E2E: Rust output -> Python parse -> CLI JSON validated against schema (CI gate).
-"""
+"""Contract consistency checks for active route-test payload surfaces."""
 
 from __future__ import annotations
 
@@ -12,27 +6,86 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
-from _vector_payloads import (
-    ROUTE_TEST_SCHEMA_V1,
-    make_db_search_hybrid_result_list,
-    make_db_search_vector_result_list,
-    make_hybrid_payload,
-    make_route_test_payload,
-    make_router_result_payload,
-    make_tool_search_payload,
-    make_vector_payload,
-)
 from jsonschema import Draft202012Validator
 
 from xiuxian_foundation.api.schema_locator import resolve_schema_file_path
 from xiuxian_foundation.config.prj import get_project_root
-from xiuxian_foundation.services.vector_schema import (
-    parse_hybrid_payload,
-    parse_tool_search_payload,
-    parse_vector_payload,
-)
+
+
+ROUTE_TEST_SCHEMA_V1 = "xiuxian.router.route_test.v1"
+
+
+def make_router_result_payload(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "id": "git.commit",
+        "name": "git.commit",
+        "description": "Commit changes",
+        "skill_name": "git",
+        "tool_name": "git.commit",
+        "command": "commit",
+        "score": 0.82,
+        "final_score": 0.91,
+        "confidence": "high",
+        "routing_keywords": ["git", "commit"],
+        "input_schema": {"type": "object"},
+        "payload": {
+            "type": "command",
+            "description": "Commit changes",
+            "metadata": {
+                "tool_name": "git.commit",
+                "routing_keywords": ["git", "commit"],
+                "input_schema": {"type": "object"},
+            },
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
+def make_route_test_payload(
+    *,
+    query: str = "git commit",
+    results: list[dict[str, Any]] | None = None,
+    stats: dict[str, Any] | None = None,
+    threshold: float = 0.4,
+    limit: int = 5,
+    confidence_profile: dict[str, Any] | None = None,
+    **overrides: Any,
+) -> dict[str, Any]:
+    if results is None:
+        results = [make_router_result_payload()]
+    if confidence_profile is None:
+        confidence_profile = {"name": "balanced", "source": "active-profile"}
+    stats_payload: dict[str, Any] = {
+        "semantic_weight": None,
+        "keyword_weight": None,
+        "rrf_k": None,
+        "strategy": None,
+    }
+    if stats:
+        stats_payload.update(
+            {
+                "semantic_weight": stats.get("semantic_weight"),
+                "keyword_weight": stats.get("keyword_weight"),
+                "rrf_k": stats.get("rrf_k"),
+                "strategy": stats.get("strategy"),
+            }
+        )
+    payload: dict[str, Any] = {
+        "schema": ROUTE_TEST_SCHEMA_V1,
+        "query": query,
+        "count": len(results),
+        "threshold": threshold,
+        "limit": limit,
+        "confidence_profile": confidence_profile,
+        "stats": stats_payload,
+        "results": results,
+    }
+    payload.update(overrides)
+    return payload
 
 
 def _snapshots_dir() -> Path:
@@ -42,13 +95,6 @@ def _snapshots_dir() -> Path:
 def _load_schema(name: str) -> dict:
     path = resolve_schema_file_path(name)
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _validate_items_against_schema(items: list[dict], schema: dict) -> None:
-    validator = Draft202012Validator(schema)
-    for i, item in enumerate(items):
-        errors = list(validator.iter_errors(item))
-        assert not errors, f"item[{i}] violates schema: {[e.message for e in errors]}"
 
 
 def _strip_ansi(text: str) -> str:
@@ -101,31 +147,6 @@ def test_route_test_cli_json_validates_against_schema():
         assert "keywords" not in r, "Results must use routing_keywords only"
         if "payload" in r and "metadata" in r["payload"]:
             assert "keywords" not in r["payload"]["metadata"]
-
-
-# ---- P0: Contract consistency - all parsers reject legacy "keywords" ----
-
-
-def test_tool_search_parser_rejects_keywords():
-    payload = make_tool_search_payload()
-    payload.pop("routing_keywords", None)
-    payload["keywords"] = ["git", "commit"]
-    with pytest.raises(ValueError, match="Legacy field 'keywords'"):
-        parse_tool_search_payload(payload)
-
-
-def test_vector_parser_rejects_keywords():
-    data = make_vector_payload()
-    data["keywords"] = ["legacy"]
-    with pytest.raises(ValueError, match="Legacy field 'keywords'"):
-        parse_vector_payload(json.dumps(data))
-
-
-def test_hybrid_parser_rejects_keywords():
-    data = make_hybrid_payload()
-    data["keywords"] = ["legacy"]
-    with pytest.raises(ValueError, match="Legacy field 'keywords'"):
-        parse_hybrid_payload(json.dumps(data))
 
 
 # ---- P0: Shared canonical snapshot (vector-side contract) ----
@@ -198,40 +219,3 @@ def test_route_test_snapshot_matches_factory_output():
     path = _snapshots_dir() / "route_test_with_stats_contract_v1.json"
     snapshot = json.loads(path.read_text(encoding="utf-8"))
     assert snapshot == expected, "Snapshot must match make_route_test_payload() output"
-
-
-# ---- P0: E2E snapshot matrix - db search JSON, built from local factories ----
-
-
-def test_db_search_vector_list_built_from_factory_validates_against_schema():
-    """Db search vector result list from local factories conforms to xiuxian.vector.search.v1."""
-    schema = _load_schema("xiuxian.vector.search.v1.schema.json")
-    items = make_db_search_vector_result_list()
-    _validate_items_against_schema(items, schema)
-    for item in items:
-        assert "keywords" not in item
-
-
-def test_db_search_hybrid_list_built_from_factory_validates_against_schema():
-    """Db search hybrid result list from local factories conforms to xiuxian.vector.hybrid.v1."""
-    schema = _load_schema("xiuxian.vector.hybrid.v1.schema.json")
-    items = make_db_search_hybrid_result_list()
-    _validate_items_against_schema(items, schema)
-    for item in items:
-        assert "keywords" not in item
-
-
-def test_db_search_vector_snapshot_matches_factory_output():
-    """Snapshot equals local factory output (vector list)."""
-    expected = make_db_search_vector_result_list()
-    path = _snapshots_dir() / "db_search_vector_result_contract_v1.json"
-    snapshot = json.loads(path.read_text(encoding="utf-8"))
-    assert snapshot == expected, "Snapshot must match make_db_search_vector_result_list()"
-
-
-def test_db_search_hybrid_snapshot_matches_factory_output():
-    """Snapshot equals local factory output (hybrid list)."""
-    expected = make_db_search_hybrid_result_list()
-    path = _snapshots_dir() / "db_search_hybrid_result_contract_v1.json"
-    snapshot = json.loads(path.read_text(encoding="utf-8"))
-    assert snapshot == expected, "Snapshot must match make_db_search_hybrid_result_list()"

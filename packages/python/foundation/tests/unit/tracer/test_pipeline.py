@@ -11,13 +11,29 @@ from __future__ import annotations
 
 import pytest
 
-from xiuxian_tracer import (
-    ExecutionTracer,
-    MappingToolInvoker,
-    PipelineConfig,
+from xiuxian_tracer.node_factory import MappingToolInvoker
+from xiuxian_tracer.pipeline_builder import PipelineWorkflowBuilder
+from xiuxian_tracer.pipeline_runtime import (
     PipelineExecutor,
-    PipelineWorkflowBuilder,
+    create_workflow_from_pipeline,
+    create_workflow_from_pipeline_with_defaults,
 )
+from xiuxian_tracer.pipeline_schema import PipelineConfig
+
+
+class _TracerStub:
+    def __init__(self, trace_id: str) -> None:
+        self.trace_id = trace_id
+        self.params: dict[str, object] = {}
+
+    def set_param(self, key: str, value: object) -> None:
+        self.params[key] = value
+
+    def start_step(self, **_: object) -> str:
+        return "step-1"
+
+    def end_step(self, *_: object, **__: object) -> None:
+        return None
 
 
 class TestPipelineConfig:
@@ -195,10 +211,6 @@ pipeline:
 runtime:
   checkpointer:
     type: memory
-  invoker:
-    include_retrieval: false
-  retrieval:
-    default_backend: hybrid
   tracer:
     callback_dispatch_mode: background
   state:
@@ -212,8 +224,6 @@ pipeline:
 
         config = PipelineConfig.from_yaml(yaml_file)
         assert config.runtime.checkpointer.type == "memory"
-        assert config.runtime.invoker.include_retrieval is False
-        assert config.runtime.retrieval.default_backend == "hybrid"
         assert config.runtime.tracer.callback_dispatch_mode == "background"
         assert config.runtime.state.schema == "builtins:dict"
 
@@ -262,8 +272,8 @@ pipeline:
         with pytest.raises(ValueError):
             PipelineConfig.from_yaml(yaml_file)
 
-    def test_from_yaml_invalid_retrieval_runtime_raises(self, tmp_path):
-        """Test invalid retrieval runtime config raises ValueError."""
+    def test_from_yaml_removed_retrieval_runtime_key_is_rejected(self, tmp_path):
+        """Test removed retrieval runtime config is rejected by schema."""
         yaml_content = """
 runtime:
   retrieval:
@@ -271,10 +281,10 @@ runtime:
 pipeline:
   - demo.run
 """
-        yaml_file = tmp_path / "invalid_retrieval_runtime.yaml"
+        yaml_file = tmp_path / "removed_retrieval_runtime.yaml"
         yaml_file.write_text(yaml_content)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid pipeline schema"):
             PipelineConfig.from_yaml(yaml_file)
 
     def test_from_yaml_unknown_top_level_key_rejected_by_schema(self, tmp_path):
@@ -963,7 +973,7 @@ pipeline:
         yaml_file = tmp_path / "traced.yaml"
         yaml_file.write_text(yaml_content)
 
-        tracer = ExecutionTracer(trace_id="test_trace")
+        tracer = _TracerStub(trace_id="test_trace")
         executor = PipelineExecutor(yaml_file, tracer=tracer)
 
         assert executor.tracer is tracer
@@ -1032,8 +1042,6 @@ class TestCreateWorkflowFromPipeline:
 
     def test_creates_workflow_from_config(self):
         """Test creating a workflow app from pipeline config."""
-        from xiuxian_tracer import create_workflow_from_pipeline
-
         config = PipelineConfig(servers={"test": "/path/to/test"}, pipeline=["test.step"])
 
         # Should return a compiled workflow app
@@ -1043,10 +1051,8 @@ class TestCreateWorkflowFromPipeline:
 
     def test_with_tracer(self):
         """Test creating a workflow app with tracer."""
-        from xiuxian_tracer import create_workflow_from_pipeline
-
         config = PipelineConfig(servers={"test": "/path"}, pipeline=["test.step"])
-        tracer = ExecutionTracer(trace_id="graph_trace")
+        tracer = _TracerStub(trace_id="graph_trace")
 
         app = create_workflow_from_pipeline(config, tracer=tracer)
 
@@ -1055,8 +1061,6 @@ class TestCreateWorkflowFromPipeline:
     @pytest.mark.asyncio
     async def test_with_custom_tool_invoker(self):
         """Test creating workflow with custom tool invoker and mapped outputs."""
-        from xiuxian_tracer import create_workflow_from_pipeline
-
         config = PipelineConfig(
             servers={"retriever": "/path"},
             pipeline=[
@@ -1082,8 +1086,6 @@ class TestCreateWorkflowFromPipeline:
     @pytest.mark.asyncio
     async def test_with_defaults_uses_mapping_stack(self):
         """Test convenience API builds default stack and executes mapping handler."""
-        from xiuxian_tracer import create_workflow_from_pipeline_with_defaults
-
         config = PipelineConfig(
             servers={"demo": "/path"},
             pipeline=[
@@ -1104,7 +1106,6 @@ class TestCreateWorkflowFromPipeline:
             pipeline_config=config,
             state_schema=dict,
             mapping={"demo.run": mapped},
-            include_retrieval=False,
         )
         result = await app.ainvoke({"query": "typed languages"})
         assert result["docs"] == ["d1", "d2"]
@@ -1112,8 +1113,6 @@ class TestCreateWorkflowFromPipeline:
     @pytest.mark.asyncio
     async def test_with_defaults_respects_explicit_tool_invoker_override(self):
         """Test explicit tool_invoker overrides default stack settings."""
-        from xiuxian_tracer import create_workflow_from_pipeline_with_defaults
-
         config = PipelineConfig(
             servers={"demo": "/path"},
             pipeline=[
@@ -1135,7 +1134,6 @@ class TestCreateWorkflowFromPipeline:
             pipeline_config=config,
             state_schema=dict,
             mapping={"demo.run": lambda *_: {"docs": ["stack"]}},
-            include_retrieval=False,
             tool_invoker=invoker,
         )
         result = await app.ainvoke({"query": "ignored"})

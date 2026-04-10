@@ -3,7 +3,7 @@
 set -euo pipefail
 
 wendaosearch_default_service_name() {
-  printf '%s\n' "wendaosearch-solver-demo"
+  printf '%s\n' "wendaosearch-parser-summary"
 }
 
 wendaosearch_default_runtime_dir() {
@@ -11,7 +11,11 @@ wendaosearch_default_runtime_dir() {
 }
 
 wendaosearch_default_config() {
-  printf '%s\n' ".data/WendaoSearch.jl/config/live/solver_demo.toml"
+  printf '%s\n' ".data/WendaoSearch.jl/config/live/parser_summary.toml"
+}
+
+wendaosearch_default_script_name() {
+  printf '%s\n' "run_parser_summary_service.jl"
 }
 
 wendaosearch_default_host() {
@@ -19,7 +23,7 @@ wendaosearch_default_host() {
 }
 
 wendaosearch_default_port() {
-  printf '%s\n' "41080"
+  printf '%s\n' "41081"
 }
 
 wendaosearch_default_mode() {
@@ -40,6 +44,10 @@ wendaosearch_effective_runtime_dir() {
 
 wendaosearch_effective_config() {
   printf '%s\n' "${WENDAOSEARCH_CONFIG:-$(wendaosearch_default_config)}"
+}
+
+wendaosearch_effective_script_name() {
+  printf '%s\n' "${WENDAOSEARCH_SCRIPT:-$(wendaosearch_default_script_name)}"
 }
 
 wendaosearch_config_value() {
@@ -65,9 +73,43 @@ else:
 PY
 }
 
+wendaosearch_config_section_value() {
+  local root="$1"
+  local section="$2"
+  local field="$3"
+  local config_path
+  config_path="$(wendaosearch_resolve_path "$root" "$(wendaosearch_effective_config)")"
+  python3 - "$config_path" "$section" "$field" <<'PY'
+import sys
+import tomllib
+
+path = sys.argv[1]
+section = sys.argv[2]
+field = sys.argv[3]
+with open(path, "rb") as handle:
+    config = tomllib.load(handle)
+section_value = config.get(section)
+if not isinstance(section_value, dict):
+    raise SystemExit(1)
+value = section_value.get(field)
+if value is None:
+    raise SystemExit(1)
+if isinstance(value, list):
+    print(",".join(str(item) for item in value))
+else:
+    print(value)
+PY
+}
+
 wendaosearch_effective_host() {
   if [ -n "${WENDAOSEARCH_HOST:-}" ]; then
     printf '%s\n' "$WENDAOSEARCH_HOST"
+    return 0
+  fi
+  if [ "$(wendaosearch_effective_script_name)" = "run_parser_summary_service.jl" ]; then
+    wendaosearch_config_section_value "$1" "interface" "host" 2>/dev/null || \
+      wendaosearch_config_value "$1" "host" 2>/dev/null || \
+      wendaosearch_default_host
     return 0
   fi
   wendaosearch_config_value "$1" "host" 2>/dev/null || wendaosearch_default_host
@@ -76,6 +118,12 @@ wendaosearch_effective_host() {
 wendaosearch_effective_port() {
   if [ -n "${WENDAOSEARCH_PORT:-}" ]; then
     printf '%s\n' "$WENDAOSEARCH_PORT"
+    return 0
+  fi
+  if [ "$(wendaosearch_effective_script_name)" = "run_parser_summary_service.jl" ]; then
+    wendaosearch_config_section_value "$1" "interface" "port" 2>/dev/null || \
+      wendaosearch_config_value "$1" "port" 2>/dev/null || \
+      wendaosearch_default_port
     return 0
   fi
   wendaosearch_config_value "$1" "port" 2>/dev/null || wendaosearch_default_port
@@ -128,5 +176,5 @@ wendaosearch_script_path() {
   local root="$1"
   local package_dir
   package_dir="$(wendaosearch_package_dir "$root")"
-  printf '%s\n' "$package_dir/scripts/run_search_service.jl"
+  printf '%s\n' "$package_dir/scripts/$(wendaosearch_effective_script_name)"
 }

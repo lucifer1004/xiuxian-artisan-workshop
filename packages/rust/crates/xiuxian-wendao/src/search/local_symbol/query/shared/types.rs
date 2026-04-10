@@ -1,7 +1,7 @@
 use crate::duckdb::ParquetQueryEngine;
 use crate::gateway::studio::types::AutocompleteSuggestion;
 use crate::search::ranking::{StreamingRerankSource, StreamingRerankTelemetry};
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum LocalSymbolSearchError {

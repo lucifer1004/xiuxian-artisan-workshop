@@ -8,72 +8,44 @@ metadata:
 
 ## Overview
 
-This skill provides git operations with **Smart Commit Protocol** for clean, safe commits.
+This skill provides basic git operations plus staging safeguards for clean, safe commits.
 
 ## Architecture
 
 ```
-assets/skills/git/
+skills/git/
 ├── SKILL.md              # Skill manifest + LLM context
 ├── README.md             # This file
-├── scripts/              # @skill_command decorated commands
-│   ├── __init__.py
-│   ├── commit.py         # commit operations
-│   ├── graph_workflow.py # Smart Commit workflow (native runtime)
+├── scripts/              # Git helpers used by the retained runtime surface
+│   ├── commit.py         # Commit operations
+│   ├── prepare.py        # Staging + security scan helper
+│   ├── rendering.py      # Template rendering helper
 │   └── ...
-├── templates/            # Cascading templates
+├── templates/            # Cascading templates for commit output
 │   ├── commit_message.j2
-│   ├── workflow_result.j2
 │   └── error_message.j2
 └── tests/                # Zero-config pytest
-    └── test_git_commands.py
+    └── test_git_status.py
 ```
 
 ---
 
-## Smart Commit Workflow
+## Staging Safeguards
 
-Use `/commit` slash command for the complete workflow:
+Use the staging helper before committing when you want security scanning and
+pre-commit hook execution:
 
-### Step 1: Preparation & Checks
+1. Stage all tracked and untracked changes.
+2. Run the project pre-commit hook when available.
+3. Re-stage files modified by formatters.
+4. Unstage obvious sensitive files.
 
-```bash
-tool: `git.prepare_commit`
-```
-
-This:
-
-- Stages all changes
-- Runs lefthook pre-commit checks
-- Scans for sensitive files
-
-### Step 2: Analysis & Report
-
-Generates commit analysis based on staged diff:
-
-- Determines commit type (feat, fix, refactor, docs, etc.)
-- Identifies scope
-- Lists changed files
-
-### Step 3: Scope Validation
+Typical sequence:
 
 ```bash
-tool: `git.prepare_commit` with `{"message": "type(scope): description"}`
-```
-
-This validates:
-
-- **Scope Check**: Verifies scope against `cog.toml`
-- **Auto-fix**: Auto-corrects close-matching scopes
-- **Security Scan**: Detects sensitive files (`.env`, `.pem`, `.key`, etc.)
-
-### Step 4: Commit
-
-```bash
+tool: `git.stage_all`
 tool: `git.commit` with `{"message": "type(scope): description"}`
 ```
-
-Executes the commit with template rendering.
 
 ---
 
@@ -116,39 +88,12 @@ If unsure, press No and run git reset <file> to unstage.
 
 ---
 
-## Scope Validation
-
-Uses `cog.toml` for Conventional Commit scope validation:
-
-```toml
-scopes = [
-    "git",
-    "docs",
-    "agent",
-    "core",
-    "git-ops",
-    ...
-]
-```
-
-### Validation Rules
-
-| Scenario          | Behavior                                |
-| ----------------- | --------------------------------------- |
-| Valid scope       | ✅ Proceeds                             |
-| Invalid scope     | ⚠️ Warning + auto-fix to closest match  |
-| No scope provided | ℹ️ Uses first valid scope from cog.toml |
-| No cog.toml       | ✅ Passes (validation skipped)          |
-
----
-
 ## Available Commands
 
 ### Tool Runtime Calls
 
 | Command              | Category | Description                   |
 | -------------------- | -------- | ----------------------------- |
-| `git.prepare_commit` | workflow | Stage + lefthook + validation |
 | `git.commit`         | write    | Execute commit with template  |
 | `git.stage_all`      | write    | Stage all changes             |
 | `git.status`         | read     | Get git status                |
@@ -174,9 +119,9 @@ scopes = [
 
 | Path                                          | Purpose                 |
 | --------------------------------------------- | ----------------------- |
-| `assets/skills/git/scripts/commit.py`         | Commit commands         |
-| `assets/skills/git/scripts/graph_workflow.py` | Smart Commit workflow   |
-| `assets/skills/git/templates/`                | Default templates       |
+| `skills/git/scripts/commit.py`                | Commit commands         |
+| `skills/git/scripts/prepare.py`               | Staging helper          |
+| `skills/git/templates/`                       | Default templates       |
 | `assets/templates/git/`                       | User override templates |
 | `cog.toml`                                    | Scope configuration     |
 

@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use axum::Router;
 #[cfg(feature = "julia")]
 use xiuxian_wendao_julia::integration_support::{
-    JuliaExampleServiceGuard, spawn_wendaosearch_demo_julia_parser_summary_service_with_attempts,
+    JuliaExampleServiceGuard, spawn_wendaosearch_julia_parser_summary_service_with_attempts,
 };
 
 use crate::gateway::studio::perf_support::git::{
@@ -166,21 +166,21 @@ pub async fn prepare_gateway_perf_fixture() -> Result<GatewayPerfFixture> {
 /// Build a warm-cache gateway fixture with one Julia repository and an active
 /// parser-summary transport.
 ///
-/// This helper keeps the spawned parser-summary demo service alive for the
+/// This helper keeps the spawned parser-summary service alive for the
 /// fixture lifetime so repo-intelligence bootstrap and routed search queries
 /// observe a stable Julia analysis surface.
 ///
 /// # Errors
 ///
 /// Returns an error if the temporary project cannot be created, the Julia
-/// parser-summary demo service cannot be configured, initialized as a Git
+/// parser-summary service cannot be configured, initialized as a Git
 /// repository, analyzed, or published into the search plane.
 #[cfg(feature = "julia")]
 pub async fn prepare_gateway_perf_fixture_with_julia_parser_summary_transport()
 -> Result<GatewayPerfFixture> {
     let root = create_perf_root()?;
     let repo_dir = create_local_git_repo(root.as_path(), "GatewaySyncPkg")?;
-    let (base_url, guard) = spawn_wendaosearch_demo_julia_parser_summary_service_with_attempts(
+    let (base_url, guard) = spawn_wendaosearch_julia_parser_summary_service_with_attempts(
         PERF_JULIA_PARSER_SUMMARY_READY_ATTEMPTS,
     )
     .await;

@@ -1,10 +1,59 @@
 #!/usr/bin/env python3
-"""Payload builders for memory CI gate failure triage reporting."""
+"""Generic API payload builders and memory CI gate triage helpers."""
 
 from __future__ import annotations
 
 import time
 from typing import Any
+
+
+def build_status_message_response(
+    *,
+    status: str,
+    message: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a normalized status payload with an optional metadata overlay."""
+    payload: dict[str, Any] = {"status": status, "message": message}
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def build_status_error_response(
+    *,
+    error: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a normalized error payload with an optional metadata overlay."""
+    payload: dict[str, Any] = {"status": "error", "error": error}
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def build_success_error_response(
+    *,
+    error: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a normalized failure payload using the legacy success/error shape."""
+    payload: dict[str, Any] = {"success": False, "error": error}
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def build_error_response(
+    *,
+    error: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a minimal error payload with an optional metadata overlay."""
+    payload: dict[str, Any] = {"error": error}
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def build_gate_failure_triage_payload(

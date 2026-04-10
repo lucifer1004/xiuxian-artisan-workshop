@@ -32,7 +32,7 @@ impl AstSearchFlightRouteProvider for StudioAstSearchFlightRouteProvider {
         &self,
         query_text: &str,
         limit: usize,
-    ) -> Result<xiuxian_vector::LanceRecordBatch, String> {
+    ) -> Result<xiuxian_vector_store::LanceRecordBatch, String> {
         let response = load_ast_search_response(
             self.state.as_ref(),
             AstSearchQuery {

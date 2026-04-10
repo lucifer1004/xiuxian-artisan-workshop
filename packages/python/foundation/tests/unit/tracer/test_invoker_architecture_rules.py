@@ -30,7 +30,7 @@ def _imported_modules(tree: ast.Module) -> list[str]:
 def test_node_factory_does_not_depend_on_concrete_invokers() -> None:
     """node_factory defines protocols/core node behavior only."""
     imported = _imported_modules(_parse("node_factory.py"))
-    forbidden = {"tool_invoker", "retrieval_invoker", "composite_invoker", "invoker_stack"}
+    forbidden = {"tool_invoker", "composite_invoker", "invoker_stack"}
     for module in imported:
         assert not any(name in module for name in forbidden), (
             "node_factory.py must not import concrete invoker modules"
@@ -41,30 +41,22 @@ def test_tool_invoker_depends_only_on_node_factory_contract() -> None:
     """tool_invoker should use ToolInvoker protocol and stay isolated."""
     imported = _imported_modules(_parse("tool_invoker.py"))
     assert any("node_factory" in module for module in imported)
-    forbidden = {"retrieval_invoker", "composite_invoker", "invoker_stack", "pipeline"}
+    forbidden = {"composite_invoker", "invoker_stack", "pipeline"}
     for module in imported:
         assert not any(name in module for name in forbidden), (
             "tool_invoker.py must not import other invoker stack or pipeline modules"
         )
 
 
-def test_retrieval_invoker_depends_only_on_contract_and_retrieval_backend() -> None:
-    """retrieval_invoker should not couple to tool/composite/stack/pipeline."""
-    imported = _imported_modules(_parse("retrieval_invoker.py"))
-    assert any("node_factory" in module for module in imported)
-    assert any("xiuxian_rag.retrieval" in module for module in imported)
-    forbidden = {"tool_invoker", "composite_invoker", "invoker_stack", "pipeline"}
-    for module in imported:
-        assert not any(name in module for name in forbidden), (
-            "retrieval_invoker.py must not import tool/composite/stack/pipeline modules"
-        )
+def test_retrieval_invoker_module_is_removed() -> None:
+    assert not (TRACER_DIR / "retrieval_invoker.py").exists()
 
 
 def test_composite_invoker_depends_only_on_tool_contract_layer() -> None:
     """composite_invoker should compose ToolInvoker, not know concrete invokers."""
     imported = _imported_modules(_parse("composite_invoker.py"))
     assert any("node_factory" in module for module in imported)
-    forbidden = {"tool_invoker", "retrieval_invoker", "invoker_stack", "pipeline"}
+    forbidden = {"tool_invoker", "invoker_stack", "pipeline"}
     for module in imported:
         assert not any(name in module for name in forbidden), (
             "composite_invoker.py must not import concrete invokers or pipeline modules"
@@ -75,7 +67,7 @@ def test_invoker_stack_is_only_composition_layer() -> None:
     """invoker_stack is allowed to compose concrete invokers and factory contracts."""
     imported = _imported_modules(_parse("invoker_stack.py"))
 
-    required = {"composite_invoker", "tool_invoker", "retrieval_invoker", "node_factory"}
+    required = {"composite_invoker", "tool_invoker", "node_factory"}
     for name in required:
         assert any(name in module for module in imported), f"invoker_stack.py must import {name}"
 

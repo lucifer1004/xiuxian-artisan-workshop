@@ -1,5 +1,5 @@
 use chrono::Utc;
-use xiuxian_vector::TableInfo;
+use xiuxian_vector_store::TableInfo;
 
 use crate::search::service::core::types::{RepoCompactionTask, SearchPlaneService};
 use crate::search::{SearchMaintenanceStatus, SearchRepoCorpusRecord, SearchRepoPublicationRecord};
@@ -39,7 +39,7 @@ impl SearchPlaneService {
 
     fn repo_compaction_task(&self, record: &SearchRepoCorpusRecord) -> Option<RepoCompactionTask> {
         let publication = record.publication.as_ref()?;
-        if publication.is_datafusion_readable() {
+        if publication.is_parquet_query_readable() {
             return None;
         }
         let maintenance = record.maintenance.as_ref()?;

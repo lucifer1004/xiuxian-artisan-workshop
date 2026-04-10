@@ -26,7 +26,6 @@ use headers::{
     populate_search_headers, populate_topology_3d_headers, populate_vfs_content_headers,
     populate_vfs_resolve_headers, populate_vfs_scan_headers,
 };
-#[cfg(feature = "julia")]
 use headers::{
     populate_code_ast_analysis_headers, populate_refine_doc_headers,
     populate_repo_doc_coverage_headers, populate_repo_overview_headers,

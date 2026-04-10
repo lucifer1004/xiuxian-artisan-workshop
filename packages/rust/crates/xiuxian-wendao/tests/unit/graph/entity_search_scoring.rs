@@ -66,7 +66,7 @@ fn test_search_entities_token_overlap() {
     let graph = KnowledgeGraph::new();
 
     let entities = vec![
-        ("git.smart_commit", EntityType::Tool, "Create smart commits"),
+        ("git.commit", EntityType::Tool, "Create git commits"),
         ("git.status", EntityType::Tool, "Show git status"),
         ("knowledge.code_search", EntityType::Tool, "Search code"),
     ];
@@ -81,12 +81,12 @@ fn test_search_entities_token_overlap() {
         assert!(graph.add_entity(entity).is_ok());
     }
 
-    // "smart commit" should match "git.smart_commit" via token overlap
-    let results = graph.search_entities("smart commit", 10);
+    // "commit changes" should match "git.commit" via token overlap
+    let results = graph.search_entities("commit changes", 10);
     assert!(!results.is_empty());
     assert_eq!(
-        results[0].name, "git.smart_commit",
-        "Token overlap should match 'smart commit' to 'git.smart_commit'"
+        results[0].name, "git.commit",
+        "Token overlap should match 'commit changes' to 'git.commit'"
     );
 }
 

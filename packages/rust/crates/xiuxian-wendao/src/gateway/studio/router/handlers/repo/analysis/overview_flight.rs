@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use xiuxian_vector::{
+use xiuxian_vector_store::{
     LanceDataType, LanceField, LanceInt32Array, LanceRecordBatch, LanceSchema, LanceStringArray,
 };
 use xiuxian_wendao_runtime::transport::{

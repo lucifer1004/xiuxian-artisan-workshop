@@ -2,6 +2,7 @@ pub(crate) mod context;
 mod document;
 mod execution;
 mod payload;
+mod translation;
 
 pub use self::execution::query_graphql_payload;
 pub use self::payload::GraphqlQueryPayload;

@@ -14349,6 +14349,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "xiuxian-vector-store"
+version = "0.1.1"
+dependencies = [
+ "xiuxian-vector",
+]
+
+[[package]]
 name = "xiuxian-wendao"
 version = "0.1.1"
 dependencies = [
@@ -14374,6 +14381,7 @@ dependencies = [
  "log",
  "notify 8.2.0",
  "notify-debouncer-full",
+ "parquet",
  "petgraph 0.7.1",
  "prost",
  "pyo3",
@@ -14414,6 +14422,7 @@ dependencies = [
  "xiuxian-testing",
  "xiuxian-types",
  "xiuxian-vector",
+ "xiuxian-vector-store",
  "xiuxian-wendao-builtin",
  "xiuxian-wendao-core",
  "xiuxian-wendao-julia",
@@ -14499,6 +14508,7 @@ dependencies = [
  "xiuxian-config-core",
  "xiuxian-testing",
  "xiuxian-vector",
+ "xiuxian-vector-store",
  "xiuxian-wendao-core",
 ]
 

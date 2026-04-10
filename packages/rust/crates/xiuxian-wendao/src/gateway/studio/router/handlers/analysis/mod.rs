@@ -1,7 +1,7 @@
 //! Studio API endpoint handlers.
 
 pub(crate) mod flight;
-mod service;
+pub(crate) mod service;
 
 pub(crate) use flight::{
     StudioCodeAstAnalysisFlightRouteProvider, StudioMarkdownAnalysisFlightRouteProvider,

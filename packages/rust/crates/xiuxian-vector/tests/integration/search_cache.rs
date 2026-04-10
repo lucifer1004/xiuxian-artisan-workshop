@@ -57,7 +57,7 @@ fn test_hybrid_cache_miss_then_hit() {
 
     assert!(get_cached_hybrid(path, table, limit, &vector, query_text).is_none());
 
-    let results = vec!["git.smart_commit".into(), "git.status".into()];
+    let results = vec!["git.commit".into(), "git.status".into()];
     set_cached_hybrid(path, table, limit, &vector, query_text, results.clone());
 
     let cached = get_cached_hybrid(path, table, limit, &vector, query_text);

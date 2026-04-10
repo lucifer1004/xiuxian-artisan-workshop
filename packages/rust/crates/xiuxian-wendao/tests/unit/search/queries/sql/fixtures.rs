@@ -6,6 +6,8 @@ use arrow::array::{Array, BooleanArray, Float32Array, Float64Array, Int32Array, 
 use arrow::datatypes::DataType;
 use arrow::util::display::array_value_to_string;
 use serde_json::{Map, Number, Value, json};
+#[cfg(feature = "duckdb")]
+use std::fs;
 use xiuxian_vector::{
     ColumnarScanOptions, LanceBooleanArray, LanceRecordBatch, LanceUInt64Array,
     lance_batch_to_engine_batch,
@@ -23,6 +25,8 @@ use crate::search::{
     BeginBuildDecision, SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace,
     SearchPlaneService, reference_occurrence_batches, reference_occurrence_schema,
 };
+#[cfg(feature = "duckdb")]
+use crate::set_link_graph_wendao_config_override;
 
 pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
     SearchPlaneService::with_paths(
@@ -31,6 +35,17 @@ pub(super) fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneServic
         SearchManifestKeyspace::new("xiuxian:test:studio_sql_flight"),
         SearchMaintenancePolicy::default(),
     )
+}
+
+#[cfg(feature = "duckdb")]
+pub(super) fn write_search_duckdb_runtime_override(
+    body: &str,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(&config_path, body)?;
+    set_link_graph_wendao_config_override(&config_path.to_string_lossy());
+    Ok(temp)
 }
 
 pub(super) fn sample_hit(name: &str, path: &str, line: usize) -> ReferenceSearchHit {

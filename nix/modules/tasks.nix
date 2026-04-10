@@ -152,6 +152,14 @@ in
       just rust-xiuxian-daochang-backend-role-contracts
     '';
 
+    "ci:rust-xiuxian-qianji-scenario-audit-contracts" = mkRustTask ''
+      just rust-xiuxian-qianji-scenario-audit-contracts
+    '';
+
+    "ci:rust-xiuxian-wendao-contract-feedback-consumer" = mkRustTask ''
+      just rust-xiuxian-wendao-contract-feedback-consumer
+    '';
+
     "ci:rust-xiuxian-daochang-embedding-role-perf-medium-gate" = mkRustTask ''
       just rust-xiuxian-daochang-embedding-role-perf-medium-gate
     '';
@@ -172,16 +180,20 @@ in
       just rust-retrieval-audits
     '';
 
-    "ci:rust-wendao-performance-gate" = mkRustTask ''
-      just rust-wendao-performance-gate
+    "ci:rust-wendao-performance-quick" = mkRustTask ''
+      just rust-wendao-performance-quick
+    '';
+
+    "ci:rust-wendao-performance-gateway-formal" = mkRustTask ''
+      just rust-wendao-performance-gateway-formal
+    '';
+
+    "ci:wendao-gateway-perf-summary" = mkPythonScriptTask ''
+      just wendao-gateway-perf-summary
     '';
 
     "ci:rust-wendao-performance-stress" = mkRustTask ''
       just rust-wendao-performance-stress
-    '';
-
-    "ci:rust-wendao-performance-bench" = mkRustTask ''
-      just rust-wendao-performance-bench
     '';
 
     "ci:rust-wendao-performance-bench-fast" = mkRustTask ''
@@ -196,47 +208,12 @@ in
       just test-contract-freeze
     '';
 
-    "ci:docs-vector-search-options-check" = mkPythonScriptTask ''
-      just docs-vector-search-options-check
-    '';
-
-    "ci:scripts-smoke" = mkPythonScriptTask ''
-      just ci-scripts-smoke
-    '';
-
     "ci:test-quick" = mkPythonScriptTask ''
       just test-quick
     '';
 
     "ci:no-inline-python-guard" = mkPythonScriptTask ''
       just no-inline-python-guard
-    '';
-
-    "ci:tool-list-sweep" = mkPythonScriptTask ''
-      just benchmark-tool-list-sweep \
-        "''${OMNI_TOOL_LIST_BASE_URL:-}" \
-        "''${OMNI_TOOL_LIST_HOST:-}" \
-        "''${OMNI_TOOL_LIST_PORT:-}" \
-        "''${OMNI_TOOL_LIST_NO_EMBEDDING:-true}" \
-        "''${OMNI_TOOL_LIST_HEALTH_TIMEOUT_SECS:-120}" \
-        "''${OMNI_TOOL_LIST_TOTAL:-1000}" \
-        "''${OMNI_TOOL_LIST_CONCURRENCY_VALUES:-40,80,120,160,200}" \
-        "''${OMNI_TOOL_LIST_WARMUP_CALLS:-2}" \
-        "''${OMNI_TOOL_LIST_TIMEOUT_SECS:-30}" \
-        "''${OMNI_TOOL_LIST_P95_SLO_MS:-400}" \
-        "''${OMNI_TOOL_LIST_P99_SLO_MS:-800}" \
-        "''${OMNI_TOOL_LIST_STRICT_SNAPSHOT:-true}" \
-        "''${OMNI_TOOL_LIST_WRITE_SNAPSHOT:-false}" \
-        "''${OMNI_TOOL_LIST_REPORT_DIR:-.run/reports/tool-list-sweep}"
-    '';
-
-    "ci:knowledge-recall-gates" = mkPythonScriptTask ''
-      just knowledge-recall-perf-ci \
-        "''${OMNI_KNOWLEDGE_RECALL_RUNS:-3}" \
-        "''${OMNI_KNOWLEDGE_RECALL_WARM_RUNS:-1}" \
-        "''${OMNI_KNOWLEDGE_RECALL_QUERY:-x}" \
-        "''${OMNI_KNOWLEDGE_RECALL_LIMIT:-2}" \
-        "''${OMNI_KNOWLEDGE_RECALL_REPORT_DIR:-.run/reports/knowledge-recall-perf}"
     '';
 
     "ci:wendao-ppr-gate" = mkPythonScriptTask ''
@@ -267,16 +244,8 @@ in
       just memory-gate-quick
     '';
 
-    "ci:memory-gate-nightly" = mkRuntimeTask ''
-      just memory-gate-nightly
-    '';
-
     "ci:memory-gate-a7" = mkRuntimeTask ''
       just memory-gate-a7
-    '';
-
-    "ci:native-runtime-smoke" = mkPythonScriptTask ''
-      just verify-native-runtime
     '';
 
     "ci:valkey-live" = mkRuntimeTask ''

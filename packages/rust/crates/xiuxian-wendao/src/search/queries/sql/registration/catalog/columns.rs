@@ -3,15 +3,14 @@ use std::sync::Arc;
 use arrow::array::{BooleanArray, StringArray, UInt64Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+#[cfg(not(feature = "duckdb"))]
 use datafusion::datasource::MemTable;
-use xiuxian_vector::SearchEngineContext;
+#[cfg(not(feature = "duckdb"))]
+use xiuxian_vector_store::SearchEngineContext;
 
-use super::super::{
-    RegisteredSqlColumn, RegisteredSqlTable, STUDIO_SQL_CATALOG_TABLE_NAME,
-    STUDIO_SQL_COLUMNS_CATALOG_TABLE_NAME, STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME,
-};
-use super::tables::tables_catalog_schema;
-use super::view_sources::view_sources_catalog_schema;
+use crate::search::queries::sql::registration::RegisteredSqlColumn;
+#[cfg(not(feature = "duckdb"))]
+use crate::search::queries::sql::registration::STUDIO_SQL_COLUMNS_CATALOG_TABLE_NAME;
 
 pub(crate) fn columns_catalog_schema() -> Arc<Schema> {
     Arc::new(Schema::new(vec![
@@ -30,46 +29,11 @@ pub(crate) fn columns_catalog_schema() -> Arc<Schema> {
     ]))
 }
 
-pub(crate) async fn collect_registered_columns(
-    query_engine: &SearchEngineContext,
-    tables: &[RegisteredSqlTable],
-) -> Result<Vec<RegisteredSqlColumn>, String> {
-    let mut columns = Vec::new();
-    for table in tables {
-        let schema = if table.sql_table_name == STUDIO_SQL_CATALOG_TABLE_NAME {
-            tables_catalog_schema()
-        } else if table.sql_table_name == STUDIO_SQL_COLUMNS_CATALOG_TABLE_NAME {
-            columns_catalog_schema()
-        } else if table.sql_table_name == STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME {
-            view_sources_catalog_schema()
-        } else {
-            query_engine
-                .session()
-                .table_provider(table.sql_table_name.as_str())
-                .await
-                .map_err(|error| {
-                    format!(
-                        "studio SQL Flight provider failed to inspect schema for `{}`: {error}",
-                        table.sql_table_name
-                    )
-                })?
-                .schema()
-        };
-        columns.extend(
-            schema.fields().iter().enumerate().map(|(index, field)| {
-                RegisteredSqlColumn::from_arrow_field(table, index + 1, field)
-            }),
-        );
-    }
-    Ok(columns)
-}
-
-pub(crate) fn register_columns_catalog_table(
-    query_engine: &SearchEngineContext,
+pub(crate) fn build_columns_catalog_batch(
     columns: &[RegisteredSqlColumn],
-) -> Result<(), String> {
+) -> Result<RecordBatch, String> {
     let schema = columns_catalog_schema();
-    let batch = RecordBatch::try_new(
+    RecordBatch::try_new(
         Arc::clone(&schema),
         vec![
             Arc::new(StringArray::from(
@@ -148,7 +112,16 @@ pub(crate) fn register_columns_catalog_table(
     )
     .map_err(|error| {
         format!("studio SQL Flight provider failed to build SQL column catalog batch: {error}")
-    })?;
+    })
+}
+
+#[cfg(not(feature = "duckdb"))]
+pub(crate) fn register_columns_catalog_table(
+    query_engine: &SearchEngineContext,
+    columns: &[RegisteredSqlColumn],
+) -> Result<(), String> {
+    let schema = columns_catalog_schema();
+    let batch = build_columns_catalog_batch(columns)?;
     let mem_table = MemTable::try_new(schema, vec![vec![batch]]).map_err(|error| {
         format!("studio SQL Flight provider failed to build SQL column catalog: {error}")
     })?;

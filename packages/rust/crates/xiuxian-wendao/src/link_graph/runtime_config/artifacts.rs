@@ -1,21 +1,22 @@
-#[cfg(feature = "julia")]
+#[cfg(all(feature = "julia", feature = "builtin-plugins"))]
 use crate::link_graph::runtime_config::settings::merged_wendao_settings;
-#[cfg(feature = "julia")]
+#[cfg(all(feature = "julia", feature = "builtin-plugins"))]
 use xiuxian_wendao_builtin::resolve_builtin_plugin_artifact_for_selector_with_settings;
 use xiuxian_wendao_core::artifacts::{PluginArtifactPayload, PluginArtifactSelector};
 
 /// Resolve one plugin artifact through the current link-graph runtime configuration.
 #[must_use]
+#[cfg(any(feature = "studio", feature = "zhenfa-router"))]
 pub fn resolve_link_graph_plugin_artifact_for_selector(
     selector: &PluginArtifactSelector,
 ) -> Option<PluginArtifactPayload> {
-    #[cfg(feature = "julia")]
+    #[cfg(all(feature = "julia", feature = "builtin-plugins"))]
     {
         let settings = merged_wendao_settings();
         resolve_builtin_plugin_artifact_for_selector_with_settings(selector, &settings)
     }
 
-    #[cfg(not(feature = "julia"))]
+    #[cfg(not(all(feature = "julia", feature = "builtin-plugins")))]
     {
         let _ = selector;
         None
@@ -27,6 +28,7 @@ pub fn resolve_link_graph_plugin_artifact_for_selector(
 /// # Errors
 ///
 /// Returns an error when the resolved artifact cannot be serialized into TOML.
+#[cfg(any(feature = "studio", feature = "zhenfa-router"))]
 pub fn render_link_graph_plugin_artifact_toml_for_selector(
     selector: &PluginArtifactSelector,
 ) -> Result<Option<String>, toml::ser::Error> {

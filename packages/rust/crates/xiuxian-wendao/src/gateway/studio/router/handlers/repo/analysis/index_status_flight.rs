@@ -4,7 +4,7 @@ use arrow::array::{Array, ArrayRef, BooleanArray, Int64Array, RecordBatch, Strin
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use async_trait::async_trait;
 use serde::Serialize;
-use xiuxian_vector::{
+use xiuxian_vector_store::{
     LanceDataType, LanceField, LanceInt32Array, LanceRecordBatch, LanceSchema, LanceStringArray,
 };
 use xiuxian_wendao_runtime::transport::{

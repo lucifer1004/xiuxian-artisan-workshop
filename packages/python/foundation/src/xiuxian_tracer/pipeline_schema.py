@@ -64,20 +64,6 @@ class CheckpointerRuntimeConfig:
 
 
 @dataclass
-class InvokerRuntimeConfig:
-    """Runtime invoker stack configuration."""
-
-    include_retrieval: bool = True
-
-
-@dataclass
-class RetrievalRuntimeConfig:
-    """Runtime retrieval backend configuration."""
-
-    default_backend: str = "vector"  # vector | hybrid
-
-
-@dataclass
 class TracerRuntimeConfig:
     """Runtime tracer behavior configuration."""
 
@@ -96,8 +82,6 @@ class PipelineRuntimeConfig:
     """Runtime options loaded from YAML `runtime` section."""
 
     checkpointer: CheckpointerRuntimeConfig = field(default_factory=CheckpointerRuntimeConfig)
-    invoker: InvokerRuntimeConfig = field(default_factory=InvokerRuntimeConfig)
-    retrieval: RetrievalRuntimeConfig = field(default_factory=RetrievalRuntimeConfig)
     tracer: TracerRuntimeConfig = field(default_factory=TracerRuntimeConfig)
     state: StateRuntimeConfig = field(default_factory=StateRuntimeConfig)
 
@@ -174,17 +158,11 @@ class PipelineConfig:
     @staticmethod
     def _validate_runtime(runtime: dict[str, Any]) -> None:
         checkpointer = runtime.get("checkpointer", {})
-        invoker = runtime.get("invoker", {})
-        retrieval = runtime.get("retrieval", {})
         tracer = runtime.get("tracer", {})
         state = runtime.get("state", {})
 
         if not isinstance(checkpointer, dict):
             raise ValueError("`runtime.checkpointer` must be a mapping")
-        if not isinstance(invoker, dict):
-            raise ValueError("`runtime.invoker` must be a mapping")
-        if not isinstance(retrieval, dict):
-            raise ValueError("`runtime.retrieval` must be a mapping")
         if not isinstance(tracer, dict):
             raise ValueError("`runtime.tracer` must be a mapping")
         if not isinstance(state, dict):
@@ -193,14 +171,6 @@ class PipelineConfig:
         kind = str(checkpointer.get("type", "none")).lower()
         if kind not in {"none", "memory"}:
             raise ValueError("`runtime.checkpointer.type` must be one of: none, memory")
-
-        include_retrieval = invoker.get("include_retrieval", True)
-        if not isinstance(include_retrieval, bool):
-            raise ValueError("`runtime.invoker.include_retrieval` must be a boolean")
-
-        default_backend = str(retrieval.get("default_backend", "vector")).lower()
-        if default_backend not in {"vector", "hybrid"}:
-            raise ValueError("`runtime.retrieval.default_backend` must be one of: vector, hybrid")
 
         dispatch_mode = str(tracer.get("callback_dispatch_mode", "inline")).lower()
         if dispatch_mode not in {"inline", "background"}:
@@ -215,21 +185,14 @@ class PipelineConfig:
     @staticmethod
     def _parse_runtime(runtime: dict[str, Any]) -> PipelineRuntimeConfig:
         checkpointer = runtime.get("checkpointer", {})
-        invoker = runtime.get("invoker", {})
-        retrieval = runtime.get("retrieval", {})
         tracer = runtime.get("tracer", {})
         state = runtime.get("state", {})
         kind = str(checkpointer.get("type", "none")).lower()
-        default_backend = str(retrieval.get("default_backend", "vector")).lower()
         dispatch_mode = str(tracer.get("callback_dispatch_mode", "inline")).lower()
         state_schema = state.get("schema")
 
         return PipelineRuntimeConfig(
             checkpointer=CheckpointerRuntimeConfig(type=kind),
-            invoker=InvokerRuntimeConfig(
-                include_retrieval=bool(invoker.get("include_retrieval", True))
-            ),
-            retrieval=RetrievalRuntimeConfig(default_backend=default_backend),
             tracer=TracerRuntimeConfig(callback_dispatch_mode=dispatch_mode),
             state=StateRuntimeConfig(
                 schema=state_schema if isinstance(state_schema, str) else None
@@ -381,12 +344,10 @@ class PipelineConfig:
 __all__ = [
     "BranchConfig",
     "CheckpointerRuntimeConfig",
-    "InvokerRuntimeConfig",
     "LoopConfig",
     "PipelineConfig",
     "PipelineRuntimeConfig",
     "PipelineState",
-    "RetrievalRuntimeConfig",
     "Segment",
     "StateRuntimeConfig",
     "StepConfig",

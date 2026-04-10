@@ -91,6 +91,17 @@ defensible future value is Rust-side live Arrow compute, request and response
 shaping, and migration-baseline support where the data is still an in-memory
 Arrow workset rather than a published Parquet corpus or a DuckDB relation.
 
+More concretely, the remaining DataFusion paths now split into two groups:
+
+1. same-layer search execution residue that should migrate away, such as the
+   non-routed request-scoped SQL discovery and logical-view planning, and any
+   adapter that still depends on that shared DataFusion-led execution seam for
+   search-side database work after routed published-Parquet reads move to
+   DuckDB
+2. distinct residual value that can remain, such as in-memory live Arrow
+   compute over generated batches and migration-baseline comparisons while
+   DuckDB cutover is still active
+
 ### 3.3 A Bounded Local Markdown SQL Lane Already Exists
 
 The repository already contains a concrete bounded local relation workflow:
@@ -265,6 +276,29 @@ The currently landed Wendao slices are:
     `ParquetQueryEngine` lanes, emits durable perf reports through
     `xiuxian-testing`, and enforces a configurable DuckDB/DataFusion p95
     ratio budget without widening storage or protocol ownership
+38. a bounded GraphQL execution cutover now keeps document parsing and
+    GraphQL argument decoding adapter-local, but translates the resulting
+    table query into SQL text and executes it through the shared SQL seam
+    instead of planning DataFusion expressions directly inside the GraphQL
+    adapter
+39. a bounded shared-SQL parquet-routing cutover now reuses the same
+    published-Parquet target resolution helper directly under the shared SQL
+    execution seam, so simple single-table queries over active local corpora
+    and concrete repo publication source tables can execute through
+    `ParquetQueryEngine`, while discovery catalogs, logical views, and
+    multi-source queries still stay on shared SQL fallback
+40. a bounded publication-readability naming cutover now treats published
+    repo and local corpora as Parquet/query-engine readable rather than as
+    "DataFusion-readable", so the storage semantics match the actual
+    Parquet publication owner and the bounded execution-kernel split
+41. a bounded shared-SQL routed-metadata follow-up now also builds metadata
+    for eligible routed published-Parquet queries from the request-scoped
+    `SqlQuerySurface`, so routed SQL no longer opens the residual DataFusion
+    query core after Parquet execution just to recover discovery metadata
+41. a bounded FlightSQL discovery-surface cutover now builds
+    `CommandGetDbSchemas` and `CommandGetTables` from publication metadata
+    plus logical-view contracts through one request-scoped `SqlQuerySurface`,
+    so FlightSQL discovery no longer opens the residual DataFusion query core
 
 Qianji does not yet have a stage-local DuckDB pilot, and the shared query
 system still contains DataFusion-led residue on some shared query paths.
@@ -1049,7 +1083,41 @@ Revisit this direction if:
     that live listener dependency and the package itself chooses between an
     explicit local override, a vendored checkout, or the official
     `gRPCServer.jl` `develop` branch source when it prepares the live env
-32. broader performance gating and broader diagnostics pilots are still open
+32. the shared request-scoped SQL seam now also reuses the bounded
+    published-Parquet routing helper directly, so simple single-table SQL
+    queries over active local corpora and concrete repo publication source
+    tables can execute through `ParquetQueryEngine`, while discovery
+    catalogs, logical views, and multi-source queries still stay on the
+    shared SQL fallback
+33. publication readability helpers and readiness checks now also use
+    Parquet/query-engine terminology instead of `DataFusion` terminology,
+    while keeping the storage and execution behavior unchanged
+34. a bounded naming cutover now exposes the retained `DataFusion`
+    search-plane fallback on `SearchPlaneService` as
+    `datafusion_query_engine()`, so parquet-routing call sites no longer
+    present that fallback as a generic search owner
+35. routed published-Parquet execution in `duckdb` builds no longer accepts a
+    production `DataFusion` fallback context: eligible routed SQL, FlightSQL,
+    and gateway publication reads now select DuckDB directly through
+    `ParquetQueryEngine`, while non-`duckdb` builds retain the explicit
+    baseline and shared discovery or logical-view fallback remains separate
+36. the surviving shared SQL fallback is now also named explicitly as a
+    request-scoped DataFusion query core, so discovery catalogs, logical-view
+    assembly, and non-routed fallback execution no longer present themselves
+    as a generic query owner
+37. the bounded FlightSQL `CommandGetTables` discovery path now rebuilds
+    `include_schema=true` payloads from `SqlQuerySurface.columns`, so the
+    residual DataFusion owner line narrows to discovery-surface registration
+    instead of discovery-schema lookup
+38. a bounded FlightSQL discovery-surface follow-up now builds
+    `CommandGetDbSchemas` and `CommandGetTables` from publication metadata
+    plus logical-view contracts through one request-scoped `SqlQuerySurface`,
+    so FlightSQL discovery no longer opens the residual DataFusion query core
+39. a bounded shared-SQL routed-metadata follow-up now also builds metadata
+    for eligible routed published-Parquet queries from the request-scoped
+    `SqlQuerySurface`, so routed SQL no longer opens the residual DataFusion
+    query core after Parquet execution just to recover discovery metadata
+40. broader performance gating and broader diagnostics pilots are still open
 
 ### Phase 3: Qianji Pilot [future]
 

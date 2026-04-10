@@ -1,24 +1,31 @@
 use std::sync::Arc;
 
 use crate::analyzers::RepositoryAnalysisOutput;
-use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::query::{
     ExampleSearchQuery, ExampleSearchResult, ImportSearchQuery, ImportSearchResult,
     ModuleSearchQuery, ModuleSearchResult, SymbolSearchQuery, SymbolSearchResult,
 };
 use crate::search::FuzzySearchOptions;
 
+#[cfg(feature = "studio")]
+use crate::analyzers::cache::RepositorySearchArtifacts;
+#[cfg(feature = "studio")]
 use super::{
     build_example_search_with_artifacts, build_import_search_with_artifacts,
     build_module_search_with_artifacts, build_symbol_search_with_artifacts,
 };
 
+#[cfg(feature = "studio")]
 type FallbackQueryBuilder<Q> = dyn Fn(String, String, usize) -> Q + Send + Sync;
+#[cfg(feature = "studio")]
 type FallbackQueryText<Q> = dyn Fn(&Q) -> String + Send + Sync;
+#[cfg(feature = "studio")]
 type FallbackQueryLimit<Q> = dyn Fn(&Q) -> usize + Send + Sync;
+#[cfg(feature = "studio")]
 type FallbackResultBuilder<Q, T> =
     dyn Fn(&Q, &RepositoryAnalysisOutput, &RepositorySearchArtifacts) -> T + Send + Sync;
 
+#[cfg(feature = "studio")]
 pub(crate) struct RepoAnalysisFallbackContract<Q, T> {
     pub(crate) scope: &'static str,
     pub(crate) fuzzy_options: FuzzySearchOptions,
@@ -28,12 +35,14 @@ pub(crate) struct RepoAnalysisFallbackContract<Q, T> {
     pub(crate) build_result: Arc<FallbackResultBuilder<Q, T>>,
 }
 
+#[cfg(any(feature = "studio", feature = "search-runtime"))]
 pub(crate) fn canonical_import_query_text(query: &ImportSearchQuery) -> String {
     let package = query.package.as_deref().unwrap_or("*");
     let module = query.module.as_deref().unwrap_or("*");
     format!("package={package};module={module}")
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn module_fallback_contract()
 -> RepoAnalysisFallbackContract<ModuleSearchQuery, ModuleSearchResult> {
     RepoAnalysisFallbackContract {
@@ -50,6 +59,7 @@ pub(crate) fn module_fallback_contract()
     }
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn symbol_fallback_contract()
 -> RepoAnalysisFallbackContract<SymbolSearchQuery, SymbolSearchResult> {
     RepoAnalysisFallbackContract {
@@ -66,6 +76,7 @@ pub(crate) fn symbol_fallback_contract()
     }
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn example_fallback_contract()
 -> RepoAnalysisFallbackContract<ExampleSearchQuery, ExampleSearchResult> {
     RepoAnalysisFallbackContract {
@@ -82,6 +93,7 @@ pub(crate) fn example_fallback_contract()
     }
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn import_fallback_contract(
     package: Option<String>,
     module: Option<String>,

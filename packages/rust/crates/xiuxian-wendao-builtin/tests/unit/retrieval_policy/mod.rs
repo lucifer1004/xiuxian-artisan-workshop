@@ -1,4 +1,3 @@
-#[cfg(feature = "julia")]
 mod julia {
     use serde_yaml::Value;
     use xiuxian_wendao_julia::compatibility::link_graph::julia_rerank_provider_selector;

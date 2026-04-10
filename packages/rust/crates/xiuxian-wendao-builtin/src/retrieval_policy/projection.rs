@@ -2,7 +2,6 @@ use serde_yaml::Value;
 use xiuxian_wendao_core::capabilities::PluginCapabilityBinding;
 use xiuxian_wendao_runtime::transport::RerankScoreWeights;
 
-#[cfg(feature = "julia")]
 use xiuxian_wendao_julia::compatibility::link_graph::LinkGraphJuliaRerankRuntimeConfig;
 
 /// Generic rerank projection resolved from the linked builtin plugin bundle.
@@ -21,21 +20,11 @@ pub struct BuiltinRerankRuntimeProjection {
 pub fn resolve_builtin_rerank_runtime_projection_with_settings(
     settings: &Value,
 ) -> BuiltinRerankRuntimeProjection {
-    #[cfg(feature = "julia")]
-    {
-        project_julia_rerank_runtime(&LinkGraphJuliaRerankRuntimeConfig::resolve_with_settings(
-            settings,
-        ))
-    }
-
-    #[cfg(not(feature = "julia"))]
-    {
-        let _ = settings;
-        BuiltinRerankRuntimeProjection::default()
-    }
+    project_julia_rerank_runtime(&LinkGraphJuliaRerankRuntimeConfig::resolve_with_settings(
+        settings,
+    ))
 }
 
-#[cfg(feature = "julia")]
 fn project_julia_rerank_runtime(
     runtime: &LinkGraphJuliaRerankRuntimeConfig,
 ) -> BuiltinRerankRuntimeProjection {
@@ -49,7 +38,6 @@ fn project_julia_rerank_runtime(
     }
 }
 
-#[cfg(feature = "julia")]
 fn build_score_weights(runtime: &LinkGraphJuliaRerankRuntimeConfig) -> Option<RerankScoreWeights> {
     let defaults = RerankScoreWeights::default();
     let vector_weight = runtime.vector_weight;

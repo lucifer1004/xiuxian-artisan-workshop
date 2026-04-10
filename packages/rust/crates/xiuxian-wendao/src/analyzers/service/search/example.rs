@@ -1,11 +1,12 @@
 use std::path::Path;
 
-use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::query::{ExampleSearchHit, ExampleSearchQuery, ExampleSearchResult};
 use crate::analyzers::registry::PluginRegistry;
 use crate::analyzers::saliency::compute_repository_saliency;
+#[cfg(feature = "studio")]
+use crate::analyzers::cache::RepositorySearchArtifacts;
 
 use super::super::helpers::{
     backlinks_for, documents_backlink_lookup, hierarchy_segments_from_path, infer_ecosystem,
@@ -13,9 +14,9 @@ use super::super::helpers::{
 };
 use super::super::{analyze_repository_from_config_with_registry, bootstrap_builtin_registry};
 use super::documents::build_example_metadata_lookup;
-use super::ranking::{
-    RankedSearchRecord, ranked_example_matches, ranked_example_matches_with_artifacts,
-};
+use super::ranking::{RankedSearchRecord, ranked_example_matches};
+#[cfg(feature = "studio")]
+use super::ranking::ranked_example_matches_with_artifacts;
 
 /// Build an example search result from normalized analysis records.
 #[must_use]
@@ -37,6 +38,7 @@ pub fn build_example_search(
 }
 
 #[must_use]
+#[cfg(feature = "studio")]
 pub(crate) fn build_example_search_with_artifacts(
     query: &ExampleSearchQuery,
     analysis: &RepositoryAnalysisOutput,

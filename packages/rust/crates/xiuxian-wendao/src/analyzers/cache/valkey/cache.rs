@@ -60,6 +60,7 @@ impl ValkeyAnalysisCache {
 
     /// Retrieves a cached analysis result by revision lookup.
     #[must_use]
+    #[cfg(feature = "zhenfa-router")]
     pub fn get_for_revision(
         &self,
         repo_id: &str,

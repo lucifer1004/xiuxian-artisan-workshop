@@ -33,7 +33,7 @@ walkdir = { workspace = true }
 globset = { workspace = true }
 tempfile = { workspace = true }
 merman-core = "0.4"
-xiuxian-wendao = { path = "../xiuxian-wendao" }
+xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
 xiuxian-qianhuan = { path = "../xiuxian-qianhuan" }
 xiuxian-ast = { path = "../xiuxian-ast" }
 xiuxian-macros = { path = "../xiuxian-macros" }

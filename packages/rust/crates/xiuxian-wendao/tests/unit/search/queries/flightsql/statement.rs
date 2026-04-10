@@ -116,7 +116,7 @@ database_path = ":memory:"
 
 #[cfg(feature = "duckdb")]
 #[tokio::test]
-async fn flightsql_statement_query_preserves_shared_sql_fallback_for_catalog_queries() {
+async fn flightsql_statement_query_routes_catalog_queries_through_shared_sql_duckdb() {
     let temp_dir = TempDir::new().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let search_plane = fixture_service(&temp_dir);
     publish_reference_hits(
@@ -138,7 +138,12 @@ async fn flightsql_statement_query_preserves_shared_sql_fallback_for_catalog_que
     .await
     .unwrap_or_else(|error| panic!("execute FlightSQL catalog statement query: {error}"));
 
-    assert_eq!(result.route, FlightSqlStatementRoute::SharedSql);
+    assert_eq!(
+        result.route,
+        FlightSqlStatementRoute::SharedSql {
+            engine_kind: LocalRelationEngineKind::DuckDb,
+        }
+    );
     assert_eq!(result.batches.len(), 1);
     assert!(result.batches[0].num_rows() >= 1);
 }

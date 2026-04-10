@@ -1,6 +1,7 @@
 use crate::link_graph::models::LinkGraphRetrievalMode;
 use crate::link_graph::runtime_config::models::LinkGraphRetrievalPolicyRuntimeConfig;
 use crate::link_graph::runtime_config::settings::{get_setting_string, merged_wendao_settings};
+#[cfg(feature = "builtin-plugins")]
 use xiuxian_wendao_builtin::resolve_builtin_rerank_runtime_projection_with_settings;
 use xiuxian_wendao_runtime::config::resolve_link_graph_retrieval_base_runtime_with_settings;
 
@@ -18,10 +19,13 @@ pub(crate) fn resolve_link_graph_retrieval_policy_runtime() -> LinkGraphRetrieva
     {
         resolved.mode = value;
     }
-    let rerank = resolve_builtin_rerank_runtime_projection_with_settings(&settings);
-    resolved.rerank_binding = rerank.binding;
-    resolved.rerank_schema_version = rerank.schema_version;
-    resolved.rerank_score_weights = rerank.score_weights;
+    #[cfg(feature = "builtin-plugins")]
+    {
+        let rerank = resolve_builtin_rerank_runtime_projection_with_settings(&settings);
+        resolved.rerank_binding = rerank.binding;
+        resolved.rerank_schema_version = rerank.schema_version;
+        resolved.rerank_score_weights = rerank.score_weights;
+    }
 
     resolved
 }

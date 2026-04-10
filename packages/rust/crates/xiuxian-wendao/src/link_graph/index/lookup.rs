@@ -25,6 +25,7 @@ impl LinkGraphIndex {
     }
 
     /// Iterate over all indexed documents.
+    #[cfg(feature = "studio")]
     pub(crate) fn docs(&self) -> std::collections::hash_map::Values<'_, String, LinkGraphDocument> {
         self.docs_by_id.values()
     }

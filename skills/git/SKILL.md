@@ -1,6 +1,6 @@
 ---
 type: skill
-title: "Git Version Control Operations and Smart Commit Workflow"
+title: "Git Version Control Operations"
 category: "workflows"
 tags:
   - git
@@ -37,14 +37,10 @@ metadata:
     - "diff"
     - "status"
     - "log"
-    - "hotfix"
     - "pr"
     - "pull request"
     - "code review"
-    - "smart commit"
-    - "smart commit workflow"
   intents:
-    - "Hotfix changes"
     - "Create pull request"
     - "Manage branches"
     - "Commit code"
@@ -55,14 +51,11 @@ metadata:
     - "Check git status"
 ---
 
-# Git Skill (Smart Commit Workflow)
+# Git Skill
 
 > **Code is Mechanism, Prompt is Policy**
 
-## Smart Commit Workflow (Primary Query Anchor)
-
-`smart commit` is the canonical query phrase for this skill.
-Use `git.smart_commit` to run the full smart commit workflow (stage -> scan -> approve -> commit).
+`git` is the canonical query phrase for this skill.
 
 ## Architecture
 
@@ -76,29 +69,8 @@ Commands are exposed through the retained tool runtime as `git.command_name`.
 | `git.status`       | Show working tree status                                |
 | `git.stage_all`    | Stage all changes (with security scan)                  |
 | `git.commit`       | Commit staged changes                                   |
-| `git.smart_commit` | Smart Commit workflow (stage → scan → approve → commit) |
 | `git.push`         | Push to remote                                          |
 | `git.log`          | Show commit logs                                        |
-
-## Smart Commit Workflow
-
-Use `git.smart_commit` for secure, human-in-the-loop commits:
-
-```python
-# Step 1: Start workflow
-git.smart_commit(action="start")
-# Returns workflow_id and diff preview
-
-# Step 2: After LLM analysis and user approval
-git.smart_commit(action="approve", workflow_id="xxx", message="feat: description")
-```
-
-**Flow:** `stage_and_scan` → `route_prepare` → `format_review` → `re_stage` → `interrupt` → `commit`
-
-## Linked Notes
-
-- Related: [Smart Commit Workflow Reference](references/smart-commit-workflow.md)
-- Related: [Skill Routing Value Standard](../../../docs/reference/skill-routing-value-standard.md)
 
 ## Staged Files Feature
 
@@ -163,7 +135,6 @@ git log --oneline
 | Stage all    | `git.stage_all()` (scans for secrets) |
 | Commit       | `git.commit(message="...")`           |
 | Push         | `git.push()`                          |
-| Smart Commit | `git.smart_commit(action="start")`    |
 
 ## Key Principle
 

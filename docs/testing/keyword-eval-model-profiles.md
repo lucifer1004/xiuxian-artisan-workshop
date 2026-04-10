@@ -24,7 +24,7 @@ This document defines how keyword-backend LLM evaluation supports flexible model
 ## Judge Profiles
 
 Judge profiles are currently defined in code:
-`packages/python/foundation/src/omni/foundation/services/keyword_eval.py`
+`packages/python/foundation/src/xiuxian_foundation/services/keyword_eval.py`
 (`DEFAULT_JUDGE_PROFILES`).
 
 - `fast`
@@ -47,14 +47,9 @@ Note:
 
 ## CLI Usage
 
-Probe supported models first:
-
-```bash
-uv run python scripts/probe_llm_models.py \
-  --models "MiniMax-M2.1,MiniMax-M2.5" \
-  --timeout-seconds 15 \
-  --output /tmp/llm-model-probe.json
-```
+When comparing multiple models, use `--skip-unsupported-models` so the evaluator
+probes each candidate once and drops models that are unavailable in the current
+provider.
 
 Single model with fallback:
 
@@ -78,19 +73,6 @@ uv run python scripts/run_keyword_backend_llm_eval.py \
   --model-profile strict \
   --max-queries 20 \
   --output /tmp/keyword-llm-eval-multi.json
-```
-
-Batched multi-model run (recommended for stability):
-
-```bash
-uv run python scripts/run_keyword_backend_multi_model_batches.py \
-  --snapshot packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
-  --models "MiniMax-M2.1,MiniMax-M2.5" \
-  --skip-unsupported-models \
-  --model-profile balanced \
-  --batch-size 10 \
-  --num-batches 4 \
-  --output /tmp/keyword-llm-eval-multi-batched.json
 ```
 
 ## Output Structure

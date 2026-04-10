@@ -100,13 +100,6 @@ fn snapshot_skill_index_json_schema_contract() {
         input_schema: String::new(),
         file_hash: String::new(),
     });
-    entry.add_tool(IndexToolEntry {
-        name: "git.smart_commit".to_string(),
-        description: "Smart commit workflow".to_string(),
-        category: String::new(),
-        input_schema: String::new(),
-        file_hash: String::new(),
-    });
 
     let tool_names = entry
         .tools

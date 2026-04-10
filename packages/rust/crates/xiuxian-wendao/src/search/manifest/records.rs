@@ -11,7 +11,7 @@ pub enum SearchPublicationStorageFormat {
     /// Legacy Lance-backed publication.
     #[default]
     Lance,
-    /// DataFusion-readable Parquet publication.
+    /// Parquet publication readable by the query-engine lane.
     Parquet,
 }
 
@@ -141,9 +141,9 @@ impl SearchRepoPublicationRecord {
             .unwrap_or_else(|| build_repo_publication_epoch(self.publication_id.as_str()))
     }
 
-    /// Whether this publication is readable by the new `DataFusion` execution engine.
+    /// Whether this publication is readable by the Parquet query-engine lane.
     #[must_use]
-    pub fn is_datafusion_readable(&self) -> bool {
+    pub fn is_parquet_query_readable(&self) -> bool {
         matches!(self.storage_format, SearchPublicationStorageFormat::Parquet)
     }
 }

@@ -4,13 +4,18 @@ set -euo pipefail
 uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -q --tb=short
 
 uv run pytest \
+  scripts/test_active_cargo_subprocess_env_imports.py \
+  scripts/test_keyword_eval_script_imports.py \
   scripts/test_render_wendao_ppr_rollout_status.py \
   scripts/test_wendao_ppr_rollout_ci.py \
   scripts/test_gate_wendao_ppr_ci.py \
   scripts/test_render_wendao_gate_status_summary.py \
   scripts/test_render_wendao_gate_line.py \
+  scripts/test_render_wendao_gateway_perf_summary.py \
   scripts/test_render_wendao_rollout_gate_line.py \
+  scripts/test_llm_provider_smoke.py \
   scripts/test_no_inline_python_exec_patterns.py \
+  scripts/test_run_real_metal_test.py \
   scripts/channel/test_epoch_millis.py \
   scripts/channel/test_config_resolver_compat.py \
   scripts/channel/test_resolve_tool_port_from_settings.py \

@@ -31,6 +31,7 @@ pub(crate) fn ranked_symbol_matches(
     ranked_symbol_matches_from_index(query, symbols, &lookup, &index, limit)
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn ranked_symbol_matches_with_artifacts(
     query: &str,
     symbols: &[SymbolRecord],

@@ -7,13 +7,24 @@ authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 
+[features]
+default = ["vector-store"]
+vector-store = [
+  "dep:lance",
+  "dep:lance-arrow",
+  "dep:lance-file",
+  "dep:lance-index",
+  "dep:lance-linalg",
+  "dep:xiuxian-lance",
+]
+
 [dependencies]
 # LanceDB core
-lance = { workspace = true }
-lance-arrow = { workspace = true }
-lance-file = { workspace = true }
-lance-index = { workspace = true }
-lance-linalg = { workspace = true }
+lance = { workspace = true, optional = true }
+lance-arrow = { workspace = true, optional = true }
+lance-file = { workspace = true, optional = true }
+lance-index = { workspace = true, optional = true }
+lance-linalg = { workspace = true, optional = true }
 
 # Tantivy - Rust Lucene for BM25/Sparse Retrieval
 tantivy = "0.25"
@@ -21,7 +32,7 @@ ordered-float = "4.2"
 num-traits = "0.2"
 
 # RecordBatch utilities (extracted to xiuxian-lance)
-xiuxian-lance = { path = "../xiuxian-lance" }
+xiuxian-lance = { path = "../xiuxian-lance", optional = true }
 
 # Arrow IPC for search result batch (same version as lance's arrow for IPC compatibility)
 arrow = { workspace = true }

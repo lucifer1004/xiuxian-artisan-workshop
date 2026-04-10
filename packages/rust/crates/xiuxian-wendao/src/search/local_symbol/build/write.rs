@@ -1,4 +1,4 @@
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
 use crate::search::local_symbol::build::{LocalSymbolBuildPlan, LocalSymbolWriteResult};

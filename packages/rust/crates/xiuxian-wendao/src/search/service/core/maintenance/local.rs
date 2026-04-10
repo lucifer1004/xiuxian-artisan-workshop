@@ -1,4 +1,4 @@
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 use super::helpers::{LOCAL_MAINTENANCE_SHUTDOWN_MESSAGE, PREWARM_ROW_LIMIT};
 use crate::search::SearchCorpusKind;
@@ -74,7 +74,7 @@ impl SearchPlaneService {
                 }));
             }
             let engine_table_name = Self::maintenance_engine_table_name(corpus, table_name);
-            self.search_engine
+            self.datafusion_query_engine
                 .ensure_parquet_table_registered(
                     engine_table_name.as_str(),
                     parquet_path.as_path(),
@@ -88,7 +88,10 @@ impl SearchPlaneService {
             };
             let query =
                 format!("SELECT {projection} FROM {engine_table_name} LIMIT {PREWARM_ROW_LIMIT}");
-            let _ = self.search_engine.sql_batches(query.as_str()).await?;
+            let _ = self
+                .datafusion_query_engine
+                .sql_batches(query.as_str())
+                .await?;
             return Ok(());
         }
 

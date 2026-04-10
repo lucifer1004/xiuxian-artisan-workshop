@@ -13,7 +13,7 @@ use crate::search::repo_entity::build::write::{
 };
 
 use std::collections::BTreeMap;
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 pub(crate) async fn publish_repo_entities(
     service: &SearchPlaneService,

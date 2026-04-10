@@ -51,6 +51,8 @@ Note: the `just test-xiuxian-daochang-valkey-*` recipes call
 `just check-xiuxian-daochang-event-sequence` calls
 `scripts/channel/check_xiuxian_daochang_event_sequence.py` directly. The
 memory suite recipes still use their dedicated Python entrypoints.
+Historical verification rows below may still mention retired shell wrapper names;
+treat the canonical commands above as the current supported entrypoints.
 
 ## Debug Event Filters
 

@@ -107,12 +107,14 @@ pub struct SqlQueryPayload {
     pub batches: Vec<SqlBatchPayload>,
 }
 
+#[cfg(feature = "search-runtime")]
 #[derive(Debug)]
 pub(crate) struct SqlQueryResult {
     metadata: SqlQueryMetadata,
     batches: Vec<EngineRecordBatch>,
 }
 
+#[cfg(feature = "search-runtime")]
 impl SqlQueryResult {
     pub(crate) fn new(metadata: SqlQueryMetadata, batches: Vec<EngineRecordBatch>) -> Self {
         Self { metadata, batches }
@@ -138,6 +140,7 @@ pub(crate) fn sql_query_payload_from_engine_batches(
     Ok(SqlQueryPayload { metadata, batches })
 }
 
+#[cfg(feature = "search-runtime")]
 pub(crate) fn engine_batches_rows_payload(
     batches: &[EngineRecordBatch],
 ) -> Result<Vec<Map<String, Value>>, String> {

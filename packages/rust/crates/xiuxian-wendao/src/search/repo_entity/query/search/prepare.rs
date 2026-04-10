@@ -27,7 +27,7 @@ pub(crate) async fn prepare_repo_entity_search(
     else {
         return Ok(None);
     };
-    if !publication.is_datafusion_readable() {
+    if !publication.is_parquet_query_readable() {
         return Ok(None);
     }
 
@@ -44,9 +44,9 @@ pub(crate) async fn prepare_repo_entity_search(
         publication.publication_id.as_str(),
     );
     #[cfg(feature = "duckdb")]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+    let query_engine = ParquetQueryEngine::configured()?;
     #[cfg(not(feature = "duckdb"))]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    let query_engine = ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
     query_engine
         .ensure_parquet_table_registered(engine_table_name.as_str(), parquet_path.as_path())
         .await?;

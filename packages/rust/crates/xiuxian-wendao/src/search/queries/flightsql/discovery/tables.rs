@@ -2,7 +2,6 @@ use arrow::datatypes::{Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use arrow_flight::sql::CommandGetTables;
 use tonic::Status;
-use xiuxian_vector::SearchEngineContext;
 
 use crate::search::queries::sql::SqlQuerySurface;
 
@@ -13,8 +12,7 @@ pub(in super::super) fn build_tables_flight_info_schema(query: CommandGetTables)
     query.into_builder().schema()
 }
 
-pub(in super::super) async fn build_tables_batch(
-    query_engine: &SearchEngineContext,
+pub(in super::super) fn build_tables_batch(
     surface: &SqlQuerySurface,
     query: CommandGetTables,
 ) -> Result<RecordBatch, Status> {
@@ -24,7 +22,7 @@ pub(in super::super) async fn build_tables_batch(
 
     for table in &surface.tables {
         let table_schema = if include_schema {
-            resolved_table_schema(query_engine, table.sql_table_name.as_str()).await?
+            surface.arrow_schema_for_table(table.sql_table_name.as_str())
         } else {
             empty_schema.clone()
         };
@@ -57,19 +55,4 @@ pub(in super::super) fn flightsql_table_type(sql_object_kind: &str) -> &str {
         "system" => "SYSTEM TABLE",
         _ => "TABLE",
     }
-}
-
-async fn resolved_table_schema(
-    query_engine: &SearchEngineContext,
-    sql_table_name: &str,
-) -> Result<Schema, Status> {
-    query_engine
-        .table(sql_table_name)
-        .await
-        .map(|table| table.schema().as_arrow().clone())
-        .map_err(|error| {
-            Status::internal(format!(
-                "FlightSQL failed to resolve discovery schema for `{sql_table_name}`: {error}"
-            ))
-        })
 }

@@ -171,6 +171,10 @@ fn build_direct_engine_probe(fixture: &GatewayPerfFixture) -> Result<DirectEngin
             parquet_path.display()
         ));
     }
+    #[cfg(feature = "duckdb")]
+    let engine = ParquetQueryEngine::configured()
+        .map_err(|error| format!("configure direct parquet query engine: {error}"))?;
+    #[cfg(not(feature = "duckdb"))]
     let engine = ParquetQueryEngine::configured(SearchEngineContext::new())
         .map_err(|error| format!("configure direct parquet query engine: {error}"))?;
     Ok(DirectEngineProbe {

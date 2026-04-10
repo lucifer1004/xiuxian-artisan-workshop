@@ -14,7 +14,7 @@ pub(super) struct ReferenceFrontmatter {
 /// Contents of the `metadata` block in reference front matter.
 #[derive(Debug, Deserialize)]
 pub(super) struct ReferenceMetadataBlock {
-    /// Tool(s) this reference is for, full name e.g. `git.smart_commit`
+    /// Tool(s) this reference is for, full name e.g. `git.commit`
     /// (string or array).
     #[serde(default, rename = "for_tools")]
     pub(super) for_tools: Option<serde_yaml::Value>,

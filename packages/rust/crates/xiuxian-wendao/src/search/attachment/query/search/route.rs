@@ -91,9 +91,9 @@ async fn prepare_attachment_read(
         active_epoch,
     );
     #[cfg(feature = "duckdb")]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+    let query_engine = ParquetQueryEngine::configured()?;
     #[cfg(not(feature = "duckdb"))]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    let query_engine = ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
     query_engine
         .ensure_parquet_table_registered(table_name.as_str(), parquet_path.as_path())
         .await?;

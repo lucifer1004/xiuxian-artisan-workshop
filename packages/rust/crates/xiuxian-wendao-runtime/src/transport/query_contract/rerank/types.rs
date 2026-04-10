@@ -13,7 +13,6 @@ pub struct RerankScoredCandidate {
 }
 
 /// Shared runtime-owned rerank score weights.
-#[cfg(feature = "transport")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RerankScoreWeights {
     /// Weight applied to the inbound `vector_score`.
@@ -22,7 +21,6 @@ pub struct RerankScoreWeights {
     pub semantic_weight: f64,
 }
 
-#[cfg(feature = "transport")]
 impl Default for RerankScoreWeights {
     fn default() -> Self {
         Self {
@@ -32,7 +30,6 @@ impl Default for RerankScoreWeights {
     }
 }
 
-#[cfg(feature = "transport")]
 impl RerankScoreWeights {
     /// Construct one validated rerank score-weight policy.
     ///

@@ -9,6 +9,7 @@ pub mod resolve;
 #[path = "runtime_config/settings/mod.rs"]
 mod settings;
 
+#[cfg(all(feature = "julia", feature = "builtin-plugins"))]
 pub use artifacts::{
     render_link_graph_plugin_artifact_toml_for_selector,
     resolve_link_graph_plugin_artifact_for_selector,

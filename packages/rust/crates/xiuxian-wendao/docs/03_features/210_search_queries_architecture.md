@@ -72,6 +72,11 @@ The current code-proven ownership split for Wendao search storage is:
 - external business protocol: native Flight first, with FlightSQL as a bounded
   query-adapter surface
 
+The code-level terminology now matches that split more closely too:
+publication readiness is treated as Parquet/query-engine readability rather
+than as "DataFusion-readable" state, because Parquet is the owned publication
+format and `ParquetQueryEngine` now selects the bounded execution kernel.
+
 That means the current system does not collapse everything into DuckDB. The
 boundary is narrower and more specific:
 
@@ -112,6 +117,66 @@ So the intended long-term interpretation is:
 - residual Arrow-native compute inside Rust: DataFusion only where DuckDB is
   not the right tool
 
+### Residual DataFusion Path Classification
+
+The remaining DataFusion usage in the repository now falls into two different
+classes.
+
+#### Same-Layer Search Execution Residue
+
+These paths still compete with DuckDB on the search-side execution layer and
+should be read as migration residue rather than long-term architecture:
+
+- `xiuxian-vector::search_engine::SearchEngineContext` and the
+  `src/search_engine/` foundation still provide the request-scoped DataFusion
+  discovery, logical-view, and SQL collection machinery that backs the
+  remaining shared fallback path and non-`duckdb` baseline
+- non-`duckdb` builds now expose that retained fallback explicitly as
+  `SearchPlaneService::datafusion_query_engine()` rather than as a generic
+  `search_engine()` accessor, but the underlying lane is still same-layer
+  DataFusion residue
+- the shared SQL surface under `src/search/queries/sql/` still owns the
+  request-scoped discovery catalogs, logical-view assembly, and DataFusion-led
+  fallback path, even though simple single-table published-Parquet statements
+  can now bypass that execution path through `ParquetQueryEngine`, which is
+  DuckDB-owned in `duckdb` builds
+- the surviving shared fallback is now named explicitly as a request-scoped
+  DataFusion query core under `SearchQueryService::open_datafusion_core()`,
+  so the remaining owner line is visible at the query-service boundary too
+- the current GraphQL adapter no longer plans DataFusion expressions directly,
+  and eligible single-table table queries can now hit the same bounded
+  parquet query-engine seam through the shared SQL service, but discovery,
+  logical-view, and multi-source GraphQL translations still ride the
+  DataFusion-led fallback path during cutover
+- bounded paths such as the default markdown helper and some diagnostics
+  helpers still keep explicit DataFusion fallbacks or default engines while
+  DuckDB cutover remains in progress
+
+#### Distinct Live Arrow Compute or Baseline Value
+
+These are the only residual DataFusion uses that still make architectural
+sense after the DuckDB search-execution direction is fixed:
+
+- `DataFusionLocalRelationEngine` over generated in-memory Arrow batches when
+  Rust still needs one programmable live compute surface before any Parquet
+  publication or DuckDB relation registration exists
+- migration-baseline and correctness comparisons while DuckDB slices are still
+  being validated against the older execution path
+- narrow request and response shaping work around generated Arrow worksets
+  where a full DuckDB database-style registration step is not yet the right
+  tool
+
+So the practical migration rule is:
+
+- search-side Parquet and routed query execution should move toward DuckDB
+- DataFusion should remain only where the workload is still fundamentally
+  live Arrow compute inside Rust
+
+That narrower split now also appears in the service boundary itself:
+non-`duckdb` builds expose `SearchPlaneService::datafusion_query_engine()`
+only for the retained DataFusion fallback, so Parquet-routing call sites stop
+presenting it as the generic search owner.
+
 This distinction matters because "search storage" in Wendao is now split
 across different layers on purpose:
 
@@ -138,8 +203,9 @@ For the repo lane specifically, the current code shows this narrower split:
   published `repo_entity` and `repo_content_chunk` corpora persisted as
   Parquet
 - repo query execution:
-  `ParquetQueryEngine` selects DataFusion or DuckDB over those Parquet
-  publications
+  routed published-Parquet reads execute through DuckDB directly in `duckdb`
+  builds via `ParquetQueryEngine`; non-`duckdb` builds retain the DataFusion
+  baseline
 - repo diagnostics protocol surfaces:
   native Flight and JSON handlers may register request-scoped Arrow relations
   and run bounded diagnostics SQL, but those routes do not become storage
@@ -150,7 +216,8 @@ So the current repo lane should be read as:
 - state: in-process
 - shared cache: Valkey-backed
 - publication: Parquet
-- execution: DataFusion or DuckDB
+- execution: DuckDB for routed published-Parquet reads in `duckdb` builds;
+  otherwise the non-`duckdb` DataFusion baseline
 - protocol: Flight, JSON, and bounded FlightSQL
 
 ### Local Corpus Lane Ownership
@@ -164,7 +231,8 @@ For the local corpus lane, the current code shows this narrower split:
   Parquet-only for already-migrated local corpora
 - local query execution:
   search and hydration paths read those Parquet publications through
-  `ParquetQueryEngine`, which selects DataFusion or DuckDB
+  `ParquetQueryEngine`; routed published-Parquet reads are DuckDB-owned in
+  `duckdb` builds and keep a DataFusion baseline only in non-`duckdb` builds
 - local cache:
   no separate DuckDB-owned local corpus cache layer is introduced by these
   cuts
@@ -175,7 +243,8 @@ For the local corpus lane, the current code shows this narrower split:
 So the current local corpus lane should be read as:
 
 - publication: Parquet-first
-- execution: DataFusion or DuckDB over Parquet
+- execution: DuckDB over routed Parquet reads in `duckdb` builds; otherwise
+  the non-`duckdb` DataFusion baseline
 - cache/state: not reassigned to DuckDB
 - protocol: gateway routes and bounded FlightSQL over those publications
 
@@ -223,9 +292,10 @@ For protocol surfaces, the current code shows this split:
   it does not own persisted publications or execution engines
 - bounded FlightSQL:
   `StudioFlightSqlService` exposes discovery and statement-query surfaces over
-  the shared query system and the published Parquet query-engine seam; it may
-  route statements into DataFusion or DuckDB execution, but it does not become
-  a storage owner
+  the shared query system and the published Parquet query-engine seam;
+  discovery is now assembled directly from publication metadata and
+  logical-view contracts, while statements may still route into DataFusion or
+  DuckDB execution, and the service does not become a storage owner
 - JSON gateway handlers:
   Studio HTTP/JSON handlers call the underlying search-plane and repo/local
   search methods, then serialize response payloads; they are protocol adapters
@@ -240,7 +310,8 @@ So the current protocol-surface split should be read as:
 - publication: Parquet
 - state: in-process
 - cache: Valkey-backed where enabled
-- execution: DataFusion or DuckDB selected underneath those protocol surfaces
+- execution: DuckDB for routed published-Parquet reads in `duckdb` builds,
+  otherwise residual DataFusion fallback underneath those protocol surfaces
 
 The bounded DuckDB analytics proposal is tracked separately in
 [RFC: DuckDB as a Bounded In-Process Analytic Lane for Wendao and Qianji](../../../../../../docs/rfcs/2026-04-08-wendao-qianji-duckdb-bounded-analytics-rfc.md).
@@ -316,18 +387,17 @@ storage usage visible without introducing a broader profiling system.
 The next gateway-facing slice is landed too. Repo-backed gateway reads for
 `repo_entity` and `repo_content_chunk` now route published Parquet scans
 through a bounded `ParquetQueryEngine` seam under `src/duckdb/parquet.rs`.
-When `search.duckdb.enabled` is true in a `duckdb` build, those repo-backed
-gateway reads execute through DuckDB; otherwise they fall back to the current
-DataFusion engine. This is the first gateway read cutover under the RFC, while
-non-repo gateway handlers and local-corpus Lance writer removal remain future
-work.
+Those routed published-Parquet repo reads are now DuckDB-owned in `duckdb`
+builds; non-`duckdb` builds retain the DataFusion baseline. This is the first
+gateway read cutover under the RFC, while non-repo gateway handlers and
+local-corpus Lance writer removal remain future work.
 
 The next local-corpus gateway slice is landed too. The published `local_symbol`
 read lane now reuses the same bounded `ParquetQueryEngine`, so local-symbol
 search, autocomplete, and payload hydration no longer read directly from
-`SearchEngineContext`. When `search.duckdb.enabled` is true in a `duckdb`
-build, those published `local_symbol` parquet reads execute through DuckDB;
-otherwise they fall back to DataFusion.
+`SearchEngineContext`. Those routed published `local_symbol` parquet reads are
+now DuckDB-owned in `duckdb` builds and keep a DataFusion baseline only in
+non-`duckdb` builds.
 
 The next symbol-route gateway slice is landed too. `/search/symbols` now
 reuses the published `local_symbol` read lane instead of reading from the
@@ -352,9 +422,9 @@ same bounded `ParquetQueryEngine`, so the stage-one scan and payload
 hydration path no longer reads directly from `SearchEngineContext`. The SQL
 builder for this lane now quotes engine-facing identifiers such as `column`,
 which keeps the published parquet read path valid in both DataFusion and
-DuckDB. When `search.duckdb.enabled` is true in a `duckdb` build, those
-published `reference_occurrence` parquet reads execute through DuckDB;
-otherwise they fall back to DataFusion.
+DuckDB. Those routed published `reference_occurrence` parquet reads are now
+DuckDB-owned in `duckdb` builds and keep a DataFusion baseline only in
+non-`duckdb` builds.
 
 The next reference-occurrence ownership slice is landed too. The
 `reference_occurrence` build owner now rewrites its published table directly
@@ -368,10 +438,9 @@ read lane behind `/search/attachments` now reuses the same bounded
 `ParquetQueryEngine`, so the stage-one scan and payload hydration path no
 longer reads directly from `SearchEngineContext`. The SQL builder for this
 lane now quotes engine-facing identifiers and table names as well, keeping the
-same published parquet read path valid in both DataFusion and DuckDB. When
-`search.duckdb.enabled` is true in a `duckdb` build, those published
-`attachment` parquet reads execute through DuckDB; otherwise they fall back to
-DataFusion.
+same published parquet read path valid in both DataFusion and DuckDB. Those
+routed published `attachment` parquet reads are now DuckDB-owned in `duckdb`
+builds and keep a DataFusion baseline only in non-`duckdb` builds.
 
 The next attachment ownership slice is landed too. The `attachment` build
 owner now rewrites its published table directly to Parquet through the bounded
@@ -387,10 +456,10 @@ reuses the same bounded `ParquetQueryEngine`, so the stage-one scan and
 payload hydration path no longer read directly from `SearchEngineContext`.
 The SQL builder for this lane now quotes engine-facing identifiers and table
 names as well, keeping the same published parquet read path valid in both
-DataFusion and DuckDB. When `search.duckdb.enabled` is true in a `duckdb`
-build, those published `knowledge_section` parquet reads execute through
-DuckDB; otherwise they fall back to DataFusion. Knowledge intent/source merge
-orchestration remains a separate future migration question.
+DataFusion and DuckDB. Those routed published `knowledge_section` parquet
+reads are now DuckDB-owned in `duckdb` builds and keep a DataFusion baseline
+only in non-`duckdb` builds. Knowledge intent/source merge orchestration
+remains a separate future migration question.
 
 The next knowledge ownership slice is landed too. The `knowledge_section`
 build owner now rewrites its published table directly to Parquet through the
@@ -435,6 +504,32 @@ local parquet files through the existing epoch table-name helpers. The logical
 teach FlightSQL to plan local-symbol views; it only makes `CommandStatementQuery`
 agree with `CommandGetTables` on the already-exposed `local_symbol` source-table
 family.
+
+The next bounded FlightSQL discovery slice is landed too. `CommandGetDbSchemas`
+and `CommandGetTables` now assemble the request-scoped discovery surface
+directly from publication metadata and logical-view contracts through
+`SearchQueryService::open_sql_surface()` instead of opening the residual
+DataFusion query core. `include_schema=true` still rebuilds schemas directly
+from `SqlQuerySurface.columns`, so concrete tables and logical views keep the
+same FlightSQL contract while the residual DataFusion owner line no longer
+includes FlightSQL discovery itself.
+
+The next shared-SQL cutover slice is landed too. The same published-parquet
+target resolution now lives under the shared SQL execution seam itself, so
+simple single-table queries over active `reference_occurrence`,
+`attachment`, `knowledge_section`, concrete `local_symbol` source tables, and
+concrete repo publication source tables can execute through
+`ParquetQueryEngine` instead of always going through the request-scoped
+DataFusion core. Discovery catalogs, logical views, and multi-source
+statements still stay on the shared SQL fallback, which means GraphQL-to-SQL
+translation can now reach the same DuckDB/DataFusion parquet lane for
+eligible table queries without introducing a second planner.
+
+The next shared-SQL metadata follow-up is landed too. Those routed
+published-Parquet queries now build result metadata from the same
+request-scoped `SqlQuerySurface` that FlightSQL discovery uses, so eligible
+routed SQL no longer opens the residual DataFusion query core just to recover
+catalog, column, and view-source metadata after Parquet execution.
 
 The next bounded diagnostics slice is landed too. The Studio search-index
 status route now computes its top-level total, phase counts,
@@ -567,7 +662,8 @@ business capabilities, not just query-language translation.
 ## Shared Queries System
 
 The shared `queries/` system is the family boundary that should compile every
-query language down to the same DataFusion execution core:
+query language down to one shared query-execution seam rather than to a
+permanent DataFusion core:
 
 - SQL
 - FlightSQL
@@ -579,8 +675,10 @@ The contract for the shared system is:
 
 1. validate the request language payload
 2. open one request-scoped query core over the visible Wendao search-plane data
-3. translate request shape into a DataFusion-readable query or plan
-4. execute against that request-scoped query core
+3. translate request shape into SQL text or another bounded query shape
+4. execute through the shared SQL seam, which may route eligible
+   single-table published-Parquet queries through `ParquetQueryEngine` and
+   otherwise falls back to the request-scoped shared SQL core
 5. return Arrow-native batches plus adapter-specific metadata or rendering
 
 ## First Physical Slice
@@ -613,8 +711,8 @@ The shared execution rule is now enforced in code:
 
 - Flight provider code may wrap SQL execution results
 - CLI `query` code may render SQL execution results
-- neither adapter may own a private copy of the request-scoped DataFusion
-  assembly or execution flow
+- neither adapter may own a private copy of the request-scoped SQL assembly,
+  parquet-routing, or fallback execution flow
 
 ## Planned Namespace Shape
 
@@ -767,14 +865,49 @@ shape end to end. `src/gateway/studio/search/handlers/code_search/search/`
 is the real gateway owner, the old test-mounted implementation files are
 retired, and the linked host proofs now execute Studio code-search against
 plain Julia and plain Modelica plugin repositories backed by the Julia-owned
-native parser-summary routes.
+native parser-summary routes. Those focused gateway proofs now also sit on the
+default unit-test surface instead of a Julia-only test gate. The same
+default-surface rule now covers the linked `studio_repo_sync_api` Modelica
+suite too: the external plugin path proofs for repo overview, module search,
+repo index, repo sync, projected pages, planner, gap reports, and symbol
+search all execute on the default unit-test surface against the Julia-owned
+native parser routes. Repo-index concurrency drift is normalized in the test
+redaction seam, and the Modelica symbol snapshot is pinned to the native
+parser span contract.
+The repo-backed Flight analysis route-wiring proofs now follow that same
+default-surface rule as well. The shared repo fixture explicitly boots the
+linked Julia parser-summary service before materializing repo-backed Flight
+analysis routes, so `analysis/code-ast`, `analysis/repo-overview`,
+`analysis/repo-doc-coverage`, `analysis/repo-projected-page-index-tree`, and
+`analysis/refine-doc` no longer fall back to the generic solver-demo base URL
+or hide behind a Julia-only test gate.
+The same default-surface rule now covers the focused repo-intelligence
+integration proofs for `repo_symbol_search` and `repo_overview`, so the
+gateway-facing Modelica search slice is no longer hidden behind a Julia-only
+gate there either.
+
+The repo-aware `analysis/code-ast` path now follows the same ownership rule.
+`src/gateway/studio/router/handlers/analysis/service/code_ast.rs` is the
+gateway-owned loader, but the repository analysis it materializes for plain
+Julia and plain Modelica plugin repositories now resolves through the same
+Julia-owned native parser line instead of any Rust-local Julia or Modelica AST
+execution path. The focused host proofs
+`load_code_ast_analysis_response_supports_plain_julia_plugin_repository` and
+`load_code_ast_analysis_response_supports_plain_modelica_plugin_repository`
+pin that repo-aware boundary.
+
+The builtin registry boundary now follows that same rule. The default
+`xiuxian-wendao-builtin` bundle links the shared Julia plus Modelica plugin
+line directly, so builtin bootstrap no longer needs a feature-gated second
+registry slice to make those two native parser routes visible.
 
 Within `search/queries/graphql/`, document parsing should stay adapter-local,
-while execution should delegate into the existing shared SQL/DataFusion
-surface:
+while GraphQL-to-SQL translation and execution should delegate into the
+existing shared SQL surface:
 
 - table and view lookup through request-scoped SQL registration
-- DataFusion dataframe operators compiled from the GraphQL query shape
+- SQL text compiled from the GraphQL query shape rather than adapter-local
+  DataFusion dataframe operators
 - no direct graph-native business traversal unless the graph data is first
   materialized as SQL-visible tables or views
 
@@ -789,8 +922,8 @@ Future query adapters should follow the same feature-folder rule:
 
 - Do not place new query-language translation logic inside business handlers.
 - Do not widen the native Flight gateway with query-adapter planning logic.
-- Keep shared query semantics in `xiuxian-wendao`, because DataFusion query
-  semantics belong there rather than in `runtime`.
+- Keep shared query semantics in `xiuxian-wendao`, because shared query
+  execution ownership belongs there rather than in `runtime`.
 - Keep request-scoped surface assembly behind one shared query-core seam rather
   than letting SQL, GraphQL, and FlightSQL each call the low-level assembly
   helper directly.

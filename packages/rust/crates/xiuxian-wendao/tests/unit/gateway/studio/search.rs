@@ -10,7 +10,6 @@ use crate::search::SearchPlaneService;
 use serde_json::json;
 use tempfile::tempdir;
 
-#[cfg(feature = "julia")]
 #[path = "search/code_search_intent.rs"]
 mod code_search_intent;
 

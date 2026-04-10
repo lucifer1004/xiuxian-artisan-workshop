@@ -76,10 +76,10 @@ async fn local_symbol_query_can_rerank_across_multiple_tables() {
     )
     .unwrap_or_else(|error| panic!("write parquet b: {error}"));
     #[cfg(feature = "duckdb")]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())
+    let query_engine = ParquetQueryEngine::configured()
         .unwrap_or_else(|error| panic!("build parquet query engine: {error}"));
     #[cfg(not(feature = "duckdb"))]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    let query_engine = ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
     query_engine
         .ensure_parquet_table_registered(
             "local_symbol_project_a",

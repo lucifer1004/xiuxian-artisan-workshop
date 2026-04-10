@@ -8,9 +8,7 @@ use xiuxian_vector::{EngineRecordBatch, SearchEngineContext, VectorStoreError};
 use super::connection::SearchDuckDbConnection;
 use super::engine::LocalRelationEngineKind;
 #[cfg(feature = "duckdb")]
-use super::engine::{
-    build_drop_duckdb_registered_relation_sql, ensure_duckdb_identifier, quoted_duckdb_identifier,
-};
+use super::engine::build_duckdb_parquet_view_sql;
 #[cfg(feature = "duckdb")]
 use super::runtime::resolve_search_duckdb_runtime;
 #[cfg(feature = "duckdb")]
@@ -59,7 +57,7 @@ impl DuckDbParquetQueryEngine {
     }
 }
 
-/// Narrow Parquet-backed query-engine seam for repo-backed gateway search.
+/// Narrow Parquet-backed query-engine seam for published Parquet search reads.
 #[derive(Clone)]
 pub enum ParquetQueryEngine {
     /// Execute repo-backed Parquet reads through the existing `DataFusion` lane.
@@ -70,29 +68,21 @@ pub enum ParquetQueryEngine {
 }
 
 impl ParquetQueryEngine {
-    /// Build one configured Parquet query engine for repo-backed reads.
+    /// Build one configured Parquet query engine for published Parquet reads.
     ///
-    /// When `search.duckdb.enabled` is true and the `duckdb` feature is
-    /// compiled in, repo-backed reads become `DuckDB`-backed. Otherwise the
-    /// current `DataFusion` search engine remains the fallback.
+    /// In `duckdb` builds, routed published-Parquet reads are now explicitly
+    /// `DuckDB`-owned and no longer accept a production `DataFusion` fallback
+    /// context.
     ///
     /// # Errors
     ///
-    /// Returns an error when runtime-selected `DuckDB` initialization fails.
+    /// Returns an error when the resolved `DuckDB` runtime cannot be
+    /// initialized.
     #[cfg(feature = "duckdb")]
-    pub fn configured(default_context: SearchEngineContext) -> Result<Self, VectorStoreError> {
-        #[cfg(feature = "duckdb")]
-        {
-            let runtime = resolve_search_duckdb_runtime();
-            if runtime.enabled {
-                return DuckDbParquetQueryEngine::from_runtime(runtime)
-                    .map(|engine| Self::DuckDb(Arc::new(engine)));
-            }
-        }
-
-        Ok(Self::DataFusion(DataFusionParquetQueryEngine::new(
-            default_context,
-        )))
+    pub fn configured() -> Result<Self, VectorStoreError> {
+        let mut runtime = resolve_search_duckdb_runtime();
+        runtime.enabled = true;
+        DuckDbParquetQueryEngine::from_runtime(runtime).map(|engine| Self::DuckDb(Arc::new(engine)))
     }
 
     /// Build one configured Parquet query engine for repo-backed reads.
@@ -174,7 +164,8 @@ impl DuckDbParquetQueryEngine {
         table_name: &str,
         table_path: &Path,
     ) -> Result<(), VectorStoreError> {
-        let sql = build_duckdb_parquet_view_sql(table_name, table_path)?;
+        let sql = build_duckdb_parquet_view_sql(table_name, table_path)
+            .map_err(VectorStoreError::General)?;
         let guard = self.lock_connection()?;
         guard.connection().execute_batch(sql.as_str()).map_err(|error| {
             VectorStoreError::General(format!(
@@ -201,18 +192,4 @@ impl DuckDbParquetQueryEngine {
             .collect::<Vec<_>>();
         Ok(batches)
     }
-}
-
-#[cfg(feature = "duckdb")]
-fn build_duckdb_parquet_view_sql(
-    table_name: &str,
-    table_path: &Path,
-) -> Result<String, VectorStoreError> {
-    ensure_duckdb_identifier(table_name, "table").map_err(VectorStoreError::General)?;
-    let quoted_table_name = quoted_duckdb_identifier(table_name);
-    let escaped_path = table_path.to_string_lossy().replace('\'', "''");
-    Ok(format!(
-        "{drop_sql}\nCREATE TEMP VIEW {quoted_table_name} AS SELECT * FROM read_parquet('{escaped_path}');",
-        drop_sql = build_drop_duckdb_registered_relation_sql(table_name),
-    ))
 }

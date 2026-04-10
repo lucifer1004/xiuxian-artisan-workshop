@@ -11,12 +11,13 @@ use prost::Message;
 use tonic::{Request, Response, Status};
 
 use crate::search::queries::SearchQueryService;
+use crate::search::queries::sql::configured_parquet_query_engine;
 
 use super::discovery::{
     build_catalogs_batch, build_catalogs_flight_info_schema, build_schemas_batch,
     build_schemas_flight_info_schema, build_tables_batch, build_tables_flight_info_schema,
 };
-use super::execution::{configured_parquet_query_engine, execute_flightsql_statement_query};
+use super::execution::execute_flightsql_statement_query;
 use super::metadata::STUDIO_FLIGHT_SQL_INFO_DATA;
 use super::statement::{
     StatementCache, cache_statement_batches, new_statement_cache, new_statement_handle,
@@ -195,7 +196,7 @@ impl FlightSqlService for StudioFlightSqlService {
         let batches = take_statement_batches(&self.statement_cache, &ticket)?;
         let schema = batches.first().map_or_else(
             || Arc::new(Schema::empty()),
-            xiuxian_vector::EngineRecordBatch::schema,
+            xiuxian_vector_store::EngineRecordBatch::schema,
         );
         Ok(response_stream(schema, batches))
     }
@@ -237,12 +238,16 @@ impl FlightSqlService for StudioFlightSqlService {
         Response<<Self as arrow_flight::flight_service_server::FlightService>::DoGetStream>,
         Status,
     > {
-        let query_core = self.query_service.open_core().await.map_err(|error| {
-            Status::internal(format!(
-                "FlightSQL failed to register discovery SQL surface: {error}"
-            ))
-        })?;
-        let batch = build_schemas_batch(query, query_core.surface())?;
+        let query_surface = self
+            .query_service
+            .open_sql_surface()
+            .await
+            .map_err(|error| {
+                Status::internal(format!(
+                    "FlightSQL failed to build discovery SQL surface: {error}"
+                ))
+            })?;
+        let batch = build_schemas_batch(query, &query_surface)?;
         let schema = batch.schema();
         Ok(response_stream(schema, vec![batch]))
     }
@@ -255,12 +260,16 @@ impl FlightSqlService for StudioFlightSqlService {
         Response<<Self as arrow_flight::flight_service_server::FlightService>::DoGetStream>,
         Status,
     > {
-        let query_core = self.query_service.open_core().await.map_err(|error| {
-            Status::internal(format!(
-                "FlightSQL failed to register discovery SQL surface: {error}"
-            ))
-        })?;
-        let batch = build_tables_batch(query_core.engine(), query_core.surface(), query).await?;
+        let query_surface = self
+            .query_service
+            .open_sql_surface()
+            .await
+            .map_err(|error| {
+                Status::internal(format!(
+                    "FlightSQL failed to build discovery SQL surface: {error}"
+                ))
+            })?;
+        let batch = build_tables_batch(&query_surface, query)?;
         let schema = batch.schema();
         Ok(response_stream(schema, vec![batch]))
     }

@@ -20,7 +20,7 @@ use crate::search::{
     SearchRepoPublicationInput,
 };
 use chrono::Utc;
-use xiuxian_wendao_julia::integration_support::spawn_wendaosearch_demo_julia_parser_summary_service;
+use xiuxian_wendao_julia::integration_support::spawn_wendaosearch_julia_parser_summary_service;
 
 fn julia_parser_summary_plugin_config(base_url: &str) -> RepositoryPluginConfig {
     RepositoryPluginConfig::Config {
@@ -350,7 +350,7 @@ async fn prepare_incremental_analysis_returns_refresh_only_for_non_code_revision
 
 #[tokio::test]
 async fn prepare_incremental_analysis_merges_leaf_julia_source_changes() {
-    let (base_url, mut guard) = spawn_wendaosearch_demo_julia_parser_summary_service().await;
+    let (base_url, mut guard) = spawn_wendaosearch_julia_parser_summary_service().await;
     let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     init_git_repository(tempdir.path());
     fs::create_dir_all(tempdir.path().join("src"))
@@ -428,7 +428,7 @@ async fn prepare_incremental_analysis_merges_leaf_julia_source_changes() {
 
 #[tokio::test]
 async fn prepare_incremental_analysis_reuses_cached_analysis_for_example_churn() {
-    let (base_url, mut guard) = spawn_wendaosearch_demo_julia_parser_summary_service().await;
+    let (base_url, mut guard) = spawn_wendaosearch_julia_parser_summary_service().await;
     let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     init_git_repository(tempdir.path());
     fs::create_dir_all(tempdir.path().join("src"))

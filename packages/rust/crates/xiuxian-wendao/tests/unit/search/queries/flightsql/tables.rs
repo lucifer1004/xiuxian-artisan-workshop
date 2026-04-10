@@ -138,3 +138,49 @@ async fn flightsql_tables_discovery_can_include_arrow_schema_bytes() {
         });
     assert!(!table_schema.is_null(0));
 }
+
+#[tokio::test]
+async fn flightsql_tables_discovery_can_include_arrow_schema_bytes_for_logical_views() {
+    let temp_dir = TempDir::new().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let search_plane = fixture_service(&temp_dir);
+    publish_repo_content_chunks(
+        &search_plane,
+        "alpha/repo",
+        &[repo_document(
+            "src/lib.rs",
+            "pub fn alpha() -> usize { 1 }\n",
+            "rust",
+            1,
+        )],
+        "rev-1",
+    )
+    .await;
+    let service = build_studio_flightsql_service(search_plane);
+
+    let batches = fetch_command_batches(
+        &service,
+        CommandGetTables {
+            catalog: Some("wendao".to_string()),
+            db_schema_filter_pattern: Some("repo".to_string()),
+            table_name_filter_pattern: Some("repo_content_chunk".to_string()),
+            table_types: vec!["VIEW".to_string()],
+            include_schema: true,
+        },
+    )
+    .await;
+
+    assert_eq!(batches.len(), 1);
+    assert_eq!(batches[0].num_rows(), 1);
+    assert_eq!(
+        string_value(&batches[0], "table_name", 0),
+        "repo_content_chunk"
+    );
+    let table_schema = batches[0]
+        .column_by_name("table_schema")
+        .unwrap_or_else(|| {
+            panic!(
+                "table_schema column should be present for logical views when include_schema=true"
+            )
+        });
+    assert!(!table_schema.is_null(0));
+}

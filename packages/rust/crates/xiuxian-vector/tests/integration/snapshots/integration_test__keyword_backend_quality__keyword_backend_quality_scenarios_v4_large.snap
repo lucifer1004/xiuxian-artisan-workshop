@@ -722,7 +722,7 @@ expression: report
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -731,12 +731,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "exact_keyword",
       "success_at_1": "1.0000",
-      "text": "git commit workflow",
-      "top1": "git.smart_commit"
+      "text": "git commit staged",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -745,12 +745,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "intent_phrase",
       "success_at_1": "1.0000",
-      "text": "safe commit approved commit flow",
-      "top1": "git.smart_commit"
+      "text": "commit code staged changes",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -759,12 +759,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "bilingual_mix",
       "success_at_1": "1.0000",
-      "text": "git 中文 场景 safe commit",
-      "top1": "git.smart_commit"
+      "text": "git 中文 场景 commit code",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -774,11 +774,11 @@ expression: report
       "scene": "workflow_ambiguous",
       "success_at_1": "1.0000",
       "text": "run git workflow commit",
-      "top1": "git.smart_commit"
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit",
+        "git.commit",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -788,12 +788,12 @@ expression: report
       "r_at_5": "1.0000",
       "scene": "tool_discovery",
       "success_at_1": "1.0000",
-      "text": "discover right tool for git workflow",
-      "top1": "git.smart_commit"
+      "text": "discover right tool for git staged",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -803,11 +803,11 @@ expression: report
       "scene": "ops_short",
       "success_at_1": "1.0000",
       "text": "git commit",
-      "top1": "git.smart_commit"
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -816,12 +816,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "troubleshooting",
       "success_at_1": "1.0000",
-      "text": "fix issue with git and workflow",
-      "top1": "git.smart_commit"
+      "text": "fix issue with git and staged",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "0.5000",
       "ndcg_at_5": "0.5788",
@@ -830,12 +830,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "planning",
       "success_at_1": "0.0000",
-      "text": "plan task using safe commit commit",
+      "text": "plan task using commit code commit",
       "top1": "crawl4ai.crawl_url"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -844,12 +844,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "audit",
       "success_at_1": "1.0000",
-      "text": "audit and verify git safe commit",
-      "top1": "git.smart_commit"
+      "text": "audit and verify git commit code",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -859,7 +859,7 @@ expression: report
       "scene": "automation",
       "success_at_1": "1.0000",
       "text": "automate git commit pipeline",
-      "top1": "git.smart_commit"
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
@@ -2604,7 +2604,7 @@ expression: report
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2613,12 +2613,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "exact_keyword",
       "success_at_1": "1.0000",
-      "text": "git commit workflow",
-      "top1": "git.smart_commit"
+      "text": "git commit staged",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2627,12 +2627,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "intent_phrase",
       "success_at_1": "1.0000",
-      "text": "safe commit approved commit flow",
-      "top1": "git.smart_commit"
+      "text": "commit code staged changes",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2641,12 +2641,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "bilingual_mix",
       "success_at_1": "1.0000",
-      "text": "git 中文 场景 safe commit",
-      "top1": "git.smart_commit"
+      "text": "git 中文 场景 commit code",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2656,11 +2656,11 @@ expression: report
       "scene": "workflow_ambiguous",
       "success_at_1": "1.0000",
       "text": "run git workflow commit",
-      "top1": "git.smart_commit"
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit",
+        "git.commit",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2670,12 +2670,12 @@ expression: report
       "r_at_5": "1.0000",
       "scene": "tool_discovery",
       "success_at_1": "1.0000",
-      "text": "discover right tool for git workflow",
+      "text": "discover right tool for git staged",
       "top1": "skill.discover"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2685,11 +2685,11 @@ expression: report
       "scene": "ops_short",
       "success_at_1": "1.0000",
       "text": "git commit",
-      "top1": "git.smart_commit"
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2698,12 +2698,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "troubleshooting",
       "success_at_1": "1.0000",
-      "text": "fix issue with git and workflow",
-      "top1": "git.smart_commit"
+      "text": "fix issue with git and staged",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2712,12 +2712,12 @@ expression: report
       "r_at_5": "0.5000",
       "scene": "planning",
       "success_at_1": "1.0000",
-      "text": "plan task using safe commit commit",
-      "top1": "git.smart_commit"
+      "text": "plan task using commit code commit",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit",
+        "git.commit",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2727,12 +2727,12 @@ expression: report
       "r_at_5": "1.0000",
       "scene": "audit",
       "success_at_1": "1.0000",
-      "text": "audit and verify git safe commit",
-      "top1": "git.smart_commit"
+      "text": "audit and verify git commit code",
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [
-        "git.smart_commit"
+        "git.commit"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9173",
@@ -2742,7 +2742,7 @@ expression: report
       "scene": "automation",
       "success_at_1": "1.0000",
       "text": "automate git commit pipeline",
-      "top1": "git.smart_commit"
+      "top1": "git.commit"
     },
     {
       "matched_relevant": [

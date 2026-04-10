@@ -4,7 +4,7 @@ use crate::search::knowledge_section::build::types::{
 use crate::search::knowledge_section::schema::{knowledge_section_batches, path_column};
 use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 #[cfg(test)]
 use crate::gateway::studio::types::UiProjectConfig;

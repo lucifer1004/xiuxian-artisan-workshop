@@ -151,8 +151,6 @@ def create_workflow_from_pipeline_with_defaults(
     *,
     tool_client: Any | None = None,
     mapping: dict[str, Any] | None = None,
-    include_retrieval: bool = True,
-    retrieval_default_backend: str = "vector",
     tool_invoker: ToolInvoker | None = None,
     checkpointer: Any | None = None,
     use_memory_saver: bool = False,
@@ -164,8 +162,6 @@ def create_workflow_from_pipeline_with_defaults(
         tool_invoker = create_default_invoker_stack(
             tool_client=tool_client,
             mapping=mapping,
-            include_retrieval=include_retrieval,
-            retrieval_default_backend=retrieval_default_backend,
         )
 
     return create_workflow_from_pipeline(
@@ -216,8 +212,6 @@ def create_workflow_from_yaml(
     mapping: dict[str, Any] | None = None,
     tool_invoker: ToolInvoker | None = None,
     checkpointer: Any | None = None,
-    include_retrieval: bool | None = None,
-    retrieval_default_backend: str | None = None,
     use_memory_saver: bool | None = None,
     callback_dispatch_mode: DispatchMode | str | None = None,
 ) -> Any:
@@ -225,14 +219,6 @@ def create_workflow_from_yaml(
     pipeline_config = load_pipeline(path)
     runtime = pipeline_config.runtime
 
-    resolved_include_retrieval = (
-        include_retrieval if include_retrieval is not None else runtime.invoker.include_retrieval
-    )
-    resolved_retrieval_default_backend = (
-        retrieval_default_backend
-        if retrieval_default_backend is not None
-        else runtime.retrieval.default_backend
-    )
     resolved_use_memory_saver = (
         use_memory_saver if use_memory_saver is not None else runtime.checkpointer.type == "memory"
     )
@@ -249,8 +235,6 @@ def create_workflow_from_yaml(
         state_schema=resolved_state_schema,
         tool_client=tool_client,
         mapping=mapping,
-        include_retrieval=resolved_include_retrieval,
-        retrieval_default_backend=resolved_retrieval_default_backend,
         tool_invoker=tool_invoker,
         checkpointer=checkpointer,
         use_memory_saver=resolved_use_memory_saver,

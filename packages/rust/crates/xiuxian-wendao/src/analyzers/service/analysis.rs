@@ -93,6 +93,7 @@ pub fn analyze_registered_repository_bundle_with_registry(
     );
     if let Some(cached) = load_cached_repository_analysis(&cache_key)? {
         return Ok(CachedRepositoryAnalysis {
+            #[cfg(feature = "studio")]
             cache_key,
             analysis: cached,
         });
@@ -101,6 +102,7 @@ pub fn analyze_registered_repository_bundle_with_registry(
     let valkey_cache = ValkeyAnalysisCache::new()?;
     if let Some(cached) = load_cached_analysis_from_valkey(&cache_key, valkey_cache.as_ref())? {
         return Ok(CachedRepositoryAnalysis {
+            #[cfg(feature = "studio")]
             cache_key,
             analysis: cached,
         });
@@ -156,6 +158,7 @@ pub fn analyze_registered_repository_bundle_with_registry(
     store_cached_repository_analysis(cache_key.clone(), &output)?;
 
     Ok(CachedRepositoryAnalysis {
+        #[cfg(feature = "studio")]
         cache_key,
         analysis: output,
     })

@@ -18,10 +18,10 @@ use super::{
 use crate::analyzers::bootstrap_builtin_registry;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::search::build_symbol_index;
+use crate::gateway::studio::search::handlers::tests::linked_parser_summary::ensure_linked_julia_parser_summary_service;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
 use crate::repo_index::RepoCodeDocument;
 use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
-#[cfg(feature = "julia")]
 use xiuxian_wendao_runtime::transport::{
     ANALYSIS_CODE_AST_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
 };
@@ -78,7 +78,6 @@ fn write_file_or_panic(path: impl AsRef<Path>, contents: &str, context: &str) {
     std::fs::write(path, contents).unwrap_or_else(|error| panic!("{context}: {error}"));
 }
 
-#[cfg(feature = "julia")]
 fn init_git_repo_or_panic(path: impl AsRef<Path>, context: &str) {
     let output = Command::new("git")
         .args(["init", "--quiet"])
@@ -204,7 +203,6 @@ fn populate_markdown_analysis_headers(metadata: &mut tonic::metadata::MetadataMa
     );
 }
 
-#[cfg(feature = "julia")]
 fn populate_code_ast_analysis_headers(
     metadata: &mut tonic::metadata::MetadataMap,
     path: &str,
@@ -461,9 +459,10 @@ dirs = ["docs"]
     assert_eq!(ticket, ANALYSIS_MARKDOWN_ROUTE);
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn build_studio_flight_service_for_roots_accepts_code_ast_analysis_routes() {
+    ensure_linked_julia_parser_summary_service()
+        .unwrap_or_else(|error| panic!("linked Julia parser-summary service: {error}"));
     let temp_dir = tempdir_or_panic("temp dir should build");
     let project_root = temp_dir.path().join("project");
     let storage_root = temp_dir.path().join("storage");

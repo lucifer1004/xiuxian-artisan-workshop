@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use super::*;
 use crate::analyzers::{
@@ -8,19 +8,14 @@ use crate::analyzers::{
     RepositoryRefreshPolicy, analyze_registered_repository_with_registry,
     bootstrap_builtin_registry,
 };
+use crate::gateway::studio::search::handlers::tests::linked_parser_summary::{
+    ensure_linked_julia_parser_summary_service, ensure_linked_modelica_parser_summary_service,
+};
 use crate::gateway::studio::test_support::{commit_all, init_git_repository};
 use crate::repo_index::{
     RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
 };
 use serial_test::serial;
-use xiuxian_wendao_julia::integration_support::{
-    spawn_wendaosearch_demo_julia_parser_summary_service,
-    spawn_wendaosearch_demo_modelica_parser_summary_service,
-};
-use xiuxian_wendao_julia::{
-    set_linked_julia_parser_summary_base_url_for_tests,
-    set_linked_modelica_parser_summary_base_url_for_tests,
-};
 
 #[tokio::test]
 #[serial(julia_live)]
@@ -291,85 +286,5 @@ end PI;
 fn initialize_git_fixture(repo_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     init_git_repository(repo_dir);
     commit_all(repo_dir, "seed fixture");
-    Ok(())
-}
-
-struct LinkedParserSummaryService {
-    base_url: String,
-}
-
-static LINKED_JULIA_PARSER_SUMMARY_SERVICE: OnceLock<LinkedParserSummaryService> = OnceLock::new();
-static LINKED_MODELICA_PARSER_SUMMARY_SERVICE: OnceLock<LinkedParserSummaryService> =
-    OnceLock::new();
-
-fn ensure_linked_julia_parser_summary_service() -> Result<(), Box<dyn std::error::Error>> {
-    if LINKED_JULIA_PARSER_SUMMARY_SERVICE.get().is_none() {
-        let (sender, receiver) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap_or_else(|error| {
-                    panic!("build linked Julia parser-summary runtime: {error}")
-                });
-            let (base_url, guard) =
-                runtime.block_on(spawn_wendaosearch_demo_julia_parser_summary_service());
-            sender.send(base_url).unwrap_or_else(|error| {
-                panic!("send linked Julia parser-summary base URL: {error}")
-            });
-            std::mem::forget(guard);
-            runtime.block_on(std::future::pending::<()>());
-        });
-        let base_url = receiver.recv().map_err(|error| {
-            Box::<dyn std::error::Error>::from(format!(
-                "receive linked Julia parser-summary base URL: {error}"
-            ))
-        })?;
-        let _ = LINKED_JULIA_PARSER_SUMMARY_SERVICE.set(LinkedParserSummaryService { base_url });
-    }
-    let service = LINKED_JULIA_PARSER_SUMMARY_SERVICE.get().ok_or_else(|| {
-        Box::<dyn std::error::Error>::from(
-            "linked Julia parser-summary base URL was not initialized".to_string(),
-        )
-    })?;
-    set_linked_julia_parser_summary_base_url_for_tests(service.base_url.clone())
-        .map_err(Box::<dyn std::error::Error>::from)?;
-    Ok(())
-}
-
-fn ensure_linked_modelica_parser_summary_service() -> Result<(), Box<dyn std::error::Error>> {
-    if LINKED_MODELICA_PARSER_SUMMARY_SERVICE.get().is_none() {
-        let (sender, receiver) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap_or_else(|error| {
-                    panic!("build linked Modelica parser-summary runtime: {error}")
-                });
-            let (base_url, guard) =
-                runtime.block_on(spawn_wendaosearch_demo_modelica_parser_summary_service());
-            sender.send(base_url).unwrap_or_else(|error| {
-                panic!("send linked Modelica parser-summary base URL: {error}")
-            });
-            std::mem::forget(guard);
-            runtime.block_on(std::future::pending::<()>());
-        });
-        let base_url = receiver.recv().map_err(|error| {
-            Box::<dyn std::error::Error>::from(format!(
-                "receive linked Modelica parser-summary base URL: {error}"
-            ))
-        })?;
-        let _ = LINKED_MODELICA_PARSER_SUMMARY_SERVICE.set(LinkedParserSummaryService { base_url });
-    }
-    let service = LINKED_MODELICA_PARSER_SUMMARY_SERVICE
-        .get()
-        .ok_or_else(|| {
-            Box::<dyn std::error::Error>::from(
-                "linked Modelica parser-summary base URL was not initialized".to_string(),
-            )
-        })?;
-    set_linked_modelica_parser_summary_base_url_for_tests(service.base_url.clone())
-        .map_err(Box::<dyn std::error::Error>::from)?;
     Ok(())
 }

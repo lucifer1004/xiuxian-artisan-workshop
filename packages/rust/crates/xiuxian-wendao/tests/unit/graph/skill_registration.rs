@@ -14,11 +14,11 @@ fn test_register_skill_entities_creates_entities_and_relations() {
             routing_keywords: vec![],
         },
         SkillDoc {
-            id: "git.smart_commit".to_string(),
+            id: "git.commit".to_string(),
             doc_type: "command".to_string(),
             skill_name: "git".to_string(),
-            tool_name: "git.smart_commit".to_string(),
-            content: "Create a smart commit with AI-generated message".to_string(),
+            tool_name: "git.commit".to_string(),
+            content: "Create a git commit".to_string(),
             routing_keywords: vec!["commit".to_string(), "git".to_string()],
         },
         SkillDoc {
@@ -58,8 +58,8 @@ fn test_register_skill_entities_creates_entities_and_relations() {
         result.entities_added
     );
 
-    // CONTAINS: git->git.smart_commit, git->git.status, knowledge->knowledge.recall = 3
-    // RELATED_TO: git.smart_commit->{commit,git}, git.status->{status,git}, knowledge.recall->{search,recall} = 6
+    // CONTAINS: git->git.commit, git->git.status, knowledge->knowledge.recall = 3
+    // RELATED_TO: git.commit->{commit,git}, git.status->{status,git}, knowledge.recall->{search,recall} = 6
     assert!(
         result.relations_added >= 9,
         "Expected >= 9 relations, got {}",
@@ -73,8 +73,8 @@ fn test_register_skill_entities_creates_entities_and_relations() {
     let hops = graph.multi_hop_search("git", 2);
     let names: Vec<String> = hops.iter().map(|e| e.name.clone()).collect();
     assert!(
-        names.contains(&"git.smart_commit".to_string()),
-        "Multi-hop from 'git' should reach 'git.smart_commit', got: {names:?}",
+        names.contains(&"git.commit".to_string()),
+        "Multi-hop from 'git' should reach 'git.commit', got: {names:?}",
     );
 }
 

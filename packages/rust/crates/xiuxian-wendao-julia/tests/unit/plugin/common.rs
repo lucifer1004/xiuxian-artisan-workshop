@@ -8,8 +8,8 @@ use crate::compatibility::link_graph::{
     DEFAULT_JULIA_ANALYZER_PACKAGE_DIR, DEFAULT_JULIA_ARROW_PACKAGE_DIR,
 };
 use crate::integration_support::{
-    JuliaExampleServiceGuard, spawn_wendaosearch_demo_julia_parser_summary_service,
-    spawn_wendaosearch_demo_modelica_parser_summary_service,
+    JuliaExampleServiceGuard, spawn_wendaosearch_julia_parser_summary_service,
+    spawn_wendaosearch_modelica_parser_summary_service,
 };
 use crate::{
     set_linked_julia_parser_summary_base_url_for_tests,
@@ -169,7 +169,7 @@ pub(crate) fn ensure_linked_julia_parser_summary_service() -> Result<(), Box<dyn
                 .build()
                 .map_err(|error| error.to_string())?;
             Ok::<(String, JuliaExampleServiceGuard), String>(
-                runtime.block_on(spawn_wendaosearch_demo_julia_parser_summary_service()),
+                runtime.block_on(spawn_wendaosearch_julia_parser_summary_service()),
             )
         })
         .join()
@@ -194,7 +194,7 @@ pub(crate) fn ensure_linked_modelica_parser_summary_service()
                 .build()
                 .map_err(|error| error.to_string())?;
             Ok::<(String, JuliaExampleServiceGuard), String>(
-                runtime.block_on(spawn_wendaosearch_demo_modelica_parser_summary_service()),
+                runtime.block_on(spawn_wendaosearch_modelica_parser_summary_service()),
             )
         })
         .join()

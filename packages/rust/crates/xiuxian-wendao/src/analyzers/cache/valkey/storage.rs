@@ -163,6 +163,7 @@ pub(super) fn decode_analysis_payload(
     Some(decoded.analysis)
 }
 
+#[cfg(feature = "zhenfa-router")]
 pub(super) fn decode_analysis_payload_for_revision(
     repo_id: &str,
     checkout_root: &str,

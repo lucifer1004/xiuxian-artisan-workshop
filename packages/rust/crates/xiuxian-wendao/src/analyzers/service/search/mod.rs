@@ -1,4 +1,5 @@
 //! Repository search functions (overview, module, symbol, example, import, doc coverage).
+#[cfg(feature = "studio")]
 mod artifacts;
 mod contracts;
 mod coverage;
@@ -24,9 +25,14 @@ pub use module::*;
 pub use overview::*;
 pub use symbol::*;
 
+#[cfg(feature = "studio")]
 pub(crate) use artifacts::repository_search_artifacts;
+#[cfg(feature = "studio")]
 pub(crate) use contracts::{
-    RepoAnalysisFallbackContract, canonical_import_query_text, example_fallback_contract,
-    import_fallback_contract, module_fallback_contract, symbol_fallback_contract,
+    RepoAnalysisFallbackContract, example_fallback_contract, import_fallback_contract,
+    module_fallback_contract, symbol_fallback_contract,
 };
+#[cfg(feature = "search-runtime")]
+pub(crate) use contracts::canonical_import_query_text;
+#[cfg(feature = "studio")]
 pub(crate) use documents::ExampleSearchMetadata;

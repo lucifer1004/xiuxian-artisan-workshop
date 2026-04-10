@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 use crate::duckdb::ParquetQueryEngine;
 use crate::search::attachment::schema::{

@@ -1,4 +1,4 @@
-use xiuxian_vector::LanceRecordBatch;
+use xiuxian_vector_store::LanceRecordBatch;
 use xiuxian_wendao_runtime::transport::RepoSearchFlightRequest;
 
 use super::batch::repo_search_batch_from_hits;

@@ -72,7 +72,6 @@ fn planner_rank_key(hit: &Value) -> (std::cmp::Reverse<i64>, String, String, Str
     )
 }
 
-#[cfg(feature = "julia")]
 fn modelica_nodocs_router(
     repo_id: &str,
 ) -> Result<(tempfile::TempDir, axum::Router), Box<dyn std::error::Error>> {
@@ -110,7 +109,6 @@ async fn docs_planner_search_endpoint_returns_gap_hits() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_planner_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let (_temp_dir, router) = modelica_nodocs_router("modelica-gateway-sync")?;
@@ -169,7 +167,6 @@ async fn docs_planner_queue_endpoint_returns_grouped_gap_backlog() -> TestResult
     Ok(())
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_planner_queue_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let (_temp_dir, router) = modelica_nodocs_router("modelica-gateway-queue")?;
@@ -239,7 +236,6 @@ async fn docs_planner_rank_endpoint_returns_priority_sorted_gaps() -> TestResult
     Ok(())
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_planner_rank_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let (_temp_dir, router) = modelica_nodocs_router("modelica-gateway-rank")?;
@@ -311,7 +307,6 @@ async fn docs_planner_workset_endpoint_returns_opened_gap_batch() -> TestResult 
     Ok(())
 }
 
-#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_planner_workset_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let (_temp_dir, router) = modelica_nodocs_router("modelica-gateway-workset")?;

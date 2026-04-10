@@ -17,18 +17,19 @@ pub(crate) async fn prepare_local_symbol_read_tables(
         service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
     if table_names.is_empty() {
         #[cfg(feature = "duckdb")]
-        let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+        let query_engine = ParquetQueryEngine::configured()?;
         #[cfg(not(feature = "duckdb"))]
-        let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+        let query_engine =
+            ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
         return Ok(PreparedLocalSymbolRead {
             query_engine,
             table_names,
         });
     }
     #[cfg(feature = "duckdb")]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone())?;
+    let query_engine = ParquetQueryEngine::configured()?;
     #[cfg(not(feature = "duckdb"))]
-    let query_engine = ParquetQueryEngine::configured(service.search_engine().clone());
+    let query_engine = ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
     for table_name in &table_names {
         let parquet_path =
             service.local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str());

@@ -20,7 +20,6 @@ async def test_default_stack_uses_mapping_when_available():
         return {"source": "mapping", "payload": payload}
 
     invoker = create_default_invoker_stack(
-        include_retrieval=False,
         mapping={"demo.run": mapped},
     )
     out = await invoker.invoke("demo", "run", {"x": 1}, {})
@@ -35,7 +34,6 @@ async def test_default_stack_prioritizes_tool_client_over_mapping():
 
     invoker = create_default_invoker_stack(
         tool_client=_ToolClient(),
-        include_retrieval=False,
         mapping={"demo.run": mapped},
     )
     out = await invoker.invoke("demo", "run", {"x": 1}, {})
@@ -45,33 +43,8 @@ async def test_default_stack_prioritizes_tool_client_over_mapping():
 
 @pytest.mark.asyncio
 async def test_default_stack_falls_back_to_noop():
-    invoker = create_default_invoker_stack(include_retrieval=False, mapping={})
+    invoker = create_default_invoker_stack(mapping={})
     out = await invoker.invoke("unknown", "tool", {}, {})
     assert out["status"] == "completed"
     assert out["server"] == "unknown"
     assert out["tool"] == "tool"
-
-
-@pytest.mark.asyncio
-async def test_default_stack_can_include_retrieval(monkeypatch):
-    import xiuxian_tracer.invoker_stack as module
-
-    class _FakeRetrievalInvoker:
-        def __init__(self, default_backend: str = "vector"):
-            self.default_backend = default_backend
-
-        async def invoke(self, server, tool, payload, state):
-            if server == "retriever" and tool == "search":
-                return {"source": "retrieval", "count": 1, "backend": self.default_backend}
-            return {"status": "not_implemented"}
-
-    monkeypatch.setattr(module, "RetrievalToolInvoker", _FakeRetrievalInvoker)
-    invoker = module.create_default_invoker_stack(
-        include_retrieval=True,
-        retrieval_default_backend="hybrid",
-        mapping={},
-    )
-    out = await invoker.invoke("retriever", "search", {"query": "typed"}, {})
-    assert out["source"] == "retrieval"
-    assert out["count"] == 1
-    assert out["backend"] == "hybrid"

@@ -1,5 +1,5 @@
 use arrow::array::{StringArray, StringViewArray};
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 use super::types::AttachmentSearchError;
 

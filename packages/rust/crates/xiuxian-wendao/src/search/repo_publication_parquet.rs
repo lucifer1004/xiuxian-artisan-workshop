@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use arrow::array::{Array, BooleanArray, LargeStringArray, StringArray, StringViewArray};
 use arrow::compute::filter_record_batch;
 use chrono::{DateTime, Utc};
-use xiuxian_vector::{
+use xiuxian_vector_store::{
     EngineRecordBatch, LanceRecordBatch, SearchEngineContext, VectorStoreError,
     lance_batches_to_engine_batches, write_engine_batches_to_parquet_file,
 };

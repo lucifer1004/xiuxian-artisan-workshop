@@ -79,3 +79,48 @@ async fn graphql_table_query_requires_shared_query_service_context() {
 
     assert!(error.contains("require a shared query service"));
 }
+
+#[tokio::test]
+async fn graphql_table_query_escapes_string_filter_literals_through_shared_sql_surface() {
+    let search_plane_temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let service = fixture_service(&search_plane_temp);
+    publish_reference_hits(
+        &service,
+        "graphql-table-query-escaping-1",
+        &[
+            sample_hit("Alpha'Service", "src/lib.rs", 10),
+            sample_hit("BetaThing", "src/beta.rs", 20),
+        ],
+    )
+    .await;
+    let context = graphql_context(service);
+
+    let payload = query_graphql_payload_with_context(
+        &context,
+        r#"
+        {
+          reference_occurrence(
+            filter: { name: "Alpha'Service" }
+            limit: 1
+          ) {
+            name
+            path
+            line
+          }
+        }
+        "#,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("graphql escaped string query: {error}"));
+
+    let rows = payload
+        .data
+        .get("reference_occurrence")
+        .and_then(serde_json::Value::as_array)
+        .unwrap_or_else(|| panic!("graphql payload should include reference_occurrence array"));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].get("name"),
+        Some(&serde_json::Value::String("Alpha'Service".to_string()))
+    );
+}

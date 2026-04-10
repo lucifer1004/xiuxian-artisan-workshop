@@ -1,6 +1,8 @@
 mod code_search;
 mod helpers;
 mod intent;
+#[path = "../../../../../support/linked_parser_summary.rs"]
+pub(crate) mod linked_parser_summary;
 mod query;
 mod repo_content;
 

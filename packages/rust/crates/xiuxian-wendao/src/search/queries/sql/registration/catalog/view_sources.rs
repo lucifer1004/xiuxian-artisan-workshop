@@ -3,10 +3,14 @@ use std::sync::Arc;
 use arrow::array::{StringArray, UInt64Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+#[cfg(not(feature = "duckdb"))]
 use datafusion::datasource::MemTable;
-use xiuxian_vector::SearchEngineContext;
+#[cfg(not(feature = "duckdb"))]
+use xiuxian_vector_store::SearchEngineContext;
 
-use super::super::{RegisteredSqlViewSource, STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME};
+use crate::search::queries::sql::registration::RegisteredSqlViewSource;
+#[cfg(not(feature = "duckdb"))]
+use crate::search::queries::sql::registration::STUDIO_SQL_VIEW_SOURCES_CATALOG_TABLE_NAME;
 
 pub(crate) fn view_sources_catalog_schema() -> Arc<Schema> {
     Arc::new(Schema::new(vec![
@@ -19,12 +23,11 @@ pub(crate) fn view_sources_catalog_schema() -> Arc<Schema> {
     ]))
 }
 
-pub(crate) fn register_view_sources_catalog_table(
-    query_engine: &SearchEngineContext,
+pub(crate) fn build_view_sources_catalog_batch(
     view_sources: &[RegisteredSqlViewSource],
-) -> Result<(), String> {
+) -> Result<RecordBatch, String> {
     let schema = view_sources_catalog_schema();
-    let batch = RecordBatch::try_new(
+    RecordBatch::try_new(
         Arc::clone(&schema),
         vec![
             Arc::new(StringArray::from(
@@ -67,7 +70,16 @@ pub(crate) fn register_view_sources_catalog_table(
     )
     .map_err(|error| {
         format!("studio SQL Flight provider failed to build SQL view-source catalog batch: {error}")
-    })?;
+    })
+}
+
+#[cfg(not(feature = "duckdb"))]
+pub(crate) fn register_view_sources_catalog_table(
+    query_engine: &SearchEngineContext,
+    view_sources: &[RegisteredSqlViewSource],
+) -> Result<(), String> {
+    let schema = view_sources_catalog_schema();
+    let batch = build_view_sources_catalog_batch(view_sources)?;
     let mem_table = MemTable::try_new(schema, vec![vec![batch]]).map_err(|error| {
         format!("studio SQL Flight provider failed to build SQL view-source catalog: {error}")
     })?;

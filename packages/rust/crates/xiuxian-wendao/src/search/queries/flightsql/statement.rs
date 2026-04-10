@@ -11,7 +11,7 @@ use prost::Message;
 use tokio_stream::StreamExt;
 use tonic::{Response, Status};
 use uuid::Uuid;
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 pub(super) type StatementCache = Arc<DashMap<String, Vec<EngineRecordBatch>>>;
 pub(super) type DoGetResponseStream =

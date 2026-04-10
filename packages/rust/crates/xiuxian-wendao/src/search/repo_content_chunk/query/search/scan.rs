@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 use crate::search::ranking::{RetainedWindow, StreamingRerankTelemetry, trim_ranked_string_map};
 

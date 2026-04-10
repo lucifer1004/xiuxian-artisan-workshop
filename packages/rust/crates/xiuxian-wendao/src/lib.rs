@@ -76,6 +76,7 @@ pub mod parsers;
 #[cfg(feature = "pybindings")]
 pub mod pybindings;
 /// Internal query-core skeleton for RFC-driven Wendao execution adapters.
+#[cfg(feature = "studio")]
 pub mod query_core;
 /// Repo-intelligence ingestion runtime and status coordination.
 #[cfg(feature = "zhenfa-router")]
@@ -110,6 +111,7 @@ pub mod link_graph_refs;
 pub mod skill_vfs;
 pub mod unified_symbol;
 /// High-level search router for integrating multiple backends.
+#[cfg(feature = "zhenfa-router")]
 pub mod zhenfa_router;
 
 xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
@@ -182,13 +184,12 @@ pub use link_graph::{
     LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSemanticIgnitionTelemetry,
     LinkGraphSortField, LinkGraphSortOrder, LinkGraphSortTerm, LinkGraphStats,
     LinkGraphSuggestedLink, LinkGraphSuggestedLinkDecision, LinkGraphSuggestedLinkDecisionRequest,
-    LinkGraphSuggestedLinkDecisionResult, LinkGraphSuggestedLinkRequest,
-    LinkGraphSuggestedLinkState, LinkGraphTagFilter, OpenAiCompatibleSemanticIgnition,
-    OpenAiCompatibleSemanticIgnitionError, QUANTUM_SALIENCY_COLUMN, QuantumAnchorHit,
-    QuantumContext, QuantumContextBuildError, QuantumContextSnapshot, QuantumFusionOptions,
+    LinkGraphSuggestedLinkDecisionResult, LinkGraphSuggestedLinkRequest, LinkGraphSuggestedLinkState,
+    LinkGraphTagFilter, QUANTUM_SALIENCY_COLUMN, QuantumAnchorHit, QuantumContext,
+    QuantumContextBuildError, QuantumContextSnapshot, QuantumFusionOptions,
     QuantumFusionTelemetry, QuantumSemanticIgnition, QuantumSemanticIgnitionError,
-    QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest, VectorStoreSemanticIgnition,
-    compute_link_graph_saliency, narrate_subgraph, quantum_context_snapshot_id,
+    QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest, compute_link_graph_saliency,
+    narrate_subgraph, quantum_context_snapshot_id,
     resolve_link_graph_index_runtime, set_link_graph_config_home_override,
     set_link_graph_wendao_config_override, valkey_quantum_context_snapshot_drop,
     valkey_quantum_context_snapshot_get, valkey_quantum_context_snapshot_get_with_valkey,
@@ -202,6 +203,11 @@ pub use link_graph::{
     valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
     valkey_suggested_link_recent_latest, valkey_suggested_link_recent_latest_with_valkey,
     valkey_suggested_link_recent_with_valkey,
+};
+#[cfg(feature = "vector-store")]
+pub use link_graph::{
+    OpenAiCompatibleSemanticIgnition, OpenAiCompatibleSemanticIgnitionError,
+    VectorStoreSemanticIgnition,
 };
 pub use link_graph_refs::{
     LinkGraphEntityRef, LinkGraphRefStats, count_entity_refs, extract_entity_refs,
@@ -235,6 +241,8 @@ pub use unified_symbol::{SymbolSource, UnifiedIndexStats, UnifiedSymbol, Unified
 #[cfg(feature = "zhenfa-router")]
 pub use zhenfa_router::WendaoZhenfaRouter;
 /// Directly execute a search via the router using standard request types.
+#[cfg(feature = "zhenfa-router")]
 pub use zhenfa_router::execute_search;
 /// Execute a search via the router using raw RPC parameters.
+#[cfg(feature = "zhenfa-router")]
 pub use zhenfa_router::search_from_rpc_params;

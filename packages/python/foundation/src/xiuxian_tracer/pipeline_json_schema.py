@@ -138,23 +138,6 @@ PIPELINE_JSON_SCHEMA: dict[str, Any] = {
                     },
                     "additionalProperties": False,
                 },
-                "invoker": {
-                    "type": "object",
-                    "properties": {
-                        "include_retrieval": {"type": "boolean"},
-                    },
-                    "additionalProperties": False,
-                },
-                "retrieval": {
-                    "type": "object",
-                    "properties": {
-                        "default_backend": {
-                            "type": "string",
-                            "enum": ["vector", "hybrid"],
-                        }
-                    },
-                    "additionalProperties": False,
-                },
                 "tracer": {
                     "type": "object",
                     "properties": {

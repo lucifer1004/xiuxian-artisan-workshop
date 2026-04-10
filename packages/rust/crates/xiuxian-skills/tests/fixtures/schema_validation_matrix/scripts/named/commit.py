@@ -1,4 +1,4 @@
-@skill_command(name="smart_commit")
-def smart_commit(action: str = "start") -> str:
-    """Smart commit workflow."""
+@skill_command(name="commit")
+def commit(message: str = "feat: update") -> str:
+    """Create commit."""
     return "ok"

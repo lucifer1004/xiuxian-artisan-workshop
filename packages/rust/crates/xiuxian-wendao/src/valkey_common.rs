@@ -29,6 +29,7 @@ pub(crate) fn open_client(valkey_url: &str) -> Result<redis::Client, redis::Redi
     redis::Client::open(valkey_url.trim())
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn ping_client(
     client: &redis::Client,
     connection_timeout: Duration,
@@ -45,6 +46,7 @@ pub(crate) fn ping_client(
         .map_err(|error| format!("ping failed: {error}"))
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn ping_valkey_url(
     valkey_url: &str,
     connection_timeout: Duration,

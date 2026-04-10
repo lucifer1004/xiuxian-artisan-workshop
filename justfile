@@ -1292,32 +1292,12 @@ contract-e2e-route-test-json:
         -v
 
 [group('validate')]
-docs-vector-search-options-check:
-    @uv run python scripts/generate_vector_search_options_contract.py --check
-
-[group('validate')]
 ci-scripts-smoke:
     @bash scripts/ci_scripts_smoke.sh
 
 [group('validate')]
-verify-native-runtime:
-    @echo "Running native runtime verification scripts..."
-    @uv run python scripts/verify_brain.py
-    @uv run python scripts/verify_pipeline.py
-
-[group('validate')]
 memory-gate-quick:
     @python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile quick
-
-[group('validate')]
-memory-gate-nightly:
-    @scripts/channel/start-xiuxian-daochang-memory-ci.sh \
-        --profile nightly \
-        --foreground \
-        -- --benchmark-iterations 3 \
-           --max-tool-call-waiting-events 0 \
-           --max-tool-connect-waiting-events 0 \
-           --max-tool-waiting-events-total 0
 
 [group('validate')]
 memory-gate-a7:
@@ -1345,35 +1325,35 @@ test-contract-freeze:
 
 [group('validate')]
 benchmark-wendao-search query="architecture" runs="5" warm_runs="2":
-    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" debug no-build
+    @uv run python scripts/benchmark_wendao_search.py --root . --query "{{query}}" --runs "{{runs}}" --warm-runs "{{warm_runs}}" --no-build
 
 [group('validate')]
 benchmark-wendao-search-build query="architecture" runs="5" warm_runs="2":
-    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" debug build
+    @uv run python scripts/benchmark_wendao_search.py --root . --query "{{query}}" --runs "{{runs}}" --warm-runs "{{warm_runs}}"
 
 [group('validate')]
 benchmark-wendao-search-release query="architecture" runs="5" warm_runs="2":
-    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" release no-build
+    @uv run python scripts/benchmark_wendao_search.py --root . --query "{{query}}" --runs "{{runs}}" --warm-runs "{{warm_runs}}" --release --no-build
 
 [group('validate')]
 benchmark-wendao-search-release-build query="architecture" runs="5" warm_runs="2":
-    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" release build
+    @uv run python scripts/benchmark_wendao_search.py --root . --query "{{query}}" --runs "{{runs}}" --warm-runs "{{warm_runs}}" --release
 
 [group('validate')]
 evaluate-wendao-retrieval limit="10" min_top3_rate="0.0":
-    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" debug no-build "{{min_top3_rate}}" text
+    @uv run python scripts/evaluate_wendao_retrieval.py --root . --matrix-file "docs/testing/wendao-query-regression-matrix.json" --limit "{{limit}}" --min-top3-rate "{{min_top3_rate}}" --no-build
 
 [group('validate')]
 evaluate-wendao-retrieval-build limit="10" min_top3_rate="0.0":
-    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" debug build "{{min_top3_rate}}" text
+    @uv run python scripts/evaluate_wendao_retrieval.py --root . --matrix-file "docs/testing/wendao-query-regression-matrix.json" --limit "{{limit}}" --min-top3-rate "{{min_top3_rate}}"
 
 [group('validate')]
 evaluate-wendao-retrieval-release limit="10" min_top3_rate="0.0":
-    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" release no-build "{{min_top3_rate}}" text
+    @uv run python scripts/evaluate_wendao_retrieval.py --root . --matrix-file "docs/testing/wendao-query-regression-matrix.json" --limit "{{limit}}" --min-top3-rate "{{min_top3_rate}}" --release --no-build
 
 [group('validate')]
 evaluate-wendao-retrieval-release-build limit="10" min_top3_rate="0.0":
-    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" release build "{{min_top3_rate}}" text
+    @uv run python scripts/evaluate_wendao_retrieval.py --root . --matrix-file "docs/testing/wendao-query-regression-matrix.json" --limit "{{limit}}" --min-top3-rate "{{min_top3_rate}}" --release
 
 [group('validate')]
 gate-wendao-ppr:

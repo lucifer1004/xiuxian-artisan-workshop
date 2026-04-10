@@ -287,7 +287,7 @@ def render_template(template_name: str, **context) -> str:
         - Falls back to: assets/skills/git/templates/ (skill default)
 
     Args:
-        template_name: Template filename (e.g., "review_card.j2")
+        template_name: Template filename (e.g., "commit_message.j2")
         **context: Variables to pass to template
 
     Returns:

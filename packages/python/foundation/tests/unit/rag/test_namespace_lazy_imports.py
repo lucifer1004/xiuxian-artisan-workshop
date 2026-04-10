@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -44,7 +46,7 @@ def test_omni_rag_import_is_lazy() -> None:
     }
 
 
-def test_omni_rag_loads_retrieval_module_on_attribute_access() -> None:
+def test_omni_rag_root_missing_facade_does_not_load_retrieval_module() -> None:
     payload = _run_python(
         textwrap.dedent(
             """
@@ -52,10 +54,16 @@ def test_omni_rag_loads_retrieval_module_on_attribute_access() -> None:
             import sys
             import xiuxian_rag as rag
 
-            _ = rag.RetrievalConfig
+            try:
+                _ = rag.RetrievalConfig
+            except AttributeError:
+                missing = True
+            else:
+                missing = False
             print(
                 json.dumps(
                     {
+                        "missing": missing,
                         "retrieval_loaded": "xiuxian_rag.retrieval" in sys.modules,
                         "analyzer_loaded": "xiuxian_rag.analyzer" in sys.modules,
                     }
@@ -65,6 +73,12 @@ def test_omni_rag_loads_retrieval_module_on_attribute_access() -> None:
         )
     )
     assert payload == {
-        "retrieval_loaded": True,
+        "missing": True,
+        "retrieval_loaded": False,
         "analyzer_loaded": False,
     }
+
+
+def test_omni_rag_retrieval_package_is_absent() -> None:
+    importlib.invalidate_caches()
+    assert importlib.util.find_spec("xiuxian_rag.retrieval") is None

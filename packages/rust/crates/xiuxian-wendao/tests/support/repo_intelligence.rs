@@ -20,7 +20,6 @@ pub fn create_sample_julia_repo(
     repo_fixture::create_sample_julia_repo(base, package_name, expected_root)
 }
 
-#[cfg(feature = "julia")]
 pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResultPath {
     repo_fixture::create_sample_modelica_repo(base, package_name)
 }

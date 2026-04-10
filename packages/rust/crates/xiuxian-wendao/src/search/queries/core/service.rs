@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
 use crate::search::SearchPlaneService;
-use crate::search::queries::core::scope::{QueryCore, open_query_core};
+#[cfg(not(feature = "duckdb"))]
+use crate::search::queries::core::scope::{DataFusionQueryCore, open_datafusion_query_core};
+use crate::search::queries::sql::registration::{SqlQuerySurface, build_sql_query_surface};
 
-/// Canonical shared-query service owner above the request-scoped query core.
+/// Canonical shared-query service owner above the residual request-scoped DataFusion query core.
 #[derive(Clone)]
 pub struct SearchQueryService {
     search_plane: SearchPlaneService,
@@ -26,8 +28,13 @@ impl SearchQueryService {
         &self.search_plane
     }
 
-    pub(crate) async fn open_core(&self) -> Result<QueryCore, String> {
-        open_query_core(self.search_plane()).await
+    #[cfg(not(feature = "duckdb"))]
+    pub(crate) async fn open_datafusion_core(&self) -> Result<DataFusionQueryCore, String> {
+        open_datafusion_query_core(self.search_plane()).await
+    }
+
+    pub(crate) async fn open_sql_surface(&self) -> Result<SqlQuerySurface, String> {
+        build_sql_query_surface(self.search_plane()).await
     }
 }
 

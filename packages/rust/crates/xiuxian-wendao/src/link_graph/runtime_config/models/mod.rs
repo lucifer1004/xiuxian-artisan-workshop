@@ -12,5 +12,6 @@ pub use index::LinkGraphIndexRuntimeConfig;
 pub(crate) use related::LinkGraphRelatedRuntimeConfig;
 pub use retrieval::{
     LinkGraphRetrievalPolicyRuntimeConfig, LinkGraphSemanticIgnitionBackend,
-    LinkGraphSemanticIgnitionRuntimeConfig,
 };
+#[cfg(feature = "vector-store")]
+pub use retrieval::LinkGraphSemanticIgnitionRuntimeConfig;

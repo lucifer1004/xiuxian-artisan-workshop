@@ -14,6 +14,8 @@ use arrow::datatypes::DataType;
 #[cfg(feature = "duckdb")]
 use duckdb::profiling::ProfilingInfo;
 #[cfg(feature = "duckdb")]
+use std::path::Path;
+#[cfg(feature = "duckdb")]
 use std::sync::{Mutex, MutexGuard};
 #[cfg(feature = "duckdb")]
 use uuid::Uuid;
@@ -359,6 +361,32 @@ impl DuckDbLocalRelationEngine {
         Ok(())
     }
 
+    pub(crate) fn register_parquet_view(
+        &self,
+        table_name: &str,
+        table_path: &Path,
+    ) -> Result<(), String> {
+        self.arrow_relation_store.remove(table_name)?;
+        let sql = build_duckdb_parquet_view_sql(table_name, table_path)?;
+        let guard = self.lock_connection()?;
+        guard
+            .connection()
+            .execute_batch(sql.as_str())
+            .map_err(|error| {
+                format!("failed to register DuckDB parquet view `{table_name}`: {error}")
+            })?;
+        Ok(())
+    }
+
+    pub(crate) fn execute_batch_sql(&self, sql: &str) -> Result<(), String> {
+        let guard = self.lock_connection()?;
+        guard
+            .connection()
+            .execute_batch(sql)
+            .map_err(|error| format!("failed to execute DuckDB batch SQL `{sql}`: {error}"))?;
+        Ok(())
+    }
+
     #[cfg(test)]
     pub(crate) fn registered_strategy(
         &self,
@@ -611,6 +639,20 @@ fn build_duckdb_virtual_view_sql(
     Ok(format!(
         "{drop_relation_sql}\nCREATE TEMP VIEW {quoted_table_name} AS SELECT * FROM {function_name}('{escaped_namespace}', '{escaped_table_name}');",
         drop_relation_sql = build_drop_duckdb_registered_relation_sql(table_name)
+    ))
+}
+
+#[cfg(feature = "duckdb")]
+pub(crate) fn build_duckdb_parquet_view_sql(
+    table_name: &str,
+    table_path: &Path,
+) -> Result<String, String> {
+    ensure_duckdb_identifier(table_name, "table")?;
+    let quoted_table_name = quoted_duckdb_identifier(table_name);
+    let escaped_path = table_path.to_string_lossy().replace('\'', "''");
+    Ok(format!(
+        "{drop_sql}\nCREATE TEMP VIEW {quoted_table_name} AS SELECT * FROM read_parquet('{escaped_path}');",
+        drop_sql = build_drop_duckdb_registered_relation_sql(table_name),
     ))
 }
 

@@ -11,7 +11,7 @@ expression: rows
     "skill_name": "git",
     "tool_count": 1,
     "tool_names": [
-      "git.smart_commit"
+      "git.commit"
     ]
   },
   {

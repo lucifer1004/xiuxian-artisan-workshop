@@ -1,8 +1,8 @@
 use super::{LinkGraphIndex, PageIndexNode, PageIndexParent, SymbolRef};
+use super::pattern_symbols::extract_pattern_symbols;
 use crate::link_graph::page_index::{
     DEFAULT_PAGE_INDEX_THINNING_TOKEN_THRESHOLD, build_page_index_tree, thin_page_index_tree,
 };
-use crate::zhenfa_router::native::sentinel::extract_pattern_symbols;
 
 impl LinkGraphIndex {
     /// Return the hierarchical `PageIndex` roots for a note.

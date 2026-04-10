@@ -17,6 +17,7 @@ transport = [
     "dep:tokio-stream",
     "dep:tonic",
     "dep:xiuxian-vector",
+    "dep:xiuxian-vector-store",
 ]
 
 [dependencies]
@@ -38,6 +39,7 @@ xiuxian-config-core = { path = "../xiuxian-config-core" }
 xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-vector = { path = "../xiuxian-vector", optional = true }
+xiuxian-vector-store = { path = "../xiuxian-vector-store", optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -31,7 +31,7 @@ expression: value
       "score": 1.0,
       "symbol": {
         "kind": "type",
-        "line_end": 2,
+        "line_end": 4,
         "line_start": 2,
         "module_id": "repo:modelica-symbol-search:module:Symbolica.Controllers",
         "name": "PI",
@@ -48,7 +48,7 @@ expression: value
   "symbols": [
     {
       "kind": "type",
-      "line_end": 2,
+      "line_end": 4,
       "line_start": 2,
       "module_id": "repo:modelica-symbol-search:module:Symbolica.Controllers",
       "name": "PI",

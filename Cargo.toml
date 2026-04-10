@@ -27,6 +27,7 @@ members = [
   "packages/rust/crates/xiuxian-tui",
   "packages/rust/crates/xiuxian-types",
   "packages/rust/crates/xiuxian-vector",
+  "packages/rust/crates/xiuxian-vector-store",
   "packages/rust/crates/xiuxian-qianhuan",
   "packages/rust/crates/xiuxian-llm",
   "packages/rust/crates/xiuxian-wendao-julia",

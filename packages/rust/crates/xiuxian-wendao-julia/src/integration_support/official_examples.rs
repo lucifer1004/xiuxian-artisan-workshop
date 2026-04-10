@@ -101,54 +101,42 @@ pub async fn spawn_wendaosearch_solver_demo_multi_route_service()
     spawn_wendaosearch_multi_route_service("solver_demo").await
 }
 
-/// Spawns the official `WendaoSearch` demo service with mounted Julia parser
-/// summary routes on the same Flight endpoint.
+/// Spawns the official `WendaoSearch` parser-summary service with the native
+/// summary routes mounted on the shared Flight endpoint.
 ///
 /// # Panics
 ///
 /// Panics when the service script cannot be resolved or the service fails to
 /// start.
-pub async fn spawn_wendaosearch_demo_julia_parser_summary_service()
--> (String, JuliaExampleServiceGuard) {
-    spawn_wendaosearch_demo_julia_parser_summary_service_with_attempts(1500).await
+pub async fn spawn_wendaosearch_julia_parser_summary_service() -> (String, JuliaExampleServiceGuard)
+{
+    spawn_wendaosearch_julia_parser_summary_service_with_attempts(1500).await
 }
 
-/// Spawns the official `WendaoSearch` demo service with mounted Julia parser
-/// summary routes on the same Flight endpoint and one explicit readiness
+/// Spawns the official `WendaoSearch` parser-summary service with one explicit
+/// readiness
 /// attempt budget.
 ///
 /// # Panics
 ///
 /// Panics when the service script cannot be resolved or the service fails to
 /// start.
-pub async fn spawn_wendaosearch_demo_julia_parser_summary_service_with_attempts(
+pub async fn spawn_wendaosearch_julia_parser_summary_service_with_attempts(
     ready_attempts: usize,
 ) -> (String, JuliaExampleServiceGuard) {
-    spawn_wendaosearch_service_with_code_parser_routes(
-        "capability_manifest",
-        "demo",
-        &["julia_file_summary", "julia_root_summary"],
-        ready_attempts,
-    )
-    .await
+    spawn_wendaosearch_parser_summary_service(ready_attempts).await
 }
 
-/// Spawns the official `WendaoSearch` demo service with mounted Modelica parser
-/// summary routes on the same Flight endpoint.
+/// Spawns the official `WendaoSearch` parser-summary service for the Modelica
+/// summary route.
 ///
 /// # Panics
 ///
 /// Panics when the service script cannot be resolved or the service fails to
 /// start.
-pub async fn spawn_wendaosearch_demo_modelica_parser_summary_service()
+pub async fn spawn_wendaosearch_modelica_parser_summary_service()
 -> (String, JuliaExampleServiceGuard) {
-    spawn_wendaosearch_service_with_code_parser_routes(
-        "capability_manifest",
-        "demo",
-        &["modelica_file_summary"],
-        1500,
-    )
-    .await
+    spawn_wendaosearch_parser_summary_service(1500).await
 }
 
 /// Materializes a Julia deployment artifact from runtime-config values.
@@ -240,6 +228,43 @@ async fn spawn_wendaosearch_service(
     mode: &str,
 ) -> (String, JuliaExampleServiceGuard) {
     spawn_wendaosearch_service_with_code_parser_routes(route_name, mode, &[], 600).await
+}
+
+async fn spawn_wendaosearch_parser_summary_service(
+    ready_attempts: usize,
+) -> (String, JuliaExampleServiceGuard) {
+    let port = reserve_service_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let script = wendaosearch_script("run_parser_summary_service.jl");
+    let child = Command::new("direnv")
+        .arg("exec")
+        .arg(".")
+        .arg("julia")
+        .arg(format!(
+            "--project={}",
+            wendaosearch_package_dir().display()
+        ))
+        .arg(script)
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(repo_root())
+        .env("JULIA_LOAD_PATH", "@:@stdlib")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|error| panic!("spawn real WendaoSearch parser-summary service: {error}"));
+    let mut guard = JuliaExampleServiceGuard::new(child);
+
+    wait_for_service_ready_with_attempts(base_url.as_str(), ready_attempts)
+        .await
+        .unwrap_or_else(|error| {
+            guard.kill();
+            panic!("wait for WendaoSearch parser-summary service readiness: {error}");
+        });
+
+    (base_url, guard)
 }
 
 async fn spawn_wendaosearch_service_with_code_parser_routes(

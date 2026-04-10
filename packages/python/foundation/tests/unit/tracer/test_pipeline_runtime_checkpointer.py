@@ -66,7 +66,6 @@ def test_create_workflow_with_defaults_passes_checkpointer(monkeypatch) -> None:
     out = create_workflow_from_pipeline_with_defaults(
         PipelineConfig(pipeline=["demo.run"]),
         state_schema=dict,
-        include_retrieval=False,
         checkpointer="cp2",
         use_memory_saver=True,
     )
@@ -82,10 +81,6 @@ def test_create_workflow_from_yaml_uses_runtime_defaults(tmp_path, monkeypatch) 
 runtime:
   checkpointer:
     type: memory
-  invoker:
-    include_retrieval: false
-  retrieval:
-    default_backend: hybrid
   tracer:
     callback_dispatch_mode: background
   state:
@@ -109,8 +104,6 @@ pipeline:
     out = create_workflow_from_yaml(yaml_file, tracer=tracer)
 
     assert out == {"ok": True}
-    assert captured["include_retrieval"] is False
-    assert captured["retrieval_default_backend"] == "hybrid"
     assert captured["use_memory_saver"] is True
     assert captured["state_schema"] is dict
     assert tracer.callback_dispatch_mode == DispatchMode.BACKGROUND
@@ -122,10 +115,6 @@ def test_create_workflow_from_yaml_allows_override(tmp_path, monkeypatch) -> Non
 runtime:
   checkpointer:
     type: none
-  invoker:
-    include_retrieval: true
-  retrieval:
-    default_backend: vector
   tracer:
     callback_dispatch_mode: inline
 
@@ -148,15 +137,11 @@ pipeline:
         yaml_file,
         tracer=tracer,
         state_schema=dict,
-        include_retrieval=False,
-        retrieval_default_backend="hybrid",
         use_memory_saver=True,
         callback_dispatch_mode="background",
     )
 
     assert out == {"ok": True}
-    assert captured["include_retrieval"] is False
-    assert captured["retrieval_default_backend"] == "hybrid"
     assert captured["use_memory_saver"] is True
     assert captured["state_schema"] is dict
     assert tracer.callback_dispatch_mode == DispatchMode.BACKGROUND

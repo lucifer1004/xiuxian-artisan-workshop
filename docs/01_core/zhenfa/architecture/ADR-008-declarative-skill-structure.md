@@ -99,4 +99,4 @@ To eliminate path ambiguity and ensure portability, all system-level "Constituti
 
 1.  **Create `packages/rust/crates/xiuxian-skills/resources/config/skills.toml`** using the finalized structure.
 2.  **Refactor `xiuxian-skills`**: Update `structure.rs` to derive `serde::Deserialize` and implement the loading logic.
-3.  **Update CLI**: Add a `just validate-skills` command to trigger the scanner's new validation mode.
+3.  **Update validation entrypoints**: expose the scanner's validation mode through maintained crate/test surfaces instead of introducing a one-off wrapper command.

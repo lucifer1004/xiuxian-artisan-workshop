@@ -2,18 +2,15 @@
 
 xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
 
-#[cfg(feature = "julia")]
 mod artifacts;
 mod link;
 mod retrieval_policy;
-#[cfg(feature = "julia")]
 mod test_support;
 
 use xiuxian_wendao_core::repo_intelligence::{
     PluginRegistry, RepoIntelligenceError, builtin_plugin_registrars,
 };
 
-#[cfg(feature = "julia")]
 pub use artifacts::{
     linked_builtin_julia_deployment_artifact_openapi_json_example,
     linked_builtin_julia_deployment_artifact_openapi_toml_example,
@@ -38,7 +35,6 @@ pub use artifacts::{
 pub use retrieval_policy::{
     BuiltinRerankRuntimeProjection, resolve_builtin_rerank_runtime_projection_with_settings,
 };
-#[cfg(feature = "julia")]
 pub use test_support::{
     GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,

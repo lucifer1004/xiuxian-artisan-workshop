@@ -2,13 +2,11 @@
 let
   gatewayConfig = "wendao.toml";
   gatewayPortResolver = "scripts/channel/resolve_wendao_gateway_port.py";
-  gatewayTargetDir = ".cache/cargo-target/wendao-gateway-process-compose";
   gatewayRuntimeDir = ".run/wendao-gateway";
   gatewayPidFile = "${gatewayRuntimeDir}/wendao.pid";
   gatewayLogDir = ".run/logs";
   gatewayStdoutLog = "${gatewayLogDir}/wendao-gateway.stdout.log";
   gatewayStderrLog = "${gatewayLogDir}/wendao-gateway.stderr.log";
-  sentinelTargetDir = ".cache/cargo-target/wendao-sentinel-process-compose";
   sentinelRuntimeDir = ".run/wendao-sentinel";
   sentinelPidFile = "${sentinelRuntimeDir}/wendao-sentinel.pid";
   valkeyDataDir = ".data/valkey";
@@ -21,6 +19,11 @@ let
   wendaosearchSolverDemoConfig = ".data/WendaoSearch.jl/config/live/solver_demo.toml";
   wendaosearchSolverDemoStdoutLog = "${wendaosearchLogDir}/wendaosearch-solver-demo.stdout.log";
   wendaosearchSolverDemoStderrLog = "${wendaosearchLogDir}/wendaosearch-solver-demo.stderr.log";
+  wendaosearchParserSummaryConfig = ".data/WendaoSearch.jl/config/live/parser_summary.toml";
+  wendaosearchParserSummaryStdoutLog =
+    "${wendaosearchLogDir}/wendaosearch-parser-summary.stdout.log";
+  wendaosearchParserSummaryStderrLog =
+    "${wendaosearchLogDir}/wendaosearch-parser-summary.stderr.log";
 in
 {
   packages = [
@@ -73,17 +76,17 @@ in
       exec = ''
         ROOT_DIR="$PRJ_ROOT"
         GATEWAY_CONFIG="$ROOT_DIR/${gatewayConfig}"
-        mkdir -p ${gatewayRuntimeDir} ${gatewayLogDir}
-        rm -f ${gatewayPidFile}
-        export CARGO_TARGET_DIR=${gatewayTargetDir}
+        mkdir -p "$ROOT_DIR/${gatewayRuntimeDir}" "$ROOT_DIR/${gatewayLogDir}"
+        rm -f "$ROOT_DIR/${gatewayPidFile}"
         export VALKEY_URL=redis://127.0.0.1:6379/0
+        cd "$ROOT_DIR"
         cargo build -p xiuxian-wendao --bin wendao --locked
-        ${gatewayTargetDir}/debug/wendao --conf "$GATEWAY_CONFIG" gateway start \
-          > >(tee -a ${gatewayStdoutLog}) \
-          2> >(tee -a ${gatewayStderrLog} >&2) &
+        "$ROOT_DIR/target/debug/wendao" --conf "$GATEWAY_CONFIG" gateway start \
+          > >(tee -a "$ROOT_DIR/${gatewayStdoutLog}") \
+          2> >(tee -a "$ROOT_DIR/${gatewayStderrLog}" >&2) &
         GATEWAY_CHILD_PID=$!
-        printf '%s\n' "$GATEWAY_CHILD_PID" > ${gatewayPidFile}
-        export WENDAO_GATEWAY_PIDFILE=${gatewayPidFile}
+        printf '%s\n' "$GATEWAY_CHILD_PID" > "$ROOT_DIR/${gatewayPidFile}"
+        export WENDAO_GATEWAY_PIDFILE="$ROOT_DIR/${gatewayPidFile}"
         trap 'kill "$GATEWAY_CHILD_PID" 2>/dev/null || true' TERM INT
         wait "$GATEWAY_CHILD_PID"
       '';
@@ -122,10 +125,10 @@ in
         SENTINEL_PIDFILE="$ROOT_DIR/${sentinelPidFile}"
         mkdir -p "$SENTINEL_RUNTIME_DIR"
         rm -f "$SENTINEL_PIDFILE"
-        export CARGO_TARGET_DIR=${sentinelTargetDir}
         export VALKEY_URL=redis://127.0.0.1:6379/0
+        cd "$ROOT_DIR"
         cargo build -p xiuxian-wendao --bin wendao --locked
-        ${sentinelTargetDir}/debug/wendao --conf "$GATEWAY_CONFIG" sentinel watch &
+        "$ROOT_DIR/target/debug/wendao" --conf "$GATEWAY_CONFIG" sentinel watch &
         SENTINEL_CHILD_PID=$!
         printf '%s\n' "$SENTINEL_CHILD_PID" > "$SENTINEL_PIDFILE"
         trap 'kill "$SENTINEL_CHILD_PID" 2>/dev/null || true' TERM INT
@@ -172,6 +175,37 @@ in
             export WENDAOSEARCH_SERVICE_NAME=wendaosearch-solver-demo
             export WENDAOSEARCH_RUNTIME_DIR=${wendaosearchRuntimeDir}
             export WENDAOSEARCH_CONFIG=${wendaosearchSolverDemoConfig}
+            bash "$ROOT_DIR/scripts/channel/wendaosearch-healthcheck.sh" >/dev/null
+          '';
+          initial_delay_seconds = 5;
+          period_seconds = 2;
+          timeout_seconds = 3;
+          failure_threshold = 90;
+        };
+      };
+    };
+
+    wendaosearch-parser-summary = {
+      exec = ''
+        ROOT_DIR="$PRJ_ROOT"
+        mkdir -p "$ROOT_DIR/${wendaosearchRuntimeDir}" "$ROOT_DIR/${wendaosearchLogDir}"
+        export WENDAOSEARCH_SERVICE_NAME=wendaosearch-parser-summary
+        export WENDAOSEARCH_RUNTIME_DIR=${wendaosearchRuntimeDir}
+        export WENDAOSEARCH_CONFIG=${wendaosearchParserSummaryConfig}
+        export WENDAOSEARCH_SCRIPT=run_parser_summary_service.jl
+        bash "$ROOT_DIR/scripts/channel/wendaosearch-launch.sh" \
+          > >(tee -a "$ROOT_DIR/${wendaosearchParserSummaryStdoutLog}") \
+          2> >(tee -a "$ROOT_DIR/${wendaosearchParserSummaryStderrLog}" >&2)
+      '';
+      process-compose = {
+        readiness_probe = {
+          exec.command = ''
+            ROOT_DIR="$PRJ_ROOT"
+
+            export WENDAOSEARCH_SERVICE_NAME=wendaosearch-parser-summary
+            export WENDAOSEARCH_RUNTIME_DIR=${wendaosearchRuntimeDir}
+            export WENDAOSEARCH_CONFIG=${wendaosearchParserSummaryConfig}
+            export WENDAOSEARCH_SCRIPT=run_parser_summary_service.jl
             bash "$ROOT_DIR/scripts/channel/wendaosearch-healthcheck.sh" >/dev/null
           '';
           initial_delay_seconds = 5;

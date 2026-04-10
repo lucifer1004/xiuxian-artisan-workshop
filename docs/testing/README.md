@@ -54,9 +54,6 @@ Recommended usage:
 # just wrapper (defaults: architecture, runs=5, warm_runs=2, debug, no-build)
 just benchmark-wendao-search
 
-# direct script wrapper in scripts/ (query runs warm_runs profile build_mode)
-bash scripts/benchmark_wendao_search.sh architecture 5 2 debug no-build
-
 # quick local sanity check (uses existing target/debug/wendao when present)
 python scripts/benchmark_wendao_search.py --root . --query architecture --runs 5 --warm-runs 2 --no-build
 

@@ -1,5 +1,3 @@
-#![cfg(feature = "julia")]
-
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -10,18 +8,13 @@ use crate::analyzers::{
     bootstrap_builtin_registry,
 };
 use crate::gateway::studio::search::handlers::code_search::search::build_code_search_response;
+use crate::gateway::studio::search::handlers::tests::linked_parser_summary::{
+    ensure_linked_julia_parser_summary_service, ensure_linked_modelica_parser_summary_service,
+};
 use crate::gateway::studio::search::handlers::tests::test_studio_state;
 use crate::gateway::studio::test_support::{commit_all, init_git_repository};
 use crate::repo_index::{
     RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
-};
-use xiuxian_wendao_julia::integration_support::{
-    spawn_wendaosearch_demo_julia_parser_summary_service,
-    spawn_wendaosearch_demo_modelica_parser_summary_service,
-};
-use xiuxian_wendao_julia::{
-    set_linked_julia_parser_summary_base_url_for_tests,
-    set_linked_modelica_parser_summary_base_url_for_tests,
 };
 
 #[tokio::test]
@@ -275,52 +268,4 @@ fn initialize_git_fixture(repo_dir: &Path, package_name: &str) {
         String::from_utf8_lossy(&output.stderr)
     );
     commit_all(repo_dir, "initial import");
-}
-
-fn ensure_linked_julia_parser_summary_service() -> Result<(), Box<dyn std::error::Error>> {
-    static LINKED_JULIA_SERVICE: std::sync::OnceLock<Result<(), String>> =
-        std::sync::OnceLock::new();
-    let result = LINKED_JULIA_SERVICE.get_or_init(|| {
-        let (base_url, _guard) = std::thread::spawn(|| {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|error| error.to_string())?;
-            Ok::<_, String>(
-                runtime.block_on(spawn_wendaosearch_demo_julia_parser_summary_service()),
-            )
-        })
-        .join()
-        .map_err(|_| "linked Julia parser-summary service thread panicked".to_string())??;
-        set_linked_julia_parser_summary_base_url_for_tests(base_url.as_str())?;
-        std::mem::forget(_guard);
-        Ok(())
-    });
-    result.as_ref().map(|_| ()).map_err(|message| {
-        Box::new(std::io::Error::other(message.clone())) as Box<dyn std::error::Error>
-    })
-}
-
-fn ensure_linked_modelica_parser_summary_service() -> Result<(), Box<dyn std::error::Error>> {
-    static LINKED_MODELICA_SERVICE: std::sync::OnceLock<Result<(), String>> =
-        std::sync::OnceLock::new();
-    let result = LINKED_MODELICA_SERVICE.get_or_init(|| {
-        let (base_url, _guard) = std::thread::spawn(|| {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|error| error.to_string())?;
-            Ok::<_, String>(
-                runtime.block_on(spawn_wendaosearch_demo_modelica_parser_summary_service()),
-            )
-        })
-        .join()
-        .map_err(|_| "linked Modelica parser-summary service thread panicked".to_string())??;
-        set_linked_modelica_parser_summary_base_url_for_tests(base_url.as_str())?;
-        std::mem::forget(_guard);
-        Ok(())
-    });
-    result.as_ref().map(|_| ()).map_err(|message| {
-        Box::new(std::io::Error::other(message.clone())) as Box<dyn std::error::Error>
-    })
 }

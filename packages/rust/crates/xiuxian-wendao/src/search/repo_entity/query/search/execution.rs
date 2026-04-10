@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::EngineRecordBatch;
+use xiuxian_vector_store::EngineRecordBatch;
 
 use crate::analyzers::service::{
     example_match_score, import_match_score, module_match_score, normalized_rank_score,

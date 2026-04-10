@@ -56,6 +56,7 @@ pub(crate) fn ranked_module_matches(
     ranked_module_matches_from_index(query, modules, &lookup, &index, limit)
 }
 
+#[cfg(feature = "studio")]
 pub(crate) fn ranked_module_matches_with_artifacts(
     query: &str,
     modules: &[ModuleRecord],

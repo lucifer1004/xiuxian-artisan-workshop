@@ -1,30 +1,79 @@
+use crate::duckdb::LocalRelationEngineKind;
+use crate::search::SearchCorpusKind;
 use crate::search::queries::SearchQueryService;
 
+use super::parquet::try_execute_published_parquet_query;
 use super::result::{SqlQueryMetadata, SqlQueryPayload, SqlQueryResult};
+use super::shared::execute_shared_sql_query;
 use crate::search::queries::sql::registration::SqlQuerySurface;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SqlQueryExecutionRoute {
+    SharedSql {
+        engine_kind: LocalRelationEngineKind,
+    },
+    LocalParquet {
+        corpus: SearchCorpusKind,
+        table_name: String,
+        engine_kind: LocalRelationEngineKind,
+    },
+}
 
 pub(crate) async fn execute_sql_query(
     service: &SearchQueryService,
     query_text: &str,
 ) -> Result<SqlQueryResult, String> {
-    let query_core = service.open_core().await?;
-    let metadata = sql_query_metadata(query_core.surface());
-    let engine_batches = query_core
-        .engine()
-        .sql_batches(query_text)
-        .await
-        .map_err(|error| {
-            format!("shared SQL query execution failed for `{query_text}`: {error}")
-        })?;
-    let result_row_count = engine_batches
+    let (_route, result) = execute_sql_query_internal(service, query_text).await?;
+    Ok(result)
+}
+
+pub(crate) async fn execute_sql_query_with_route(
+    service: &SearchQueryService,
+    query_text: &str,
+) -> Result<(SqlQueryExecutionRoute, SqlQueryResult), String> {
+    execute_sql_query_internal(service, query_text).await
+}
+
+async fn execute_sql_query_internal(
+    service: &SearchQueryService,
+    query_text: &str,
+) -> Result<(SqlQueryExecutionRoute, SqlQueryResult), String> {
+    if let Some(routed) =
+        try_execute_published_parquet_query(service.search_plane(), None, query_text).await?
+    {
+        let query_surface = service.open_sql_surface().await?;
+        let metadata =
+            sql_query_metadata_with_result_counts(&query_surface, routed.batches.as_slice());
+        return Ok((
+            SqlQueryExecutionRoute::LocalParquet {
+                corpus: routed.corpus,
+                table_name: routed.table_name,
+                engine_kind: routed.engine_kind,
+            },
+            SqlQueryResult::new(metadata, routed.batches),
+        ));
+    }
+
+    let (engine_kind, query_surface, engine_batches) =
+        execute_shared_sql_query(service, query_text).await?;
+    let metadata = sql_query_metadata_with_result_counts(&query_surface, engine_batches.as_slice());
+    Ok((
+        SqlQueryExecutionRoute::SharedSql { engine_kind },
+        SqlQueryResult::new(metadata, engine_batches),
+    ))
+}
+
+fn sql_query_metadata_with_result_counts(
+    query_surface: &SqlQuerySurface,
+    engine_batches: &[xiuxian_vector_store::EngineRecordBatch],
+) -> SqlQueryMetadata {
+    let mut metadata = sql_query_metadata(query_surface);
+    metadata.result_row_count = engine_batches
         .iter()
-        .map(xiuxian_vector::EngineRecordBatch::num_rows)
+        .map(xiuxian_vector_store::EngineRecordBatch::num_rows)
         .sum();
-    let result_batch_count = engine_batches.len();
-    let mut metadata = metadata;
-    metadata.result_batch_count = result_batch_count;
-    metadata.result_row_count = result_row_count;
-    Ok(SqlQueryResult::new(metadata, engine_batches))
+    metadata.result_batch_count = engine_batches.len();
+    metadata
 }
 
 fn sql_query_metadata(query_surface: &SqlQuerySurface) -> SqlQueryMetadata {

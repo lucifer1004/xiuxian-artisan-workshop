@@ -24,7 +24,7 @@ const PARSER_SUMMARY_TRANSPORT_KEY: &str = "parser_summary_transport";
 const FILE_SUMMARY_TRANSPORT_KEY: &str = "file_summary";
 const ROOT_SUMMARY_TRANSPORT_KEY: &str = "root_summary";
 const DEFAULT_JULIA_HEALTH_ROUTE: &str = "/healthz";
-const DEFAULT_WENDAOSEARCH_SOLVER_DEMO_BASE_URL: &str = "http://127.0.0.1:41080";
+const DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL: &str = "http://127.0.0.1:41081";
 const DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS: u64 = 120;
 
 pub(crate) const JULIA_PARSER_SUMMARY_SCHEMA_VERSION: &str = "v3";
@@ -367,7 +367,7 @@ fn resolve_parser_summary_transport_options(
     if saw_julia_plugin {
         return Ok(Some(ParserSummaryTransportOptions {
             enabled: Some(true),
-            base_url: Some(DEFAULT_WENDAOSEARCH_SOLVER_DEMO_BASE_URL.to_string()),
+            base_url: Some(DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL.to_string()),
             route: None,
             health_route: None,
             schema_version: Some(JULIA_PARSER_SUMMARY_SCHEMA_VERSION.to_string()),

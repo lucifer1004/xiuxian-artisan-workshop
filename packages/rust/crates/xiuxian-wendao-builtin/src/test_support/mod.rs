@@ -1,14 +1,10 @@
-#[cfg(feature = "julia")]
 mod graph_structural;
-#[cfg(feature = "julia")]
 mod julia;
-#[cfg(feature = "julia")]
 mod planned_search;
-#[cfg(all(test, feature = "julia"))]
+#[cfg(test)]
 #[path = "../../tests/unit/test_support/mod.rs"]
 mod tests;
 
-#[cfg(feature = "julia")]
 pub use graph_structural::{
     GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN, GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN,
     GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
@@ -49,14 +45,12 @@ pub use graph_structural::{
     linked_builtin_spawn_wendaosearch_solver_demo_multi_route_service,
     linked_builtin_spawn_wendaosearch_solver_demo_structural_rerank_service,
 };
-#[cfg(feature = "julia")]
 pub use julia::{
     linked_builtin_julia_analyzer_example_config_path, linked_builtin_julia_analyzer_launcher_path,
     linked_builtin_julia_deployment_artifact_selector,
     linked_builtin_julia_rerank_provider_binding_with_endpoint,
     linked_builtin_julia_rerank_provider_selector,
 };
-#[cfg(feature = "julia")]
 pub use planned_search::{
     LinkedBuiltinWendaoArrowScoreRow,
     linked_builtin_julia_planned_search_openai_runtime_config_toml,

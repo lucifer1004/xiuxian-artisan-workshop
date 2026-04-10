@@ -65,7 +65,14 @@
         # };
         "xiuxian-zhenfa" = {
           depsDrvConfig.mkDerivation = {
-            buildInputs = [ pkgs.libxml2 ];
+            buildInputs = [
+              pkgs.libxml2
+              pkgs.cacert
+            ];
+          };
+          depsDrvConfig.env = {
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           };
         };
         "xiuxian-qianji" = {

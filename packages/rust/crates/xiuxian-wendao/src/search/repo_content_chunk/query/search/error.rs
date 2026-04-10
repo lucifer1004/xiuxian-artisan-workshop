@@ -1,4 +1,4 @@
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector_store::VectorStoreError;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum RepoContentChunkSearchError {

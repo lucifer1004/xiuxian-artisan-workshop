@@ -1,4 +1,3 @@
-#[cfg(feature = "julia")]
 mod julia {
     use xiuxian_wendao_core::{
         artifacts::PluginArtifactSelector,

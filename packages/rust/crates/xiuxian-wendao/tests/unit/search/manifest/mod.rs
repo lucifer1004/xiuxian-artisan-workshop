@@ -160,8 +160,8 @@ fn repo_publication_id_changes_when_storage_format_changes() {
     );
 
     assert_ne!(lance.publication_id, parquet.publication_id);
-    assert!(parquet.is_datafusion_readable());
-    assert!(!lance.is_datafusion_readable());
+    assert!(parquet.is_parquet_query_readable());
+    assert!(!lance.is_parquet_query_readable());
 }
 
 #[test]

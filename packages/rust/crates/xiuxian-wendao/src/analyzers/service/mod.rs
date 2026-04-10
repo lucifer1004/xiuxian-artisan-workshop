@@ -4,6 +4,7 @@ mod analysis;
 mod bootstrap;
 mod cached;
 mod helpers;
+#[cfg(feature = "zhenfa-router")]
 mod incremental;
 mod julia_transport;
 mod merge;
@@ -19,16 +20,12 @@ pub use analysis::{
 };
 pub use bootstrap::bootstrap_builtin_registry;
 pub use cached::analyze_registered_repository_cached_with_registry;
+#[cfg(feature = "studio")]
 pub(crate) use cached::{
     CachedRepositoryAnalysis, analyze_registered_repository_cached_bundle_with_registry,
 };
 pub use helpers::relation_kind_label;
-pub(crate) use helpers::{
-    backlinks_for, documents_backlink_lookup, example_match_score, example_relation_lookup,
-    hierarchy_segments_from_path, import_match_score, infer_ecosystem, module_match_score,
-    normalized_rank_score, projection_page_lookup, projection_pages_for, record_hierarchical_uri,
-    related_modules_for_example, related_symbols_for_example, symbol_match_score,
-};
+#[cfg(feature = "zhenfa-router")]
 pub(crate) use incremental::{
     IncrementalApplyContext, analyze_changed_files, apply_incremental_plugin_outputs,
 };
@@ -39,16 +36,20 @@ pub use julia_transport::{
     julia_arrow_response_schema,
 };
 
+#[cfg(feature = "studio")]
 pub(crate) use projection::build_repo_projected_page_search_with_artifacts;
 pub use projection::*;
 pub use registry::load_registered_repository;
+#[cfg(feature = "studio")]
 pub(crate) use search::ExampleSearchMetadata;
 pub use search::*;
+#[cfg(feature = "studio")]
 pub(crate) use search::{
-    RepoAnalysisFallbackContract, canonical_import_query_text, example_fallback_contract,
-    import_fallback_contract, module_fallback_contract, repository_search_artifacts,
-    symbol_fallback_contract,
+    RepoAnalysisFallbackContract, example_fallback_contract, import_fallback_contract,
+    module_fallback_contract, repository_search_artifacts, symbol_fallback_contract,
 };
+#[cfg(feature = "search-runtime")]
+pub(crate) use search::canonical_import_query_text;
 pub use sync::*;
 #[cfg(test)]
 #[path = "../../../tests/unit/analyzers/service/mod.rs"]

@@ -14,7 +14,6 @@ This directory contains utility scripts for the `xiuxian-artisan-workshop` proje
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `benchmark_wendao_search.py`                          | Benchmark wendao search latency                                                                          |
 | `evaluate_wendao_retrieval.py`                        | Evaluate wendao Top1/Top3/Top10 on fixed query matrix                                                    |
-| `evaluate_wendao_retrieval.sh`                        | Thin shell wrapper for `evaluate_wendao_retrieval.py`                                                    |
 | `benchmark_wendao_related.py`                         | Benchmark wendao related latency and PPR diagnostics                                                     |
 | `gate_wendao_ppr.sh`                                  | Unified WG2/WG3 gate: retrieval matrix quality + related PPR latency/diagnostics                         |
 | `fetch_previous_skills_benchmark_artifact.py`         | Fetch a member file from the latest matching successful GitHub Actions artifact into a local output path |

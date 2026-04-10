@@ -65,7 +65,7 @@ impl LinkGraphIndex {
 
     /// Index symbols from a cloned page index tree.
     fn index_symbols_from_tree_cloned(&mut self, doc_id: &str, nodes: &[super::PageIndexNode]) {
-        use crate::zhenfa_router::native::sentinel::extract_pattern_symbols;
+        use super::pattern_symbols::extract_pattern_symbols;
 
         for node in nodes {
             for obs in &node.metadata.observations {

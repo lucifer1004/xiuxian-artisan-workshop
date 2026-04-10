@@ -1,12 +1,8 @@
 """
-git/scripts/prepare.py - Commit preparation workflow
+git/scripts/prepare.py - staging helper with safety checks
 
-Implements the prepare_commit command for /commit workflow:
-1. Stage all changes with security scan
-2. Run quality checks (lefthook pre-commit)
-3. Return staged diff for commit analysis with template output
-
-Uses cascading template pattern with configuration via settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml).
+Stages changes, runs pre-commit hooks when available, re-stages formatter
+edits, and un-stages obvious sensitive files before a follow-up commit step.
 """
 
 import re
