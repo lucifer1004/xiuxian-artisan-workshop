@@ -3,8 +3,12 @@
 use crate as xiuxian_wendao;
 
 use std::fs;
+#[cfg(feature = "julia")]
+use std::io::Error as IoError;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+#[cfg(feature = "julia")]
+use std::sync::{Mutex, OnceLock};
 use std::time::UNIX_EPOCH;
 
 use axum::body::{Body, to_bytes};
@@ -28,8 +32,25 @@ use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
 use xiuxian_wendao::repo_index::RepoCodeDocument;
 use xiuxian_wendao::repo_index::{RepoIndexCoordinator, RepoIndexRequest};
 use xiuxian_wendao::search::{SearchPlaneService, publish_repo_entities};
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::{
+    integration_support::{
+        JuliaExampleServiceGuard, spawn_wendaosearch_demo_modelica_parser_summary_service,
+    },
+    set_linked_modelica_parser_summary_base_url_for_tests,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+#[cfg(feature = "julia")]
+struct LinkedModelicaParserSummaryService {
+    _guard: Mutex<JuliaExampleServiceGuard>,
+}
+
+#[cfg(feature = "julia")]
+static LINKED_MODELICA_PARSER_SUMMARY_SERVICE: OnceLock<
+    Result<LinkedModelicaParserSummaryService, String>,
+> = OnceLock::new();
 
 async fn request_json(
     router: axum::Router,
@@ -106,7 +127,7 @@ async fn repo_overview_endpoint_returns_repo_summary_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_overview_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -163,7 +184,7 @@ async fn repo_module_search_endpoint_returns_module_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_module_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -236,7 +257,7 @@ async fn repo_symbol_search_endpoint_returns_symbol_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_symbol_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -314,7 +335,7 @@ async fn repo_example_search_endpoint_returns_example_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_example_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -487,7 +508,7 @@ async fn repo_doc_coverage_endpoint_returns_coverage_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_doc_coverage_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -557,7 +578,7 @@ async fn repo_index_endpoint_returns_status_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_index_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -632,7 +653,7 @@ async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_index_status_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -732,7 +753,7 @@ async fn repo_sync_endpoint_returns_repo_status_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_sync_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -790,7 +811,7 @@ async fn repo_projected_pages_endpoint_returns_projection_payload() -> TestResul
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_pages_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -864,7 +885,7 @@ async fn docs_planner_item_endpoint_returns_gap_bundle() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_planner_item_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -986,7 +1007,7 @@ async fn docs_search_endpoint_returns_projection_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1060,7 +1081,7 @@ async fn docs_retrieval_endpoint_returns_mixed_hits() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_retrieval_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1157,7 +1178,7 @@ async fn docs_retrieval_context_endpoint_returns_node_context_payload() -> TestR
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_retrieval_context_endpoint_executes_over_external_modelica_plugin_path() -> TestResult
 {
@@ -1269,7 +1290,7 @@ async fn docs_retrieval_hit_endpoint_returns_hit_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_retrieval_hit_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1393,7 +1414,7 @@ async fn docs_page_endpoint_returns_projection_payload() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_page_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1504,7 +1525,7 @@ async fn docs_family_context_endpoint_returns_family_context() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_family_context_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1591,7 +1612,7 @@ async fn docs_family_search_endpoint_returns_family_clusters() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_family_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1681,7 +1702,7 @@ async fn docs_family_cluster_endpoint_returns_requested_cluster() -> TestResult 
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_family_cluster_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1813,7 +1834,7 @@ async fn docs_navigation_endpoint_returns_navigation_bundle() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_navigation_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1933,7 +1954,7 @@ async fn docs_navigation_search_endpoint_returns_navigation_hits() -> TestResult
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_navigation_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult
 {
@@ -2013,7 +2034,7 @@ async fn repo_projected_page_endpoint_returns_projection_payload() -> TestResult
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -2100,7 +2121,7 @@ async fn repo_projected_page_index_tree_endpoint_returns_tree_payload() -> TestR
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_index_tree_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2200,7 +2221,7 @@ async fn repo_projected_page_index_node_endpoint_returns_node_payload() -> TestR
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_index_node_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2309,7 +2330,7 @@ async fn repo_projected_page_index_tree_search_endpoint_returns_hit_payload() ->
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_index_tree_search_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2383,7 +2404,7 @@ async fn repo_projected_page_search_endpoint_returns_projection_payload() -> Tes
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_search_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2454,7 +2475,7 @@ async fn repo_projected_retrieval_endpoint_returns_mixed_hit_payload() -> TestRe
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_retrieval_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2527,7 +2548,7 @@ async fn repo_projected_retrieval_hit_endpoint_returns_page_payload() -> TestRes
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_retrieval_hit_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2633,7 +2654,7 @@ async fn repo_projected_retrieval_context_endpoint_returns_node_context_payload(
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_retrieval_context_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2752,7 +2773,7 @@ async fn repo_projected_page_family_context_endpoint_returns_family_clusters() -
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_family_context_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2822,7 +2843,7 @@ async fn repo_projected_page_family_search_endpoint_returns_family_clusters() ->
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_family_search_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -2921,7 +2942,7 @@ async fn repo_projected_page_family_cluster_endpoint_returns_family_payload() ->
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_family_cluster_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -3029,7 +3050,7 @@ async fn repo_projected_page_navigation_endpoint_returns_navigation_bundle() -> 
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_navigation_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -3106,7 +3127,7 @@ async fn repo_projected_page_navigation_search_endpoint_returns_navigation_hits(
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_navigation_search_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -3186,7 +3207,7 @@ async fn repo_projected_page_index_trees_endpoint_returns_tree_payload() -> Test
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_page_index_trees_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -3849,10 +3870,46 @@ version = "0.1.0"
     Ok(repo_dir)
 }
 
+#[cfg(feature = "julia")]
+fn ensure_linked_modelica_parser_summary_service() -> TestResult {
+    let service = LINKED_MODELICA_PARSER_SUMMARY_SERVICE.get_or_init(|| {
+        std::thread::spawn(|| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|error| error.to_string())?;
+            let (base_url, guard) =
+                runtime.block_on(spawn_wendaosearch_demo_modelica_parser_summary_service());
+            set_linked_modelica_parser_summary_base_url_for_tests(base_url.as_str())?;
+            Ok::<LinkedModelicaParserSummaryService, String>(LinkedModelicaParserSummaryService {
+                _guard: Mutex::new(guard),
+            })
+        })
+        .join()
+        .unwrap_or_else(|panic_payload| {
+            Err::<LinkedModelicaParserSummaryService, String>(
+                if let Some(message) = panic_payload.downcast_ref::<&'static str>() {
+                    (*message).to_string()
+                } else if let Some(message) = panic_payload.downcast_ref::<String>() {
+                    message.clone()
+                } else {
+                    "unknown panic payload".to_string()
+                },
+            )
+        })
+    });
+    service
+        .as_ref()
+        .map(|_| ())
+        .map_err(|message| Box::new(IoError::other(message.clone())) as Box<dyn std::error::Error>)
+}
+
+#[cfg(feature = "julia")]
 fn create_local_modelica_repo(
     base: &Path,
     package_name: &str,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    ensure_linked_modelica_parser_summary_service()?;
     let repo_dir = base.join(package_name.to_ascii_lowercase());
     fs::create_dir_all(repo_dir.join("Controllers").join("Examples"))?;
     fs::create_dir_all(
@@ -3931,7 +3988,7 @@ fn create_local_modelica_repo(
     Ok(repo_dir)
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 fn write_modelica_repo_config(
     base: &Path,
     repo_dir: &Path,
@@ -3950,7 +4007,7 @@ plugins = ["modelica"]
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 fn projected_page_id_for_title(
     base: &Path,
     repo_id: &str,
@@ -3972,7 +4029,7 @@ fn projected_page_id_for_title(
     Ok(page.page_id.clone())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 fn projected_page_and_node_id_for_title(
     base: &Path,
     repo_id: &str,

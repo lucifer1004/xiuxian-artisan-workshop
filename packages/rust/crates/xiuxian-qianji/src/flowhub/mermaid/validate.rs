@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use super::model::MermaidNode;
 use super::{MermaidFlowchart, MermaidNodeKind};
 
-const ALLOWED_SCENARIO_GRAPH_NODE_LABELS: &[&str] = &[
+pub(crate) const ALLOWED_SCENARIO_GRAPH_NODE_LABELS: &[&str] = &[
     "Codex write bounded surface",
     "surface check",
     "flowchart alignment",

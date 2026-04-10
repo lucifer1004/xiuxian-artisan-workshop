@@ -20,7 +20,7 @@ scenarios.
 
 - Crate: `packages/rust/crates/xiuxian-daochang`
 - Focus area: Telegram webhook dedup with Valkey backend
-- Validation style: ignored live tests and wrapper `just` commands
+- Validation style: ignored live tests plus direct `just` and Python commands
 
 ## Canonical Commands
 
@@ -46,8 +46,11 @@ cargo test -p xiuxian-daochang --test channels_commands --test channels_webhook 
 cargo test -p xiuxian-daochang runtime_handle_inbound_session_partition_
 ```
 
-Note: the `test-xiuxian-daochang-valkey-*.sh` scripts and `test-xiuxian-daochang-memory-*.sh` scripts are
-compatibility wrappers that delegate to Python suite runners.
+Note: the `just test-xiuxian-daochang-valkey-*` recipes call
+`scripts/channel/test_xiuxian_daochang_valkey_suite.py` directly, and
+`just check-xiuxian-daochang-event-sequence` calls
+`scripts/channel/check_xiuxian_daochang_event_sequence.py` directly. The
+memory suite recipes still use their dedicated Python entrypoints.
 
 ## Debug Event Filters
 

@@ -1311,7 +1311,8 @@ memory-gate-quick:
 
 [group('validate')]
 memory-gate-nightly:
-    @scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh \
+    @scripts/channel/start-xiuxian-daochang-memory-ci.sh \
+        --profile nightly \
         --foreground \
         -- --benchmark-iterations 3 \
            --max-tool-call-waiting-events 0 \
@@ -1320,7 +1321,8 @@ memory-gate-nightly:
 
 [group('validate')]
 memory-gate-a7:
-    @scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh \
+    @scripts/channel/start-xiuxian-daochang-memory-ci.sh \
+        --profile nightly \
         --foreground \
         -- --skip-matrix \
            --skip-evolution \
@@ -1356,18 +1358,6 @@ benchmark-wendao-search-release query="architecture" runs="5" warm_runs="2":
 [group('validate')]
 benchmark-wendao-search-release-build query="architecture" runs="5" warm_runs="2":
     @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" release build
-
-[group('validate')]
-benchmark-skills-tools-gate runs="3":
-    @bash scripts/benchmark_skills_tools_gate.sh deterministic "{{runs}}"
-
-[group('validate')]
-benchmark-skills-tools-network-observability runs="5":
-    @bash scripts/benchmark_skills_tools_gate.sh network "{{runs}}"
-
-[group('validate')]
-benchmark-skills-tools-ci report_dir=".run/reports/skills-tools-benchmark" deterministic_runs="3" network_runs="5":
-    @bash scripts/benchmark_skills_tools_ci.sh "{{report_dir}}" "{{deterministic_runs}}" "{{network_runs}}"
 
 [group('validate')]
 evaluate-wendao-retrieval limit="10" min_top3_rate="0.0":
@@ -2540,7 +2530,7 @@ test-xiuxian-daochang-valkey-stress valkey_url="":
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-xiuxian-daochang-valkey-stress.sh "${resolved_valkey_url}"
+    uv run python scripts/channel/test_xiuxian_daochang_valkey_suite.py --suite stress "${resolved_valkey_url}"
 
 # Run focused distributed SessionGate verification against live Valkey.
 # Usage: just test-xiuxian-daochang-valkey-session-gate [valkey_url]
@@ -2552,7 +2542,7 @@ test-xiuxian-daochang-valkey-session-gate valkey_url="":
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-xiuxian-daochang-valkey-session-gate.sh "${resolved_valkey_url}"
+    uv run python scripts/channel/test_xiuxian_daochang_valkey_suite.py --suite session-gate "${resolved_valkey_url}"
 
 # Run focused cross-instance session-context restore verification against live Valkey.
 # Usage: just test-xiuxian-daochang-valkey-session-context [valkey_url]
@@ -2564,7 +2554,7 @@ test-xiuxian-daochang-valkey-session-context valkey_url="":
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-xiuxian-daochang-valkey-session-context.sh "${resolved_valkey_url}"
+    uv run python scripts/channel/test_xiuxian_daochang_valkey_suite.py --suite session-context "${resolved_valkey_url}"
 
 # Run focused multi-HTTP Valkey dedup verification.
 # Usage: just test-xiuxian-daochang-valkey-multi-http [valkey_url]
@@ -2576,7 +2566,7 @@ test-xiuxian-daochang-valkey-multi-http valkey_url="":
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-xiuxian-daochang-valkey-multi-http.sh "${resolved_valkey_url}"
+    uv run python scripts/channel/test_xiuxian_daochang_valkey_suite.py --suite multi-http "${resolved_valkey_url}"
 
 # Run focused multi-process Valkey dedup verification.
 # Usage: just test-xiuxian-daochang-valkey-multi-process [valkey_url]
@@ -2588,7 +2578,7 @@ test-xiuxian-daochang-valkey-multi-process valkey_url="":
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-xiuxian-daochang-valkey-multi-process.sh "${resolved_valkey_url}"
+    uv run python scripts/channel/test_xiuxian_daochang_valkey_suite.py --suite multi-process "${resolved_valkey_url}"
 
 # Run full live Valkey webhook verification suite
 # (stress + distributed session gate + session-context + multi-http + multi-process).
@@ -2601,7 +2591,7 @@ test-xiuxian-daochang-valkey-full valkey_url="":
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-xiuxian-daochang-valkey-full.sh "${resolved_valkey_url}"
+    uv run python scripts/channel/test_xiuxian_daochang_valkey_suite.py --suite full "${resolved_valkey_url}"
 
 # Validate observability event sequence from a captured agent log file.
 # Usage:
@@ -2621,7 +2611,7 @@ check-xiuxian-daochang-event-sequence log_file strict="false" require_memory="fa
     if [ -n "{{expect_memory_backend}}" ]; then
       args+=(--expect-memory-backend "{{expect_memory_backend}}")
     fi
-    bash scripts/channel/check-xiuxian-daochang-event-sequence.sh "{{log_file}}" "${args[@]}"
+    uv run python scripts/channel/check_xiuxian_daochang_event_sequence.py "{{log_file}}" "${args[@]}"
 
 # ==============================================================================
 # RUST BUILD

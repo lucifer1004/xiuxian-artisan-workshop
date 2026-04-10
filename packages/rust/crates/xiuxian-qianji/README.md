@@ -157,8 +157,9 @@ than from the Mermaid direction token, must cover every registered Flowhub
 module node required by the current root contract, and must keep one
 connected module backbone across those module nodes. Undeclared graph-node
 labels such as stale semantic-node names now fail validation explicitly, and
-`qianji show --dir .../plan` maps each immediate Mermaid file into
-`file_name -> merimind_graph_name` in the markdown preview surface. The
+`qianji show --dir .../plan` now surfaces each immediate Mermaid case through
+explicit `Graph name: <merimind_graph_name>` and `Path: ./plan/<file>.mmd`
+fields in the markdown preview surface. The
 control-plane markdown renderer path is now also deduplicated through one
 shared embedded `qianhuan` template catalog exported by
 `xiuxian-qianhuan`, so `show`, `check`, Flowhub-root/module blocks, and
@@ -168,6 +169,45 @@ Those control-plane templates now also live as checked-in `.md.j2` files
 under `resources/templates/control_plane/`, so the Rust side only keeps
 payload assembly plus `include_str!` bindings rather than large inline
 template strings.
+The same CLI surface now also splits graph understanding from localized
+contract evaluation explicitly: `qianji show --graph <scenario.mmd>` renders
+the graph contract surface in five bounded sections only: graph metadata, raw
+Mermaid, node semantics, expected work surface, and the minimal local
+`qianji.toml` template that Codex or any other agent executor should
+materialize. That graph surface still parses node/edge structure through the
+mature Mermaid parser, derives `merimind_graph_name` from the filename stem,
+renders `Path` as the owning Mermaid file with repo-root-relative display when
+the graph lives under the active checkout, and aligns registered module nodes
+back to the Flowhub root contract plus module exports, while
+`qianji check --dir <workdir>` continues to evaluate the localized workdir
+contract materialized for the current bounded slice.
+The current execution model is now explicit in the docs: Codex is the
+execution layer, `qianji-flowhub` is the constraint layer, and
+`qianji check` is the evaluation layer. The localized workdir contract stays
+intentionally small, with only `[plan].name`, `[plan].surface`,
+`[check].require`, and `[check].flowchart`. The main RFC now also freezes the
+`show --graph` output contract itself: graph metadata, raw Mermaid, node
+semantics, expected work surface, and the localized `qianji.toml` template.
+The same RFC now also freezes the v0 node taxonomy and label-normalization
+rules for `show --graph`, plus the v0 `Next` edge semantics for backbone,
+fail, and repair-loop edges. The same `Nodes` contract now also fixes the
+wording boundary: `Role` stays descriptive and `Agent action` stays
+imperative. The same RFC now also fixes `unknown` node failure semantics:
+visible in `show --graph`, blocking in `qianji check`, and excluded from
+localized contract materialization guidance. Module alignment in the same RFC
+is now also explicit: module nodes are anchored by root `contract.register`,
+and export alignment stays bounded to `entry` and `ready`. The same RFC now
+also freezes the graph path and naming contract: `Name` is the filename-stem
+`merimind_graph_name`, and `Path` is the owning Mermaid file rendered
+repo-root-relative when the graph lives under the active checkout. The same
+RFC now also freezes the Mermaid consumption boundary for `show --graph`: the
+raw Mermaid block stays verbatim, while graph-contract semantics consume only
+first-order node labels and directed adjacency rather than Mermaid
+presentation directives such as direction, styling, or click metadata. The
+current parser path now code-backs that boundary directly: before extracting
+graph-contract semantics, it strips presentation-only Mermaid directives such
+as `classDef`, `class`, `style`, `click`, and `linkStyle`, while the
+rendered `## Mermaid` block still preserves the original source verbatim.
 This slice does not add a new CLI verb yet.
 The touched CLI and
 integration-test coverage now anchors repo/workspace resolution through the
@@ -211,6 +251,10 @@ direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji -- \
 direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
   show \
   --dir "$PRJ_ROOT/qianji-flowhub"
+
+direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
+  show \
+  --graph "$PRJ_ROOT/qianji-flowhub/plan/codex-plan.mmd"
 
 direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
   check \

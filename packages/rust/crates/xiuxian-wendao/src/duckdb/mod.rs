@@ -25,7 +25,10 @@ pub use connection::{SearchDuckDbConnection, open_search_duckdb_connection};
 pub use engine::DuckDbLocalRelationEngine;
 #[cfg(all(feature = "duckdb", test))]
 pub(crate) use engine::DuckDbRegistrationStrategy;
-pub use engine::{DataFusionLocalRelationEngine, LocalRelationEngine, LocalRelationEngineKind};
+pub use engine::{
+    DataFusionLocalRelationEngine, LocalRelationEngine, LocalRelationEngineKind,
+    LocalRelationMaterializationState, LocalRelationRegistrationHint,
+};
 #[cfg(feature = "duckdb")]
 pub use parquet::DuckDbParquetQueryEngine;
 pub use parquet::{DataFusionParquetQueryEngine, ParquetQueryEngine};

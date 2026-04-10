@@ -1,10 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use xiuxian_ast::{
-    JuliaDocAttachment, JuliaDocTargetKind, JuliaFileSummary, JuliaImport, JuliaSymbol,
-    JuliaSymbolKind as AstJuliaSymbolKind, TreeSitterJuliaParser,
-};
 use xiuxian_wendao_core::repo_intelligence::{
     AnalysisContext, DocRecord, ModuleRecord, PluginAnalysisOutput, PluginLinkContext,
     RegisteredRepository, RelationKind, RelationRecord, RepoIntelligenceError,
@@ -17,6 +13,12 @@ use super::discovery::{discover_docs, discover_examples, relative_path_string};
 use super::graph_structural::GraphStructuralRouteKind;
 use super::graph_structural_transport::build_graph_structural_flight_transport_client;
 use super::linking::{build_doc_relations, build_example_relations};
+use super::parser_summary::{
+    JuliaParserDocAttachment, JuliaParserDocTargetKind, JuliaParserFileSummary, JuliaParserImport,
+    JuliaParserSymbol, JuliaParserSymbolKind,
+    fetch_julia_parser_file_summary_blocking_for_repository,
+    validate_julia_parser_summary_preflight_for_repository,
+};
 use super::project::{load_project_metadata, locate_root_module_file};
 use super::sources::{JuliaAnalyzedFile, collect_julia_sources};
 use super::transport::build_julia_flight_transport_client;
@@ -106,6 +108,7 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
         context: &AnalysisContext,
         repository_root: &Path,
     ) -> Result<(), RepoIntelligenceError> {
+        validate_julia_parser_summary_preflight_for_repository(&context.repository)?;
         let _maybe_transport = build_julia_flight_transport_client(&context.repository)?;
         let _maybe_manifest_rows =
             validate_julia_capability_manifest_preflight_for_repository(&context.repository)?;
@@ -145,7 +148,7 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
         )?;
         let root_path = relative_path_string(repository_root, &root_file)?;
         let collected = collect_julia_sources(
-            &context.repository.id,
+            &context.repository,
             repository_root,
             &root_file,
             &mut diagnostics,
@@ -233,29 +236,12 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
 fn parse_julia_file_summary(
     context: &AnalysisContext,
     file: &RepoSourceFile,
-) -> Result<JuliaFileSummary, RepoIntelligenceError> {
-    let mut parser =
-        TreeSitterJuliaParser::new().map_err(|error| RepoIntelligenceError::AnalysisFailed {
-            message: format!("failed to parse Julia source `{}`: {error}", file.path),
-        })?;
-    if let Ok(summary) = parser.parse_summary(&file.contents) {
-        return Ok(JuliaFileSummary {
-            module_name: Some(summary.module_name),
-            exports: summary.exports,
-            imports: summary.imports,
-            symbols: summary.symbols,
-            docstrings: summary.docstrings,
-            includes: summary.includes,
-        });
-    }
-    parser.parse_file_summary(&file.contents).map_err(|error| {
-        RepoIntelligenceError::AnalysisFailed {
-            message: format!(
-                "failed to parse Julia file `{}` in repo `{}` for incremental analysis: {error}",
-                file.path, context.repository.id
-            ),
-        }
-    })
+) -> Result<JuliaParserFileSummary, RepoIntelligenceError> {
+    fetch_julia_parser_file_summary_blocking_for_repository(
+        &context.repository,
+        &file.path,
+        &file.contents,
+    )
 }
 
 fn collect_symbol_records(
@@ -285,7 +271,7 @@ fn build_symbol_records(
     path: &str,
     module_name: &str,
     exports: &[String],
-    symbols: &[JuliaSymbol],
+    symbols: &[JuliaParserSymbol],
 ) -> Vec<SymbolRecord> {
     let mut symbol_map = BTreeMap::new();
 
@@ -303,8 +289,10 @@ fn build_symbol_records(
 
     for symbol in symbols {
         let kind = match symbol.kind {
-            AstJuliaSymbolKind::Function => RepoSymbolKind::Function,
-            AstJuliaSymbolKind::Type => RepoSymbolKind::Type,
+            JuliaParserSymbolKind::Function => RepoSymbolKind::Function,
+            JuliaParserSymbolKind::Type => RepoSymbolKind::Type,
+            JuliaParserSymbolKind::Constant => RepoSymbolKind::Constant,
+            JuliaParserSymbolKind::Other => RepoSymbolKind::Other,
         };
         let record = build_symbol_record(
             repo_id,
@@ -323,7 +311,7 @@ fn build_symbol_records(
 fn build_import_relations(
     repo_id: &str,
     module_id: &str,
-    imports: &[JuliaImport],
+    imports: &[JuliaParserImport],
 ) -> Vec<RelationRecord> {
     imports
         .iter()
@@ -381,20 +369,20 @@ fn build_docstring_records(
     path: &str,
     module_name: &str,
     symbols: &[SymbolRecord],
-    docstrings: &[JuliaDocAttachment],
+    docstrings: &[JuliaParserDocAttachment],
 ) -> Vec<DocRecord> {
     docstrings
         .iter()
         .filter_map(|docstring| {
             let anchor = match docstring.target_kind {
-                JuliaDocTargetKind::Module if docstring.target_name == module_name => {
+                JuliaParserDocTargetKind::Module if docstring.target_name == module_name => {
                     format!("module:{}", docstring.target_name)
                 }
-                JuliaDocTargetKind::Symbol => symbols
+                JuliaParserDocTargetKind::Symbol => symbols
                     .iter()
                     .find(|symbol| symbol.name == docstring.target_name)
                     .map(|_| format!("symbol:{}", docstring.target_name))?,
-                JuliaDocTargetKind::Module => return None,
+                JuliaParserDocTargetKind::Module => return None,
             };
             Some(DocRecord {
                 repo_id: repo_id.to_string(),
@@ -411,18 +399,18 @@ fn build_docstring_relations(
     repo_id: &str,
     module_id: &str,
     symbols: &[SymbolRecord],
-    docstrings: &[JuliaDocAttachment],
+    docstrings: &[JuliaParserDocAttachment],
     path: &str,
 ) -> Vec<RelationRecord> {
     docstrings
         .iter()
         .filter_map(|docstring| {
             let (anchor, target_id) = match docstring.target_kind {
-                JuliaDocTargetKind::Module => (
+                JuliaParserDocTargetKind::Module => (
                     format!("module:{}", docstring.target_name),
                     module_id.to_string(),
                 ),
-                JuliaDocTargetKind::Symbol => (
+                JuliaParserDocTargetKind::Symbol => (
                     format!("symbol:{}", docstring.target_name),
                     symbols
                         .iter()

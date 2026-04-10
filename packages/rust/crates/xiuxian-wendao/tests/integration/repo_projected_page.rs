@@ -1,9 +1,9 @@
 //! Integration tests for deterministic projected-page lookup.
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use std::fs;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
@@ -11,7 +11,7 @@ use xiuxian_wendao::analyzers::{
     RepoProjectedPageQuery, RepoProjectedPagesQuery, build_repo_projected_page,
     build_repo_projected_pages,
 };
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use xiuxian_wendao::analyzers::{
     repo_projected_page_from_config, repo_projected_pages_from_config,
 };
@@ -50,7 +50,7 @@ fn projected_page_lookup_resolves_one_stable_page() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_projected_page_lookup_resolves_one_stable_page() -> TestResult {
     let temp = tempfile::tempdir()?;

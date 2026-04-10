@@ -88,7 +88,8 @@ crate keeps only generic Arrow batch helpers on the public surface:
 `xiuxian-vector` intentionally has two Arrow surfaces:
 
 - Lance-facing storage, mutation, and repo-hydration paths must use Lance's Arrow-57 types re-exported from `lance::deps`.
-- DataFusion/search-engine execution and generic Arrow-over-HTTP transport continue to use the workspace Arrow surface.
+- residual DataFusion and other workspace Arrow-native compute paths continue
+  to use the workspace Arrow surface.
 
 Do not pass workspace Arrow arrays into `LanceRecordBatch` construction or downcast Lance batches using workspace Arrow collection types. Use the Lance-prefixed re-exports from `xiuxian-vector` for any code that touches Lance-owned schemas or arrays.
 

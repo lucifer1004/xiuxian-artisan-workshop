@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected markdown documents.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -9,7 +9,7 @@ use xiuxian_wendao::analyzers::{DocsMarkdownDocumentsQuery, docs_markdown_docume
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_markdown_documents_resolve_projected_markdown_documents() -> TestResult {
     let temp = tempfile::tempdir()?;

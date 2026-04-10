@@ -1,0 +1,9 @@
+version = 1
+
+[plan]
+name = "{{ plan_name }}"
+surface = ["flowchart.mmd", "blueprint", "plan"]
+
+[check]
+require = ["qianji.toml", "flowchart.mmd", "blueprint", "plan", "blueprint/**/*.md", "plan/**/*.md"]
+flowchart = ["blueprint", "plan"]

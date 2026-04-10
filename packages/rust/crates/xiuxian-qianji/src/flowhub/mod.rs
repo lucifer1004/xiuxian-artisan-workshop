@@ -1,6 +1,7 @@
 mod check;
 mod discover;
 mod flowchart;
+mod graph_show;
 mod load;
 mod materialize;
 mod mermaid;
@@ -15,6 +16,10 @@ pub use check::{
 };
 pub use discover::{FlowhubDirKind, classify_flowhub_dir};
 pub(crate) use flowchart::{derive_flowchart_aliases, render_flowchart};
+pub use graph_show::{
+    FlowhubGraphEdgeSummary, FlowhubGraphNodeKind, FlowhubGraphNodeSummary, FlowhubGraphShow,
+    render_flowhub_graph_show, show_flowhub_graph,
+};
 pub use load::{load_flowhub_module_manifest, load_flowhub_scenario_manifest};
 pub use materialize::{MaterializedWorkdir, materialize_flowhub_scenario_workdir};
 pub use parse::{parse_flowhub_module_manifest, parse_flowhub_scenario_manifest};

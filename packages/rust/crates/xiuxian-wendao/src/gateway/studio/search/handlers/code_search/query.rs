@@ -1,26 +1,18 @@
-#[cfg(test)]
 use std::time::Duration;
 
-#[cfg(test)]
 use super::types::ParsedCodeSearchQuery;
-#[cfg(test)]
 pub(crate) use crate::search::repo_search::RepoSearchResultLimits;
 
-#[cfg(test)]
 const DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
-#[cfg(test)]
 const DEFAULT_REPO_WIDE_PER_REPO_ENTITY_RESULT_LIMIT: usize = 12;
-#[cfg(test)]
 const DEFAULT_REPO_WIDE_PER_REPO_CONTENT_RESULT_LIMIT: usize = 4;
 
-#[cfg(test)]
 pub(crate) fn repo_wide_code_search_timeout(repo_hint: Option<&str>) -> Option<Duration> {
     repo_hint
         .is_none()
         .then_some(DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT)
 }
 
-#[cfg(test)]
 pub(crate) fn repo_search_result_limits(
     repo_hint: Option<&str>,
     limit: usize,
@@ -38,7 +30,6 @@ pub(crate) fn repo_search_result_limits(
     }
 }
 
-#[cfg(test)]
 pub(crate) fn parse_code_search_query(
     query: &str,
     repo_hint: Option<&str>,
@@ -81,7 +72,6 @@ pub(crate) fn parse_code_search_query(
     parsed
 }
 
-#[cfg(test)]
 pub(crate) fn infer_repo_hint_from_query<'a, I>(
     parsed: &ParsedCodeSearchQuery,
     repo_ids: I,
@@ -109,7 +99,6 @@ where
     Some(first.to_string())
 }
 
-#[cfg(test)]
 fn normalize_repo_search_seed(value: &str) -> String {
     let mut normalized = value.trim().to_ascii_lowercase();
     if let Some(stripped) = normalized.strip_suffix(".jl") {

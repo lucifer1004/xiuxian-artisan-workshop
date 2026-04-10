@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use arrow::datatypes::Schema;
 use arrow_flight::sql::server::FlightSqlService;
@@ -11,12 +11,12 @@ use prost::Message;
 use tonic::{Request, Response, Status};
 
 use crate::search::queries::SearchQueryService;
-use crate::search::queries::sql::execute_sql_query;
 
 use super::discovery::{
     build_catalogs_batch, build_catalogs_flight_info_schema, build_schemas_batch,
     build_schemas_flight_info_schema, build_tables_batch, build_tables_flight_info_schema,
 };
+use super::execution::{configured_parquet_query_engine, execute_flightsql_statement_query};
 use super::metadata::STUDIO_FLIGHT_SQL_INFO_DATA;
 use super::statement::{
     StatementCache, cache_statement_batches, new_statement_cache, new_statement_handle,
@@ -28,6 +28,7 @@ use super::statement::{
 pub struct StudioFlightSqlService {
     query_service: SearchQueryService,
     statement_cache: StatementCache,
+    statement_query_engine: Arc<OnceLock<Result<crate::duckdb::ParquetQueryEngine, String>>>,
 }
 
 #[must_use]
@@ -45,6 +46,7 @@ impl StudioFlightSqlService {
         Self {
             query_service: query_service.into(),
             statement_cache: new_statement_cache(),
+            statement_query_engine: Arc::new(OnceLock::new()),
         }
     }
 
@@ -66,6 +68,17 @@ impl StudioFlightSqlService {
                 )
             })
     }
+
+    fn statement_query_engine(&self) -> Result<crate::duckdb::ParquetQueryEngine, Status> {
+        self.statement_query_engine
+            .get_or_init(|| configured_parquet_query_engine(self.query_service.search_plane()))
+            .clone()
+            .map_err(|error| {
+                Status::internal(format!(
+                    "FlightSQL failed to configure published parquet query engine: {error}"
+                ))
+            })
+    }
 }
 
 #[tonic::async_trait]
@@ -84,12 +97,18 @@ impl FlightSqlService for StudioFlightSqlService {
         }
 
         let descriptor = request.into_inner();
-        let result = execute_sql_query(&self.query_service, query.query.as_str())
-            .await
-            .map_err(|error| {
-                Status::internal(format!("FlightSQL statement execution failed: {error}"))
-            })?;
-        let (_metadata, batches) = result.into_parts();
+        let statement_query_engine = self.statement_query_engine()?;
+        let result = execute_flightsql_statement_query(
+            &self.query_service,
+            Some(&statement_query_engine),
+            query.query.as_str(),
+        )
+        .await
+        .map_err(|error| {
+            Status::internal(format!("FlightSQL statement execution failed: {error}"))
+        })?;
+        let _statement_route = &result.route;
+        let batches = result.batches;
         let statement_handle = new_statement_handle();
         let flight_info = statement_flight_info(descriptor, statement_handle.as_str(), &batches)?;
         cache_statement_batches(&self.statement_cache, statement_handle, batches);

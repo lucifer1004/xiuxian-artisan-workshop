@@ -111,6 +111,10 @@ The exact Rust API may evolve, but the ownership rule should remain fixed: Qianj
 
 Qianji should maintain workflow state as Arrow-native relations rather than opaque JSON envelopes wherever practical.
 
+This statement is about Qianji's logical state model, not storage ownership.
+The runtime persistence for checkpoint, resume, and coordination state remains
+Valkey-backed. DuckDB is not a workflow-state store in this architecture.
+
 The minimal state relation should include fields such as:
 
 1. `workflow_id`
@@ -125,6 +129,10 @@ The minimal state relation should include fields such as:
 10. `updated_at`
 
 This relation is owned by Qianji. It is not a substitute for Wendao query outputs.
+
+When a workflow stage later uses a bounded local relation engine, that engine
+only computes over already materialized stage inputs or outputs. It does not
+replace the workflow-state layer.
 
 ### 5.1.4 Explain and telemetry flow
 
@@ -151,7 +159,11 @@ That direction does not change the ownership split defined in this RFC:
 
 1. Wendao still owns retrieval planning and storage policy
 2. Qianji still owns workflow-stage orchestration and relation handoff
-3. checkpoint persistence and transient coordination do not move into DuckDB
+3. Valkey continues to own checkpoint persistence, resume state, and transient
+   coordination
+4. DuckDB, if later used, remains only a stage-local compute helper for
+   bounded joins, rollups, contradiction checks, or reduce shaping over
+   already materialized Arrow relations
 
 ## 6. Implementation Phases
 

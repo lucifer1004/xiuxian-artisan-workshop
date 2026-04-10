@@ -19,10 +19,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from xiuxian_wendao_py.compat.runtime import (
-    get_project_root,
-    prepare_cargo_subprocess_env,
-)
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.resolve()
+
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 DEFAULT_MATRIX = "docs/testing/wendao-query-regression-matrix.json"
 MATRIX_SCHEMA = "xiuxian_wendao.query_matrix.v1"
@@ -42,17 +45,17 @@ class CaseResult:
 
 
 def _resolve_project_root() -> Path:
+    prj_root = os.environ.get("PRJ_ROOT")
+    if prj_root:
+        return Path(prj_root).expanduser().resolve()
     try:
-        return get_project_root().resolve()
-    except Exception:
-        prj_root = os.environ.get("PRJ_ROOT")
-        if prj_root:
-            return Path(prj_root).expanduser().resolve()
         raw = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"],
             text=True,
         ).strip()
-        return Path(raw).resolve()
+    except Exception:
+        return _PROJECT_ROOT
+    return Path(raw).resolve()
 
 
 def _resolve_default_config_path(project_root: Path) -> Path | None:

@@ -17,4 +17,4 @@ cleanup() {
 trap cleanup EXIT
 
 bash scripts/channel/valkey-start.sh "${port}"
-bash scripts/channel/test-xiuxian-daochang-valkey-full.sh "${valkey_url}"
+uv run python "${PROJECT_ROOT}/scripts/channel/test_xiuxian_daochang_valkey_suite.py" --suite full "${valkey_url}"

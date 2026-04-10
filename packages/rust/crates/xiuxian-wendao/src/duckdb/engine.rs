@@ -68,6 +68,16 @@ impl LocalRelationMaterializationState {
     }
 }
 
+/// Narrow caller hint for one request-scoped local relation registration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalRelationRegistrationHint {
+    /// Use the engine default registration policy.
+    Default,
+    /// The caller expects to query the same relation multiple times within the
+    /// current request-scoped engine lifetime.
+    RepeatedUse,
+}
+
 /// Narrow local relation-engine seam for bounded in-process analytics.
 #[async_trait]
 pub trait LocalRelationEngine: Send + Sync {
@@ -86,6 +96,24 @@ pub trait LocalRelationEngine: Send + Sync {
         schema: SchemaRef,
         batches: Vec<EngineRecordBatch>,
     ) -> Result<(), String>;
+
+    /// Register one set of in-memory record batches as a queryable table with
+    /// one caller-provided usage hint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the batches cannot be normalized into a queryable
+    /// in-memory table or when registration fails.
+    fn register_record_batches_with_hint(
+        &self,
+        table_name: &str,
+        schema: SchemaRef,
+        batches: Vec<EngineRecordBatch>,
+        hint: LocalRelationRegistrationHint,
+    ) -> Result<(), String> {
+        let _ = hint;
+        self.register_record_batches(table_name, schema, batches)
+    }
 
     /// Report the registration strategy used for one registered relation when
     /// the engine exposes that detail.
@@ -257,6 +285,21 @@ impl DuckDbLocalRelationEngine {
         }
     }
 
+    fn registration_strategy(
+        &self,
+        total_rows: usize,
+        hint: LocalRelationRegistrationHint,
+    ) -> DuckDbRegistrationStrategy {
+        match hint {
+            LocalRelationRegistrationHint::Default => {
+                self.registration_strategy_for_row_count(total_rows)
+            }
+            LocalRelationRegistrationHint::RepeatedUse => {
+                DuckDbRegistrationStrategy::MaterializedAppender
+            }
+        }
+    }
+
     fn register_virtual_relation(
         &self,
         table_name: &str,
@@ -421,6 +464,21 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
         schema: SchemaRef,
         batches: Vec<EngineRecordBatch>,
     ) -> Result<(), String> {
+        self.register_record_batches_with_hint(
+            table_name,
+            schema,
+            batches,
+            LocalRelationRegistrationHint::Default,
+        )
+    }
+
+    fn register_record_batches_with_hint(
+        &self,
+        table_name: &str,
+        schema: SchemaRef,
+        batches: Vec<EngineRecordBatch>,
+        hint: LocalRelationRegistrationHint,
+    ) -> Result<(), String> {
         ensure_duckdb_identifier(table_name, "table")?;
         ensure_duckdb_schema_support(&schema)?;
         for batch in &batches {
@@ -432,7 +490,7 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
         }
 
         let total_rows = batches.iter().map(EngineRecordBatch::num_rows).sum();
-        let strategy = self.registration_strategy_for_row_count(total_rows);
+        let strategy = self.registration_strategy(total_rows, hint);
         match strategy {
             DuckDbRegistrationStrategy::VirtualArrow => {
                 self.register_virtual_relation(table_name, &schema, batches)?;

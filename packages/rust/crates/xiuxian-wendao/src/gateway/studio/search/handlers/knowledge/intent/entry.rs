@@ -1,5 +1,4 @@
 use crate::gateway::studio::router::{StudioApiError, StudioState};
-#[cfg(test)]
 use crate::gateway::studio::search::handlers::code_search::search::build_code_search_response;
 use crate::gateway::studio::search::handlers::knowledge::helpers::{
     intent_candidate_limit, is_code_biased_intent,
@@ -33,12 +32,6 @@ pub(crate) async fn load_intent_search_response_with_metadata(
         ));
     }
 
-    if intent == "code_search" {
-        return build_code_search_response(studio, raw_query, query.repo.as_deref(), limit)
-            .await
-            .map(|response| (response, IntentSearchTransportMetadata::default()));
-    }
-
     build_intent_search_response_with_metadata(
         studio,
         raw_query.as_str(),
@@ -51,7 +44,6 @@ pub(crate) async fn load_intent_search_response_with_metadata(
 }
 
 #[cfg(test)]
-#[cfg_attr(not(any(test, feature = "julia")), allow(dead_code))]
 pub async fn build_intent_search_response(
     studio: &StudioState,
     raw_query: &str,
@@ -75,6 +67,12 @@ pub(crate) async fn build_intent_search_response_with_metadata(
     limit: usize,
     intent: Option<String>,
 ) -> Result<(SearchResponse, IntentSearchTransportMetadata), StudioApiError> {
+    if intent.as_deref() == Some("code_search") {
+        return build_code_search_response(studio, raw_query.to_string(), repo_hint, limit)
+            .await
+            .map(|response| (response, IntentSearchTransportMetadata::default()));
+    }
+
     let index_state = ensure_intent_indices(studio)?;
     let candidate_limit = intent_candidate_limit(limit);
     let intent_ref = intent.as_deref();

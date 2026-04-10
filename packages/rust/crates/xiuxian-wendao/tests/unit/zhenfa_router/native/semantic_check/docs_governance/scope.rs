@@ -57,11 +57,11 @@ fn workspace_doc_identity_scan_respects_explicit_doc_scope() {
 fn workspace_scope_does_not_match_prefix_sibling_crates() {
     let temp = TempDir::new().or_panic("tempdir");
     let wendao_dir = temp.path().join("packages/rust/crates/xiuxian-wendao");
-    let modelica_dir = temp
+    let julia_dir = temp
         .path()
-        .join("packages/rust/crates/xiuxian-wendao-modelica");
+        .join("packages/rust/crates/xiuxian-wendao-julia-sibling");
 
-    for crate_dir in [&wendao_dir, &modelica_dir] {
+    for crate_dir in [&wendao_dir, &julia_dir] {
         fs::create_dir_all(crate_dir.join("docs/01_core")).or_panic("create docs dir");
         fs::write(
             crate_dir.join("Cargo.toml"),
@@ -83,16 +83,16 @@ fn workspace_scope_does_not_match_prefix_sibling_crates() {
     )
     .or_panic("write wendao doc");
 
-    let modelica_doc = modelica_dir.join("docs/01_core/101_core.md");
+    let julia_doc = julia_dir.join("docs/01_core/101_core.md");
     fs::write(
-        &modelica_doc,
-        "# Modelica\n\n:PROPERTIES:\n:ID: readable-modelica\n:TYPE: CORE\n:END:\n",
+        &julia_doc,
+        "# Julia\n\n:PROPERTIES:\n:ID: readable-julia\n:TYPE: CORE\n:END:\n",
     )
-    .or_panic("write modelica doc");
+    .or_panic("write julia doc");
 
     let issues = collect_workspace_doc_governance_issues(
         temp.path(),
-        Some(&modelica_dir.join("docs").to_string_lossy()),
+        Some(&julia_dir.join("docs").to_string_lossy()),
     );
     let identity_issues = issues
         .iter()
@@ -104,8 +104,6 @@ fn workspace_scope_does_not_match_prefix_sibling_crates() {
         Path::new(&identity_issues[0].doc)
             .canonicalize()
             .or_panic("canonical issue path"),
-        modelica_doc
-            .canonicalize()
-            .or_panic("canonical modelica doc")
+        julia_doc.canonicalize().or_panic("canonical julia doc")
     );
 }

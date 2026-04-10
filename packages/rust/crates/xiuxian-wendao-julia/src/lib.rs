@@ -6,6 +6,7 @@ pub mod compatibility;
 pub mod integration_support;
 /// Runtime-level memory-family thin compat surfaces for Julia compute.
 pub mod memory;
+mod modelica_plugin;
 mod plugin;
 
 xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
@@ -13,6 +14,10 @@ xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs"
 #[cfg(test)]
 pub(crate) use plugin::test_support as julia_plugin_test_support;
 
+pub use modelica_plugin::{
+    ModelicaRepoIntelligencePlugin, register_modelica_into,
+    set_linked_modelica_parser_summary_base_url_for_tests,
+};
 pub use plugin::{
     GRAPH_STRUCTURAL_ACCEPTED_COLUMN, GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN,
     GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_DESTINATIONS_COLUMN,
@@ -113,11 +118,13 @@ pub use plugin::{
     fetch_julia_plugin_capability_manifest_rows_for_repository,
     fetch_plugin_arrow_score_rows_for_repository, graph_structural_pair_candidate_id,
     graph_structural_route_kind, graph_structural_shared_tag_anchors, is_graph_structural_route,
+    julia_parser_summary_allows_safe_incremental_file_for_repository,
     process_graph_structural_flight_batches,
     process_graph_structural_flight_batches_for_repository,
     process_julia_capability_manifest_flight_batches,
     process_julia_capability_manifest_flight_batches_for_repository, process_julia_flight_batches,
     process_julia_flight_batches_for_repository, register_into,
+    set_linked_julia_parser_summary_base_url_for_tests,
     validate_graph_structural_filter_request_batch,
     validate_graph_structural_filter_request_schema,
     validate_graph_structural_filter_response_batch,

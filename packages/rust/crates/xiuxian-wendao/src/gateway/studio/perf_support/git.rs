@@ -8,12 +8,40 @@ const GIT_AUTHOR_NAME: &str = "Gateway Perf";
 const GIT_AUTHOR_EMAIL: &str = "gateway-perf@example.invalid";
 
 pub(crate) fn write_default_repo_config(base: &Path, repo_dir: &Path, repo_id: &str) -> Result<()> {
+    write_repo_config(base, repo_dir, repo_id, None)
+}
+
+pub(crate) fn write_repo_config_with_julia_parser_summary_transport(
+    base: &Path,
+    repo_dir: &Path,
+    repo_id: &str,
+    base_url: &str,
+) -> Result<()> {
+    write_repo_config(base, repo_dir, repo_id, Some(base_url))
+}
+
+fn write_repo_config(
+    base: &Path,
+    repo_dir: &Path,
+    repo_id: &str,
+    parser_summary_base_url: Option<&str>,
+) -> Result<()> {
+    let plugin = parser_summary_base_url.map_or_else(
+        || "\"julia\"".to_string(),
+        |base_url| {
+            format!(
+                "{{ id = \"julia\", parser_summary_transport = {{ base_url = \"{base_url}\", file_summary = {{ schema_version = \"v3\" }}, root_summary = {{ schema_version = \"v3\" }} }} }}"
+            )
+        },
+    );
     fs::write(
         base.join("wendao.toml"),
         format!(
             r#"[link_graph.projects.{repo_id}]
 root = "{}"
-plugins = ["julia"]
+plugins = [
+  {plugin}
+]
 "#,
             repo_dir.display()
         ),

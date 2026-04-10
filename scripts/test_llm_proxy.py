@@ -2,11 +2,19 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 import time
 import urllib.request
 import urllib.error
+from pathlib import Path
 
-from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.resolve()
+
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 
 async def main():

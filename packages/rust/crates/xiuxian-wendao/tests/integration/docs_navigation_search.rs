@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page navigation search.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -11,7 +11,7 @@ use xiuxian_wendao::analyzers::{
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_navigation_search_expands_reference_hits_into_navigation_bundles()
 -> TestResult {

@@ -11,13 +11,29 @@ use tempfile::TempDir;
 use tokio_stream::StreamExt;
 use tonic::{Request, Status};
 
+use crate::gateway::studio::types::{AstSearchHit, StudioNavigationTarget};
 use crate::repo_index::RepoCodeDocument;
 use crate::search::SearchPlaneService;
 use crate::search::queries::flightsql::StudioFlightSqlService;
 use crate::search::queries::tests::fixtures as shared_fixtures;
+#[cfg(feature = "duckdb")]
+use crate::set_link_graph_wendao_config_override;
+#[cfg(feature = "duckdb")]
+use std::fs;
 
 pub(super) fn fixture_service(temp_dir: &TempDir) -> SearchPlaneService {
     shared_fixtures::fixture_service(temp_dir, "xiuxian:test:studio_flightsql")
+}
+
+#[cfg(feature = "duckdb")]
+pub(super) fn write_search_duckdb_runtime_override(
+    body: &str,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(&config_path, body)?;
+    set_link_graph_wendao_config_override(&config_path.to_string_lossy());
+    Ok(temp)
 }
 
 pub(super) fn repo_document(
@@ -45,6 +61,43 @@ pub(super) async fn publish_repo_content_chunks(
         .publish_repo_content_chunks_with_revision(repo_id, documents, Some(source_revision))
         .await
         .unwrap_or_else(|error| panic!("publish repo content chunks: {error}"));
+}
+
+pub(super) fn sample_local_symbol_hit(name: &str, path: &str, line_start: usize) -> AstSearchHit {
+    AstSearchHit {
+        name: name.to_string(),
+        signature: format!("fn {name}()"),
+        path: path.to_string(),
+        language: "rust".to_string(),
+        crate_name: "kernel".to_string(),
+        project_name: None,
+        root_label: None,
+        node_kind: None,
+        owner_title: None,
+        navigation_target: StudioNavigationTarget {
+            path: path.to_string(),
+            category: "symbol".to_string(),
+            project_name: None,
+            root_label: None,
+            line: Some(line_start),
+            line_end: Some(line_start),
+            column: Some(1),
+        },
+        line_start,
+        line_end: line_start,
+        score: 0.0,
+    }
+}
+
+pub(super) async fn publish_local_symbol_hits(
+    service: &SearchPlaneService,
+    build_id: &str,
+    hits: &[AstSearchHit],
+) {
+    service
+        .publish_local_symbol_hits(build_id, hits)
+        .await
+        .unwrap_or_else(|error| panic!("publish local symbol hits: {error}"));
 }
 
 pub(super) async fn collect_flight_frames<S>(stream: S) -> Vec<Result<FlightData, Status>>

@@ -6,6 +6,9 @@ use regex::Regex;
 
 use super::model::{MermaidEdge, MermaidFlowchart, MermaidNode, MermaidNodeKind};
 
+const PRESENTATION_ONLY_DIRECTIVE_PREFIXES: &[&str] =
+    &["classDef ", "class ", "style ", "click ", "linkStyle "];
+
 /// One Mermaid parse error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MermaidParseError {
@@ -33,10 +36,11 @@ pub(crate) fn parse_mermaid_flowchart(
     merimind_graph_name: &str,
     registered_module_names: &[String],
 ) -> Result<MermaidFlowchart, MermaidParseError> {
-    validate_explicit_node_labels(source)?;
+    let semantic_source = sanitize_mermaid_first_order_semantics_source(source);
+    validate_explicit_node_labels(&semantic_source)?;
 
     let parsed = Engine::new()
-        .parse_diagram_for_render_model_sync(source, ParseOptions::strict())
+        .parse_diagram_for_render_model_sync(&semantic_source, ParseOptions::strict())
         .map_err(|error| MermaidParseError::new(error.to_string()))?
         .ok_or_else(|| MermaidParseError::new("mermaid flowchart is empty"))?;
 
@@ -87,6 +91,19 @@ pub(crate) fn parse_mermaid_flowchart(
         nodes,
         edges,
     })
+}
+
+fn sanitize_mermaid_first_order_semantics_source(source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            !PRESENTATION_ONLY_DIRECTIVE_PREFIXES
+                .iter()
+                .any(|prefix| trimmed.starts_with(prefix))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn validate_explicit_node_labels(source: &str) -> Result<(), MermaidParseError> {

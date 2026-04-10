@@ -4,8 +4,15 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use axum::Router;
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::integration_support::{
+    JuliaExampleServiceGuard, spawn_wendaosearch_demo_julia_parser_summary_service_with_attempts,
+};
 
-use crate::gateway::studio::perf_support::git::{create_local_git_repo, write_default_repo_config};
+use crate::gateway::studio::perf_support::git::{
+    create_local_git_repo, write_default_repo_config,
+    write_repo_config_with_julia_parser_summary_transport,
+};
 use crate::gateway::studio::perf_support::root::{
     DEFAULT_REAL_WORKSPACE_ROOT, GatewayPerfRoot, REAL_WORKSPACE_ROOT_ENV, create_perf_root,
     resolve_real_workspace_root,
@@ -17,10 +24,15 @@ use crate::gateway::studio::perf_support::workspace::{
 use crate::gateway::studio::router::studio_router;
 use crate::repo_index::repo_index_policy_debug_snapshot;
 
+#[cfg(feature = "julia")]
+const PERF_JULIA_PARSER_SUMMARY_READY_ATTEMPTS: usize = 900;
+
 /// Prepared Studio gateway fixture for performance tests.
 pub struct GatewayPerfFixture {
     root: GatewayPerfRoot,
     state: Arc<crate::gateway::studio::router::GatewayState>,
+    #[cfg(feature = "julia")]
+    _julia_parser_summary_guard: Option<JuliaExampleServiceGuard>,
 }
 
 /// One controller-side concurrency snapshot captured alongside repo-index
@@ -146,6 +158,44 @@ pub async fn prepare_gateway_perf_fixture() -> Result<GatewayPerfFixture> {
     Ok(GatewayPerfFixture {
         root: GatewayPerfRoot::Owned(root),
         state,
+        #[cfg(feature = "julia")]
+        _julia_parser_summary_guard: None,
+    })
+}
+
+/// Build a warm-cache gateway fixture with one Julia repository and an active
+/// parser-summary transport.
+///
+/// This helper keeps the spawned parser-summary demo service alive for the
+/// fixture lifetime so repo-intelligence bootstrap and routed search queries
+/// observe a stable Julia analysis surface.
+///
+/// # Errors
+///
+/// Returns an error if the temporary project cannot be created, the Julia
+/// parser-summary demo service cannot be configured, initialized as a Git
+/// repository, analyzed, or published into the search plane.
+#[cfg(feature = "julia")]
+pub async fn prepare_gateway_perf_fixture_with_julia_parser_summary_transport()
+-> Result<GatewayPerfFixture> {
+    let root = create_perf_root()?;
+    let repo_dir = create_local_git_repo(root.as_path(), "GatewaySyncPkg")?;
+    let (base_url, guard) = spawn_wendaosearch_demo_julia_parser_summary_service_with_attempts(
+        PERF_JULIA_PARSER_SUMMARY_READY_ATTEMPTS,
+    )
+    .await;
+    write_repo_config_with_julia_parser_summary_transport(
+        root.as_path(),
+        repo_dir.as_path(),
+        "gateway-sync",
+        &base_url,
+    )?;
+    let state = gateway_state_for_project(root.as_path())?;
+    publish_code_search_snapshot(&state, "gateway-sync").await?;
+    Ok(GatewayPerfFixture {
+        root: GatewayPerfRoot::Owned(root),
+        state,
+        _julia_parser_summary_guard: Some(guard),
     })
 }
 
@@ -172,5 +222,7 @@ pub async fn prepare_gateway_real_workspace_perf_fixture() -> Result<GatewayPerf
     Ok(GatewayPerfFixture {
         root: GatewayPerfRoot::External(root),
         state,
+        #[cfg(feature = "julia")]
+        _julia_parser_summary_guard: None,
     })
 }

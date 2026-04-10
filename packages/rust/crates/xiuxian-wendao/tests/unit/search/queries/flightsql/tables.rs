@@ -1,11 +1,13 @@
 use arrow_flight::sql::CommandGetTables;
 use tempfile::TempDir;
 
+use crate::search::SearchCorpusKind;
+use crate::search::SearchPlaneService;
 use crate::search::queries::flightsql::build_studio_flightsql_service;
 
 use super::fixtures::{
-    fetch_command_batches, fixture_service, publish_reference_hits, publish_repo_content_chunks,
-    repo_document, sample_hit, string_value,
+    fetch_command_batches, fixture_service, publish_local_symbol_hits, publish_reference_hits,
+    publish_repo_content_chunks, repo_document, sample_hit, sample_local_symbol_hit, string_value,
 };
 
 #[tokio::test]
@@ -16,6 +18,12 @@ async fn flightsql_tables_discovery_reports_local_repo_and_system_sql_objects() 
         &search_plane,
         "build-1",
         &[sample_hit("AlphaService", "src/alpha.rs", 11)],
+    )
+    .await;
+    publish_local_symbol_hits(
+        &search_plane,
+        "fp-local-symbol-flight-tables",
+        &[sample_local_symbol_hit("AlphaSymbol", "src/lib.rs", 10)],
     )
     .await;
     publish_repo_content_chunks(
@@ -30,7 +38,18 @@ async fn flightsql_tables_discovery_reports_local_repo_and_system_sql_objects() 
         "rev-1",
     )
     .await;
+    let local_symbol_epoch = search_plane
+        .coordinator()
+        .status_for(SearchCorpusKind::LocalSymbol)
+        .active_epoch
+        .unwrap_or_else(|| panic!("active local symbol epoch"));
+    let local_symbol_source_table_name = search_plane
+        .local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, local_symbol_epoch)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("local symbol source table"));
     let service = build_studio_flightsql_service(search_plane);
+    let repo_source_table_name = SearchPlaneService::repo_content_chunk_table_name("alpha/repo");
 
     let batches = fetch_command_batches(
         &service,
@@ -64,6 +83,16 @@ async fn flightsql_tables_discovery_reports_local_repo_and_system_sql_objects() 
         "repo".to_string(),
         "repo_content_chunk".to_string(),
         "VIEW".to_string(),
+    )));
+    assert!(rows.contains(&(
+        "local".to_string(),
+        local_symbol_source_table_name,
+        "TABLE".to_string(),
+    )));
+    assert!(rows.contains(&(
+        "repo".to_string(),
+        repo_source_table_name,
+        "TABLE".to_string(),
     )));
     assert!(rows.contains(&(
         "system".to_string(),

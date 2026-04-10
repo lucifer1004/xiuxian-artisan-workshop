@@ -20,10 +20,21 @@ Wendao-specific capabilities such as semantic search, graph navigation, VFS
 resolution, and analysis routes. These routes are not just query translation.
 
 The shared `queries/` system, by contrast, exists to translate a request
-language into a DataFusion plan over the Wendao search plane. SQL is the first
-fully landed query adapter. FlightSQL, GraphQL, REST-style query APIs, and a
-CLI `query` subcommand belong to the same architectural family even when they
-are introduced later.
+language into one local relation-execution plan over the Wendao search plane.
+SQL is the first fully landed query adapter. FlightSQL, GraphQL, REST-style
+query APIs, and a CLI `query` subcommand belong to the same architectural
+family even when they are introduced later.
+
+Today that shared family still contains substantial DataFusion residue, but it
+should not be read as the long-term database execution owner. The current
+DuckDB migration direction is narrower and more explicit:
+
+- DuckDB is the intended database and query-execution lane for search-side
+  Parquet publications, bounded FlightSQL statement reads, and bounded
+  diagnostics SQL
+- DataFusion retains value only where Rust still needs live Arrow compute over
+  generated or request-scoped batches that have not become published Parquet
+  or an explicitly registered DuckDB relation
 
 ## Target Layering
 
@@ -32,25 +43,217 @@ The intended layering is:
 - native Flight business routes: Wendao capability surfaces
 - shared queries system: one semantic query boundary inside `xiuxian-wendao`
 - query adapters: SQL, FlightSQL, GraphQL, REST, CLI
-- DataFusion planning and execution: one execution core inside
-  `xiuxian-wendao`
+- cross-language Arrow substrate:
+  `WendaoArrow`, pyarrow, julia-arrow, and Flight move `RecordBatch`
+  contracts between Rust and Julia analyzers
+- DuckDB database execution:
+  search-side SQL over published Parquet plus bounded request-scoped analytic
+  relations
+- residual DataFusion compute:
+  Rust-side live Arrow compute, batch shaping, and migration-baseline support
 - Arrow result encoding: returned through Flight or another adapter surface
 
-This means Flight is not a replacement for DataFusion. Flight is a transport
-or business-protocol surface. DataFusion remains the query planning and
-execution engine for the shared queries system.
+This means Flight is not a replacement for DuckDB or DataFusion. Flight is a
+transport or business-protocol surface. The cross-language Arrow substrate is
+separate from the bounded database execution lane, and residual DataFusion use
+should be read as Arrow-native compute support rather than as a second
+long-term search database.
+
+## Current Ownership Matrix
+
+The current code-proven ownership split for Wendao search storage is:
+
+- mutable runtime state: in-process coordinator state, not DuckDB and not
+  Valkey by default
+- shared cache and fast shared state: Valkey-backed when that role is enabled
+- published read-mostly corpora: Parquet on disk
+- current bounded SQL execution over Arrow or Parquet: DataFusion or DuckDB
+  during the migration
+- external business protocol: native Flight first, with FlightSQL as a bounded
+  query-adapter surface
+
+That means the current system does not collapse everything into DuckDB. The
+boundary is narrower and more specific:
+
+- `repo_index` runtime status, queue membership, active repo ordering, and
+  pending work still live inside the process coordinator
+- repo analysis cache and repo-search query cache still use in-memory plus
+  Valkey-backed cache paths
+- published local and repo corpora are persisted as Parquet, not as DuckDB
+  files
+- DuckDB is a bounded local execution lane over Arrow relations and Parquet
+  publications
+- native Flight and bounded FlightSQL remain protocol surfaces, not storage
+  owners
+
+### Cross-Language Arrow Substrate and Residual DataFusion Value
+
+The current code also shows a separate boundary that should not be collapsed
+into the DuckDB lane:
+
+- `WendaoArrow`, pyarrow, julia-arrow, and Flight own the cross-language
+  Arrow `RecordBatch` substrate between Rust and Julia analyzers
+- Rust Julia integration paths such as parser-summary, graph-structural, and
+  rerank exchange are Arrow-first request and response contracts before any
+  database execution question appears
+- DuckDB belongs downstream of that transport substrate when Wendao executes
+  search-side SQL over published Parquet or bounded request-scoped analytic
+  relations
+- DataFusion's residual value therefore belongs only in Rust-side live Arrow
+  compute, request and response shaping, or migration-baseline work where the
+  data is still a generated Arrow workset rather than a Parquet publication or
+  DuckDB-owned relation
+
+So the intended long-term interpretation is:
+
+- cross-language Arrow transport: `WendaoArrow` and Flight
+- search and diagnostics database execution: DuckDB
+- mutable state and shared cache: in-process plus Valkey-backed roles
+- residual Arrow-native compute inside Rust: DataFusion only where DuckDB is
+  not the right tool
+
+This distinction matters because "search storage" in Wendao is now split
+across different layers on purpose:
+
+- Arrow: request-scoped relation and payload format
+- Parquet: published persisted columnar corpus format
+- DuckDB: search-side query and analytics execution over published Parquet or
+  bounded request-scoped relations
+- DataFusion: residual live Arrow compute inside Rust during the migration
+- Valkey: cache and explicit fast-state roles
+- in-process coordinator memory: mutable runtime state
+
+### Repo Lane Ownership
+
+For the repo lane specifically, the current code shows this narrower split:
+
+- `repo_index` mutable state:
+  in-process coordinator memory owns queue membership, active repo ordering,
+  per-repo status maps, and the aggregate `status_snapshot`
+- repo analysis cache:
+  in-memory cache plus `ValkeyAnalysisCache`
+- repo search query-result cache:
+  in-memory query cache plus `ValkeyAnalysisCache`
+- repo publication data:
+  published `repo_entity` and `repo_content_chunk` corpora persisted as
+  Parquet
+- repo query execution:
+  `ParquetQueryEngine` selects DataFusion or DuckDB over those Parquet
+  publications
+- repo diagnostics protocol surfaces:
+  native Flight and JSON handlers may register request-scoped Arrow relations
+  and run bounded diagnostics SQL, but those routes do not become storage
+  owners
+
+So the current repo lane should be read as:
+
+- state: in-process
+- shared cache: Valkey-backed
+- publication: Parquet
+- execution: DataFusion or DuckDB
+- protocol: Flight, JSON, and bounded FlightSQL
+
+### Local Corpus Lane Ownership
+
+For the local corpus lane, the current code shows this narrower split:
+
+- local publication ownership:
+  `local_symbol`, `reference_occurrence`, `attachment`, and
+  `knowledge_section` now rewrite published data directly to Parquet
+- local epoch discovery and prewarm:
+  Parquet-only for already-migrated local corpora
+- local query execution:
+  search and hydration paths read those Parquet publications through
+  `ParquetQueryEngine`, which selects DataFusion or DuckDB
+- local cache:
+  no separate DuckDB-owned local corpus cache layer is introduced by these
+  cuts
+- local protocol surfaces:
+  gateway search routes and bounded FlightSQL statements read from the local
+  corpus Parquet publications, but they do not become storage owners
+
+So the current local corpus lane should be read as:
+
+- publication: Parquet-first
+- execution: DataFusion or DuckDB over Parquet
+- cache/state: not reassigned to DuckDB
+- protocol: gateway routes and bounded FlightSQL over those publications
+
+### Mutable State and Shared Cache Ownership
+
+For mutable state and shared cache, the current code shows this split:
+
+- `repo_index` mutable state:
+  `RepoIndexCoordinator` still owns per-repo statuses, fingerprints, active
+  ordering, the aggregate snapshot, and the pending queue in in-process
+  `RwLock` and `Mutex` fields
+- search-plane mutable runtime state:
+  `SearchPlaneCoordinator` and `SearchPlaneService` still keep per-corpus
+  runtime maps, maintenance state, dispatch runtime, repo runtime generation,
+  and query telemetry in in-process synchronization primitives
+- repository analysis cache:
+  analysis outputs still land in an in-memory cache, with shared reuse going
+  through `ValkeyAnalysisCache` where configured
+- repository search query-result cache:
+  query payload reuse still lands in an in-memory cache plus
+  `ValkeyAnalysisCache`
+- search-plane shared cache:
+  `SearchPlaneCache` remains the Valkey-backed cache entrypoint for
+  manifests, leases, and short-lived search-plane cache values where enabled
+- DuckDB role:
+  DuckDB remains an execution and bounded analytics lane over Arrow and
+  Parquet relations; it does not own mutable coordinator state or the shared
+  cache backplane
+
+So the current mutable-state and shared-cache split should be read as:
+
+- mutable state: in-process
+- shared cache: Valkey-backed where enabled
+- publication: Parquet
+- execution: DataFusion or DuckDB
+- protocol: Flight, JSON, and bounded FlightSQL over those owned surfaces
+
+### Protocol Surface Ownership
+
+For protocol surfaces, the current code shows this split:
+
+- native Flight routes:
+  `StudioSearchFlightRouteProvider` dispatches route requests to search
+  handlers and returns `SearchFlightRouteResponse` batches plus metadata, but
+  it does not own persisted publications or execution engines
+- bounded FlightSQL:
+  `StudioFlightSqlService` exposes discovery and statement-query surfaces over
+  the shared query system and the published Parquet query-engine seam; it may
+  route statements into DataFusion or DuckDB execution, but it does not become
+  a storage owner
+- JSON gateway handlers:
+  Studio HTTP/JSON handlers call the underlying search-plane and repo/local
+  search methods, then serialize response payloads; they are protocol adapters
+  rather than persistence owners
+- underlying ownership:
+  protocol surfaces sit on top of Parquet publications, in-process state, and
+  Valkey-backed caches without changing who owns those underlying layers
+
+So the current protocol-surface split should be read as:
+
+- protocol: native Flight, bounded FlightSQL, and JSON/HTTP
+- publication: Parquet
+- state: in-process
+- cache: Valkey-backed where enabled
+- execution: DataFusion or DuckDB selected underneath those protocol surfaces
 
 The bounded DuckDB analytics proposal is tracked separately in
 [RFC: DuckDB as a Bounded In-Process Analytic Lane for Wendao and Qianji](../../../../../../docs/rfcs/2026-04-08-wendao-qianji-duckdb-bounded-analytics-rfc.md).
 That RFC keeps the external Flight contract unchanged and keeps the shared
-query system DataFusion-led; DuckDB is explicitly scoped only to internal
-request-scoped or bounded-lived analytic execution.
+query system's current DataFusion residue explicit; DuckDB is scoped to the
+target search-side database execution lane and to internal request-scoped or
+bounded-lived analytic execution.
 
 The first bounded implementation slice under that RFC is now landed too.
 `xiuxian-wendao` has a local `src/duckdb/` bridge that exposes one bounded
 local relation-engine seam, and the bounded-work markdown lane now uses that
 seam while remaining DataFusion-backed. DuckDB-specific execution is still
-feature-gated scaffolding rather than the default shared query core.
+feature-gated scaffolding rather than the default shared query path.
 
 The next bounded pilot under the same RFC is landed too. The bounded-work
 markdown query owner now exposes an explicit
@@ -58,8 +261,8 @@ markdown query owner now exposes an explicit
 `DuckDbLocalRelationEngine` can register Arrow batches through
 `appender-arrow` and return Arrow-native query batches. The default
 `query_bounded_work_markdown_payload(...)` path still instantiates the
-DataFusion engine explicitly, so the shared query system remains DataFusion-led
-while the DuckDB pilot stays opt-in and request-scoped.
+DataFusion engine explicitly, so the residual shared-query DataFusion path
+stays intact while the DuckDB pilot remains opt-in and request-scoped.
 
 The next engine-policy slice under the same RFC is landed too.
 `DuckDbLocalRelationEngine` now honors the published `search.duckdb`
@@ -205,6 +408,34 @@ labels for those source lanes, and focused handler plus Flight tests prove
 that the public route can return DuckDB-fed intent hits without changing the
 response contract or merge semantics.
 
+The next bounded FlightSQL protocol slice is landed too. `CommandStatementQuery`
+no longer unconditionally routes into the shared request-scoped SQL surface.
+Single-table statements against published local `reference_occurrence`,
+`attachment`, and `knowledge_section` corpora now reuse the bounded
+`ParquetQueryEngine`, which means the same statement surface selects DuckDB
+when `search.duckdb.enabled` is true and falls back to DataFusion otherwise.
+All other FlightSQL statements still use the shared SQL path, and the routed
+statement batches normalize top-level string columns back to the existing
+`Utf8View` Arrow shape so the public FlightSQL payload contract stays stable.
+
+The next bounded FlightSQL protocol slice is landed too. The same statement
+router now also recognizes concrete repo publication source tables that are
+already exposed by catalog discovery, such as hashed
+`repo_content_chunk_repo_<hash>` names, and resolves them back to active
+publication Parquet through repo snapshot metadata. Logical repo views still
+stay on the shared SQL fallback, so FlightSQL still does not plan multi-source
+repo unions, while `CommandGetTables` and `CommandStatementQuery` now agree on
+the concrete repo-table surface that is eligible for DuckDB/DataFusion routing.
+
+The next bounded FlightSQL protocol slice is landed too. The same statement
+router now also recognizes concrete published `local_symbol` source tables,
+including partitioned active-epoch names, and resolves them back to the active
+local parquet files through the existing epoch table-name helpers. The logical
+`local_symbol` view still stays on the shared SQL path, so this slice does not
+teach FlightSQL to plan local-symbol views; it only makes `CommandStatementQuery`
+agree with `CommandGetTables` on the already-exposed `local_symbol` source-table
+family.
+
 The next bounded diagnostics slice is landed too. The Studio search-index
 status route now computes its top-level total, phase counts,
 `compactionPending`, and aggregate maintenance summary through a bounded local
@@ -213,6 +444,60 @@ status payload stays unchanged, the route falls back to the existing Rust
 summary path if local diagnostics execution fails, and focused unit plus
 route-level tests now prove the same payload under both fallback and
 DuckDB-enabled runtime policy.
+
+The next diagnostics-expansion slice is landed too. The same bounded
+search-index diagnostics helper now also rolls up
+`query_telemetry_summary`, including per-scope telemetry buckets, through the
+local relation-engine seam instead of the old ad-hoc Rust accumulator. The
+public payload and fallback path remain unchanged, and focused telemetry-heavy
+unit fixtures plus the existing route proof still match the Rust baseline.
+
+The next diagnostics-expansion slice is landed too. The same bounded
+search-index diagnostics helper now also selects the aggregate
+`status_reason` through a request-scoped relation instead of leaving that
+top-level priority rollup on ad-hoc Rust traversal. Severity and code
+priority, plus affected, readable, and blocking corpus counts, remain
+contract-identical to the Rust baseline, and the diagnostics path still falls
+back cleanly if local execution fails.
+
+The next diagnostics-expansion slice is landed too. The same bounded
+search-index diagnostics helper now also maps top-level `repo_read_pressure`
+through a request-scoped relation instead of leaving that field on direct Rust
+snapshot mapping. The public payload and fallback path remain unchanged, and
+all optional repo-read pressure fields continue to match the Rust baseline.
+
+The next `appender-arrow` utilization slice is landed too. The same bounded
+search-index diagnostics helper now marks `query_telemetry_rows` as a
+repeated-use relation registration, which lets DuckDB prefer
+`MaterializedAppender` even when the default row-count threshold would have
+kept that relation virtual. DataFusion keeps its current in-memory
+registration behavior, the public diagnostics payload stays unchanged, and
+focused engine plus diagnostics tests now prove that the hint only narrows
+request-scoped execution policy.
+
+The next repo/runtime diagnostics slice is landed too. The Studio repo-index
+analysis Flight route now rolls up its phase summary counts from the
+per-repository `repos` relation through the same bounded local relation-engine
+seam instead of trusting only the pre-aggregated counters on the response
+struct. The JSON repo-index contract stays unchanged, the Flight batch and
+metadata stay contract-identical, and the SQL rollup now casts all aggregate
+columns to `BIGINT` so DataFusion and DuckDB agree on one stable `Int64`
+Arrow shape instead of drifting by engine.
+
+The next repo/runtime diagnostics follow-up slice is landed too. The same
+repo-index analysis Flight diagnostics relation now also carries explicit
+`active_order`, so `active_repo_ids` and `current_repo_id` are recomputed from
+request-scoped rows instead of being copied directly from the incoming
+response. The boundary stays narrow: runtime ordering is preserved, the JSON
+and Flight contracts do not widen, and the same repeated-use registration hint
+now justifies one bounded two-query workset over the same relation.
+
+The next repo/runtime diagnostics HTTP follow-up slice is landed too. The
+Studio `repo_index_status` JSON route now reuses the same bounded diagnostics
+helper as the repo-index Flight route before serialization, so stale aggregate
+counts plus active identity fields are recomputed consistently across both
+surfaces while the JSON envelope, bootstrap telemetry, and fallback semantics
+remain unchanged.
 
 The next local-publication boundary slice is landed too. Local epoch discovery
 for search-plane corpora now ignores legacy `.lance` artifacts and only
@@ -228,6 +513,42 @@ corpora, local maintenance runtime state is shutdown-only, and runtime status
 annotation no longer fabricates local compaction backlog or running views.
 Focused coordinator, maintenance, and status proofs now keep local compaction
 metadata idle while preserving the repo-backed compaction status path.
+
+The next bounded performance-gate slice is landed too. The Wendao performance
+suite now compares the DataFusion and DuckDB `ParquetQueryEngine` lanes over
+the same deterministic synthetic Parquet fixture, emits durable perf reports
+through the shared `xiuxian-testing` harness, and enforces a configurable
+DuckDB/DataFusion p95 ratio budget at the execution seam itself. This keeps
+performance evidence attached to the bounded query-engine surface without
+widening protocol or storage ownership.
+
+The next bounded FlightSQL performance-gate slice is landed too. Wendao now
+also benchmarks the routed single-table `CommandStatementQuery` surface over a
+Julia parser-summary-aware gateway perf fixture, so the same published
+repo-content source-table statement executes through both DataFusion and
+DuckDB under the shared `xiuxian-testing` harness. The gate stays narrow: it
+measures only the already-routed FlightSQL statement seam, emits durable perf
+reports, and enforces a configurable DuckDB/DataFusion p95 ratio budget
+without widening FlightSQL planning or storage ownership.
+
+The next bounded FlightSQL latency-breakdown slice is landed too. The same
+routed statement benchmark now also persists per-phase timing metadata into
+its durable reports, including a direct-engine lower bound and bounded timings
+for `get_flight_info`, `do_get` collection, decode, and validation. Current
+local evidence shows that routed statement latency is dominated by
+`get_flight_info` planning overhead rather than by DuckDB execution itself:
+the direct-engine lower bound stays far below the routed statement p95, while
+`do_get` collection and decode remain negligible on the bounded workload.
+
+The next bounded live-harness correction slice is landed too. The routed
+FlightSQL performance gate now leaves the required `gRPCServer` runtime
+dependency under `WendaoSearch.jl`'s own `scripts/run_search_service.jl`
+bootstrap instead of routing that ownership through Rust-side preflight or a
+`WendaoArrow` support helper. The live script still honors an explicit
+`WENDAO_FLIGHT_GRPCSERVER_PATH` override and reuses a vendored checkout when
+present, but otherwise now bootstraps `gRPCServer.jl` from its official
+`develop` branch into the live Julia environment before binding the Flight
+listener.
 
 ## Native Flight
 
@@ -334,7 +655,10 @@ The current ownership rule is explicit:
 The first landed FlightSQL cut is intentionally narrow:
 
 - one dedicated FlightSQL server builder and binary
-- `CommandStatementQuery` routed into the shared request-scoped SQL surface
+- `CommandStatementQuery` now first checks a bounded local published-Parquet
+  route for single-table `reference_occurrence`, `attachment`, and
+  `knowledge_section` statements, and otherwise falls back to the shared
+  request-scoped SQL surface
 - minimal `CommandGetSqlInfo` coverage
 - no prepared statements, ingest/update, or broad JDBC/XDBC metadata yet
 - no merger with the native Wendao business Flight router
@@ -437,6 +761,13 @@ Studio-config repo resolution, cache policy, and final response DTO shaping
 still remain in the Studio gateway layer by design. Any later move past this
 point would be a DTO-boundary review, not another pure execution downpressure
 slice.
+
+The production `intent = "code_search"` path now also uses that source-owned
+shape end to end. `src/gateway/studio/search/handlers/code_search/search/`
+is the real gateway owner, the old test-mounted implementation files are
+retired, and the linked host proofs now execute Studio code-search against
+plain Julia and plain Modelica plugin repositories backed by the Julia-owned
+native parser-summary routes.
 
 Within `search/queries/graphql/`, document parsing should stay adapter-local,
 while execution should delegate into the existing shared SQL/DataFusion

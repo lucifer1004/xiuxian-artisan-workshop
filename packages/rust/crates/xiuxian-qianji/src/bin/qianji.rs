@@ -35,9 +35,10 @@ use xiuxian_qianji::sovereign::KnowledgeStorageContractFeedbackSink;
 use xiuxian_qianji::{
     QianjiCompiler, QianjiLlmClient, QianjiScheduler, check_flowhub, check_flowhub_scenario,
     check_workdir, classify_flowhub_dir, looks_like_flowhub_scenario_dir, looks_like_workdir_dir,
-    render_flowhub_check_markdown, render_flowhub_scenario_check_markdown,
-    render_flowhub_scenario_show, render_flowhub_show, render_workdir_check_markdown,
-    render_workdir_show, show_flowhub, show_flowhub_scenario, show_workdir,
+    render_flowhub_check_markdown, render_flowhub_graph_show,
+    render_flowhub_scenario_check_markdown, render_flowhub_scenario_show, render_flowhub_show,
+    render_workdir_check_markdown, render_workdir_show, show_flowhub, show_flowhub_graph,
+    show_flowhub_scenario, show_workdir,
 };
 use xiuxian_testing::{
     AdvisoryAuditPolicy, CollectionContext, ContractReport, ContractRunConfig, FindingSeverity,
@@ -50,8 +51,14 @@ const REST_DOCS_PACK_ID: &str = "rest_docs";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum DirCliCommand {
-    Show { dir: PathBuf },
+    Show { target: ShowCliTarget },
     Check { dir: PathBuf },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ShowCliTarget {
+    Dir(PathBuf),
+    Graph(PathBuf),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,8 +249,15 @@ fn handle_dir_command(command: DirCliCommand) -> Result<(), Box<dyn std::error::
 
 fn run_dir_command(command: DirCliCommand) -> Result<DirCliOutput, QianjiError> {
     match command {
-        DirCliCommand::Show { dir } => run_show_dir_command(&dir),
+        DirCliCommand::Show { target } => run_show_command(&target),
         DirCliCommand::Check { dir } => run_check_dir_command(&dir),
+    }
+}
+
+fn run_show_command(target: &ShowCliTarget) -> Result<DirCliOutput, QianjiError> {
+    match target {
+        ShowCliTarget::Dir(dir) => run_show_dir_command(dir),
+        ShowCliTarget::Graph(graph) => run_show_graph_command(graph),
     }
 }
 
@@ -282,6 +296,14 @@ fn run_show_dir_command(dir: &Path) -> Result<DirCliOutput, QianjiError> {
         "`{}` is neither a bounded work surface, a Flowhub root/module, nor a Flowhub scenario directory",
         dir.display()
     )))
+}
+
+fn run_show_graph_command(graph: &Path) -> Result<DirCliOutput, QianjiError> {
+    let show = show_flowhub_graph(graph)?;
+    Ok(DirCliOutput {
+        rendered: render_flowhub_graph_show(&show),
+        exit_code: 0,
+    })
 }
 
 fn run_check_dir_command(dir: &Path) -> Result<DirCliOutput, QianjiError> {
@@ -860,12 +882,53 @@ fn parse_rest_docs_cli_command(args: &[String]) -> io::Result<RestDocsCliCommand
 fn parse_dir_command(args: &[String]) -> io::Result<Option<DirCliCommand>> {
     match args.get(1).map(String::as_str) {
         Some("show") => Ok(Some(DirCliCommand::Show {
-            dir: parse_dir_flag(&args[2..], "show")?,
+            target: parse_show_target(&args[2..])?,
         })),
         Some("check") => Ok(Some(DirCliCommand::Check {
             dir: parse_dir_flag(&args[2..], "check")?,
         })),
         _ => Ok(None),
+    }
+}
+
+fn parse_show_target(args: &[String]) -> io::Result<ShowCliTarget> {
+    let mut index = 0;
+    let mut dir = None;
+    let mut graph = None;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--dir" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .ok_or_else(|| invalid_input("missing value for --dir in `show` command"))?;
+                dir = Some(PathBuf::from(value));
+            }
+            "--graph" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .ok_or_else(|| invalid_input("missing value for --graph in `show` command"))?;
+                graph = Some(PathBuf::from(value));
+            }
+            other => {
+                return Err(invalid_input(format!(
+                    "unsupported `show` option `{other}`"
+                )));
+            }
+        }
+        index += 1;
+    }
+
+    match (dir, graph) {
+        (Some(dir), None) => Ok(ShowCliTarget::Dir(dir)),
+        (None, Some(graph)) => Ok(ShowCliTarget::Graph(graph)),
+        (Some(_), Some(_)) => Err(invalid_input(
+            "`show` command requires exactly one of `--dir <path>` or `--graph <path>`",
+        )),
+        (None, None) => Err(invalid_input(
+            "missing `--dir <path>` or `--graph <path>` for `show` command",
+        )),
     }
 }
 
@@ -911,6 +974,7 @@ fn print_qianji_usage() {
     );
     eprintln!("  Graph:     qianji [-v|--log-verbose] graph <manifest_path> <output_path>");
     eprintln!("  Show:      qianji [-v|--log-verbose] show --dir <path>");
+    eprintln!("             qianji [-v|--log-verbose] show --graph <path>");
     eprintln!("  Check:     qianji [-v|--log-verbose] check --dir <path>");
     eprintln!(
         "  Contract:  qianji [-v|--log-verbose] contract-feedback rest-docs <openapi_path> [--workspace-root PATH] [--storage-path PATH] [--table-name NAME] [--role ROLE]... [--no-persist] [--live-advisory] [--model MODEL] [--temperature FLOAT] [--cognitive-threshold FLOAT]"

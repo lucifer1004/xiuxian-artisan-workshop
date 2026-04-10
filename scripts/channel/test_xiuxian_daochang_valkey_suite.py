@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
 """
 Valkey live-test suite runner for xiuxian-daochang Telegram webhook tests.
-
-This script centralizes the logic behind:
-  - test-xiuxian-daochang-valkey-stress.sh
-  - test-xiuxian-daochang-valkey-session-gate.sh
-  - test-xiuxian-daochang-valkey-session-context.sh
-  - test-xiuxian-daochang-valkey-multi-http.sh
-  - test-xiuxian-daochang-valkey-multi-process.sh
-  - test-xiuxian-daochang-valkey-full.sh
 """
 
 from __future__ import annotations
@@ -20,8 +12,15 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
-from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parents[1]
+
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 DEFAULT_LOCAL_HOST = os.environ.get("XIUXIAN_WENDAO_LOCAL_HOST", "localhost").strip() or "localhost"
 DEFAULT_VALKEY_URL = f"redis://{DEFAULT_LOCAL_HOST}:6379/0"

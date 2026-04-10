@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_projection_support::{assert_repo_json_snapshot, write_repo_config};
 use serde_json::json;
@@ -73,7 +73,7 @@ fn projected_page_navigation_bundle_resolves_tree_context_and_family_cluster() -
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_projected_page_navigation_bundle_resolves_tree_context() -> TestResult {
     let temp = tempfile::tempdir()?;

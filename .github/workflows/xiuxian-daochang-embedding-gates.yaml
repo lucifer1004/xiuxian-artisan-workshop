@@ -56,25 +56,6 @@ jobs:
           name: embedding-role-perf-${{ env.OMNI_EMBED_ROLE_PERF_GATE_PROFILE }}
           path: |
             .run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.json
-            .run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.md
             .run/reports/xiuxian-daochang-embedding-role-perf-smoke.heavy.json
-            .run/reports/xiuxian-daochang-embedding-role-perf-smoke.heavy.md
             .run/logs/xiuxian-daochang-embedding-role-*.log
           if-no-files-found: warn
-
-      - name: Embedding role perf summary (step summary)
-        if: ${{ always() }}
-        run: |
-          report=".run/reports/xiuxian-daochang-embedding-role-perf-smoke.${OMNI_EMBED_ROLE_PERF_GATE_PROFILE}.json"
-          markdown=".run/reports/xiuxian-daochang-embedding-role-perf-smoke.${OMNI_EMBED_ROLE_PERF_GATE_PROFILE}.md"
-          if [ -f "${report}" ]; then
-            python3 scripts/render_embedding_role_perf_summary.py \
-              --input "${report}" \
-              --profile "${OMNI_EMBED_ROLE_PERF_GATE_PROFILE}" \
-              --runner-os "${RUNNER_OS}" \
-              --output-markdown "${markdown}" \
-              >> "${GITHUB_STEP_SUMMARY}"
-          else
-            echo "## Embedding Role Perf (${OMNI_EMBED_ROLE_PERF_GATE_PROFILE}, ${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
-            echo "- report missing: \`${report}\`" >> "${GITHUB_STEP_SUMMARY}"
-          fi

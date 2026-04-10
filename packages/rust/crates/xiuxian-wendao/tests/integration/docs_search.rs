@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected-page search.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -9,7 +9,7 @@ use xiuxian_wendao::analyzers::{DocsSearchQuery, ProjectionPageKind, docs_search
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_search_matches_reference_pages() -> TestResult {
     let temp = tempfile::tempdir()?;

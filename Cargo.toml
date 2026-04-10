@@ -29,7 +29,6 @@ members = [
   "packages/rust/crates/xiuxian-vector",
   "packages/rust/crates/xiuxian-qianhuan",
   "packages/rust/crates/xiuxian-llm",
-  "packages/rust/crates/xiuxian-wendao-modelica",
   "packages/rust/crates/xiuxian-wendao-julia",
   "packages/rust/crates/xiuxian-window",
   "packages/rust/crates/xiuxian-daochang",

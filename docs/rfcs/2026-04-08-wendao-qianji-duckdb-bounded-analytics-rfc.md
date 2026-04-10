@@ -31,9 +31,11 @@ The primary decision is:
 1. DuckDB may be used for request-scoped or bounded-lived SQL analytics over
    Arrow-first relations
 2. Wendao keeps Arrow Flight as the external business boundary
-3. the shared query system inside `xiuxian-wendao` remains DataFusion-led for
-   now
-4. Valkey remains the hot-cache and transient-state layer
+3. the current shared query system inside `xiuxian-wendao` still contains
+   DataFusion-led residue, but the intended database execution direction for
+   search-side SQL is DuckDB-first
+4. Valkey remains the hot-cache, workflow-state, checkpoint, and
+   transient-coordination layer
 5. the vector store remains the embedding and ANN layer
 
 This RFC does not make DuckDB the new primary database, the new vector store,
@@ -82,6 +84,13 @@ query family.
 This matters because the DuckDB lane proposed here is intentionally narrower:
 it is not a silent replacement of the current shared query core.
 
+This also should not be read as DataFusion owning the cross-language Arrow
+substrate. The current code shows that `WendaoArrow`, pyarrow, julia-arrow,
+and Flight own the Rust-Julia `RecordBatch` data plane. DataFusion's only
+defensible future value is Rust-side live Arrow compute, request and response
+shaping, and migration-baseline support where the data is still an in-memory
+Arrow workset rather than a published Parquet corpus or a DuckDB relation.
+
 ### 3.3 A Bounded Local Markdown SQL Lane Already Exists
 
 The repository already contains a concrete bounded local relation workflow:
@@ -102,7 +111,9 @@ workflow is already local, bounded, relation-oriented, and Arrow-friendly.
 Valkey-backed runtime-config lane with TOML-first precedence.
 
 This RFC therefore must not repurpose DuckDB into checkpoint storage or a
-replacement for Qianji runtime-state coordination.
+replacement for Qianji runtime-state coordination. Any future Qianji DuckDB
+pilot must stay downstream of that boundary and operate only as stage-local
+relational compute over already materialized Arrow relations.
 
 ### 3.5 A Bounded DuckDB Landing Now Exists
 
@@ -172,9 +183,91 @@ The currently landed Wendao slices are:
     worker state are removed, `publish_ready_and_maintain(...)` becomes a pure
     local publish step, and runtime status no longer projects local
     compaction backlog while preserving repo-backed compaction status
+21. a bounded diagnostics expansion where the Studio search-index status route
+    now also rolls up `query_telemetry_summary`, including per-scope buckets,
+    through the same local relation-engine seam while preserving the payload
+    contract and Rust fallback path
+22. a bounded diagnostics expansion where the Studio search-index status route
+    now also selects aggregate `status_reason` through the same local
+    relation-engine seam while preserving severity and code priority,
+    affected and readable counts, the payload contract, and the Rust fallback
+    path
+23. a bounded diagnostics expansion where the Studio search-index status route
+    now also maps top-level `repo_read_pressure` through the same local
+    relation-engine seam while preserving the payload contract, optional field
+    semantics, and the Rust fallback path
+24. a bounded FlightSQL statement-routing slice where single-table statements
+    against published local `reference_occurrence`, `attachment`, and
+    `knowledge_section` corpora now reuse the same Parquet query-engine seam,
+    while all other statements still fall back to the shared SQL surface and
+    routed batches normalize top-level string columns back to the existing
+    FlightSQL Arrow shape
+25. a bounded FlightSQL repo-source-table slice where concrete repo
+    publication tables already exposed by catalog discovery now route through
+    the same Parquet query-engine seam, while logical repo views still stay on
+    shared SQL fallback and FlightSQL does not take on multi-source repo-view
+    planning
+26. a bounded FlightSQL local-symbol source-table slice where concrete
+    published `local_symbol` source tables, including partitioned active-epoch
+    names, now route through the same Parquet query-engine seam, while the
+    logical `local_symbol` view still stays on shared SQL fallback and
+    FlightSQL does not take on local-view planning
+27. a bounded FlightSQL latency-breakdown slice where the routed
+    single-table statement benchmark now persists per-phase timing metadata
+    for a direct-engine lower bound plus `get_flight_info`, `do_get`
+    collection, decode, and validation, so bounded evidence can distinguish
+    query-engine time from FlightSQL statement-planning overhead
+28. a bounded `appender-arrow` utilization slice where the Studio
+    search-index diagnostics helper now marks `query_telemetry_rows` as a
+    repeated-use request-scoped relation so DuckDB can prefer
+    `MaterializedAppender` without changing payload or fallback semantics
+29. a bounded repo/runtime diagnostics slice where the Studio repo-index
+    analysis Flight route now rolls up phase summary counts from the
+    per-repository `repos` relation through the same local relation-engine
+    seam while preserving the JSON repo-index contract and the Flight payload
+    shape
+30. a bounded repo/runtime diagnostics follow-up slice where the same
+    repo-index analysis Flight relation now also preserves runtime active
+    ordering through an explicit `active_order` column so
+    `active_repo_ids` and `current_repo_id` are recomputed from request-scoped
+    rows instead of being copied from the incoming response
+31. a bounded repo/runtime diagnostics HTTP follow-up slice where the Studio
+    `repo_index_status` JSON route now reuses the same diagnostics helper as
+    the repo-index Flight route before serialization, so aggregate counts and
+    active identity fields are recomputed consistently across both surfaces
+    without widening the JSON envelope or telemetry contract
+32. a bounded documentation-only audit slice now records the current Wendao
+    ownership matrix directly: mutable runtime state remains in-process, shared
+    cache remains Valkey-backed where enabled, published corpora remain
+    Parquet, and DuckDB remains only a bounded execution lane over Arrow and
+    Parquet relations
+33. a bounded documentation-only repo-lane audit slice now narrows that
+    ownership matrix further: `repo_index` state remains in-process, repo
+    analysis and query-result caches remain in-memory plus Valkey-backed,
+    repo publications remain Parquet, and DuckDB/DataFusion remain only local
+    execution lanes over those repo publications
+34. a bounded documentation-only local-corpus audit slice now narrows the
+    ownership matrix further for local corpora: local publication ownership is
+    Parquet-first, local epoch discovery is Parquet-only, and DuckDB/DataFusion
+    remain only local execution lanes over those local corpus publications
+35. a bounded documentation-only state/cache audit slice now narrows the
+    runtime split further: mutable `repo_index` and search-plane runtime state
+    remain in-process, shared analysis and search-plane caches remain
+    Valkey-backed where enabled, and DuckDB remains only an execution and
+    bounded analytics lane over Arrow and Parquet relations
+36. a bounded documentation-only protocol-surface audit slice now narrows the
+    transport split further: native Flight, bounded FlightSQL, and JSON routes
+    remain protocol adapters over Parquet publications, in-process state, and
+    Valkey-backed caches, while DataFusion or DuckDB continue to sit only in
+    the underlying execution lane
+37. a bounded performance-gate slice now compares the same deterministic
+    synthetic Parquet fixture through the DataFusion and DuckDB
+    `ParquetQueryEngine` lanes, emits durable perf reports through
+    `xiuxian-testing`, and enforces a configurable DuckDB/DataFusion p95
+    ratio budget without widening storage or protocol ownership
 
 Qianji does not yet have a stage-local DuckDB pilot, and the shared query
-system remains DataFusion-led.
+system still contains DataFusion-led residue on some shared query paths.
 
 ## 4. Problem Statement
 
@@ -191,6 +284,11 @@ That gap appears in three places:
 3. repo/runtime status or explain-facing local joins that benefit from fast
    in-process SQL without introducing a new external service
 
+For Qianji, this gap is specifically about stage-local relation compute inside
+steps such as `audit_step` or `reduce_step`. It is not about workflow-state
+persistence, checkpoint ownership, or coordination state, which remain outside
+the DuckDB lane.
+
 Without a clear boundary, DuckDB adoption risks failing in one of two ways:
 
 1. it becomes too small and ad hoc to justify the dependency
@@ -206,9 +304,11 @@ This RFC has the following goals:
 2. keep Arrow Flight unchanged as the external Wendao business boundary
 3. let Qianji consume relation-level analytic results without taking ownership
    of retrieval planning or storage policy
-4. preserve DataFusion as the current shared query core until later evidence
-   justifies a wider change
-5. require explain and telemetry coverage for the DuckDB lane from the start
+4. keep Valkey as the owner of workflow state, checkpoint, resume, and
+   coordination state in Qianji
+5. narrow DataFusion toward residual live Arrow compute and migration-baseline
+   roles instead of treating it as a second long-term search database
+6. require explain and telemetry coverage for the DuckDB lane from the start
 
 ## 6. Non-Goals
 
@@ -254,8 +354,8 @@ The intended shape is:
 2. Wendao and Qianji may register Arrow batches into a local relation engine
    for bounded SQL work
 3. DuckDB is one implementation of that local relation-engine seam
-4. DataFusion remains the shared query core unless a later bounded slice proves
-   a wider change is worth the cost
+4. DataFusion remains only where the code still needs live Arrow compute,
+   request and response shaping, or migration-baseline support
 
 ### 8.2 Package Ownership
 
@@ -300,6 +400,74 @@ Valkey continues to own:
 2. transient coordination
 3. checkpoint-like runtime state
 4. other explicit fast-state roles already assigned to it
+
+#### Current Wendao Ownership Matrix
+
+The current Wendao codebase now shows a narrower ownership split than the old
+"one search store" framing:
+
+1. mutable repo-index runtime state still lives inside the in-process
+   coordinator
+2. repo analysis cache and repo-search query cache still use in-memory plus
+   Valkey-backed cache paths
+3. published local and repo search corpora are persisted as Parquet
+4. DuckDB and DataFusion are bounded local execution lanes over Arrow or
+   Parquet relations
+5. native Flight and bounded FlightSQL remain protocol surfaces rather than
+   storage owners
+
+This is the intended reading of the current Wendao landing: DuckDB executes
+over Arrow and Parquet; it does not replace mutable runtime state, cache, or
+publication ownership.
+
+For the repo lane specifically, the current code-proven split is:
+
+1. `repo_index` mutable runtime state stays inside the in-process coordinator
+2. repo analysis cache and repo query-result cache stay in-memory plus
+   Valkey-backed
+3. repo publications stay Parquet
+4. repo search execution uses DataFusion or DuckDB over those Parquet
+   publications
+5. repo diagnostics routes may use bounded request-scoped relation SQL, but
+   they do not become storage owners
+
+For the local corpus lane specifically, the current code-proven split is:
+
+1. `local_symbol`, `reference_occurrence`, `attachment`, and
+   `knowledge_section` publication ownership is now Parquet-first
+2. local epoch discovery and prewarm are Parquet-only for those migrated local
+   corpora
+3. local search and hydration execution use DataFusion or DuckDB over those
+   Parquet publications
+4. gateway routes and bounded FlightSQL may read those publications, but they
+   do not become storage owners
+5. this does not introduce a separate DuckDB-owned local corpus cache layer
+
+For mutable state and shared cache specifically, the current code-proven split
+is:
+
+1. `RepoIndexCoordinator` mutable state remains in-process
+2. `SearchPlaneCoordinator` and `SearchPlaneService` mutable runtime state
+   remain in-process
+3. repository analysis and query-result caches remain in-memory with
+   Valkey-backed sharing where configured
+4. `SearchPlaneCache` remains the Valkey-backed cache path for manifests,
+   leases, and short-lived search-plane cache values where enabled
+5. DuckDB remains an execution and bounded analytics lane rather than a
+   mutable-state owner or shared cache backplane
+
+For protocol surfaces specifically, the current code-proven split is:
+
+1. native Flight routes remain transport adapters that package batches and
+   metadata over underlying search results
+2. bounded FlightSQL remains a query protocol over the shared SQL system and
+   published Parquet query-engine seam
+3. JSON gateway handlers remain response adapters over the underlying search
+   and diagnostics lanes
+4. those protocol surfaces may expose results produced through DataFusion or
+   DuckDB execution, but they do not become persistence owners
+5. Parquet publications, in-process state, and Valkey-backed caches keep their
+   existing ownership underneath those surfaces
 
 #### Vector Store
 
@@ -356,7 +524,8 @@ trait LocalRelationEngine {
 This keeps the current architecture honest:
 
 1. DataFusion remains valid
-2. DuckDB can be piloted without a flag day
+2. DuckDB can replace same-layer search database execution in bounded slices
+   without a flag day
 3. bounded analytics can choose the right internal engine without changing the
    external contract
 
@@ -621,10 +790,74 @@ status route:
 2. the public `SearchIndexStatusResponse` payload remains unchanged, and the
    route falls back to the existing Rust summary path if local diagnostics
    execution fails
-3. focused unit and route-level tests now prove the same payload under both
+3. the same diagnostics helper now also rolls up `query_telemetry_summary`,
+   including per-scope buckets, through the local relation-engine seam
+4. the same diagnostics helper now also selects aggregate `status_reason`
+   through the local relation-engine seam, preserving severity and code
+   priority plus affected, readable, and blocking corpus counts
+5. the same diagnostics helper now also maps top-level `repo_read_pressure`
+   through the local relation-engine seam while preserving all optional repo
+   gate fields
+6. focused unit and route-level tests now prove the same payload under both
    fallback and DuckDB-enabled runtime policy
-4. broader repo/runtime status, degraded-state diagnostics, and explain-facing
+7. broader repo/runtime status, degraded-state diagnostics, and explain-facing
    status analytics remain future work
+
+### 10.17 Wendao Parquet Query Engine Performance Gate [landed in bounded form]
+
+The next bounded performance slice is now landed for the shared Parquet
+execution seam:
+
+1. Wendao now carries one deterministic synthetic Parquet benchmark under the
+   shared performance harness
+2. the same SQL workload now executes through both the DataFusion and DuckDB
+   `ParquetQueryEngine` lanes over that identical fixture
+3. the gate now emits durable perf reports and enforces a configurable
+   DuckDB/DataFusion p95 ratio budget at the query-engine seam
+4. first local evidence is favorable for DuckDB on that bounded workload, but
+   broader performance-gate expansion remains future work
+
+### 10.18 Wendao FlightSQL Statement Performance Gate [landed in bounded form]
+
+The next bounded performance slice is now landed for the routed FlightSQL
+statement surface:
+
+1. Wendao now carries one routed FlightSQL statement benchmark under the
+   shared performance harness
+2. the benchmark uses a Julia parser-summary-aware gateway perf fixture so the
+   same published repo-content source-table statement executes through both
+   DataFusion and DuckDB over the already-landed statement seam
+3. the gate now emits durable perf reports and enforces a configurable
+   DuckDB/DataFusion p95 ratio budget at the routed FlightSQL statement seam
+4. first local evidence is still favorable for DuckDB on that bounded
+   workload, with `duckdb_p95_ms=180.863`, `datafusion_p95_ms=214.143`, and
+   `ratio=0.845`
+5. FlightSQL planning remains intentionally narrow: only the already-routed
+   single-table statement surface is measured, and multi-source planning or
+   new discovery ownership remains future work
+
+### 10.19 Wendao FlightSQL Statement Latency Breakdown [landed in bounded form]
+
+The next bounded follow-up slice is now landed for the same routed FlightSQL
+statement surface:
+
+1. the same benchmark now persists per-phase timing metadata into its durable
+   reports, including a direct-engine lower bound plus bounded timings for
+   `get_flight_info`, `do_get` collection, decode, and validation
+2. current local evidence shows that the routed statement seam is dominated by
+   `get_flight_info` statement-planning overhead rather than by DuckDB query
+   execution itself
+3. on the bounded rerun, the direct-engine lower bound was materially lower
+   than the routed statement seam for both engines, with
+   `datafusion_phase_direct_engine_p95_ms=27.127`,
+   `duckdb_phase_direct_engine_p95_ms=2.620`,
+   `datafusion_phase_get_flight_info_p95_ms=77.093`, and
+   `duckdb_phase_get_flight_info_p95_ms=54.212`
+4. `do_get` collection and decode stayed negligible on the same workload, so
+   the absolute routed statement number should not be read as "DuckDB query
+   execution took that long"
+5. the slice stays bounded to performance evidence only: it does not widen
+   FlightSQL planning, discovery ownership, or the published Parquet surface
 
 ## 11. Telemetry and Explain
 
@@ -758,7 +991,65 @@ Revisit this direction if:
     store scans
 17. Wendao no longer ships a local compaction queue or worker runtime for
     search-plane corpora, while repo-backed compaction status remains intact
-18. broader performance gating and broader diagnostics pilots are still open
+18. the Studio search-index status route now also rolls up
+    `query_telemetry_summary` through the bounded diagnostics helper instead
+    of the old pure-Rust accumulator
+19. the Studio search-index status route now also selects aggregate
+    `status_reason` through the bounded diagnostics helper instead of leaving
+    that top-level priority rollup on pure Rust traversal
+20. the Studio search-index status route now also maps top-level
+    `repo_read_pressure` through the bounded diagnostics helper instead of
+    leaving that field on direct Rust snapshot mapping
+21. the Studio search-index status route now also marks
+    `query_telemetry_rows` as a repeated-use request-scoped relation so
+    DuckDB can prefer `MaterializedAppender` through the same bounded
+    diagnostics helper
+22. the Studio repo-index analysis Flight route now also rolls up its phase
+    summary counts from per-repository rows through the bounded local
+    relation-engine seam, with explicit `BIGINT` aggregate casts to keep the
+    output Arrow type stable across DataFusion and DuckDB
+23. the same Studio repo-index analysis Flight diagnostics relation now also
+    recomputes `active_repo_ids` and `current_repo_id` from request-scoped
+    rows, using an explicit `active_order` column plus repeated-use
+    registration instead of copying those fields directly from the incoming
+    response
+24. the Studio `repo_index_status` JSON route now also reuses the same
+    bounded diagnostics helper as the repo-index Flight route before
+    serialization, so aggregate counts and active identity fields stay
+    consistent across both surfaces without changing the JSON envelope or
+    bootstrap telemetry
+25. the current Wendao landing now explicitly records its ownership matrix:
+    mutable runtime state stays in-process, shared cache stays Valkey-backed
+    where enabled, published corpora stay Parquet, and DuckDB stays bounded to
+    local execution over Arrow and Parquet relations
+26. the current Wendao repo lane now also records its narrower ownership
+    split explicitly: `repo_index` state is in-process, repo caches are
+    in-memory plus Valkey-backed, repo publications are Parquet, and DuckDB is
+    only a local execution lane over those publications
+27. the current Wendao local corpus lane now also records its narrower
+    ownership split explicitly: local publication ownership is Parquet-first,
+    local epoch discovery is Parquet-only, and DuckDB remains only a local
+    execution lane over those publications
+28. the current Wendao mutable-state and shared-cache split is now also
+    recorded explicitly: runtime state remains in-process, shared caches
+    remain Valkey-backed where enabled, and DuckDB remains only an execution
+    and bounded analytics lane
+29. the current Wendao protocol-surface split is now also recorded
+    explicitly: native Flight, bounded FlightSQL, and JSON routes remain only
+    protocol adapters over Parquet publications, in-process state, and
+    Valkey-backed caches
+30. the Wendao performance suite now also carries one bounded
+    `ParquetQueryEngine` gate that compares the same deterministic synthetic
+    Parquet fixture through the DataFusion and DuckDB lanes, emits durable
+    perf reports, and enforces a configurable DuckDB/DataFusion p95 ratio
+    budget
+31. the routed FlightSQL performance gate now also leaves the required
+    `gRPCServer` runtime dependency under `WendaoSearch.jl`'s own live
+    `run_search_service.jl` bootstrap, so the Rust harness no longer owns
+    that live listener dependency and the package itself chooses between an
+    explicit local override, a vendored checkout, or the official
+    `gRPCServer.jl` `develop` branch source when it prepares the live env
+32. broader performance gating and broader diagnostics pilots are still open
 
 ### Phase 3: Qianji Pilot [future]
 

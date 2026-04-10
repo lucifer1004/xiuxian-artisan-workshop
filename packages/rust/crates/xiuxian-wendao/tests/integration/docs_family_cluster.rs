@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page family cluster lookup.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -12,7 +12,7 @@ use xiuxian_wendao::analyzers::{
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_family_cluster_resolves_how_to_cluster_for_reference_page() -> TestResult {
     let temp = tempfile::tempdir()?;

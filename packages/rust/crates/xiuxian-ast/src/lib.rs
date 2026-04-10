@@ -1,7 +1,7 @@
-//! xiuxian-ast - Unified AST Utilities using ast-grep
+//! xiuxian-ast - Unified AST utilities using ast-grep.
 //!
-//! This crate provides a unified interface for AST-based code analysis
-//! across the Omni `DevEnv` project.
+//! This crate provides a unified interface for AST-based code analysis across
+//! the Omni `DevEnv` project.
 //!
 //! ## Architecture
 //!
@@ -13,9 +13,7 @@
 //! ├── match.rs              # Match struct
 //! ├── scan.rs               # Pattern utilities
 //! ├── python.rs             # Python-specific utilities
-//! ├── python_tree_sitter.rs # Tree-sitter Python parser
-//! ├── julia_tree_sitter.rs  # Tree-sitter Julia parser (feature: julia)
-//! └── modelica_tree_sitter.rs # Tree-sitter Modelica parser (feature: modelica)
+//! └── python_tree_sitter.rs # Tree-sitter Python parser
 //! ```
 //!
 //! ## Quick Start
@@ -28,11 +26,6 @@
 //!     .unwrap_or_else(|error| panic!("scan failed: {error}"));
 //! ```
 //!
-//! ## Optional Features
-//!
-//! - `julia`: Enable Julia tree-sitter parser
-//! - `modelica`: Enable Modelica tree-sitter parser (runtime-loaded)
-
 xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
 
 // ============================================================================
@@ -42,11 +35,7 @@ xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs"
 mod chunk;
 mod extract;
 mod item;
-#[cfg(feature = "julia")]
-mod julia_tree_sitter;
 mod lang;
-#[cfg(feature = "modelica")]
-mod modelica_tree_sitter;
 mod python;
 mod python_tree_sitter;
 mod re_exports;
@@ -88,17 +77,4 @@ pub use chunk::{CodeChunk, chunk_code};
 // Tree-sitter based Python parser for robust decorator extraction
 pub use python_tree_sitter::{
     DecoratedFunction, DecoratorArguments, DecoratorInfo, ParameterInfo, TreeSitterPythonParser,
-};
-
-#[cfg(feature = "julia")]
-pub use julia_tree_sitter::{
-    JuliaDocAttachment, JuliaDocTargetKind, JuliaFileSummary, JuliaImport, JuliaParseError,
-    JuliaSourceSummary, JuliaSymbol, JuliaSymbolKind, TreeSitterJuliaParser,
-};
-
-#[cfg(feature = "modelica")]
-pub use modelica_tree_sitter::{
-    ModelicaComponent, ModelicaComponentKind, ModelicaFileSummary, ModelicaImport,
-    ModelicaParseError, ModelicaSymbol, ModelicaSymbolKind, ModelicaVisibility,
-    TreeSitterModelicaParser,
 };

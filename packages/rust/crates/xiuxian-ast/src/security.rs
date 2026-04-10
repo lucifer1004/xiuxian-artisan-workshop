@@ -11,7 +11,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use omni_ast::{SecurityScanner, SecurityViolation};
+//! use xiuxian_ast::{SecurityScanner, SecurityViolation};
 //!
 //! let scanner = SecurityScanner::new();
 //! match scanner.scan("import os") {

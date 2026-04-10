@@ -7,6 +7,8 @@ pub(crate) mod state;
 mod tests;
 pub(crate) mod workspace;
 
+#[cfg(feature = "julia")]
+pub use fixture::prepare_gateway_perf_fixture_with_julia_parser_summary_transport;
 pub use fixture::{
     GatewayPerfFixture, GatewayRepoIndexControllerDebugSnapshot, prepare_gateway_perf_fixture,
     prepare_gateway_real_workspace_perf_fixture,

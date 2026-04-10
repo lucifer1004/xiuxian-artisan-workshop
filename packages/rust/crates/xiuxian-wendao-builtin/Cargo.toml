@@ -10,8 +10,6 @@ publish = false
 [features]
 default = []
 julia = ["dep:xiuxian-wendao-julia"]
-modelica = ["dep:xiuxian-wendao-modelica"]
-modelica-tree-sitter = ["modelica", "xiuxian-wendao-modelica/tree-sitter"]
 
 [dependencies]
 serde_yaml = { workspace = true }
@@ -20,7 +18,6 @@ xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", default-features = false, features = ["transport"] }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }
-xiuxian-wendao-modelica = { path = "../xiuxian-wendao-modelica", optional = true, default-features = false }
 toml = { workspace = true }
 
 [lints]

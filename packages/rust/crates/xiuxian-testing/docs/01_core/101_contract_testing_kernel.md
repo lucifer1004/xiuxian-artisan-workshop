@@ -571,10 +571,10 @@ the same canonical split harness shape:
 and `tests/performance_test.rs` as explicit root harness targets. Its old
 scattered root test files were absorbed into canonical `tests/unit/`,
 `tests/integration/`, and `tests/performance/` trees, the obsolete root
-`tests/mod.rs` entrypoint is gone, and the remaining source-resident inline
-suites in `src/julia_tree_sitter.rs` and `src/modelica_tree_sitter.rs` now
-mount canonical `tests/unit/{julia_tree_sitter,modelica_tree_sitter}.rs`
-files instead. All five shared harness entrypoints now pass, and the crate
+`tests/mod.rs` entrypoint is gone. The former Julia and Modelica source-backed
+suites have since been retired entirely because the active Wendao lane now
+owns those languages through native Julia routes instead of Rust-local AST
+parsers. All five shared harness entrypoints now pass, and the crate
 also clears `cargo clippy -p xiuxian-ast --lib --tests --all-features -- -D warnings`
 without reintroducing source-resident test logic.
 
@@ -704,15 +704,15 @@ and it also clears
 
 The next bounded consumer milestone then landed as a Wendao-adjacent plugin
 pack spanning `xiuxian-wendao-builtin`, `xiuxian-wendao-core`, and
-`xiuxian-wendao-modelica`. All three crates now mount the canonical
+`xiuxian-wendao-julia`. All three crates now mount the canonical
 source-side harness in `src/lib.rs`, own explicit `tests/unit_test.rs` root
 targets, and keep their remaining test bodies under canonical
-`tests/unit/...` or `tests/integration/...` trees. `xiuxian-wendao-modelica`
-also accepted the snapshot namespace migration onto
-`tests/unit/plugin/snapshots/` plus
-`tests/integration/snapshots/integration_test__modelica_plugin__*.snap`,
-proving the canonical layout works for both source-backed unit suites and a
-migrated integration target. While validating that pack, the newly exposed
+`tests/unit/...` or `tests/integration/...` trees. The Modelica plugin
+coverage now lives on the Julia-owned line under
+`xiuxian-wendao-julia/tests/unit/plugin/` plus
+`tests/unit/plugin/snapshots/`, proving the canonical layout works for both
+the Julia plugin surface and the migrated Modelica parser-summary lane
+without a separate Rust crate. While validating that pack, the newly exposed
 strict-clippy debt was also closed in the dependency chain:
 `xiuxian-wendao-core/tests/unit/artifacts/payload.rs` no longer uses
 `expect()`, `xiuxian-wendao-runtime` now passes `doc_markdown`, and
@@ -720,7 +720,7 @@ strict-clippy debt was also closed in the dependency chain:
 that sat under the pack's `--all-features` clippy lane. The decisive outcome
 is that the plugin pack now passes the shared gate as part of default
 `cargo test` and clears
-`cargo clippy -p xiuxian-wendao-core -p xiuxian-wendao-builtin -p xiuxian-wendao-modelica --lib --tests --all-features -- -D warnings`.
+`cargo clippy -p xiuxian-wendao-core -p xiuxian-wendao-builtin -p xiuxian-wendao-julia --lib --tests --all-features -- -D warnings`.
 
 The next bounded consumer milestone then landed as a runtime-and-orchestration
 pack spanning `xiuxian-qianhuan`, `xiuxian-zhixing`, and `xiuxian-llm`. All

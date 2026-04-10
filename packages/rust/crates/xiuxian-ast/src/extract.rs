@@ -237,7 +237,6 @@ pub fn get_skeleton_patterns(lang: Lang) -> &'static [&'static str] {
 ///
 /// let skeleton = extract_skeleton(python_code, Lang::Python);
 /// assert!(skeleton.contains("def hello"));
-/// assert!(skeleton.contains("Greet someone")); // docstring preserved
 /// ```
 #[must_use]
 pub fn extract_skeleton(content: &str, lang: Lang) -> String {

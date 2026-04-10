@@ -1,6 +1,6 @@
 use super::{
     ContractFeedbackCliCommand, DEFAULT_CONTRACT_FEEDBACK_TABLE_NAME, DirCliCommand,
-    REST_DOCS_PACK_ID, RestDocsCliCommand, build_contract_feedback_config,
+    REST_DOCS_PACK_ID, RestDocsCliCommand, ShowCliTarget, build_contract_feedback_config,
     build_rest_docs_collection_context, parse_contract_feedback_command, parse_dir_command,
     resolve_workspace_root, run_deterministic_rest_docs_contract_feedback, run_dir_command,
     run_scaffold_rest_docs_contract_feedback, sanitize_prj_cache_home,
@@ -239,7 +239,30 @@ fn parse_show_workdir_command_requires_dir_flag() {
     assert_eq!(
         command,
         DirCliCommand::Show {
-            dir: PathBuf::from("/tmp/workdir")
+            target: ShowCliTarget::Dir(PathBuf::from("/tmp/workdir"))
+        }
+    );
+}
+
+#[test]
+fn parse_show_graph_command_requires_graph_flag() {
+    let command = must_some(
+        must_ok(
+            parse_dir_command(&to_args(&[
+                "qianji",
+                "show",
+                "--graph",
+                "./qianji-flowhub/plan/codex-plan.mmd",
+            ])),
+            "show graph parse should succeed",
+        ),
+        "show graph command should be detected",
+    );
+
+    assert_eq!(
+        command,
+        DirCliCommand::Show {
+            target: ShowCliTarget::Graph(PathBuf::from("./qianji-flowhub/plan/codex-plan.mmd"))
         }
     );
 }
@@ -276,7 +299,7 @@ fn run_show_workdir_command_renders_surface_summary() {
 
     let output = must_ok(
         run_dir_command(DirCliCommand::Show {
-            dir: workdir.clone(),
+            target: ShowCliTarget::Dir(workdir.clone()),
         }),
         "show command should render",
     );
@@ -341,7 +364,7 @@ order by surface, path, heading_path"
 fn run_show_dir_command_renders_flowhub_summary() {
     let output = must_ok(
         run_dir_command(DirCliCommand::Show {
-            dir: flowhub_root(),
+            target: ShowCliTarget::Dir(flowhub_root()),
         }),
         "show command should render Flowhub summary",
     );
@@ -357,7 +380,7 @@ fn run_show_dir_command_renders_flowhub_summary() {
 fn run_show_dir_command_renders_scenario_preview() {
     let output = must_ok(
         run_dir_command(DirCliCommand::Show {
-            dir: scenario_fixture_dir("coding_rust_blueprint_plan"),
+            target: ShowCliTarget::Dir(scenario_fixture_dir("coding_rust_blueprint_plan")),
         }),
         "show command should render scenario preview",
     );
@@ -373,6 +396,43 @@ fn run_show_dir_command_renders_scenario_preview() {
     assert!(output.rendered.contains("## blueprint"));
     assert!(output.rendered.contains("## plan"));
     assert!(output.rendered.contains("blueprint --> plan"));
+}
+
+#[test]
+fn run_show_graph_command_renders_flowhub_mermaid_graph() {
+    let output = must_ok(
+        run_dir_command(DirCliCommand::Show {
+            target: ShowCliTarget::Graph(flowhub_root().join("plan/codex-plan.mmd")),
+        }),
+        "show graph command should render Flowhub Mermaid preview",
+    );
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.rendered.starts_with("# Graph"));
+    assert!(output.rendered.contains("Name: codex-plan"));
+    assert!(
+        output
+            .rendered
+            .contains("Path: ./qianji-flowhub/plan/codex-plan.mmd")
+    );
+    assert!(output.rendered.contains("Kind: scenario"));
+    assert!(output.rendered.contains("## Mermaid"));
+    assert!(output.rendered.contains("```mermaid"));
+    assert!(output.rendered.contains("flowchart LR"));
+    assert!(output.rendered.contains("## Nodes"));
+    assert!(output.rendered.contains("### coding"));
+    assert!(output.rendered.contains("Kind: context"));
+    assert!(output.rendered.contains("### blueprint"));
+    assert!(output.rendered.contains("Kind: artifact"));
+    assert!(output.rendered.contains("### domain validators"));
+    assert!(output.rendered.contains("Kind: validator"));
+    assert!(output.rendered.contains("## Expected work surface"));
+    assert!(output.rendered.contains("<plan-workdir>/"));
+    assert!(output.rendered.contains("  qianji.toml"));
+    assert!(output.rendered.contains("  flowchart.mmd"));
+    assert!(output.rendered.contains("## Local qianji.toml template"));
+    assert!(output.rendered.contains("[plan]"));
+    assert!(output.rendered.contains("[check]"));
 }
 
 #[test]

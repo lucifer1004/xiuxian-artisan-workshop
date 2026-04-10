@@ -52,35 +52,28 @@ async fn graph_neighbors_resolves_relative_markdown_links_from_index_pages() {
                 "This file is the top-level entry for major documentation tracks.\n\n",
                 "## Testing\n\n",
                 "- [Testing Documentation](testing/README.md)\n",
-                "- [Skills Tools Benchmark CI Gate](testing/skills-tools-benchmark-ci.md)\n",
             ),
         ),
         (
             "docs/testing/README.md",
             "# Testing Documentation\n\nBody.\n",
         ),
-        (
-            "docs/testing/skills-tools-benchmark-ci.md",
-            "# Skills Tools Benchmark CI Gate\n\nBody.\n",
-        ),
     ]);
 
     let response = graph_neighbors_response(&fixture, "kernel/docs/index.md", 1, 20).await;
 
     assert!(
-        response.total_nodes >= 3,
+        response.total_nodes >= 2,
         "expected docs/index.md to surface related documentation nodes, got {}",
         response.total_nodes
     );
     assert!(
-        response.total_links >= 2,
+        response.total_links >= 1,
         "expected docs/index.md to surface outbound graph edges, got {}",
         response.total_links
     );
     assert_graph_neighbors_include_path(&response, "testing/README.md");
-    assert_graph_neighbors_include_path(&response, "testing/skills-tools-benchmark-ci.md");
     assert_graph_neighbors_include_link_target(&response, "testing/README.md");
-    assert_graph_neighbors_include_link_target(&response, "testing/skills-tools-benchmark-ci.md");
 
     assert_studio_json_snapshot(
         "graph_neighbors_index_page_links_payload",

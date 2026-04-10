@@ -2,11 +2,9 @@ use crate::gateway::studio::types::SearchHit;
 use crate::search::SearchPlaneService;
 
 use super::buffered::search_repo_intent_hits_buffered;
-#[cfg(test)]
 use super::buffered::{RepoSearchResultLimits, search_repo_code_hits_buffered};
 use super::dispatch::{RepoSearchDispatch, collect_repo_search_targets, repo_search_parallelism};
 
-#[cfg(test)]
 use std::time::Duration;
 
 #[derive(Debug, Default)]
@@ -18,7 +16,6 @@ pub(crate) struct RepoIntentSearchOutcome {
     pub(crate) repo_content_available: bool,
 }
 
-#[cfg(test)]
 #[derive(Debug, Default)]
 pub(crate) struct RepoCodeSearchOutcome {
     pub(crate) hits: Vec<SearchHit>,
@@ -56,7 +53,6 @@ pub(crate) async fn search_repo_intent_outcome(
     })
 }
 
-#[cfg(test)]
 pub(crate) async fn search_repo_code_outcome(
     search_plane: &SearchPlaneService,
     repo_ids: Vec<String>,

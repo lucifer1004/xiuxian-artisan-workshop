@@ -21,7 +21,6 @@ inventory = "0.3"
 xiuxian-memory-engine = { path = "../xiuxian-memory-engine" }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", features = ["transport"] }
-xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
 xiuxian-vector = { path = "../xiuxian-vector" }
 xiuxian-testing = { path = "../xiuxian-testing" }
 

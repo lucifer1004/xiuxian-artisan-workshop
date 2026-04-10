@@ -2,26 +2,31 @@ use std::collections::{BTreeSet, VecDeque};
 use std::fs;
 use std::path::Path;
 
-use xiuxian_ast::{JuliaFileSummary, JuliaSourceSummary, TreeSitterJuliaParser};
-
-use xiuxian_wendao_core::repo_intelligence::{DiagnosticRecord, RepoIntelligenceError};
+use xiuxian_wendao_core::repo_intelligence::{
+    DiagnosticRecord, RegisteredRepository, RepoIntelligenceError,
+};
 
 use super::discovery::relative_path_string;
+use super::parser_summary::{
+    JuliaParserFileSummary, JuliaParserSourceSummary,
+    fetch_julia_parser_file_summary_blocking_for_repository,
+    fetch_julia_parser_root_summary_blocking_for_repository,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct JuliaAnalyzedFile {
     pub(crate) path: String,
-    pub(crate) summary: JuliaFileSummary,
+    pub(crate) summary: JuliaParserFileSummary,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct JuliaCollectedSources {
-    pub(crate) root_summary: JuliaSourceSummary,
+    pub(crate) root_summary: JuliaParserSourceSummary,
     pub(crate) files: Vec<JuliaAnalyzedFile>,
 }
 
 pub(crate) fn collect_julia_sources(
-    repo_id: &str,
+    repository: &RegisteredRepository,
     repository_root: &Path,
     root_file: &Path,
     diagnostics: &mut Vec<DiagnosticRecord>,
@@ -35,11 +40,12 @@ pub(crate) fn collect_julia_sources(
             ),
         })?;
 
-    let mut parser = TreeSitterJuliaParser::new().map_err(map_parse_error(root_path.clone()))?;
-    let root_summary = parser
-        .parse_summary(&root_contents)
-        .map_err(map_parse_error(root_path.clone()))?;
-    let root_file_summary = JuliaFileSummary {
+    let root_summary = fetch_julia_parser_root_summary_blocking_for_repository(
+        repository,
+        &root_path,
+        &root_contents,
+    )?;
+    let root_file_summary = JuliaParserFileSummary {
         module_name: Some(root_summary.module_name.clone()),
         exports: root_summary.exports.clone(),
         imports: root_summary.imports.clone(),
@@ -66,7 +72,7 @@ pub(crate) fn collect_julia_sources(
             .join(include_literal.as_str());
         let Ok(include_relative) = relative_path_string(repository_root, &include_path) else {
             diagnostics.push(DiagnosticRecord {
-                repo_id: repo_id.to_string(),
+                repo_id: repository.id.clone(),
                 path: include_literal.clone(),
                 line: 0,
                 message: format!(
@@ -79,7 +85,7 @@ pub(crate) fn collect_julia_sources(
 
         if !include_path.is_file() {
             diagnostics.push(DiagnosticRecord {
-                repo_id: repo_id.to_string(),
+                repo_id: repository.id.clone(),
                 path: include_relative,
                 line: 0,
                 message: format!(
@@ -101,9 +107,11 @@ pub(crate) fn collect_julia_sources(
                 ),
             }
         })?;
-        let summary = parser
-            .parse_file_summary(&include_contents)
-            .map_err(map_parse_error(include_relative.clone()))?;
+        let summary = fetch_julia_parser_file_summary_blocking_for_repository(
+            repository,
+            &include_relative,
+            &include_contents,
+        )?;
         pending.extend(
             summary
                 .includes
@@ -120,12 +128,4 @@ pub(crate) fn collect_julia_sources(
         root_summary,
         files,
     })
-}
-
-fn map_parse_error(
-    path: String,
-) -> impl FnOnce(xiuxian_ast::JuliaParseError) -> RepoIntelligenceError {
-    move |error| RepoIntelligenceError::AnalysisFailed {
-        message: format!("failed to parse Julia source `{path}`: {error}"),
-    }
 }

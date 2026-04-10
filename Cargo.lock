@@ -7089,16 +7089,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libloading"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
-dependencies = [
- "cfg-if",
- "windows-link",
-]
-
-[[package]]
 name = "liblzma"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12449,16 +12439,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-julia"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4144731a178812ee867619b1e98b3b91e54c1652304b26e5ebe3175b701de323"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
-
-[[package]]
 name = "tree-sitter-kotlin-sg"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13828,14 +13808,12 @@ dependencies = [
  "ast-grep-core",
  "ast-grep-language",
  "insta",
- "libloading",
  "regex",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "tree-sitter",
- "tree-sitter-julia",
  "tree-sitter-python",
  "walkdir",
  "xiuxian-io",
@@ -14454,7 +14432,6 @@ dependencies = [
  "xiuxian-testing",
  "xiuxian-wendao-core",
  "xiuxian-wendao-julia",
- "xiuxian-wendao-modelica",
  "xiuxian-wendao-runtime",
 ]
 
@@ -14493,27 +14470,11 @@ dependencies = [
  "toml 0.8.23",
  "tonic",
  "walkdir",
- "xiuxian-ast",
  "xiuxian-memory-engine",
  "xiuxian-testing",
  "xiuxian-vector",
  "xiuxian-wendao-core",
  "xiuxian-wendao-runtime",
-]
-
-[[package]]
-name = "xiuxian-wendao-modelica"
-version = "0.1.1"
-dependencies = [
- "insta",
- "inventory",
- "serde_json",
- "tempfile",
- "walkdir",
- "xiuxian-ast",
- "xiuxian-testing",
- "xiuxian-wendao",
- "xiuxian-wendao-core",
 ]
 
 [[package]]

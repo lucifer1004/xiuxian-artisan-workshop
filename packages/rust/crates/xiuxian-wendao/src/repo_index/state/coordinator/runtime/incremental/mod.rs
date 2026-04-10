@@ -1,11 +1,11 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use xiuxian_ast::TreeSitterJuliaParser;
 use xiuxian_git_repo::{
     MaterializedRepo, RepoDriftState, RepoLifecycleState, RepoSourceKind as GitRepoSourceKind,
     RevisionChangeKind, RevisionPathChange, diff_checkout_revisions, discover_checkout_metadata,
 };
+use xiuxian_wendao_julia::julia_parser_summary_allows_safe_incremental_file_for_repository;
 
 use crate::analyzers::cache::{
     FingerprintMode, ValkeyAnalysisCache, analysis_fingerprint_mode,
@@ -302,13 +302,6 @@ fn collect_safe_incremental_julia_files(
     checkout_root: &Path,
     changes: &[RevisionPathChange],
 ) -> Result<Option<Vec<RepoSourceFile>>, RepoIntelligenceError> {
-    let mut parser =
-        TreeSitterJuliaParser::new().map_err(|error| RepoIntelligenceError::AnalysisFailed {
-            message: format!(
-                "repo `{}` failed to initialize Julia incremental parser: {error}",
-                repository.id
-            ),
-        })?;
     let mut files = Vec::new();
 
     for change in changes {
@@ -338,18 +331,11 @@ fn collect_safe_incremental_julia_files(
                 ),
             }
         })?;
-        let summary = parser.parse_file_summary(&contents).map_err(|error| {
-            RepoIntelligenceError::AnalysisFailed {
-                message: format!(
-                    "repo `{}` failed to parse changed Julia file `{}`: {error}",
-                    repository.id, change.path
-                ),
-            }
-        })?;
-        if summary.module_name.is_some()
-            || !summary.imports.is_empty()
-            || !summary.includes.is_empty()
-        {
+        if !julia_parser_summary_allows_safe_incremental_file_for_repository(
+            repository,
+            change.path.as_str(),
+            &contents,
+        )? {
             return Ok(None);
         }
         files.push(RepoSourceFile {

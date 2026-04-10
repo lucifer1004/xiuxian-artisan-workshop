@@ -23,6 +23,18 @@ The surface is intentionally request-scoped:
 - discovery catalogs are rebuilt per request
 - `information_schema` is enabled without mutating a shared global session
 
+This document describes one still-landed DataFusion-led surface. It should not
+be read as the target long-term database execution owner for Wendao search.
+The current bounded migration direction is:
+
+- DuckDB-first database execution for search-side Parquet publications,
+  bounded FlightSQL statement routing, and bounded diagnostics SQL
+- residual DataFusion value only for Rust-side live Arrow compute, request and
+  response shaping, and migration-baseline coverage where the data is still a
+  generated Arrow workset
+
+So this feature doc is active, but transitional.
+
 ## SQL Surface Layers
 
 The SQL lane lives under `src/search/queries/`:

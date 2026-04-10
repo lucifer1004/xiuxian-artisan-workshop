@@ -13,23 +13,26 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
-
-from xiuxian_wendao_py.compat.runtime import get_project_root
 
 RETRIEVAL_SCHEMA = "xiuxian_wendao.retrieval_eval.v1"
 RELATED_SCHEMA = "xiuxian_wendao.related_benchmark.v1"
 
 
 def _resolve_project_root() -> Path:
+    prj_root = os.environ.get("PRJ_ROOT")
+    if prj_root:
+        return Path(prj_root).expanduser().resolve()
     try:
-        return get_project_root().resolve()
+        raw = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            text=True,
+        ).strip()
     except Exception:
-        prj_root = os.environ.get("PRJ_ROOT")
-        if prj_root:
-            return Path(prj_root).expanduser().resolve()
         return Path(".").resolve()
+    return Path(raw).resolve()
 
 
 def _resolve_dir(project_root: Path, raw: str) -> Path:

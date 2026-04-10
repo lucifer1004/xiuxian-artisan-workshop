@@ -13,12 +13,12 @@ use xiuxian_wendao::analyzers::{
 };
 
 use crate::support::repo_fixture::{git_is_bare_repository, git_remote_url};
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
     assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
 };
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use xiuxian_wendao::analyzers::{
     ExampleSearchQuery, ModuleSearchQuery, example_search_from_config, module_search_from_config,
 };
@@ -90,7 +90,7 @@ fn julia_analyzer_builds_repo_overview_from_local_repo() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_builds_repo_overview_and_search_results_from_local_repo() -> TestResult {
     let temp = tempfile::tempdir()?;

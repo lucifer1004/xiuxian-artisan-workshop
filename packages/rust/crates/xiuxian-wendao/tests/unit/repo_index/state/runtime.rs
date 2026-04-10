@@ -20,6 +20,24 @@ use crate::search::{
     SearchRepoPublicationInput,
 };
 use chrono::Utc;
+use xiuxian_wendao_julia::integration_support::spawn_wendaosearch_demo_julia_parser_summary_service;
+
+fn julia_parser_summary_plugin_config(base_url: &str) -> RepositoryPluginConfig {
+    RepositoryPluginConfig::Config {
+        id: "julia".to_string(),
+        options: serde_json::json!({
+            "parser_summary_transport": {
+                "base_url": base_url,
+                "file_summary": {
+                    "schema_version": "v3"
+                },
+                "root_summary": {
+                    "schema_version": "v3"
+                }
+            }
+        }),
+    }
+}
 
 #[tokio::test]
 async fn refresh_status_snapshot_synchronizes_search_plane_runtime() {
@@ -332,6 +350,7 @@ async fn prepare_incremental_analysis_returns_refresh_only_for_non_code_revision
 
 #[tokio::test]
 async fn prepare_incremental_analysis_merges_leaf_julia_source_changes() {
+    let (base_url, mut guard) = spawn_wendaosearch_demo_julia_parser_summary_service().await;
     let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     init_git_repository(tempdir.path());
     fs::create_dir_all(tempdir.path().join("src"))
@@ -359,7 +378,7 @@ async fn prepare_incremental_analysis_merges_leaf_julia_source_changes() {
         url: None,
         git_ref: None,
         refresh: RepositoryRefreshPolicy::Fetch,
-        plugins: vec![RepositoryPluginConfig::Id("julia".to_string())],
+        plugins: vec![julia_parser_summary_plugin_config(&base_url)],
     };
     let registry = Arc::new(
         bootstrap_builtin_registry().unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
@@ -404,10 +423,12 @@ async fn prepare_incremental_analysis_merges_leaf_julia_source_changes() {
     assert!(analysis.symbols.iter().any(|symbol| {
         symbol.qualified_name == "FixturePkg.beta" && symbol.path == "src/leaf.jl"
     }));
+    guard.kill();
 }
 
 #[tokio::test]
 async fn prepare_incremental_analysis_reuses_cached_analysis_for_example_churn() {
+    let (base_url, mut guard) = spawn_wendaosearch_demo_julia_parser_summary_service().await;
     let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     init_git_repository(tempdir.path());
     fs::create_dir_all(tempdir.path().join("src"))
@@ -440,7 +461,7 @@ async fn prepare_incremental_analysis_reuses_cached_analysis_for_example_churn()
         url: None,
         git_ref: None,
         refresh: RepositoryRefreshPolicy::Fetch,
-        plugins: vec![RepositoryPluginConfig::Id("julia".to_string())],
+        plugins: vec![julia_parser_summary_plugin_config(&base_url)],
     };
     let registry = Arc::new(
         bootstrap_builtin_registry().unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
@@ -483,6 +504,7 @@ async fn prepare_incremental_analysis_reuses_cached_analysis_for_example_churn()
     assert_eq!(analysis.modules, baseline.modules);
     assert_eq!(analysis.symbols, baseline.symbols);
     assert_eq!(analysis.examples, baseline.examples);
+    guard.kill();
 }
 
 #[tokio::test]

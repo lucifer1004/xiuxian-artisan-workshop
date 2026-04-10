@@ -63,7 +63,12 @@
         #     };
         #   };
         # };
-        "qianji" = {
+        "xiuxian-zhenfa" = {
+          depsDrvConfig.mkDerivation = {
+            buildInputs = [ pkgs.libxml2 ];
+          };
+        };
+        "xiuxian-qianji" = {
           depsDrvConfig = {
             mkDerivation = {
               buildInputs = [ pkgs.protobuf ];

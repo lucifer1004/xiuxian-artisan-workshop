@@ -1,4 +1,5 @@
 mod discovery;
+mod execution;
 mod metadata;
 mod service;
 mod statement;

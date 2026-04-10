@@ -1,4 +1,3 @@
-#[cfg(test)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct ParsedCodeSearchQuery {
     pub(crate) query: String,

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::definitions as search_index;
-use super::diagnostics::summarize_status_diagnostics_rollup;
+use super::diagnostics::summarize_status_diagnostics;
 
 impl From<&crate::search::SearchPlaneStatusSnapshot> for search_index::SearchIndexStatusResponse {
     fn from(value: &crate::search::SearchPlaneStatusSnapshot) -> Self {
@@ -43,16 +43,21 @@ impl search_index::SearchIndexStatusResponse {
             .iter()
             .map(search_index::SearchCorpusIndexStatus::from)
             .collect::<Vec<_>>();
-        let rollup = match summarize_status_diagnostics_rollup(value).await {
-            Ok(rollup) => rollup,
-            Err(_) => fallback_rollup_from_corpora(&corpora),
-        };
-        let status_reason = summarize_response_status_reason(&corpora);
-        let query_telemetry_summary = summarize_response_query_telemetry(&corpora);
-        let repo_read_pressure = value
-            .repo_read_pressure
-            .as_ref()
-            .map(search_index::SearchIndexRepoReadPressure::from);
+        let (rollup, status_reason, query_telemetry_summary, repo_read_pressure) =
+            match summarize_status_diagnostics(value).await {
+                Ok(summary) => (
+                    summary.rollup,
+                    summary.status_reason,
+                    summary.query_telemetry_summary,
+                    summary.repo_read_pressure,
+                ),
+                Err(_) => (
+                    fallback_rollup_from_corpora(&corpora),
+                    summarize_response_status_reason(&corpora),
+                    summarize_response_query_telemetry(&corpora),
+                    value.repo_read_pressure.as_ref().map(From::from),
+                ),
+            };
         Self {
             total: rollup.total,
             idle: rollup.idle,
@@ -236,7 +241,9 @@ fn max_optional_u64(left: Option<u64>, right: Option<u64>) -> Option<u64> {
     }
 }
 
-fn response_reason_severity_priority(severity: search_index::SearchIndexStatusSeverity) -> u8 {
+pub(super) fn response_reason_severity_priority(
+    severity: search_index::SearchIndexStatusSeverity,
+) -> u8 {
     match severity {
         search_index::SearchIndexStatusSeverity::Error => 0,
         search_index::SearchIndexStatusSeverity::Warning => 1,
@@ -244,7 +251,7 @@ fn response_reason_severity_priority(severity: search_index::SearchIndexStatusSe
     }
 }
 
-fn response_reason_code_priority(code: search_index::SearchIndexStatusReasonCode) -> u8 {
+pub(super) fn response_reason_code_priority(code: search_index::SearchIndexStatusReasonCode) -> u8 {
     match code {
         search_index::SearchIndexStatusReasonCode::PublishedManifestMissing => 0,
         search_index::SearchIndexStatusReasonCode::BuildFailed => 1,

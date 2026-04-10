@@ -17,6 +17,7 @@ pub use doc_coverage::doc_coverage;
 pub(crate) use flight::StudioRepoDocCoverageFlightRouteProvider;
 pub(crate) use index_flight::StudioRepoIndexFlightRouteProvider;
 pub(crate) use index_status_flight::StudioRepoIndexStatusFlightRouteProvider;
+pub(crate) use index_status_flight::repo_index_status_response_with_diagnostics;
 pub use overview::overview;
 pub(crate) use overview_flight::StudioRepoOverviewFlightRouteProvider;
 pub(crate) use projected_page_index_tree_flight::StudioRepoProjectedPageIndexTreeFlightRouteProvider;

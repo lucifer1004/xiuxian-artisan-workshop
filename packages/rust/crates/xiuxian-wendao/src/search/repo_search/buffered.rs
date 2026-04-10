@@ -1,41 +1,28 @@
 use std::collections::VecDeque;
-
-use tokio::task::JoinSet;
-
-use crate::gateway::studio::types::SearchHit;
-use crate::search::SearchPlaneService;
-
-use super::dispatch::{RepoSearchTarget, repo_search_parallelism};
-use super::entity::search_repo_entity_hits_for_query;
-use super::search::search_repo_content_hits_for_query;
-
-#[cfg(test)]
 use std::sync::Arc;
-#[cfg(test)]
 use std::time::Duration;
 
-#[cfg(test)]
+use tokio::task::JoinSet;
 use tokio::time::{Instant, timeout_at};
 
-#[cfg(test)]
-use super::entity::{record_query_core_telemetry, relation_to_search_hits};
-#[cfg(test)]
+use crate::gateway::studio::types::SearchHit;
 use crate::parsers::search::repo_code_query::parse_repo_code_search_query;
-#[cfg(test)]
 use crate::query_core::{
     InMemoryWendaoExplainSink, RepoCodeQueryRequest, RetrievalCorpus, query_repo_code_relation,
 };
-#[cfg(test)]
-use crate::search::SearchCorpusKind;
+use crate::search::{SearchCorpusKind, SearchPlaneService};
 
-#[cfg(test)]
+use super::dispatch::{RepoSearchTarget, repo_search_parallelism};
+use super::entity::search_repo_entity_hits_for_query;
+use super::entity::{record_query_core_telemetry, relation_to_search_hits};
+use super::search::search_repo_content_hits_for_query;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RepoSearchResultLimits {
     pub(crate) entity_limit: usize,
     pub(crate) content_limit: usize,
 }
 
-#[cfg(test)]
 #[derive(Debug, Default)]
 pub(crate) struct BufferedRepoSearchResult {
     pub(crate) hits: Vec<SearchHit>,
@@ -86,7 +73,6 @@ pub(crate) async fn search_repo_intent_hits_buffered(
     Ok(hits)
 }
 
-#[cfg(test)]
 pub(crate) async fn search_repo_code_hits_buffered(
     search_plane: SearchPlaneService,
     targets: Vec<RepoSearchTarget>,
@@ -188,7 +174,6 @@ fn spawn_repo_intent_search_task(
     });
 }
 
-#[cfg(test)]
 fn spawn_repo_code_search_task(
     join_set: &mut JoinSet<Result<Vec<SearchHit>, String>>,
     search_plane: SearchPlaneService,
@@ -201,7 +186,6 @@ fn spawn_repo_code_search_task(
     });
 }
 
-#[cfg(test)]
 async fn search_repo_code_hits(
     search_plane: &SearchPlaneService,
     target: &RepoSearchTarget,

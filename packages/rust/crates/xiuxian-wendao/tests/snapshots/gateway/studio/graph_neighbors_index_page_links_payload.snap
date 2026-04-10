@@ -17,12 +17,6 @@ expression: value
       "distance": 1,
       "source": "kernel/docs/index.md",
       "target": "kernel/docs/testing/README.md"
-    },
-    {
-      "direction": "outgoing",
-      "distance": 1,
-      "source": "kernel/docs/index.md",
-      "target": "kernel/docs/testing/skills-tools-benchmark-ci.md"
     }
   ],
   "nodes": [
@@ -41,16 +35,8 @@ expression: value
       "label": "Testing Documentation",
       "nodeType": "doc",
       "path": "kernel/docs/testing/README.md"
-    },
-    {
-      "distance": 1,
-      "id": "kernel/docs/testing/skills-tools-benchmark-ci.md",
-      "isCenter": false,
-      "label": "Skills Tools Benchmark CI Gate",
-      "nodeType": "doc",
-      "path": "kernel/docs/testing/skills-tools-benchmark-ci.md"
     }
   ],
-  "totalLinks": 2,
-  "totalNodes": 3
+  "totalLinks": 1,
+  "totalNodes": 2
 }

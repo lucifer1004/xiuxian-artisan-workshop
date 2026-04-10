@@ -212,13 +212,6 @@ in
       just no-inline-python-guard
     '';
 
-    "ci:benchmark-skills-tools" = mkPythonBenchmarkTask ''
-      just benchmark-skills-tools-ci \
-        "''${OMNI_SKILLS_TOOLS_REPORT_DIR:-.run/reports/skills-tools-benchmark}" \
-        "''${OMNI_SKILLS_TOOLS_DETERMINISTIC_RUNS:-3}" \
-        "''${OMNI_SKILLS_TOOLS_NETWORK_RUNS:-5}"
-    '';
-
     "ci:tool-list-sweep" = mkPythonScriptTask ''
       just benchmark-tool-list-sweep \
         "''${OMNI_TOOL_LIST_BASE_URL:-}" \

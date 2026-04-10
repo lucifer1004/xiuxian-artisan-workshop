@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing deep-wiki planner search.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -9,7 +9,7 @@ use xiuxian_wendao::analyzers::{DocsPlannerSearchQuery, docs_planner_search_from
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_planner_search_executes_over_external_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;

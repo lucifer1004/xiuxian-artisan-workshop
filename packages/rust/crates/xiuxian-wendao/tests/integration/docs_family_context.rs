@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page family context.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -12,7 +12,7 @@ use xiuxian_wendao::analyzers::{
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_family_context_groups_related_pages_by_family() -> TestResult {
     let temp = tempfile::tempdir()?;

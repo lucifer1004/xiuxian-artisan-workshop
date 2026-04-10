@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
 Validate key observability event sequence for Telegram webhook/session/memory flows.
-
-Compatibility target:
-  scripts/channel/check-xiuxian-daochang-event-sequence.sh
 """
 
 from __future__ import annotations

@@ -13,7 +13,8 @@ use serial_test::serial;
 
 use crate::duckdb::{
     DataFusionLocalRelationEngine, DuckDbDatabasePath, LocalRelationEngine,
-    LocalRelationEngineKind, ParquetQueryEngine, resolve_search_duckdb_runtime,
+    LocalRelationEngineKind, LocalRelationRegistrationHint, ParquetQueryEngine,
+    resolve_search_duckdb_runtime,
 };
 #[cfg(feature = "duckdb")]
 use crate::duckdb::{
@@ -182,6 +183,37 @@ async fn duckdb_local_relation_engine_materializes_when_threshold_is_reached() -
     assert!(engine.last_query_temp_storage_peak_bytes().is_some());
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].num_rows(), 2);
+    Ok(())
+}
+
+#[cfg(feature = "duckdb")]
+#[tokio::test]
+async fn duckdb_local_relation_engine_materializes_when_repeated_use_is_hint() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let mut runtime = in_memory_search_duckdb_runtime(temp.path());
+    runtime.materialize_threshold_rows = 100;
+    let engine = DuckDbLocalRelationEngine::from_runtime(runtime).map_err(std::io::Error::other)?;
+
+    let schema = Arc::new(Schema::new(vec![Field::new("name", DataType::Utf8, false)]));
+    let batch = RecordBatch::try_new(
+        Arc::clone(&schema),
+        vec![Arc::new(StringArray::from(vec!["beta", "alpha"]))],
+    )?;
+
+    engine.register_record_batches_with_hint(
+        "ducks",
+        schema,
+        vec![batch],
+        LocalRelationRegistrationHint::RepeatedUse,
+    )?;
+    assert_eq!(
+        engine.registered_strategy("ducks")?,
+        Some(DuckDbRegistrationStrategy::MaterializedAppender)
+    );
+    assert_eq!(
+        engine.relation_materialization_state("ducks"),
+        Some(crate::duckdb::LocalRelationMaterializationState::Materialized)
+    );
     Ok(())
 }
 

@@ -1,13 +1,13 @@
 //! Integration tests for deterministic projected page navigation search.
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use std::fs;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use xiuxian_wendao::analyzers::repo_projected_page_navigation_search_from_config;
 use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageNavigationSearchQuery,
@@ -39,7 +39,7 @@ fn projected_page_navigation_search_expands_reference_hits_into_navigation_bundl
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_projected_page_navigation_search_expands_reference_hits_into_navigation_bundles()
 -> TestResult {

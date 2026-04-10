@@ -1,14 +1,15 @@
-# Omni AST
+# xiuxian-ast
 
 > Unified AST Utilities using ast-grep.
 
 ## Overview
 
-This crate provides a unified interface for AST-based code analysis across the Omni DevEnv project. Built on top of ast-grep for high-performance pattern matching.
+This crate provides unified AST and structural extraction helpers on top of
+ast-grep, plus the Python tree-sitter parser used by the active Rust lanes.
 
 ## Features
 
-- Multi-language AST support
+- Multi-language ast-grep support
 - Pattern-based code search
 - Syntax tree traversal
 - Code transformation support
@@ -16,26 +17,27 @@ This crate provides a unified interface for AST-based code analysis across the O
 ## Usage
 
 ```rust
-use omni_ast::AstAnalyzer;
+use xiuxian_ast::{scan, Lang};
 
-let analyzer = AstAnalyzer::new();
-let ast = analyzer.parse("src/main.py")?;
-let functions = analyzer.find_functions(&ast)?;
+let matches = scan("def hello(): pass", "def $NAME", Lang::Python)?;
 ```
 
 ## Supported Languages
 
 - Python
-- Julia (feature-gated tree-sitter parser)
 - Rust
 - JavaScript/TypeScript
 - Go
 - Java
 
+Julia and Modelica no longer live in this crate. The active Wendao lane owns
+those languages through `WendaoCodeParser.jl` native routes consumed by
+`xiuxian-wendao-julia` over Arrow Flight.
+
 ## Testing
 
-- Julia parser snapshots use `xiuxian-testing` `ScenarioFramework` under `tests/fixtures/scenarios/`
-- Low-level Julia parser unit snapshots remain in `src/snapshots/`
+- `cargo test -p xiuxian-ast`
+- `cargo clippy -p xiuxian-ast --lib --tests -- -D warnings`
 
 ## License
 

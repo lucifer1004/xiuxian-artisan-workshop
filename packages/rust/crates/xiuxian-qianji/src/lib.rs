@@ -65,17 +65,18 @@ pub use contracts::{
 pub use engine::QianjiEngine;
 pub use engine::compiler::QianjiCompiler;
 pub use flowhub::{
-    FlowhubCheckReport, FlowhubDiagnostic, FlowhubDirKind, FlowhubModuleKind, FlowhubModuleShow,
-    FlowhubModuleSummary, FlowhubRootShow, FlowhubScenarioCaseSummary, FlowhubScenarioCheckReport,
-    FlowhubScenarioDiagnostic, FlowhubScenarioHiddenAlias, FlowhubScenarioShow,
-    FlowhubScenarioSurfacePreview, FlowhubShow, MaterializedWorkdir, ResolvedFlowhubModule,
-    check_flowhub, check_flowhub_scenario, classify_flowhub_dir, load_flowhub_module_manifest,
-    load_flowhub_scenario_manifest, looks_like_flowhub_scenario_dir,
+    FlowhubCheckReport, FlowhubDiagnostic, FlowhubDirKind, FlowhubGraphEdgeSummary,
+    FlowhubGraphNodeKind, FlowhubGraphNodeSummary, FlowhubGraphShow, FlowhubModuleKind,
+    FlowhubModuleShow, FlowhubModuleSummary, FlowhubRootShow, FlowhubScenarioCaseSummary,
+    FlowhubScenarioCheckReport, FlowhubScenarioDiagnostic, FlowhubScenarioHiddenAlias,
+    FlowhubScenarioShow, FlowhubScenarioSurfacePreview, FlowhubShow, MaterializedWorkdir,
+    ResolvedFlowhubModule, check_flowhub, check_flowhub_scenario, classify_flowhub_dir,
+    load_flowhub_module_manifest, load_flowhub_scenario_manifest, looks_like_flowhub_scenario_dir,
     materialize_flowhub_scenario_workdir, parse_flowhub_module_manifest,
-    parse_flowhub_scenario_manifest, render_flowhub_check_markdown,
+    parse_flowhub_scenario_manifest, render_flowhub_check_markdown, render_flowhub_graph_show,
     render_flowhub_scenario_check_markdown, render_flowhub_scenario_show, render_flowhub_show,
     resolve_flowhub_module_children, resolve_flowhub_scenario_modules, show_flowhub,
-    show_flowhub_scenario,
+    show_flowhub_graph, show_flowhub_scenario,
 };
 pub use manifest::{manifest_declares_qianhuan_bindings, manifest_requires_llm};
 pub use safety::QianjiSafetyGuard;

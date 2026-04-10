@@ -22,7 +22,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.resolve()
+
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 
 @dataclass
@@ -37,10 +43,13 @@ def _resolve_project_root() -> Path:
     prj_root = os.environ.get("PRJ_ROOT")
     if prj_root:
         return Path(prj_root).expanduser().resolve()
-    raw = subprocess.check_output(
-        ["git", "rev-parse", "--show-toplevel"],
-        text=True,
-    ).strip()
+    try:
+        raw = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            text=True,
+        ).strip()
+    except Exception:
+        return _PROJECT_ROOT
     return Path(raw).resolve()
 
 

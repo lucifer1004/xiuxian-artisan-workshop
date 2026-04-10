@@ -14,14 +14,6 @@ on:
         options:
           - "false"
           - "true"
-      run_memory_ci_nightly:
-        description: "Run optional xiuxian-daochang memory nightly gate"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
 jobs:
   architecture-gate:
@@ -142,18 +134,6 @@ jobs:
       OMNI_KNOWLEDGE_RECALL_GRAPH_RSS_PEAK_DELTA_MB: ${{ matrix.recall_graph_rss_peak_delta_mb }}
       OMNI_KNOWLEDGE_RECALL_MAX_FAILURES: "0"
       OMNI_KNOWLEDGE_RECALL_REPORT_DIR: ".run/reports/knowledge-recall-perf"
-      OMNI_SKILLS_TOOLS_REPORT_DIR: ".run/reports/skills-tools-benchmark"
-      OMNI_SKILLS_TOOLS_CLI_SUMMARY_PROMOTE_BASELINE: "1"
-      OMNI_SKILLS_TOOLS_FETCH_REMOTE_BASELINE: "1"
-      OMNI_SKILLS_TOOLS_REMOTE_WORKFLOW_FILE: "ci.yaml"
-      OMNI_SKILLS_TOOLS_REMOTE_ARTIFACT_NAME: skills-tools-benchmark-${{ matrix.os }}
-      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_MAX_MS: "70"
-      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_MAX_RATIO: "1.2"
-      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_BOOTSTRAP_MAX_MS: "60"
-      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_BOOTSTRAP_MAX_RATIO: "1.7"
-      OMNI_SKILLS_TOOLS_TREND_MAX_OVERALL_STREAK: "2"
-      OMNI_SKILLS_TOOLS_TREND_MAX_COMPONENT_STREAK: "2"
-      OMNI_SKILLS_TOOLS_TREND_STRICT: "1"
       OMNI_MCP_TOOLS_LIST_REPORT_DIR: ".run/reports/mcp-tools-list-sweep"
       OMNI_MCP_TOOLS_LIST_NO_EMBEDDING: "true"
       OMNI_MCP_TOOLS_LIST_HEALTH_TIMEOUT_SECS: "120"
@@ -268,20 +248,6 @@ jobs:
       - name: Run tests
         run: secretspec run --provider env --profile default -- devenv tasks run ci:test-quick
 
-      - name: Skill benchmark gate/report - unified
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:benchmark-skills-tools
-
-      - name: Skill benchmark summary (step summary)
-        if: ${{ always() }}
-        run: |
-          status_md="${OMNI_SKILLS_TOOLS_REPORT_DIR}/skills_tools_ci_status.md"
-          echo "## Skills Tools Benchmark (${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
-          if [ -f "${status_md}" ]; then
-            cat "${status_md}" >> "${GITHUB_STEP_SUMMARY}"
-          else
-            echo "- status markdown missing: \`${status_md}\`" >> "${GITHUB_STEP_SUMMARY}"
-          fi
-
       - name: MCP gate - tools/list concurrency sweep
         run: secretspec run --provider env --profile default -- devenv tasks run ci:mcp-tools-list-sweep
 
@@ -331,14 +297,6 @@ jobs:
           path: ${{ env.OMNI_KNOWLEDGE_RECALL_REPORT_DIR }}
           if-no-files-found: warn
 
-      - name: Upload skills tools benchmark reports
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: skills-tools-benchmark-${{ matrix.os }}
-          path: ${{ env.OMNI_SKILLS_TOOLS_REPORT_DIR }}
-          if-no-files-found: warn
-
       - name: Upload wendao PPR gate reports
         if: ${{ always() }}
         uses: actions/upload-artifact@v6
@@ -378,57 +336,5 @@ jobs:
           name: embedding-role-perf-${{ matrix.os }}
           path: |
             .run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.json
-            .run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.md
             .run/logs/xiuxian-daochang-embedding-role-*.log
-          if-no-files-found: warn
-
-      - name: Embedding role perf summary (step summary)
-        if: ${{ always() }}
-        run: |
-          report=".run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.json"
-          if [ -f "${report}" ]; then
-            python3 scripts/render_embedding_role_perf_summary.py \
-              --input "${report}" \
-              --profile "medium" \
-              --runner-os "${RUNNER_OS}" \
-              --output-markdown ".run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.md" \
-              >> "${GITHUB_STEP_SUMMARY}"
-          else
-            echo "## Embedding Role Perf (medium, ${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
-            echo "- report missing: \`${report}\`" >> "${GITHUB_STEP_SUMMARY}"
-          fi
-
-  memory-gate-nightly:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_memory_ci_nightly == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    env:
-      GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - uses: ./.github/actions/common-setup
-        with:
-          CACHIX_AUTH_TOKEN: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
-
-      - name: Run xiuxian-daochang memory gate (nightly via launcher)
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:memory-gate-nightly
-
-      - name: Upload xiuxian-daochang memory nightly reports
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: xiuxian-daochang-memory-nightly
-          path: |
-            .run/reports/xiuxian-daochang-memory-ci-latest-run.json
-            .run/reports/xiuxian-daochang-memory-ci-latest-failure.json
-            .run/reports/xiuxian-daochang-memory-ci-latest-failure.md
-            .run/logs/xiuxian-daochang-memory-ci-nightly-*.log
-            .run/logs/xiuxian-daochang-webhook-ci-nightly-*.log
-            .run/logs/xiuxian-daochang-mock-telegram-nightly-*.log
           if-no-files-found: warn

@@ -53,7 +53,6 @@ run_machete_wendao() {
     "packages/rust/crates/xiuxian-wendao-runtime"
     "packages/rust/crates/xiuxian-wendao"
     "packages/rust/crates/xiuxian-wendao-julia"
-    "packages/rust/crates/xiuxian-wendao-modelica"
   )
 
   require_command cargo-machete

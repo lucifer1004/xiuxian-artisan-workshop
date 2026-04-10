@@ -17,6 +17,7 @@ import shutil
 import signal
 import statistics
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -25,8 +26,15 @@ from typing import Any
 
 import httpx
 
-from omni.foundation.config.settings import get_setting
-from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
+from xiuxian_foundation.config.settings import get_setting
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parents[1]
+
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_REPORT = _ROOT / ".run" / "reports" / "xiuxian-daochang-embedding-role-perf-smoke.json"

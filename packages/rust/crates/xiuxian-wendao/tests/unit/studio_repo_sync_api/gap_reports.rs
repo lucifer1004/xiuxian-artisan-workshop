@@ -24,7 +24,7 @@ fn projected_gap_report_router()
     Ok((temp, router))
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 fn modelica_projected_gap_report_router(
     repo_id: &str,
 ) -> Result<(tempfile::TempDir, axum::Router), Box<dyn std::error::Error>> {
@@ -46,7 +46,7 @@ async fn repo_projected_gap_report_endpoint_returns_projection_gap_payload() -> 
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn repo_projected_gap_report_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {
@@ -103,7 +103,7 @@ async fn docs_projected_gap_report_endpoint_returns_projection_gap_payload() -> 
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[tokio::test]
 async fn docs_projected_gap_report_endpoint_executes_over_external_modelica_plugin_path()
 -> TestResult {

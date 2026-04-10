@@ -1,19 +1,19 @@
 //! Integration tests for deterministic projected page-family search.
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use std::fs;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use xiuxian_wendao::analyzers::repo_projected_page_family_search_from_config;
 use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageFamilySearchQuery, build_repo_projected_page_family_search,
 };
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
@@ -33,7 +33,7 @@ fn projected_page_family_search_matches_reference_family_clusters() {
     assert_repo_json_snapshot("repo_projected_page_family_search_result", json!(result));
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_projected_page_family_search_matches_reference_family_clusters() -> TestResult {
     let temp = tempfile::tempdir()?;

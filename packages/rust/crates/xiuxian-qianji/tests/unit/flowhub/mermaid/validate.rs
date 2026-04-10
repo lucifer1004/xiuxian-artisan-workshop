@@ -106,3 +106,23 @@ fn rejects_flowchart_with_undeclared_graph_nodes() {
     assert!(error.contains("undeclared graph nodes"));
     assert!(error.contains("style"));
 }
+
+#[test]
+fn accepts_flowchart_with_presentation_directives() {
+    let registered_module_names = vec![
+        "coding".to_string(),
+        "rust".to_string(),
+        "blueprint".to_string(),
+        "plan".to_string(),
+    ];
+    let parsed = parse_mermaid_flowchart(
+        "flowchart LR\n  A[\"coding\"] --> B[\"rust\"]\n  B --> C[\"blueprint\"]\n  C --> D[\"plan\"]\n  classDef highlight fill:#f9f,stroke:#333,stroke-width:2px;\n  class A,B highlight;\n  style C fill:#e0f7fa,stroke:#006064;\n  click D \"https://example.com/plan\" \"plan docs\"\n",
+        "codex-plan",
+        &registered_module_names,
+    )
+    .unwrap_or_else(|error| panic!("presentation directives should not break parse: {error}"));
+
+    validate_mermaid_flowchart(&parsed, &registered_module_names).unwrap_or_else(|error| {
+        panic!("presentation directives should not break validation: {error}")
+    });
+}

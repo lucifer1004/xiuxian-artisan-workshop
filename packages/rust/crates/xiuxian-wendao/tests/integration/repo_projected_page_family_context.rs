@@ -1,9 +1,9 @@
 //! Integration tests for deterministic projected page-family context.
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use std::fs;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
     assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
@@ -49,7 +49,7 @@ fn projected_page_family_context_lookup_groups_related_pages_by_family() -> Test
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_projected_page_family_context_groups_related_pages_by_family() -> TestResult {
     let temp = tempfile::tempdir()?;

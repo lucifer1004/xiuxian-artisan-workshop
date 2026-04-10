@@ -1,6 +1,20 @@
 use std::fs;
+#[cfg(feature = "julia")]
+use std::io::Error as IoError;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(feature = "julia")]
+use std::sync::{Mutex, OnceLock};
+
+#[cfg(feature = "julia")]
+use xiuxian_wendao_julia::{
+    integration_support::{
+        JuliaExampleServiceGuard, spawn_wendaosearch_demo_julia_parser_summary_service,
+        spawn_wendaosearch_demo_modelica_parser_summary_service,
+    },
+    set_linked_julia_parser_summary_base_url_for_tests,
+    set_linked_modelica_parser_summary_base_url_for_tests,
+};
 
 pub type TestResult = Result<(), Box<dyn std::error::Error>>;
 pub type TestResultPath = Result<PathBuf, Box<dyn std::error::Error>>;
@@ -8,6 +22,26 @@ pub type TestResultPath = Result<PathBuf, Box<dyn std::error::Error>>;
 const TEST_GIT_AUTHOR_NAME: &str = "Xiuxian Test";
 const TEST_GIT_AUTHOR_EMAIL: &str = "test@example.com";
 const TEST_GIT_COMMIT_TIME: &str = "1700000000 +0000";
+
+#[cfg(feature = "julia")]
+struct LinkedJuliaParserSummaryService {
+    _guard: Mutex<JuliaExampleServiceGuard>,
+}
+
+#[cfg(feature = "julia")]
+struct LinkedModelicaParserSummaryService {
+    _guard: Mutex<JuliaExampleServiceGuard>,
+}
+
+#[cfg(feature = "julia")]
+static LINKED_JULIA_PARSER_SUMMARY_SERVICE: OnceLock<
+    Result<LinkedJuliaParserSummaryService, String>,
+> = OnceLock::new();
+
+#[cfg(feature = "julia")]
+static LINKED_MODELICA_PARSER_SUMMARY_SERVICE: OnceLock<
+    Result<LinkedModelicaParserSummaryService, String>,
+> = OnceLock::new();
 
 pub fn create_sample_julia_repo(
     base: &Path,
@@ -116,8 +150,9 @@ end
     Ok(repo_dir)
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResultPath {
+    ensure_linked_modelica_parser_summary_service()?;
     let repo_dir = base.join(package_name.to_ascii_lowercase());
     fs::create_dir_all(repo_dir.join("Controllers").join("Examples"))?;
     fs::create_dir_all(
@@ -193,6 +228,56 @@ pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResul
         ),
     )?;
     Ok(repo_dir)
+}
+
+#[cfg(feature = "julia")]
+pub fn ensure_linked_julia_parser_summary_service() -> TestResult {
+    let service = LINKED_JULIA_PARSER_SUMMARY_SERVICE.get_or_init(|| {
+        let (base_url, guard) = std::thread::spawn(|| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|error| error.to_string())?;
+            Ok::<(String, JuliaExampleServiceGuard), String>(
+                runtime.block_on(spawn_wendaosearch_demo_julia_parser_summary_service()),
+            )
+        })
+        .join()
+        .map_err(|_| "linked Julia parser-summary service thread panicked".to_string())??;
+        set_linked_julia_parser_summary_base_url_for_tests(base_url.as_str())?;
+        Ok::<LinkedJuliaParserSummaryService, String>(LinkedJuliaParserSummaryService {
+            _guard: Mutex::new(guard),
+        })
+    });
+    service
+        .as_ref()
+        .map(|_| ())
+        .map_err(|message| Box::new(IoError::other(message.clone())) as Box<dyn std::error::Error>)
+}
+
+#[cfg(feature = "julia")]
+pub fn ensure_linked_modelica_parser_summary_service() -> TestResult {
+    let service = LINKED_MODELICA_PARSER_SUMMARY_SERVICE.get_or_init(|| {
+        let (base_url, guard) = std::thread::spawn(|| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|error| error.to_string())?;
+            Ok::<(String, JuliaExampleServiceGuard), String>(
+                runtime.block_on(spawn_wendaosearch_demo_modelica_parser_summary_service()),
+            )
+        })
+        .join()
+        .map_err(|_| "linked Modelica parser-summary service thread panicked".to_string())??;
+        set_linked_modelica_parser_summary_base_url_for_tests(base_url.as_str())?;
+        Ok::<LinkedModelicaParserSummaryService, String>(LinkedModelicaParserSummaryService {
+            _guard: Mutex::new(guard),
+        })
+    });
+    service
+        .as_ref()
+        .map(|_| ())
+        .map_err(|message| Box::new(IoError::other(message.clone())) as Box<dyn std::error::Error>)
 }
 
 pub fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {

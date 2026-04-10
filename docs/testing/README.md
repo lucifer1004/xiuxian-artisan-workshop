@@ -22,7 +22,6 @@ This folder holds testing-related docs: evaluation reports, decision records, an
 | [Keyword Backend Decision](keyword-backend-decision.md)                                             | **Canonical** — Tantivy vs Lance FTS decision, when to use which, how to regenerate reports.                  |
 | [Keyword Backend Usage Guide](keyword-backend-usage-guide.md)                                       | How to use the keyword backend in tests and CLI.                                                              |
 | [修仙道场 (Xiuxian Daochang) Live Multi-Group Runbook](xiuxian-daochang-live-multigroup-runbook.md) | Canonical live validation flow for `Test1/Test2/Test3` session isolation + memory evolution + trace evidence. |
-| [Skills Tools Benchmark CI Gate](skills-tools-benchmark-ci.md)                                      | Canonical threshold policy and execution path for `ci:benchmark-skills-tools` (deterministic + diff + trend). |
 
 ## Reports (historical or one-off)
 
@@ -48,7 +47,6 @@ For how to run tests, write tests, and use the test kit: [Developer Testing Guid
 - `scripts/validate_wendao_gate_reports.py` — contract validation for PPR gate JSON artifacts.
 - `scripts/render_wendao_ppr_rollout_status.py` — sustained-green rollout readiness evaluation.
 - `docs/testing/wendao-query-regression-matrix.json` — canonical query matrix for retrieval regression.
-- `docs/testing/skills-tools-benchmark-ci.md` — canonical threshold and trend-streak policy for skills-tools CI gate.
 
 Recommended usage:
 

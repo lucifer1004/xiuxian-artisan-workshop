@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page navigation bundles.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -13,7 +13,7 @@ use xiuxian_wendao::analyzers::{
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_navigation_bundle_resolves_tree_context_and_family_cluster() -> TestResult {
     let temp = tempfile::tempdir()?;

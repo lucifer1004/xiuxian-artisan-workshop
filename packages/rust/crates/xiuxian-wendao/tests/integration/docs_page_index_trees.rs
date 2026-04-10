@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing projected page-index trees.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::fs;
 
@@ -9,7 +9,7 @@ use xiuxian_wendao::analyzers::{DocsPageIndexTreesQuery, docs_page_index_trees_f
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_page_index_trees_lookup_resolves_deterministic_tree_set() -> TestResult {
     let temp = tempfile::tempdir()?;

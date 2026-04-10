@@ -212,16 +212,647 @@ entrypoints.
 The intended command surfaces are:
 
 ```bash
+qianji show --graph <scenario.mmd>
 qianji show --dir <plan-workdir>
 qianji check --dir <plan-workdir>
 ```
 
-`qianji show` exposes the current graph entry surface and the main bounded
-content surfaces. `qianji check` unifies `[[validation]]`, flowchart
-alignment, boundary checks, drift checks, and status legality checks.
+## 6. Three-Layer Execution Model v0
+
+The current implementation is intentionally split into three layers.
+
+### 6.1 Execution Layer
+
+The execution layer is Codex.
+
+Codex is responsible for:
+
+1. reading the graph contract
+2. writing artifacts inside the bounded work surface
+3. iterating on those artifacts in response to diagnostics
+
+Codex does not define the constraint model. It executes inside the constraint
+model.
+
+### 6.2 Constraint Layer
+
+The constraint layer is `qianji-flowhub`.
+
+`qianji-flowhub` is responsible for:
+
+1. providing the normative graph
+2. providing upstream flow and plan or blueprint constraints
+3. providing scenario contracts
+4. providing the template boundary and backbone graph
+
+The constraint layer is not the runtime surface and is not the localized
+workdir. It is the contract source.
+
+### 6.3 Evaluation Layer
+
+The evaluation layer is `qianji check`.
+
+`qianji check` is responsible for:
+
+1. reading the localized contract from the current bounded work surface
+2. evaluating the current artifact state against that localized contract
+3. returning a continue or block outcome
+4. emitting precise diagnostics
+
+### 6.4 Localized Contract Principle
+
+The active workdir manifest is the localized contract surface derived from
+`qianji-flowhub`.
+
+The localized contract is authored in two stages:
+
+1. `qianji-flowhub` provides the source graph and constraint contract
+2. Codex materializes the localized contract into `<plan-workdir>/qianji.toml`
+
+Therefore, `qianji check` does not evaluate raw Flowhub state directly.
+`qianji check` evaluates the bounded artifact state that Codex has already
+materialized under the localized contract.
+
+This principle is the most important execution rule for the current model:
+
+> Qianji Flow constraints are authored in flowhub, localized into the bounded
+> workdir by Codex, and evaluated by `qianji check` against the resulting
+> artifact state.
+
+`qianji show --graph` exposes one Flowhub graph companion directly from the
+Flowhub library. Its responsibility is limited to the graph contract surface:
+graph metadata, raw Mermaid, node semantics, the expected bounded work
+surface, and the minimal localized `qianji.toml` template that an agent
+executor should materialize next. `qianji show --dir` exposes the current
+graph entry surface and the main bounded content surfaces. `qianji check`
+unifies `[[validation]]`, flowchart alignment, boundary checks, drift checks,
+and status legality checks.
+
+### 6.5 `qianji show --graph` Output Contract v0
+
+`qianji show --graph <scenario.mmd>` is a graph-contract display surface only.
+
+It must not:
+
+1. run `check`
+2. scan arbitrary repository directories
+3. perform exact retrieval
+4. run toolchain validator evaluation
+
+Its responsibility is to provide enough graph-contract information for the
+executor to materialize a localized bounded work surface.
+
+The output contract for v0 is fixed to five sections.
+
+#### Section 1: Graph Metadata
+
+The surface must begin with:
+
+1. graph name
+2. graph path
+3. graph kind
+
+For example:
+
+```md
+# Graph
+
+Name: codex-plan
+Path: ./qianji-flowhub/plan/codex-plan.mmd
+Kind: scenario
+```
+
+#### Section 2: Raw Mermaid
+
+The surface must include the original Mermaid graph verbatim in one fenced
+`mermaid` block.
+
+#### Section 3: Nodes
+
+Each node must be rendered with exactly four slots:
+
+1. `Kind`
+2. `Role`
+3. `Agent action`
+4. `Next`
+
+This keeps the graph contract executor-agnostic and bounded to first-order
+materialization guidance.
+
+#### Section 4: Expected Work Surface
+
+The surface must explicitly show the bounded target shape:
+
+```text
+<plan-workdir>/
+  qianji.toml
+  flowchart.mmd
+  blueprint/
+  plan/
+```
+
+#### Section 5: Local Contract Template
+
+The surface must include the minimal localized `qianji.toml` template that the
+executor should materialize next.
+
+That template must stay aligned with the current `WorkdirManifest` shape:
+
+1. `[plan].name`
+2. `[plan].surface`
+3. `[check].require`
+4. `[check].flowchart`
+
+### 6.6 `qianji show --graph` Node Taxonomy v0
+
+The `Nodes` section uses a fixed v0 taxonomy.
+
+The current node kinds are:
+
+1. `context`
+2. `constraint`
+3. `artifact`
+4. `guard`
+5. `validator`
+6. `gate`
+7. `process`
+8. `unknown`
+
+Node labels must be normalized before taxonomy matching.
+
+The v0 normalization rule is:
+
+1. lowercase the label
+2. convert spaces, dashes, and slashes to underscores
+3. collapse repeated separators
+
+Examples:
+
+1. `boundary and drift check` -> `boundary_and_drift_check`
+2. `Codex write bounded surface` -> `codex_write_bounded_surface`
+3. `engineering requirement` -> `engineering_requirement`
+
+The v0 static taxonomy mapping is:
+
+1. `coding`, `rust` -> `context`
+2. `style`, `engineering_requirement`, `policy` -> `constraint`
+3. `blueprint`, `plan` -> `artifact`
+4. `surface_check`, `flowchart_alignment`, `boundary_check`,
+   `drift_check`, `boundary_and_drift_check`, `status_legality` -> `guard`
+5. `validator_gate`, `domain_validators` -> `validator`
+6. `done_gate` -> `gate`
+7. `codex_write_bounded_surface`, `diagnostics` -> `process`
+8. any label outside the registered module set and outside the allowed graph
+   vocabulary -> `unknown`
+
+This mapping is intentionally static in v0. `qianji show --graph` is not a
+semantic inference engine. It is a graph-contract display surface with a
+bounded taxonomy.
+
+When a node is classified as `unknown`, the rendered node semantics must stay
+defensive:
+
+1. the role must indicate that the node is outside the known v0 graph contract
+   vocabulary
+2. the agent action must instruct the executor not to rely on that node until
+   the Flowhub graph contract is corrected
+
+### 6.7 `qianji show --graph` Next Edge Semantics v0
+
+The `Next` slot is a flattened adjacency surface for outgoing edges.
+
+It is intentionally minimal in v0:
+
+1. it lists downstream node labels only
+2. it preserves stable outgoing-edge order
+3. it does not render a separate edge-kind column
+
+The current edge semantics are:
+
+1. backbone edge
+2. fail edge
+3. repair-loop edge
+
+#### Backbone Edge
+
+A backbone edge is the normal forward edge in the graph contract.
+
+Examples:
+
+1. `coding -> rust`
+2. `rust -> blueprint`
+3. `blueprint -> plan`
+
+For backbone edges, `Next` means the ordinary downstream graph-contract step.
+
+#### Fail Edge
+
+A fail edge is a failure branch such as:
+
+```text
+surface check -- fail --> diagnostics
+```
+
+For fail edges, `Next` still lists the downstream label in the same flattened
+surface, but the semantics are failure-oriented rather than forward-progress
+oriented.
+
+In v0, fail edges are not rendered in a separate slot. They remain visible
+through:
+
+1. the raw Mermaid section
+2. the additional failure-oriented downstream label in `Next`
+
+#### Repair-Loop Edge
+
+A repair-loop edge is an edge that returns execution from a repair-oriented
+process node back to the bounded writing path.
+
+Example:
+
+```text
+diagnostics -> Codex write bounded surface
+```
+
+For repair-loop edges, `Next` means the bounded retry target after diagnostics
+or repair guidance has been consumed.
+
+#### Rendering Rule
+
+The `Next` slot must therefore be read as:
+
+1. ordinary downstream graph progression for backbone edges
+2. failure branch targets for fail edges
+3. bounded retry targets for repair-loop edges
+
+This is intentionally sufficient for v0 because the raw Mermaid block remains
+present above the node-semantics surface.
+
+### 6.8 `qianji show --graph` Role and Agent Action Wording Contract v0
+
+The `Role` slot and the `Agent action` slot have different wording rules.
+
+They must not collapse into one mixed sentence type.
+
+#### Role Wording
+
+`Role` must stay descriptive.
+
+It describes what the node means in the graph contract.
+
+The preferred v0 shape is:
+
+1. short
+2. descriptive
+3. noun-phrase or declarative-phrase oriented
+4. free of imperative wording
+
+Good examples:
+
+1. `define the bounded blueprint surface`
+2. `require the bounded work surface to exist`
+3. `allow completion only when required guards and validators pass`
+
+Bad examples:
+
+1. `create and populate blueprint/`
+2. `do not write outside the bounded work surface`
+3. `repair artifacts and re-run qianji check`
+
+Those are action instructions and therefore belong in `Agent action`, not in
+`Role`.
+
+#### Agent Action Wording
+
+`Agent action` must stay imperative.
+
+It tells the executor what to do next under the graph contract.
+
+The preferred v0 shape is:
+
+1. short
+2. imperative
+3. artifact-oriented
+4. bounded to the current work surface
+
+Good examples:
+
+1. `create and populate blueprint/`
+2. `ensure qianji.toml, flowchart.mmd, blueprint/, and plan/ exist`
+3. `do not treat the slice as complete before qianji check passes`
+
+Bad examples:
+
+1. `define the bounded blueprint surface`
+2. `require the bounded work surface to exist`
+3. `allow completion only when required guards and validators pass`
+
+Those are contract descriptions and therefore belong in `Role`, not in
+`Agent action`.
+
+#### Boundary Rule
+
+The boundary between the two slots is:
+
+1. `Role` answers: what does this node mean in the contract
+2. `Agent action` answers: what should the executor do because of this node
+
+This boundary must remain stable so the `Nodes` section stays easy to consume
+for both humans and agent executors.
+
+### 6.9 `unknown` Node Failure Semantics v0
+
+`unknown` is not a soft taxonomy bucket. It is a contract-warning state.
+
+It means that the current Mermaid graph contains at least one node label that
+is:
+
+1. outside the registered Flowhub module set
+2. outside the allowed graph-node vocabulary for v0
+
+The failure semantics differ by surface.
+
+#### `show --graph`
+
+In `qianji show --graph`, an `unknown` node must remain visible.
+
+The graph-contract surface must not hide it and must not silently coerce it
+into another known node kind.
+
+Instead, the `Nodes` section must render:
+
+1. `Kind: unknown`
+2. a defensive `Role`
+3. a defensive `Agent action`
+
+This keeps the graph-contract surface honest for both humans and agent
+executors.
+
+#### `qianji check`
+
+In `qianji check`, an `unknown` node must be treated as blocking graph drift.
+
+It is not a warning-only state. It must prevent the graph from being accepted
+as valid until the unknown node is removed, renamed, or formally adopted into
+the contract vocabulary.
+
+#### Materialize and Localized Workdir Use
+
+`unknown` belongs to the graph-contract side, not to the localized workdir
+contract side.
+
+Therefore:
+
+1. `qianji show --graph` may still display the graph contract with `unknown`
+   nodes
+2. the executor must not rely on those nodes when materializing the localized
+   workdir contract
+3. localized contract generation should remain bounded to the known v0
+   contract surface
+
+#### Rule
+
+The v0 rule is:
+
+1. visible in `show --graph`
+2. blocking in `qianji check`
+3. excluded from localized contract materialization guidance
+
+This keeps the display surface informative, the evaluation surface strict, and
+the localized workdir contract bounded to the currently accepted graph
+vocabulary.
+
+### 6.10 Module and Export Alignment v0
+
+`qianji show --graph` is not only a free-form Mermaid preview. It also aligns
+module nodes back to the live Flowhub contract.
+
+#### Module Alignment
+
+For v0, the Flowhub root `contract.register` list is the authoritative module
+allowlist for `show --graph`.
+
+A Mermaid node is treated as a Flowhub module node only when its visible label
+matches one registered module ref from the Flowhub root contract.
+
+Therefore:
+
+1. registered module labels are the authoritative module vocabulary
+2. a non-registered label must not be silently treated as a module node
+3. labels outside the registered module set stay on the graph-node side and
+   may become `unknown`
+
+This keeps module alignment anchored to the live Flowhub root contract rather
+than to ad hoc label inference.
+
+#### Export Alignment
+
+For every aligned module node, v0 resolves module exports at exactly two
+surfaces:
+
+1. `entry`
+2. `ready`
+
+These come from the module-local `qianji.toml` export contract.
+
+This means the graph lane aligns module nodes to the same `entry -> ready`
+surface already used elsewhere in Flowhub module contracts.
+
+#### Display Rule
+
+The primary five-section `show --graph` markdown contract remains focused on
+graph-contract guidance. Therefore, v0 does not require a separate exported
+surface list inside the main `Nodes` rendering block.
+
+Instead:
+
+1. module and export alignment must occur in the graph-show resolution path
+2. export alignment is bounded to `entry` and `ready`
+3. the primary markdown surface may stay focused on graph metadata, Mermaid,
+   node semantics, expected work surface, and localized contract template
+
+This keeps the user-facing graph surface compact while preserving
+contract-backed module alignment underneath it.
+
+### 6.11 Graph Path and Naming Contract v0
+
+`qianji show --graph` must expose a stable graph-identity surface in the
+metadata block.
+
+For v0, that surface is:
+
+1. `Name`
+2. `Path`
+3. `Kind`
+
+The order must remain stable so both humans and agent executors can read the
+graph header deterministically.
+
+#### `Name`
+
+For v0, `Name` must render the stable `merimind_graph_name`.
+
+`merimind_graph_name` must derive from the owning Mermaid filename stem.
+
+It must not derive from:
+
+1. the Mermaid direction token such as `LR` or `TB`
+2. the first node label
+3. any in-graph title-like label or comment
+
+Therefore:
+
+1. `qianji-flowhub/plan/codex-plan.mmd` renders `Name: codex-plan`
+2. changing the Mermaid direction token does not change graph identity
+3. changing internal node labels does not change graph identity
+
+This keeps graph identity anchored to the contracted scenario-case file rather
+than to mutable graph body details.
+
+#### `Path`
+
+For v0, `Path` must identify the owning Mermaid file.
+
+It does not identify the future localized workdir and does not identify the
+localized `flowchart.mmd` companion.
+
+When the graph file is inside the active project root, `Path` should render as
+a repo-root-relative path prefixed with `./`.
+
+Therefore:
+
+1. `qianji-flowhub/plan/codex-plan.mmd` renders as
+   `Path: ./qianji-flowhub/plan/codex-plan.mmd`
+2. the graph metadata surface stays portable across machines within the same
+   repository checkout
+3. the display surface stays distinct from localized workdir paths such as
+   `<plan-workdir>/flowchart.mmd`
+
+If the provided Mermaid file is outside the active project root, v0 may render
+the caller-provided filesystem path instead.
+
+#### Rule
+
+The v0 naming and path rule is:
+
+1. `Name` comes from the owning Mermaid filename stem as `merimind_graph_name`
+2. `Path` points to the owning Mermaid file, not to the localized workdir
+3. repo-owned graph files should render with repo-root-relative paths
+
+### 6.12 Mermaid Graph Consumption Boundary v0
+
+`qianji show --graph` has two Mermaid responsibilities:
+
+1. render the raw Mermaid source verbatim
+2. derive a bounded graph-contract semantic surface from that source
+
+Those two responsibilities must not be conflated.
+
+#### Raw Mermaid Surface
+
+The `## Mermaid` section is the source-preservation surface.
+
+Its job is to show the original graph text exactly as authored so humans and
+agent executors can inspect the full scenario-case graph directly.
+
+This surface may therefore contain Mermaid constructs that are richer than the
+bounded v0 graph-contract semantics.
+
+#### Consumed Semantic Surface
+
+For v0, the graph-contract semantic surface is limited to first-order graph
+structure:
+
+1. the owning Mermaid file identity
+2. normalized visible node labels
+3. directed node adjacency
+
+This bounded semantic surface is what feeds:
+
+1. node taxonomy
+2. `Next` adjacency rendering
+3. module alignment
+4. localized contract guidance
+
+#### Out of Scope for v0 Semantics
+
+For v0, Mermaid presentation features are not first-order graph-contract
+inputs.
+
+That includes:
+
+1. direction tokens such as `LR`, `TB`, `RL`, and `BT`
+2. decorative styling directives such as `style`, `class`, and `classDef`
+3. interactive directives such as `click`
+4. other presentation-oriented Mermaid syntax that does not introduce or
+   rename the first-order node and edge structure
+
+Those constructs may still appear in the raw Mermaid block, but they do not
+change:
+
+1. `merimind_graph_name`
+2. node-kind classification
+3. the primary `Next` surface
+4. localized workdir contract guidance
+
+#### Rule
+
+The v0 Mermaid-boundary rule is:
+
+1. preserve the full Mermaid source in `## Mermaid`
+2. consume only first-order node and edge structure for graph-contract
+   semantics
+3. do not let Mermaid presentation directives expand the localized contract
+   surface
+
+This keeps `show --graph` honest to the authored graph while keeping the
+executor-facing contract bounded and stable.
+
+The active workdir manifest is the localized contract surface derived from
+`qianji-flowhub`. `qianji check` evaluates the current artifact state against
+this localized contract, not against the raw flow library directly.
 
 The bounded plan work surface should already expose its primary semantic split
 through filenames and top-level directories.
+
+The bounded work surface for v0 is:
+
+```text
+<plan-workdir>/
+  qianji.toml
+  flowchart.mmd
+  blueprint/
+  plan/
+```
+
+In this surface:
+
+1. `qianji.toml` is the localized contract
+2. `flowchart.mmd` is the graph companion for the current slice
+3. `blueprint/` is the bounded blueprint surface
+4. `plan/` is the bounded execution surface
+
+The localized workdir contract is intentionally small and already aligns with
+the current `WorkdirManifest` structure:
+
+```toml
+version = 1
+
+[plan]
+name = "<plan-name>"
+surface = ["flowchart.mmd", "blueprint", "plan"]
+
+[check]
+require = ["qianji.toml", "flowchart.mmd", "blueprint", "plan", "blueprint/**/*.md", "plan/**/*.md"]
+flowchart = ["blueprint", "plan"]
+```
+
+This contract expresses:
+
+1. the stable bounded-slice name
+2. the top-level surfaces that `qianji show --dir` should expose
+3. the minimum required surfaces and markdown artifacts
+4. the principal surfaces that `flowchart.mmd` must stay aligned with
 
 `tree` is not the context retrieval mechanism itself. It is only an optional
 structural probe that helps Codex decide whether deeper inspection is
@@ -235,11 +866,20 @@ Because the repository already includes DataFusion, SQL is the natural
 retrieval surface. No additional retrieval DSL is introduced in
 `qianji.toml`.
 
-Therefore, deeper context is obtained in three distinct stages:
+Therefore, the standard bounded execution sequence is:
 
-1. structural inspection through filenames, directories, and optional `tree`
-2. exact retrieval through Wendao SQL when deeper inspection is needed
-3. validation through unified `qianji check`
+1. `qianji show --graph <scenario.mmd>`
+2. Codex materializes `<plan-workdir>/qianji.toml`, `flowchart.mmd`,
+   `blueprint/`, and `plan/`
+3. `qianji show --dir <plan-workdir>`
+4. `qianji check --dir <plan-workdir>`
+
+Deeper context is then obtained in four distinct stages:
+
+1. graph-contract inspection through `qianji show --graph <scenario.mmd>`
+2. structural inspection through filenames, directories, and optional `tree`
+3. exact retrieval through Wendao SQL when deeper inspection is needed
+4. validation through unified `qianji check`
 
 Conceptual SQL examples:
 

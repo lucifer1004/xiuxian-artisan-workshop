@@ -1,9 +1,9 @@
 //! Integration tests for Repo Intelligence relation graph output.
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use std::fs;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_intelligence::{
     assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
@@ -27,7 +27,7 @@ fn analysis_emits_structural_and_semantic_relations() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_emits_structural_and_semantic_relations() -> TestResult {
     let temp = tempfile::tempdir()?;

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Compatibility wrapper: use Python Valkey suite runner (full).
-
-set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec python3 "${SCRIPT_DIR}/test_xiuxian_daochang_valkey_suite.py" --suite full "$@"

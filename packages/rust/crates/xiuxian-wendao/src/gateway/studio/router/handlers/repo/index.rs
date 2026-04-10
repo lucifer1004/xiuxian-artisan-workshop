@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::Serialize;
 
+use crate::gateway::studio::router::handlers::repo::analysis::repo_index_status_response_with_diagnostics;
 use crate::gateway::studio::router::handlers::repo::command_service::{
     run_repo_index, run_repo_index_status,
 };
@@ -49,6 +50,17 @@ pub async fn repo_index_status(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<RepoIndexStatusEnvelope>, StudioApiError> {
     let status = run_repo_index_status(&state, query.repo.as_deref());
+    let status = repo_index_status_payload_with_diagnostics(status).await;
     let telemetry = state.studio.bootstrap_background_indexing_telemetry();
     Ok(Json(RepoIndexStatusEnvelope { status, telemetry }))
 }
+
+pub(crate) async fn repo_index_status_payload_with_diagnostics(
+    status: RepoIndexStatusResponse,
+) -> RepoIndexStatusResponse {
+    repo_index_status_response_with_diagnostics(&status).await
+}
+
+#[cfg(test)]
+#[path = "../../../../../../tests/unit/gateway/studio/router/handlers/repo/index.rs"]
+mod tests;

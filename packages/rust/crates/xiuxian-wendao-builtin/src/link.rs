@@ -2,8 +2,6 @@
 // remain visible to the bootstrap bundle without widening any host-facing API.
 #[cfg(feature = "julia")]
 use xiuxian_wendao_julia as _;
-#[cfg(feature = "modelica")]
-use xiuxian_wendao_modelica as _;
 
 /// Ensure builtin plugin crates stay linked into the current host build.
 #[inline]

@@ -1,0 +1,27 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+assertion_line: 16
+expression: value
+---
+{
+  "active": 0,
+  "checking": 0,
+  "failed": 0,
+  "indexing": 0,
+  "maxConcurrency": 1,
+  "queued": 1,
+  "ready": 0,
+  "repos": [
+    {
+      "attemptCount": 0,
+      "phase": "queued",
+      "repoId": "modelica-gateway-index",
+      "updatedAt": "[updated-at]"
+    }
+  ],
+  "syncConcurrencyLimit": 8,
+  "syncing": 0,
+  "targetConcurrency": 1,
+  "total": 1,
+  "unsupported": 0
+}

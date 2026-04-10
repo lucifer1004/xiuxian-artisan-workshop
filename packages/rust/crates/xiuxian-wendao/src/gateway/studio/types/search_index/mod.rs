@@ -7,5 +7,5 @@ mod status;
 mod tests;
 
 pub use definitions::*;
-#[cfg(test)]
+#[cfg(all(test, feature = "duckdb"))]
 pub(crate) use diagnostics::configured_status_diagnostics_engine_kind;

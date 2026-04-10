@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 use crate::support::repo_intelligence::create_sample_modelica_repo;
 use crate::support::repo_projection_support::{assert_repo_json_snapshot, write_repo_config};
 use serde_json::json;
@@ -52,7 +52,7 @@ fn projected_page_family_cluster_lookup_resolves_how_to_cluster_for_reference_pa
     Ok(())
 }
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_projected_page_family_cluster_resolves_how_to_cluster_for_reference_page()
 -> TestResult {

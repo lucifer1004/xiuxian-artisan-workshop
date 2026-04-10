@@ -1,5 +1,5 @@
 //! Integration tests for deterministic docs-facing deep-wiki planner ranking.
-#![cfg(feature = "modelica")]
+#![cfg(feature = "julia")]
 
 use std::cmp::Reverse;
 use std::fs;
@@ -10,7 +10,7 @@ use xiuxian_wendao::analyzers::{DocsPlannerRankQuery, docs_planner_rank_from_con
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[cfg(feature = "modelica")]
+#[cfg(feature = "julia")]
 #[test]
 fn modelica_plugin_docs_planner_rank_executes_over_external_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
