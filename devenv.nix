@@ -7,6 +7,8 @@
 }:
 
 let
+  processModuleStamp = builtins.readFile ./nix/modules/process.nix;
+  processModuleStampHash = builtins.hashString "sha256" processModuleStamp;
   nixpkgs-latest = import inputs.nixpkgs-latest {
     system = pkgs.stdenv.hostPlatform.system;
     config = {
@@ -107,6 +109,7 @@ in
   # };
 
   enterShell = ''
+    # process-module-stamp: ${processModuleStampHash}
     export PATH="$DEVENV_ROOT/.devenv/profile/bin:$DEVENV_ROOT/.venv/bin:$PATH"
     export OLLAMA_MODELS="''${OLLAMA_MODELS:-''${PRJ_DATA_HOME:-$DEVENV_ROOT/.data}/models}"
     ${lib.optionalString (pkgs.stdenv.hostPlatform.isDarwin) ''

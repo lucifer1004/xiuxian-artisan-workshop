@@ -1,5 +1,5 @@
-use super::{LinkGraphIndex, PageIndexNode, PageIndexParent, SymbolRef};
 use super::pattern_symbols::extract_pattern_symbols;
+use super::{LinkGraphIndex, PageIndexNode, PageIndexParent, SymbolRef};
 use crate::link_graph::page_index::{
     DEFAULT_PAGE_INDEX_THINNING_TOKEN_THRESHOLD, build_page_index_tree, thin_page_index_tree,
 };

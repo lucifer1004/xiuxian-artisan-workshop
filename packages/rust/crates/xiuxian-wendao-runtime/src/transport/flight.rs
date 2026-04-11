@@ -4,6 +4,7 @@ use std::time::Duration;
 use arrow_flight::FlightDescriptor;
 use arrow_flight::client::FlightClient;
 use arrow_flight::encode::FlightDataEncoderBuilder;
+use arrow_flight::flight_service_client::FlightServiceClient as TonicFlightServiceClient;
 use arrow_schema::DataType;
 use futures::{TryStreamExt, stream};
 use tokio::sync::Mutex;
@@ -16,6 +17,8 @@ use super::query_contract::{
 };
 
 /// Lazy Arrow Flight client aligned to the workspace Arrow Flight transport line.
+pub(crate) const DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES: usize = 64 * 1024 * 1024;
+
 #[derive(Clone)]
 pub(crate) struct ArrowFlightTransportClient {
     base_url: String,
@@ -135,7 +138,10 @@ impl ArrowFlightTransportClient {
                     self.endpoint.clone().connect().await.map_err(|error| {
                         format!("failed to connect Arrow Flight endpoint: {error}")
                     })?;
-                let mut flight_client = FlightClient::new(channel);
+                let inner_client = TonicFlightServiceClient::new(channel)
+                    .max_encoding_message_size(DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES)
+                    .max_decoding_message_size(DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES);
+                let mut flight_client = FlightClient::new_from_inner(inner_client);
                 flight_client
                     .add_header(WENDAO_SCHEMA_VERSION_HEADER, self.schema_version.as_str())
                     .map_err(|error| {

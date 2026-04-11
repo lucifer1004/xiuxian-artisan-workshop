@@ -295,7 +295,7 @@ The currently landed Wendao slices are:
     for eligible routed published-Parquet queries from the request-scoped
     `SqlQuerySurface`, so routed SQL no longer opens the residual DataFusion
     query core after Parquet execution just to recover discovery metadata
-41. a bounded FlightSQL discovery-surface cutover now builds
+42. a bounded FlightSQL discovery-surface cutover now builds
     `CommandGetDbSchemas` and `CommandGetTables` from publication metadata
     plus logical-view contracts through one request-scoped `SqlQuerySurface`,
     so FlightSQL discovery no longer opens the residual DataFusion query core
@@ -1117,7 +1117,13 @@ Revisit this direction if:
     for eligible routed published-Parquet queries from the request-scoped
     `SqlQuerySurface`, so routed SQL no longer opens the residual DataFusion
     query core after Parquet execution just to recover discovery metadata
-40. broader performance gating and broader diagnostics pilots are still open
+40. a bounded shared-SQL execution cutover now uses one request-scoped
+    `SqlSurfaceAssembly` to register Parquet tables, logical views, and
+    catalog batches into a DuckDB local relation core in `duckdb` builds, so
+    non-routed shared SQL execution also stops using same-layer DataFusion on
+    the DuckDB production path; the explicit DataFusion query core remains
+    only as the non-`duckdb` baseline
+41. broader performance gating and broader diagnostics pilots are still open
 
 ### Phase 3: Qianji Pilot [future]
 

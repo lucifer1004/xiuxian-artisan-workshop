@@ -3,11 +3,13 @@
 //! Integration tests for `OpenAI` `/responses` transport execution.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use axum::Router;
+use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{StatusCode, header::CONTENT_TYPE};
 use axum::response::IntoResponse;
@@ -15,6 +17,7 @@ use axum::routing::post;
 use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
 use litellm_rs::core::types::message::{MessageContent, MessageRole};
 use litellm_rs::core::types::tools::{FunctionDefinition, Tool, ToolType};
+use serde_json::Value;
 use tokio::net::TcpListener;
 use xiuxian_llm::llm::providers::{
     execute_openai_responses_request, is_openai_like_stream_required_error_message,
@@ -37,6 +40,12 @@ struct MockSequenceState {
 struct DelayedResponseState {
     response: MockResponse,
     header_delay: Duration,
+}
+
+#[derive(Clone)]
+struct CapturedResponseState {
+    response: MockResponse,
+    requests: Arc<Mutex<Vec<Value>>>,
 }
 
 async fn responses(State(state): State<MockResponse>) -> impl IntoResponse {
@@ -68,6 +77,24 @@ async fn responses_sequence(State(state): State<MockSequenceState>) -> impl Into
 
 async fn delayed_responses(State(state): State<DelayedResponseState>) -> impl IntoResponse {
     tokio::time::sleep(state.header_delay).await;
+    (
+        state.response.status,
+        [(CONTENT_TYPE, state.response.content_type)],
+        state.response.body.to_string(),
+    )
+}
+
+async fn responses_with_capture(
+    State(state): State<CapturedResponseState>,
+    body: Bytes,
+) -> impl IntoResponse {
+    let payload = serde_json::from_slice::<Value>(&body)
+        .unwrap_or_else(|error| Value::String(format!("invalid_json:{error}")));
+    state
+        .requests
+        .lock()
+        .expect("capture lock should not be poisoned")
+        .push(payload);
     (
         state.response.status,
         [(CONTENT_TYPE, state.response.content_type)],
@@ -124,6 +151,24 @@ async fn spawn_mock_delayed_responses_server(
     Ok(format!("http://{addr}/v1/responses"))
 }
 
+async fn spawn_mock_captured_responses_server(
+    response: MockResponse,
+) -> Result<(String, Arc<Mutex<Vec<Value>>>)> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let app = Router::new()
+        .route("/v1/responses", post(responses_with_capture))
+        .with_state(CapturedResponseState {
+            response,
+            requests: Arc::clone(&requests),
+        });
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    Ok((format!("http://{addr}/v1/responses"), requests))
+}
+
 fn request_with_tool_alias() -> LiteChatRequest {
     LiteChatRequest {
         model: "gpt-5-codex".to_string(),
@@ -175,6 +220,64 @@ data: [DONE]"#,
         parsed.tool_calls[0].function.arguments,
         r#"{"scope":"all"}"#
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_openai_responses_request_sends_developer_role_in_payload() -> Result<()> {
+    let (endpoint, requests) = spawn_mock_captured_responses_server(MockResponse {
+        status: StatusCode::OK,
+        content_type: "text/event-stream",
+        body: r#"data: {"type":"response.output_item.done","item":{"type":"message","content":[{"type":"output_text","text":"pong"}]}}
+data: [DONE]"#,
+    })
+    .await?;
+
+    let request = LiteChatRequest {
+        model: "gpt-5-codex".to_string(),
+        messages: vec![
+            ChatMessage {
+                role: MessageRole::Developer,
+                content: Some(MessageContent::Text(
+                    "Prefer terse implementation-first answers.".to_string(),
+                )),
+                ..Default::default()
+            },
+            ChatMessage {
+                role: MessageRole::User,
+                content: Some(MessageContent::Text("hello".to_string())),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let parsed = execute_openai_responses_request(
+        &reqwest::Client::new(),
+        &endpoint,
+        Some("test-key"),
+        &request,
+    )
+    .await?;
+
+    assert_eq!(parsed.content.as_deref(), Some("pong"));
+    let captured = requests
+        .lock()
+        .expect("capture lock should not be poisoned")
+        .clone();
+    let payload = captured
+        .first()
+        .ok_or_else(|| anyhow!("expected a captured request payload"))?;
+    let input = payload["input"]
+        .as_array()
+        .ok_or_else(|| anyhow!("captured payload should include input array: {payload}"))?;
+
+    assert_eq!(input[0]["role"], serde_json::json!("developer"));
+    assert_eq!(
+        input[0]["content"],
+        serde_json::json!("Prefer terse implementation-first answers.")
+    );
+    assert_eq!(input[1]["role"], serde_json::json!("user"));
     Ok(())
 }
 

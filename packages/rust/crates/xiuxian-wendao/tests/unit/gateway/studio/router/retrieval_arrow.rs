@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use arrow::array::{StringArray, UInt64Array};
+use arrow::array::{Array, StringArray, UInt64Array};
 use arrow::ipc::reader::StreamReader;
 
 use crate::gateway::studio::router::retrieval_arrow::encode_retrieval_chunks_ipc;
@@ -20,6 +20,7 @@ fn retrieval_arrow_roundtrip_preserves_chunk_fields() {
             line_start: Some(1),
             line_end: Some(4),
             surface: Some(RetrievalChunkSurface::Section),
+            attributes: vec![("heading_path".to_string(), "Intro".to_string())],
         },
         RetrievalChunk {
             owner_id: "block:return:solve".to_string(),
@@ -32,6 +33,7 @@ fn retrieval_arrow_roundtrip_preserves_chunk_fields() {
             line_start: Some(22),
             line_end: Some(24),
             surface: Some(RetrievalChunkSurface::Block),
+            attributes: Vec::new(),
         },
     ];
 
@@ -72,4 +74,13 @@ fn retrieval_arrow_roundtrip_preserves_chunk_fields() {
     };
     assert_eq!(surfaces.value(0), "section");
     assert_eq!(surfaces.value(1), "block");
+
+    let Some(attributes_column) = batch.column_by_name("attributesJson") else {
+        panic!("attributesJson column");
+    };
+    let Some(attributes) = attributes_column.as_any().downcast_ref::<StringArray>() else {
+        panic!("attributesJson should be utf8");
+    };
+    assert_eq!(attributes.value(0), r#"[["heading_path","Intro"]]"#);
+    assert!(attributes.is_null(1));
 }

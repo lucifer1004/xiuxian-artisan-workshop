@@ -63,30 +63,31 @@ shared SQL plus FlightSQL lanes now select the execution kernel separately.
 
 The SQL lane lives under `src/search/queries/`:
 
-- `core/`: shared request-scoped `SearchEngineContext + SqlQuerySurface`
-  assembly, now named explicitly as the residual DataFusion query core
+- `core/`: shared request-scoped `SqlQuerySurface` assembly plus the explicit
+  non-`duckdb` DataFusion baseline core
 - `execution/`: transport-neutral SQL execution results, bounded published
   Parquet routing, and payload rendering
 - `provider/`: SQL Flight entrypoint, route execution, and app metadata
-- `registration/`: request-scoped DataFusion session setup, table/view
-  registration, and stable SQL naming
+- `registration/`: request-scoped SQL surface assembly, table or view builders,
+  and stable SQL naming
 - `tests/`: focused provider, catalog, information-schema, logical-view, and
   snapshot coverage
 
 The core registration flow is:
 
-1. open the shared request-scoped DataFusion query core
-2. create a request-scoped DataFusion `SearchEngineContext`
-3. register readable local and repo-backed corpora
-4. register stable logical views
-5. register Wendao discovery catalogs
-6. execute the client SQL query through the shared SQL seam; simple
-   single-table published-Parquet statements may route through
-   `ParquetQueryEngine`, which is DuckDB-owned in `duckdb` builds and remains
-   a DataFusion baseline only in non-`duckdb` builds; discovery,
-   logical-view, and multi-source queries still execute through the
-   DataFusion-led fallback
-7. return Arrow batches plus structured SQL app metadata
+1. build one request-scoped `SqlSurfaceAssembly`
+2. register readable local and repo-backed corpora, stable logical views, and
+   Wendao discovery catalogs from that shared assembly
+3. in `duckdb` builds, register those request-scoped tables, views, and
+   catalog batches into a DuckDB local relation core
+4. in non-`duckdb` builds, open the explicit request-scoped DataFusion query
+   core and register the same surfaces there as the baseline path
+5. execute the client SQL query through the shared SQL seam; simple
+   single-table published-Parquet statements may still route directly through
+   `ParquetQueryEngine`, and non-routed shared SQL now also executes through
+   the DuckDB core in `duckdb` builds; only the non-`duckdb` baseline keeps
+   shared execution on DataFusion
+6. return Arrow batches plus structured SQL app metadata
 
 The remaining FlightSQL discovery path is narrower now too.
 `CommandGetDbSchemas` and `CommandGetTables` now build one request-scoped
@@ -102,8 +103,11 @@ query resolves directly to published Parquet through `ParquetQueryEngine`, the
 shared SQL seam now builds result metadata from
 `SearchQueryService::open_sql_surface()` instead of opening the request-scoped
 DataFusion query core just to read back the same request-scoped SQL surface.
-Non-routed discovery, logical-view, and multi-source fallback still keep the
-residual DataFusion owner line unchanged.
+The non-routed shared-SQL path is narrower as well: in `duckdb` builds it now
+executes through a request-scoped DuckDB core assembled from the same
+`SqlSurfaceAssembly`, so discovery catalogs and logical views no longer keep a
+same-layer DataFusion execution role on the DuckDB production path. Only the
+non-`duckdb` baseline keeps the shared execution fallback on DataFusion.
 
 ## Stable SQL Objects
 
@@ -293,8 +297,10 @@ ORDER BY repo_id, name;
 - Expect simple single-table base-table statements over published corpora to
   be eligible for bounded `ParquetQueryEngine` routing, while discovery
   catalogs, logical views, and multi-source queries still stay on the shared
-  request-scoped SQL fallback. In `duckdb` builds that routed published
-  Parquet lane is now DuckDB-owned.
+  request-scoped SQL seam. In `duckdb` builds both the routed published
+  Parquet lane and the non-routed shared SQL execution lane are now
+  DuckDB-owned; only the non-`duckdb` baseline still executes them through
+  the residual DataFusion core.
 - Use the Wendao catalogs first when you need stable contract semantics such as
   `column_origin_kind` or logical-view source membership.
 - Use `information_schema` when you need portable SQL metadata queries.

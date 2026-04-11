@@ -46,8 +46,11 @@ downstream proof.
 - The `/api/health` response now also carries `X-Wendao-Process-Id`, and the
   managed startup path writes `WENDAO_GATEWAY_PIDFILE` so process-compose can
   compare the header against the owned pidfile before treating the gateway as
-  ready. The readiness probe also checks for `HTTP 200`, so a `503` response
-  with the correct header still fails closed.
+  ready. The `/api/health` body is the single readiness contract now: it
+  returns structured JSON with `ready`, `processId`, and plane metadata, and
+  the managed probe no longer guesses Flight readiness from an external
+  `GetFlightInfo -> 400` side effect. A `503` response with the correct header
+  still fails closed.
 - The Valkey launch contract is shared now: both `process-compose` and the
   standalone `just valkey-*` path go through `scripts/channel/valkey-launch.sh`,
   and health checks go through `scripts/channel/valkey-healthcheck.sh`, so the

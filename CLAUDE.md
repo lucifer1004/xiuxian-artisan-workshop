@@ -109,7 +109,7 @@ Tasks under an active strategic blueprint MUST strictly adhere to its architectu
 ### Holistic Evolution Workflow (Triple-Sync Protocol)
 
 1. **Blueprint Check**: Check if task falls under a strategic blueprint.
-2. **GTD Synchronization**: Update today's GTD (`docs/GTD/DAILY_YYYY_MM_DD.md`).
+2. **GTD Synchronization**: Update today's GTD (`$PRJ_CACHE_HOME/agent/GTD/DAILY_YYYY_MM_DD.md`).
 3. **ExecPlan Creation**: Create a formal plan (`$PRJ_CACHE_HOME/agent/execplans/<slug>.md`) referencing the blueprint.
 4. **Implementation**: Execute per the plan.
    Completed plans move to `$PRJ_CACHE_HOME/agent/execplans/archives/`; completed blueprints move to `$PRJ_CACHE_HOME/agent/blueprints/archives/` only after the full governed workstream closes.

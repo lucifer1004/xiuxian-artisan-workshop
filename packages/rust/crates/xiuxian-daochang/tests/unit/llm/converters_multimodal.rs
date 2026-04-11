@@ -127,3 +127,21 @@ fn litellm_converter_maps_tool_message_to_tool_result_part() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn litellm_converter_accepts_developer_role() -> TestResult {
+    let message = ChatMessage {
+        role: "developer".to_string(),
+        content: Some("Prefer concise answers.".to_string()),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+    };
+    let converted = chat_message_to_litellm_message(message)?;
+    assert!(matches!(converted.role, LiteMessageRole::Developer));
+    match converted.content {
+        Some(LiteMessageContent::Text(text)) => assert_eq!(text, "Prefer concise answers."),
+        other => panic!("expected developer text content, got {other:?}"),
+    }
+    Ok(())
+}

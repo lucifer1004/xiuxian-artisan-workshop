@@ -23,13 +23,17 @@ canonical parser families, and parser implementation rules in
 - [relation_semantics.md](relation_semantics.md): The difference between
   global `[[...]]` topology links, section-scoped property-drawer relations,
   local property scalar metadata, and the snapshot-backed regression contract.
+- [../06_roadmap/419_parser_substrate_separation.md](../06_roadmap/419_parser_substrate_separation.md):
+  Future-facing package split for shared syntax-only document parsing versus
+  Wendao-owned domain adapters.
 
 ## Current Canonical Parser Families
 
 - `src/parsers/markdown/`
 - `src/parsers/link_graph/query/`
 - `src/parsers/zhixing/tasks/`
-- `src/parsers/cargo/dependencies/`
+- `src/parsers/languages/rust/cargo/`
+- `src/parsers/languages/python/pyproject/`
 - `src/parsers/search/repo_code_query/`
 - `src/parsers/graph/persistence/`
 
@@ -47,13 +51,15 @@ canonical parser families, and parser implementation rules in
 7. How ordinary Markdown reference parsing stays parser-owned and comrak-backed
 8. How the narrower ordinary wikilink subset relates to the shared reference
    parser surface
+9. How shared syntax-only document parsing should be separated from
+   Wendao-owned domain adapters for cross-crate consumers
 
 :RELATIONS:
-:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[03_features/210_search_queries_architecture]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]]
+:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]], [[03_features/210_search_queries_architecture]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-05
+:LAST_SYNC: 2026-04-10
 :END:

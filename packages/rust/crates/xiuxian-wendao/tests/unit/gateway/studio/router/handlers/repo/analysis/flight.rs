@@ -1,6 +1,6 @@
 use xiuxian_vector::LanceArray;
 
-use crate::analyzers::{DocCoverageResult, DocRecord};
+use crate::analyzers::{DocCoverageResult, DocRecord, DocTargetRecord};
 use crate::gateway::studio::router::handlers::repo::analysis::flight::{
     build_repo_doc_coverage_flight_batch, build_repo_doc_coverage_flight_metadata,
 };
@@ -14,6 +14,13 @@ fn repo_doc_coverage_flight_batch_preserves_doc_rows() {
             title: "README".to_string(),
             path: "README.md".to_string(),
             format: Some("markdown".to_string()),
+            doc_target: Some(DocTargetRecord {
+                kind: "module".to_string(),
+                name: "GatewaySyncPkg".to_string(),
+                path: Some("GatewaySyncPkg".to_string()),
+                line_start: Some(1),
+                line_end: Some(12),
+            }),
         },
         DocRecord {
             repo_id: "gateway-sync".to_string(),
@@ -21,6 +28,7 @@ fn repo_doc_coverage_flight_batch_preserves_doc_rows() {
             title: "solve".to_string(),
             path: "docs/solve.md".to_string(),
             format: None,
+            doc_target: None,
         },
     ])
     .unwrap_or_else(|error| panic!("repo doc coverage batch should build: {error}"));
@@ -49,6 +57,30 @@ fn repo_doc_coverage_flight_batch_preserves_doc_rows() {
     };
     assert_eq!(formats.value(0), "markdown");
     assert!(formats.is_null(1));
+
+    let Some(target_name_column) = batch.column_by_name("targetName") else {
+        panic!("targetName column");
+    };
+    let Some(target_names) = target_name_column
+        .as_any()
+        .downcast_ref::<xiuxian_vector::LanceStringArray>()
+    else {
+        panic!("targetName should be utf8");
+    };
+    assert_eq!(target_names.value(0), "GatewaySyncPkg");
+    assert!(target_names.is_null(1));
+
+    let Some(target_line_start_column) = batch.column_by_name("targetLineStart") else {
+        panic!("targetLineStart column");
+    };
+    let Some(target_line_starts) = target_line_start_column
+        .as_any()
+        .downcast_ref::<xiuxian_vector::LanceInt32Array>()
+    else {
+        panic!("targetLineStart should be int32");
+    };
+    assert_eq!(target_line_starts.value(0), 1);
+    assert!(target_line_starts.is_null(1));
 }
 
 #[test]

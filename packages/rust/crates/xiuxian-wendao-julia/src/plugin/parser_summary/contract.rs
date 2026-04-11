@@ -32,6 +32,10 @@ pub(crate) const JULIA_PARSER_SUMMARY_ITEM_KIND_COLUMN: &str = "item_kind";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_SIGNATURE_COLUMN: &str = "item_signature";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TARGET_KIND_COLUMN: &str = "item_target_kind";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TARGET_NAME_COLUMN: &str = "item_target_name";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TARGET_PATH_COLUMN: &str = "item_target_path";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TARGET_LINE_START_COLUMN: &str =
+    "item_target_line_start";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TARGET_LINE_END_COLUMN: &str = "item_target_line_end";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_DEPENDENCY_KIND_COLUMN: &str = "item_dependency_kind";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_DEPENDENCY_FORM_COLUMN: &str = "item_dependency_form";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_DEPENDENCY_TARGET_COLUMN: &str =
@@ -51,6 +55,39 @@ pub(crate) const JULIA_PARSER_SUMMARY_ITEM_CONTENT_COLUMN: &str = "item_content"
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_REEXPORTED_COLUMN: &str = "item_reexported";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PATH_COLUMN: &str = "item_path";
 pub(crate) const JULIA_PARSER_SUMMARY_ITEM_BINDING_KIND_COLUMN: &str = "item_binding_kind";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_MODULE_NAME_COLUMN: &str = "item_module_name";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_MODULE_PATH_COLUMN: &str = "item_module_path";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_OWNER_NAME_COLUMN: &str = "item_owner_name";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_OWNER_KIND_COLUMN: &str = "item_owner_kind";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_OWNER_PATH_COLUMN: &str = "item_owner_path";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TOP_LEVEL_COLUMN: &str = "item_top_level";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_LINE_START_COLUMN: &str = "item_line_start";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_LINE_END_COLUMN: &str = "item_line_end";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TYPE_KIND_COLUMN: &str = "item_type_kind";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TYPE_PARAMETERS_COLUMN: &str = "item_type_parameters";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_TYPE_SUPERTYPE_COLUMN: &str = "item_type_supertype";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PRIMITIVE_BITS_COLUMN: &str = "item_primitive_bits";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PARAMETER_KIND_COLUMN: &str = "item_parameter_kind";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PARAMETER_TYPE_NAME_COLUMN: &str =
+    "item_parameter_type_name";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PARAMETER_DEFAULT_VALUE_COLUMN: &str =
+    "item_parameter_default_value";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_TYPED_COLUMN: &str =
+    "item_parameter_is_typed";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_DEFAULTED_COLUMN: &str =
+    "item_parameter_is_defaulted";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_VARARG_COLUMN: &str =
+    "item_parameter_is_vararg";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_FUNCTION_POSITIONAL_ARITY_COLUMN: &str =
+    "item_function_positional_arity";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_FUNCTION_KEYWORD_ARITY_COLUMN: &str =
+    "item_function_keyword_arity";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_FUNCTION_HAS_VARARGS_COLUMN: &str =
+    "item_function_has_varargs";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_FUNCTION_WHERE_PARAMS_COLUMN: &str =
+    "item_function_where_params";
+pub(crate) const JULIA_PARSER_SUMMARY_ITEM_FUNCTION_RETURN_TYPE_COLUMN: &str =
+    "item_function_return_type";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct JuliaParserSummaryRequestRow {
@@ -76,6 +113,9 @@ pub(crate) struct JuliaParserSummaryResponseRow {
     pub(crate) item_signature: Option<String>,
     pub(crate) item_target_kind: Option<String>,
     pub(crate) item_target_name: Option<String>,
+    pub(crate) item_target_path: Option<String>,
+    pub(crate) item_target_line_start: Option<i64>,
+    pub(crate) item_target_line_end: Option<i64>,
     pub(crate) item_dependency_kind: Option<String>,
     pub(crate) item_dependency_form: Option<String>,
     pub(crate) item_dependency_target: Option<String>,
@@ -89,6 +129,29 @@ pub(crate) struct JuliaParserSummaryResponseRow {
     pub(crate) item_reexported: Option<bool>,
     pub(crate) item_path: Option<String>,
     pub(crate) item_binding_kind: Option<String>,
+    pub(crate) item_module_name: Option<String>,
+    pub(crate) item_module_path: Option<String>,
+    pub(crate) item_owner_name: Option<String>,
+    pub(crate) item_owner_kind: Option<String>,
+    pub(crate) item_owner_path: Option<String>,
+    pub(crate) item_top_level: Option<bool>,
+    pub(crate) item_line_start: Option<i64>,
+    pub(crate) item_line_end: Option<i64>,
+    pub(crate) item_type_kind: Option<String>,
+    pub(crate) item_type_parameters: Option<String>,
+    pub(crate) item_type_supertype: Option<String>,
+    pub(crate) item_primitive_bits: Option<i32>,
+    pub(crate) item_parameter_kind: Option<String>,
+    pub(crate) item_parameter_type_name: Option<String>,
+    pub(crate) item_parameter_default_value: Option<String>,
+    pub(crate) item_parameter_is_typed: Option<bool>,
+    pub(crate) item_parameter_is_defaulted: Option<bool>,
+    pub(crate) item_parameter_is_vararg: Option<bool>,
+    pub(crate) item_function_positional_arity: Option<i32>,
+    pub(crate) item_function_keyword_arity: Option<i32>,
+    pub(crate) item_function_has_varargs: Option<bool>,
+    pub(crate) item_function_where_params: Option<String>,
+    pub(crate) item_function_return_type: Option<String>,
 }
 
 pub(crate) fn build_julia_parser_summary_request_batch(
@@ -191,6 +254,21 @@ pub(crate) fn validate_julia_parser_summary_response_batches(
             JULIA_PARSER_SUMMARY_ITEM_TARGET_NAME_COLUMN,
             "response",
         )?;
+        let _item_target_path = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TARGET_PATH_COLUMN,
+            "response",
+        )?;
+        let _item_target_line_start = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TARGET_LINE_START_COLUMN,
+            "response",
+        )?;
+        let _item_target_line_end = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TARGET_LINE_END_COLUMN,
+            "response",
+        )?;
         let _item_dependency_kind = optional_utf8_values(
             batch,
             JULIA_PARSER_SUMMARY_ITEM_DEPENDENCY_KIND_COLUMN,
@@ -250,6 +328,121 @@ pub(crate) fn validate_julia_parser_summary_response_batches(
             JULIA_PARSER_SUMMARY_ITEM_BINDING_KIND_COLUMN,
             "response",
         )?;
+        let _item_module_name = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_MODULE_NAME_COLUMN,
+            "response",
+        )?;
+        let _item_module_path = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_MODULE_PATH_COLUMN,
+            "response",
+        )?;
+        let _item_owner_name = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_OWNER_NAME_COLUMN,
+            "response",
+        )?;
+        let _item_owner_kind = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_OWNER_KIND_COLUMN,
+            "response",
+        )?;
+        let _item_owner_path = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_OWNER_PATH_COLUMN,
+            "response",
+        )?;
+        let _item_top_level = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TOP_LEVEL_COLUMN,
+            "response",
+        )?;
+        let _item_line_start = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_LINE_START_COLUMN,
+            "response",
+        )?;
+        let _item_line_end = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_LINE_END_COLUMN,
+            "response",
+        )?;
+        let _item_type_kind = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TYPE_KIND_COLUMN,
+            "response",
+        )?;
+        let _item_type_parameters = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TYPE_PARAMETERS_COLUMN,
+            "response",
+        )?;
+        let _item_type_supertype = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TYPE_SUPERTYPE_COLUMN,
+            "response",
+        )?;
+        let _item_primitive_bits = optional_int32_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PRIMITIVE_BITS_COLUMN,
+            "response",
+        )?;
+        let _item_parameter_kind = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_KIND_COLUMN,
+            "response",
+        )?;
+        let _item_parameter_type_name = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_TYPE_NAME_COLUMN,
+            "response",
+        )?;
+        let _item_parameter_default_value = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_DEFAULT_VALUE_COLUMN,
+            "response",
+        )?;
+        let _item_parameter_is_typed = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_TYPED_COLUMN,
+            "response",
+        )?;
+        let _item_parameter_is_defaulted = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_DEFAULTED_COLUMN,
+            "response",
+        )?;
+        let _item_parameter_is_vararg = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_VARARG_COLUMN,
+            "response",
+        )?;
+        let _item_function_positional_arity = optional_int32_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_POSITIONAL_ARITY_COLUMN,
+            "response",
+        )?;
+        let _item_function_keyword_arity = optional_int32_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_KEYWORD_ARITY_COLUMN,
+            "response",
+        )?;
+        let _item_function_has_varargs = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_HAS_VARARGS_COLUMN,
+            "response",
+        )?;
+        let _item_function_where_params = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_WHERE_PARAMS_COLUMN,
+            "response",
+        )?;
+        let _item_function_return_type = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_RETURN_TYPE_COLUMN,
+            "response",
+        )?;
     }
 
     Ok(())
@@ -297,6 +490,21 @@ pub(crate) fn decode_julia_parser_summary_response_rows(
         let item_target_name = optional_utf8_values(
             batch,
             JULIA_PARSER_SUMMARY_ITEM_TARGET_NAME_COLUMN,
+            "response",
+        )?;
+        let item_target_path = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TARGET_PATH_COLUMN,
+            "response",
+        )?;
+        let item_target_line_start = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TARGET_LINE_START_COLUMN,
+            "response",
+        )?;
+        let item_target_line_end = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TARGET_LINE_END_COLUMN,
             "response",
         )?;
         let item_dependency_kind = optional_utf8_values(
@@ -358,6 +566,121 @@ pub(crate) fn decode_julia_parser_summary_response_rows(
             JULIA_PARSER_SUMMARY_ITEM_BINDING_KIND_COLUMN,
             "response",
         )?;
+        let item_module_name = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_MODULE_NAME_COLUMN,
+            "response",
+        )?;
+        let item_module_path = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_MODULE_PATH_COLUMN,
+            "response",
+        )?;
+        let item_owner_name = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_OWNER_NAME_COLUMN,
+            "response",
+        )?;
+        let item_owner_kind = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_OWNER_KIND_COLUMN,
+            "response",
+        )?;
+        let item_owner_path = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_OWNER_PATH_COLUMN,
+            "response",
+        )?;
+        let item_top_level = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TOP_LEVEL_COLUMN,
+            "response",
+        )?;
+        let item_line_start = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_LINE_START_COLUMN,
+            "response",
+        )?;
+        let item_line_end = optional_int_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_LINE_END_COLUMN,
+            "response",
+        )?;
+        let item_type_kind = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TYPE_KIND_COLUMN,
+            "response",
+        )?;
+        let item_type_parameters = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TYPE_PARAMETERS_COLUMN,
+            "response",
+        )?;
+        let item_type_supertype = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_TYPE_SUPERTYPE_COLUMN,
+            "response",
+        )?;
+        let item_primitive_bits = optional_int32_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PRIMITIVE_BITS_COLUMN,
+            "response",
+        )?;
+        let item_parameter_kind = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_KIND_COLUMN,
+            "response",
+        )?;
+        let item_parameter_type_name = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_TYPE_NAME_COLUMN,
+            "response",
+        )?;
+        let item_parameter_default_value = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_DEFAULT_VALUE_COLUMN,
+            "response",
+        )?;
+        let item_parameter_is_typed = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_TYPED_COLUMN,
+            "response",
+        )?;
+        let item_parameter_is_defaulted = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_DEFAULTED_COLUMN,
+            "response",
+        )?;
+        let item_parameter_is_vararg = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_PARAMETER_IS_VARARG_COLUMN,
+            "response",
+        )?;
+        let item_function_positional_arity = optional_int32_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_POSITIONAL_ARITY_COLUMN,
+            "response",
+        )?;
+        let item_function_keyword_arity = optional_int32_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_KEYWORD_ARITY_COLUMN,
+            "response",
+        )?;
+        let item_function_has_varargs = optional_bool_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_HAS_VARARGS_COLUMN,
+            "response",
+        )?;
+        let item_function_where_params = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_WHERE_PARAMS_COLUMN,
+            "response",
+        )?;
+        let item_function_return_type = optional_utf8_values_or_missing(
+            batch,
+            JULIA_PARSER_SUMMARY_ITEM_FUNCTION_RETURN_TYPE_COLUMN,
+            "response",
+        )?;
 
         for row_index in 0..batch.num_rows() {
             rows.push(JuliaParserSummaryResponseRow {
@@ -376,6 +699,9 @@ pub(crate) fn decode_julia_parser_summary_response_rows(
                 item_signature: item_signature[row_index].clone(),
                 item_target_kind: item_target_kind[row_index].clone(),
                 item_target_name: item_target_name[row_index].clone(),
+                item_target_path: item_target_path[row_index].clone(),
+                item_target_line_start: item_target_line_start[row_index],
+                item_target_line_end: item_target_line_end[row_index],
                 item_dependency_kind: item_dependency_kind[row_index].clone(),
                 item_dependency_form: item_dependency_form[row_index].clone(),
                 item_dependency_target: item_dependency_target[row_index].clone(),
@@ -389,6 +715,29 @@ pub(crate) fn decode_julia_parser_summary_response_rows(
                 item_reexported: item_reexported[row_index],
                 item_path: item_path[row_index].clone(),
                 item_binding_kind: item_binding_kind[row_index].clone(),
+                item_module_name: item_module_name[row_index].clone(),
+                item_module_path: item_module_path[row_index].clone(),
+                item_owner_name: item_owner_name[row_index].clone(),
+                item_owner_kind: item_owner_kind[row_index].clone(),
+                item_owner_path: item_owner_path[row_index].clone(),
+                item_top_level: item_top_level[row_index],
+                item_line_start: item_line_start[row_index],
+                item_line_end: item_line_end[row_index],
+                item_type_kind: item_type_kind[row_index].clone(),
+                item_type_parameters: item_type_parameters[row_index].clone(),
+                item_type_supertype: item_type_supertype[row_index].clone(),
+                item_primitive_bits: item_primitive_bits[row_index],
+                item_parameter_kind: item_parameter_kind[row_index].clone(),
+                item_parameter_type_name: item_parameter_type_name[row_index].clone(),
+                item_parameter_default_value: item_parameter_default_value[row_index].clone(),
+                item_parameter_is_typed: item_parameter_is_typed[row_index],
+                item_parameter_is_defaulted: item_parameter_is_defaulted[row_index],
+                item_parameter_is_vararg: item_parameter_is_vararg[row_index],
+                item_function_positional_arity: item_function_positional_arity[row_index],
+                item_function_keyword_arity: item_function_keyword_arity[row_index],
+                item_function_has_varargs: item_function_has_varargs[row_index],
+                item_function_where_params: item_function_where_params[row_index].clone(),
+                item_function_return_type: item_function_return_type[row_index].clone(),
             });
         }
     }
@@ -475,6 +824,9 @@ pub(crate) fn decode_julia_parser_file_summary(
             name: name.clone(),
             kind: map_symbol_kind(row.item_kind.as_deref(), row.item_binding_kind.as_deref()),
             signature: row.item_signature.clone(),
+            line_start: normalize_line_number(row.item_line_start, "item_line_start")?,
+            line_end: normalize_line_number(row.item_line_end, "item_line_end")?,
+            attributes: build_symbol_attributes(row),
         };
         match symbol_map.get(&name) {
             Some(existing) if symbol_kind_rank(existing.kind) > symbol_kind_rank(symbol.kind) => {}
@@ -487,18 +839,45 @@ pub(crate) fn decode_julia_parser_file_summary(
     let docstrings = rows
         .iter()
         .filter(|row| row.item_group.as_deref() == Some("docstring"))
-        .filter_map(|row| {
-            Some(JuliaParserDocAttachment {
-                target_name: row
-                    .item_target_name
-                    .as_ref()
-                    .or(row.item_name.as_ref())?
-                    .clone(),
+        .filter(|row| {
+            row.item_target_name.is_some() || row.item_name.is_some() && row.item_content.is_some()
+        })
+        .map(|row| {
+            let target_name = row
+                .item_target_name
+                .as_ref()
+                .or(row.item_name.as_ref())
+                .ok_or_else(|| {
+                    parser_summary_contract_error(
+                        "response",
+                        "parser-summary docstring row is missing target name".to_string(),
+                    )
+                })?
+                .clone();
+            let content = row.item_content.as_ref().ok_or_else(|| {
+                parser_summary_contract_error(
+                    "response",
+                    format!(
+                        "parser-summary docstring row for `{target_name}` is missing `item_content`"
+                    ),
+                )
+            })?;
+            Ok(JuliaParserDocAttachment {
+                target_name,
                 target_kind: map_doc_target_kind(row.item_target_kind.as_deref()),
-                content: row.item_content.as_ref()?.clone(),
+                target_path: row.item_target_path.clone(),
+                target_line_start: normalize_line_number(
+                    row.item_target_line_start,
+                    "item_target_line_start",
+                )?,
+                target_line_end: normalize_line_number(
+                    row.item_target_line_end,
+                    "item_target_line_end",
+                )?,
+                content: content.clone(),
             })
         })
-        .collect::<BTreeSet<_>>()
+        .collect::<Result<BTreeSet<_>, _>>()?
         .into_iter()
         .collect::<Vec<_>>();
 
@@ -534,6 +913,153 @@ pub(crate) fn decode_julia_parser_root_summary(
         docstrings: summary.docstrings,
         includes: summary.includes,
     })
+}
+
+fn build_symbol_attributes(row: &JuliaParserSummaryResponseRow) -> BTreeMap<String, String> {
+    let mut attributes = BTreeMap::new();
+
+    insert_text_attribute(&mut attributes, "parser_kind", row.item_kind.as_ref());
+    insert_text_attribute(&mut attributes, "module_kind", row.module_kind.as_ref());
+    insert_text_attribute(
+        &mut attributes,
+        "binding_kind",
+        row.item_binding_kind.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "module_name",
+        row.item_module_name.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "module_path",
+        row.item_module_path.as_ref(),
+    );
+    insert_text_attribute(&mut attributes, "owner_name", row.item_owner_name.as_ref());
+    insert_text_attribute(&mut attributes, "owner_kind", row.item_owner_kind.as_ref());
+    insert_text_attribute(&mut attributes, "owner_path", row.item_owner_path.as_ref());
+    insert_text_attribute(&mut attributes, "type_kind", row.item_type_kind.as_ref());
+    insert_text_attribute(
+        &mut attributes,
+        "type_parameters",
+        row.item_type_parameters.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "type_supertype",
+        row.item_type_supertype.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "parameter_kind",
+        row.item_parameter_kind.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "parameter_type_name",
+        row.item_parameter_type_name.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "parameter_default_value",
+        row.item_parameter_default_value.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "function_where_params",
+        row.item_function_where_params.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "function_return_type",
+        row.item_function_return_type.as_ref(),
+    );
+    insert_bool_attribute(&mut attributes, "top_level", row.item_top_level);
+    insert_bool_attribute(
+        &mut attributes,
+        "parameter_is_typed",
+        row.item_parameter_is_typed,
+    );
+    insert_bool_attribute(
+        &mut attributes,
+        "parameter_is_defaulted",
+        row.item_parameter_is_defaulted,
+    );
+    insert_bool_attribute(
+        &mut attributes,
+        "parameter_is_vararg",
+        row.item_parameter_is_vararg,
+    );
+    insert_bool_attribute(
+        &mut attributes,
+        "function_has_varargs",
+        row.item_function_has_varargs,
+    );
+    insert_int_attribute(
+        &mut attributes,
+        "primitive_bits",
+        row.item_primitive_bits.map(i64::from),
+    );
+    insert_int_attribute(
+        &mut attributes,
+        "function_positional_arity",
+        row.item_function_positional_arity.map(i64::from),
+    );
+    insert_int_attribute(
+        &mut attributes,
+        "function_keyword_arity",
+        row.item_function_keyword_arity.map(i64::from),
+    );
+
+    attributes
+}
+
+fn insert_text_attribute(
+    attributes: &mut BTreeMap<String, String>,
+    key: &str,
+    value: Option<&String>,
+) {
+    let Some(value) = value
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return;
+    };
+    attributes.insert(key.to_string(), value.to_string());
+}
+
+fn insert_bool_attribute(
+    attributes: &mut BTreeMap<String, String>,
+    key: &str,
+    value: Option<bool>,
+) {
+    if let Some(value) = value {
+        attributes.insert(key.to_string(), value.to_string());
+    }
+}
+
+fn insert_int_attribute(attributes: &mut BTreeMap<String, String>, key: &str, value: Option<i64>) {
+    if let Some(value) = value {
+        attributes.insert(key.to_string(), value.to_string());
+    }
+}
+
+fn normalize_line_number(
+    value: Option<i64>,
+    field_name: &str,
+) -> Result<Option<usize>, RepoIntelligenceError> {
+    value
+        .map(|value| {
+            usize::try_from(value).map_err(|error| {
+                parser_summary_contract_error(
+                    "response",
+                    format!(
+                        "parser-summary column `{field_name}` cannot narrow `{value}` into usize: {error}"
+                    ),
+                )
+            })
+        })
+        .transpose()
 }
 
 fn response_context<'a>(
@@ -773,6 +1299,17 @@ fn optional_utf8_values(
     }
 }
 
+fn optional_utf8_values_or_missing(
+    batch: &RecordBatch,
+    field_name: &str,
+    contract_side: &str,
+) -> Result<Vec<Option<String>>, RepoIntelligenceError> {
+    if batch.column_by_name(field_name).is_none() {
+        return Ok(vec![None; batch.num_rows()]);
+    }
+    optional_utf8_values(batch, field_name, contract_side)
+}
+
 fn required_bool_values(
     batch: &RecordBatch,
     field_name: &str,
@@ -830,6 +1367,85 @@ fn optional_bool_values(
             ),
         )),
     }
+}
+
+fn optional_bool_values_or_missing(
+    batch: &RecordBatch,
+    field_name: &str,
+    contract_side: &str,
+) -> Result<Vec<Option<bool>>, RepoIntelligenceError> {
+    if batch.column_by_name(field_name).is_none() {
+        return Ok(vec![None; batch.num_rows()]);
+    }
+    optional_bool_values(batch, field_name, contract_side)
+}
+
+fn optional_int_values(
+    batch: &RecordBatch,
+    field_name: &str,
+    contract_side: &str,
+) -> Result<Vec<Option<i64>>, RepoIntelligenceError> {
+    let column = column_by_name(batch, field_name, contract_side)?;
+    match column.data_type() {
+        DataType::Int32 => {
+            let array = column
+                .as_any()
+                .downcast_ref::<Int32Array>()
+                .ok_or_else(|| {
+                    parser_summary_contract_error(
+                        contract_side,
+                        format!("parser-summary column `{field_name}` must decode as Int32"),
+                    )
+                })?;
+            Ok((0..array.len())
+                .map(|row_index| {
+                    if array.is_null(row_index) {
+                        None
+                    } else {
+                        Some(i64::from(array.value(row_index)))
+                    }
+                })
+                .collect())
+        }
+        DataType::Int64 => {
+            let array = column
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .ok_or_else(|| {
+                    parser_summary_contract_error(
+                        contract_side,
+                        format!("parser-summary column `{field_name}` must decode as Int64"),
+                    )
+                })?;
+            Ok((0..array.len())
+                .map(|row_index| {
+                    if array.is_null(row_index) {
+                        None
+                    } else {
+                        Some(array.value(row_index))
+                    }
+                })
+                .collect())
+        }
+        DataType::Null => Ok(vec![None; column.len()]),
+        _ => Err(parser_summary_contract_error(
+            contract_side,
+            format!(
+                "parser-summary column `{field_name}` must decode as a nullable Int32 or Int64 Arrow column"
+            ),
+        )),
+    }
+}
+
+fn optional_int_values_or_missing(
+    batch: &RecordBatch,
+    field_name: &str,
+    contract_side: &str,
+) -> Result<Vec<Option<i64>>, RepoIntelligenceError> {
+    if batch.column_by_name(field_name).is_none() {
+        return Ok(vec![None; batch.num_rows()]);
+    }
+    optional_int_values(batch, field_name, contract_side)
 }
 
 fn optional_int32_values(
@@ -896,6 +1512,17 @@ fn optional_int32_values(
             ),
         )),
     }
+}
+
+fn optional_int32_values_or_missing(
+    batch: &RecordBatch,
+    field_name: &str,
+    contract_side: &str,
+) -> Result<Vec<Option<i32>>, RepoIntelligenceError> {
+    if batch.column_by_name(field_name).is_none() {
+        return Ok(vec![None; batch.num_rows()]);
+    }
+    optional_int32_values(batch, field_name, contract_side)
 }
 
 fn parser_summary_request_error(message: String) -> RepoIntelligenceError {

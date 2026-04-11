@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::analyzers::saliency::compute_repository_saliency;
-use crate::analyzers::service::{
+use crate::analyzers::service::helpers::{
     documents_backlink_lookup, example_relation_lookup, infer_ecosystem, projection_page_lookup,
 };
 use crate::analyzers::{RepoBacklinkItem, RepositoryAnalysisOutput};

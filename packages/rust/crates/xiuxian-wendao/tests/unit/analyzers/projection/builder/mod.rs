@@ -10,6 +10,7 @@ fn doc_projection_kind_honors_reference_format_without_symbol_targets() {
         title: "Solve Linear Systems".to_string(),
         path: "docs/solve.md".to_string(),
         format: Some("reference".to_string()),
+        doc_target: None,
     };
 
     assert_eq!(
@@ -26,6 +27,7 @@ fn doc_projection_kind_upgrades_explanation_docs_when_symbol_anchored() {
         title: "Solver Notes".to_string(),
         path: "docs/solver.md".to_string(),
         format: None,
+        doc_target: None,
     };
 
     let targets = TargetAnchors {

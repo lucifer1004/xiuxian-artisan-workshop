@@ -17,6 +17,11 @@ pub(crate) async fn health() -> Response {
     gateway_health_response(gateway_pidfile_from_env().as_deref())
 }
 
+#[cfg(feature = "zhenfa-router")]
+const GATEWAY_FLIGHT_PLANE_STATUS: &str = "mounted";
+#[cfg(not(feature = "zhenfa-router"))]
+const GATEWAY_FLIGHT_PLANE_STATUS: &str = "disabled";
+
 pub(crate) fn gateway_pidfile_from_env() -> Option<PathBuf> {
     std::env::var_os(GATEWAY_PIDFILE_ENV)
         .map(PathBuf::from)
@@ -27,31 +32,63 @@ pub(crate) fn gateway_health_response(pidfile: Option<&Path>) -> Response {
     let process_id = std::process::id();
     let mut response = match pidfile {
         Some(pidfile) => match gateway_pidfile_process_id(pidfile) {
-            Ok(expected_process_id) if expected_process_id == process_id => {
-                Json("ok").into_response()
-            }
+            Ok(expected_process_id) if expected_process_id == process_id => Json(json!({
+                "status": "ok",
+                "ready": true,
+                "service": "wendao-gateway",
+                "processId": process_id,
+                "planes": {
+                    "http": "ready",
+                    "flight": GATEWAY_FLIGHT_PLANE_STATUS,
+                },
+            }))
+            .into_response(),
             Ok(expected_process_id) => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({
+                    "status": "degraded",
+                    "ready": false,
+                    "service": "wendao-gateway",
                     "error": "gateway is not ready",
                     "pidfile": pidfile.display().to_string(),
                     "expectedPid": expected_process_id,
                     "processId": process_id,
+                    "planes": {
+                        "http": "ready",
+                        "flight": GATEWAY_FLIGHT_PLANE_STATUS,
+                    },
                 })),
             )
                 .into_response(),
             Err(details) => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({
+                    "status": "degraded",
+                    "ready": false,
+                    "service": "wendao-gateway",
                     "error": "gateway is not ready",
                     "pidfile": pidfile.display().to_string(),
                     "details": details,
                     "processId": process_id,
+                    "planes": {
+                        "http": "ready",
+                        "flight": GATEWAY_FLIGHT_PLANE_STATUS,
+                    },
                 })),
             )
                 .into_response(),
         },
-        None => Json("ok").into_response(),
+        None => Json(json!({
+            "status": "ok",
+            "ready": true,
+            "service": "wendao-gateway",
+            "processId": process_id,
+            "planes": {
+                "http": "ready",
+                "flight": GATEWAY_FLIGHT_PLANE_STATUS,
+            },
+        }))
+        .into_response(),
     };
 
     response.headers_mut().insert(

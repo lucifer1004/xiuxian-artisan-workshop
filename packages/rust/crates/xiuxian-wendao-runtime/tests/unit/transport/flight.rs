@@ -1,4 +1,4 @@
-use super::ArrowFlightTransportClient;
+use super::{ArrowFlightTransportClient, DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES};
 use crate::transport::{
     REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
     REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN, RERANK_ROUTE, WendaoFlightService,
@@ -60,6 +60,48 @@ fn build_rerank_request_batch() -> EngineRecordBatch {
         ],
     )
     .unwrap_or_else(|error| panic!("request batch should build: {error}"))
+}
+
+fn build_large_rerank_request_batch() -> EngineRecordBatch {
+    use arrow_array::types::Float32Type;
+    use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
+    use arrow_schema::{DataType, Field, Schema};
+
+    let large_doc_id = "doc-".to_string() + &"x".repeat(5 * 1024 * 1024);
+
+    RecordBatch::try_new(
+        Arc::new(Schema::new(vec![
+            Field::new("doc_id", DataType::Utf8, false),
+            Field::new("vector_score", DataType::Float32, false),
+            Field::new(
+                "embedding",
+                DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 3),
+                false,
+            ),
+            Field::new(
+                "query_embedding",
+                DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 3),
+                false,
+            ),
+        ])),
+        vec![
+            Arc::new(StringArray::from(vec![large_doc_id])),
+            Arc::new(Float32Array::from(vec![0.5_f32])),
+            Arc::new(
+                FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                    vec![Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)])],
+                    3,
+                ),
+            ),
+            Arc::new(
+                FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                    vec![Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)])],
+                    3,
+                ),
+            ),
+        ],
+    )
+    .unwrap_or_else(|error| panic!("large request batch should build: {error}"))
 }
 
 #[tokio::test]
@@ -150,6 +192,70 @@ async fn flight_transport_client_roundtrips_batches_over_lance_arrow_line() {
     assert_eq!(client.route(), RERANK_ROUTE);
     assert_eq!(client.schema_version(), "v2");
     assert_eq!(client.timeout().as_secs(), 5);
+
+    server.abort();
+}
+
+#[tokio::test]
+async fn flight_transport_client_accepts_responses_larger_than_default_tonic_limit() {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap_or_else(|error| panic!("listener should bind: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| panic!("listener should expose a local address: {error}"));
+    let query_response_batch = LanceRecordBatch::try_new(
+        Arc::new(LanceSchema::new(vec![
+            LanceField::new(REPO_SEARCH_DOC_ID_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(REPO_SEARCH_PATH_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(REPO_SEARCH_TITLE_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(REPO_SEARCH_SCORE_COLUMN, LanceDataType::Float64, false),
+            LanceField::new(REPO_SEARCH_LANGUAGE_COLUMN, LanceDataType::Utf8, false),
+        ])),
+        vec![
+            Arc::new(StringArray::from(vec!["doc-1"])),
+            Arc::new(StringArray::from(vec!["src/lib.rs"])),
+            Arc::new(StringArray::from(vec!["Repo Search Result"])),
+            Arc::new(LanceFloat64Array::from(vec![0.91_f64])),
+            Arc::new(StringArray::from(vec!["rust"])),
+        ],
+    )
+    .unwrap_or_else(|error| panic!("query response batch should build: {error}"));
+    let service = WendaoFlightService::new("v2", query_response_batch, 3)
+        .unwrap_or_else(|error| panic!("runtime-owned Flight service should build: {error}"));
+    let server = tokio::spawn(async move {
+        Server::builder()
+            .add_service(
+                FlightServiceServer::new(service)
+                    .max_decoding_message_size(DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES),
+            )
+            .serve_with_incoming(TcpListenerStream::new(listener))
+            .await
+            .unwrap_or_else(|error| panic!("mock Flight server should serve: {error}"));
+    });
+
+    let client = ArrowFlightTransportClient::new(
+        format!("http://{address}"),
+        RERANK_ROUTE,
+        "v2",
+        Duration::from_secs(5),
+    )
+    .unwrap_or_else(|error| panic!("flight client should build: {error}"));
+    let request_batch = build_large_rerank_request_batch();
+    let response_batches = client
+        .process_batch(&request_batch)
+        .await
+        .unwrap_or_else(|error| panic!("large flight roundtrip should succeed: {error}"));
+    let lance_response_batches =
+        engine_batches_to_lance_batches(&response_batches).unwrap_or_else(|error| {
+            panic!("response batches should convert onto Lance Arrow: {error}")
+        });
+
+    let doc_ids = lance_response_batches[0]
+        .column_by_name("doc_id")
+        .and_then(|column| column.as_any().downcast_ref::<StringArray>())
+        .unwrap_or_else(|| panic!("response doc_id column should decode as Utf8"));
+    assert!(doc_ids.value(0).len() > 4 * 1024 * 1024);
 
     server.abort();
 }

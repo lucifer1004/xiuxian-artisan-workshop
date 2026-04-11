@@ -19,12 +19,16 @@ PORT="${1:-${VALKEY_PORT:-${DEFAULT_PORT}}}"
 HOST="${VALKEY_HOST:-${DEFAULT_HOST}}"
 DB="${VALKEY_DB:-${DEFAULT_DB}}"
 
-RUNTIME_DIR="$(valkey_resolve_path "$PROJECT_ROOT" "${PRJ_RUNTIME_DIR:-.run}/valkey")"
-PIDFILE="$RUNTIME_DIR/valkey-${PORT}.pid"
+export VALKEY_PORT="$PORT"
+export VALKEY_HOST="$HOST"
+export VALKEY_DB="$DB"
+
+PIDFILE="$(valkey_resolved_pidfile "$PROJECT_ROOT")"
 URL="redis://${HOST}:${PORT}/${DB}"
 
-if valkey_listener_matches_pidfile "$PIDFILE" "$URL" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
-  echo "Valkey is running on ${PORT} (pid $(cat "$PIDFILE"))."
+MATCHED_PIDFILE=""
+if MATCHED_PIDFILE="$(valkey_matching_pidfile "$PROJECT_ROOT" "$URL")" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
+  echo "Valkey is running on ${PORT} (pid $(valkey_pidfile_process_id "$MATCHED_PIDFILE"))."
   echo "PONG"
   exit 0
 fi

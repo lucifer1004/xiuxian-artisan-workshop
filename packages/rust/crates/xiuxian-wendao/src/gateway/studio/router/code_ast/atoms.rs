@@ -2,12 +2,29 @@ use crate::gateway::studio::types::CodeAstRetrievalAtomScope;
 
 pub(crate) trait RetrievalChunkLineExt {
     fn with_lines(self, line_start: usize, line_end: usize) -> Self;
+    fn with_display(self, display_label: impl Into<String>, excerpt: impl Into<String>) -> Self;
+    fn with_attributes(self, attributes: Vec<(String, String)>) -> Self;
 }
 
 impl RetrievalChunkLineExt for crate::gateway::studio::types::CodeAstRetrievalAtom {
     fn with_lines(mut self, line_start: usize, line_end: usize) -> Self {
         self.line_start = Some(line_start);
         self.line_end = Some(line_end);
+        self
+    }
+
+    fn with_display(
+        mut self,
+        display_label: impl Into<String>,
+        excerpt: impl Into<String>,
+    ) -> Self {
+        self.display_label = Some(display_label.into());
+        self.excerpt = Some(excerpt.into());
+        self
+    }
+
+    fn with_attributes(mut self, attributes: Vec<(String, String)>) -> Self {
+        self.attributes = attributes;
         self
     }
 }
@@ -84,5 +101,6 @@ pub(crate) fn build_code_ast_retrieval_atom(
         line_start: None,
         line_end: None,
         surface: Some(scope),
+        attributes: Vec::new(),
     }
 }

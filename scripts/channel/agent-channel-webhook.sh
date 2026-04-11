@@ -20,16 +20,6 @@ resolve_xiuxian_daochang_cargo_features() {
     return 0
   fi
 
-  if [ "$(uname -s)" = "Darwin" ]; then
-    printf '%s' "xiuxian-llm/vision-dots-metal,xiuxian-llm/mistral-accel-metal"
-    return 0
-  fi
-
-  if [ "$(uname -s)" = "Linux" ]; then
-    printf '%s' "xiuxian-llm/vision-dots-cuda,xiuxian-llm/mistral-accel-cuda"
-    return 0
-  fi
-
   printf ''
 }
 
@@ -701,7 +691,7 @@ GATEWAY_HEALTH_URL=""
 GATEWAY_EMBED_PROBE_REQUIRED_EFFECTIVE="false"
 GATEWAY_EMBED_PROBE_REQUIRED_RAW="${DEFAULT_GATEWAY_EMBED_PROBE_REQUIRED}"
 # Force safe embedding backend defaults before launching any xiuxian-daochang subprocess.
-# This prevents gateway/discord sidecars from inheriting in-process mistral_sdk defaults.
+# This prevents gateway/discord sidecars from inheriting stale local-embedding defaults.
 export XIUXIAN_DAOCHANG_MEMORY_EMBEDDING_BACKEND="${XIUXIAN_DAOCHANG_MEMORY_EMBEDDING_BACKEND:-http}"
 export XIUXIAN_DAOCHANG_EMBED_BACKEND="${XIUXIAN_DAOCHANG_EMBED_BACKEND:-http}"
 if [ -n "${GATEWAY_BIND:-}" ]; then
@@ -1119,7 +1109,7 @@ if [ -n "${GATEWAY_BIND:-}" ]; then
   fi
 else
   echo "  Running foreground warmup before webhook channel starts..."
-  "${XIUXIAN_DAOCHANG_BIN}" embedding-warmup --mistral-sdk-only --text "webhook embedding warmup" 2>&1 | tee -a "${LOG_FILE}"
+  "${XIUXIAN_DAOCHANG_BIN}" embedding-warmup --text "webhook embedding warmup" 2>&1 | tee -a "${LOG_FILE}"
   echo "  Warmup check completed."
 fi
 echo ""

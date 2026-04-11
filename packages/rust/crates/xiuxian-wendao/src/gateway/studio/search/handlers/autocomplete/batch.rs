@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use xiuxian_vector_store::{LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray};
+use xiuxian_vector_store::{
+    LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray,
+};
 
 use crate::gateway::studio::types::{AutocompleteResponse, AutocompleteSuggestion};
 

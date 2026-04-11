@@ -140,11 +140,21 @@ fn process_managed_parser_summary_base_url() -> Result<String, String> {
     let host = interface
         .get("host")
         .and_then(Value::as_str)
-        .ok_or_else(|| format!("`{}` is missing string `[interface].host`", config_path.display()))?;
+        .ok_or_else(|| {
+            format!(
+                "`{}` is missing string `[interface].host`",
+                config_path.display()
+            )
+        })?;
     let port = interface
         .get("port")
         .and_then(Value::as_integer)
-        .ok_or_else(|| format!("`{}` is missing integer `[interface].port`", config_path.display()))?;
+        .ok_or_else(|| {
+            format!(
+                "`{}` is missing integer `[interface].port`",
+                config_path.display()
+            )
+        })?;
     Ok(format!("http://{host}:{port}"))
 }
 

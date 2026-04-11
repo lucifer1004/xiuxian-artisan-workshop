@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 /// Target kinds preserved by the native Julia parser docstring contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum JuliaParserDocTargetKind {
@@ -29,6 +31,12 @@ pub(crate) struct JuliaParserSymbol {
     pub(crate) kind: JuliaParserSymbolKind,
     /// Optional signature snippet emitted by the parser.
     pub(crate) signature: Option<String>,
+    /// Optional 1-based source line where the symbol starts.
+    pub(crate) line_start: Option<usize>,
+    /// Optional 1-based source line where the symbol ends.
+    pub(crate) line_end: Option<usize>,
+    /// Parser-owned detail attributes preserved for downstream AST consumers.
+    pub(crate) attributes: BTreeMap<String, String>,
 }
 
 /// One Julia import-like dependency preserved from the native parser-summary
@@ -65,6 +73,12 @@ pub(crate) struct JuliaParserDocAttachment {
     pub(crate) target_name: String,
     /// Normalized target kind.
     pub(crate) target_kind: JuliaParserDocTargetKind,
+    /// Optional parser-owned qualified path for the attached target.
+    pub(crate) target_path: Option<String>,
+    /// Optional 1-based target declaration start line.
+    pub(crate) target_line_start: Option<usize>,
+    /// Optional 1-based target declaration end line.
+    pub(crate) target_line_end: Option<usize>,
     /// Trimmed docstring contents.
     pub(crate) content: String,
 }

@@ -3,6 +3,9 @@ use xiuxian_macros::env_non_empty;
 
 use super::{DEFAULT_ANTHROPIC_KEY_ENV, DEFAULT_MINIMAX_KEY_ENV, DEFAULT_OPENAI_KEY_ENV};
 
+const DEFAULT_MINIMAX_API_BASE: &str = "https://api.minimax.io/v1";
+const DEFAULT_MINIMAX_MODEL: &str = "MiniMax-M2.5";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::llm) enum LiteLlmProviderMode {
     OpenAi,
@@ -102,6 +105,42 @@ fn default_api_key_env(mode: LiteLlmProviderMode) -> &'static str {
     }
 }
 
+fn normalize_provider_model(mode: LiteLlmProviderMode, raw: String) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    match mode {
+        LiteLlmProviderMode::Minimax => normalize_minimax_model(trimmed),
+        _ => trimmed.to_string(),
+    }
+}
+
+fn normalize_minimax_model(raw: &str) -> String {
+    let stripped = raw
+        .strip_prefix("minimax/")
+        .or_else(|| raw.strip_prefix("minimax:"))
+        .unwrap_or(raw);
+    let lower = stripped.to_ascii_lowercase();
+
+    match lower.as_str() {
+        "minimax-m2.1-highspeed" => "MiniMax-M2.1-lightning".to_string(),
+        "minimax-m2.5-highspeed" => "MiniMax-M2.5-lightning".to_string(),
+        "minimax-m2.1" => "MiniMax-M2.1".to_string(),
+        "minimax-m2.5" => "MiniMax-M2.5".to_string(),
+        _ => {
+            if stripped.starts_with("MiniMax-") {
+                return stripped.to_string();
+            }
+            if let Some(suffix) = lower.strip_prefix("minimax-") {
+                return format!("MiniMax-{suffix}");
+            }
+            stripped.to_string()
+        }
+    }
+}
+
 fn is_env_var_name(raw: &str) -> bool {
     let mut chars = raw.chars();
     let Some(first) = chars.next() else {
@@ -170,7 +209,7 @@ pub(in crate::llm) fn resolve_provider_settings_with_env(
             .map(str::trim)
             .filter(|value| !value.is_empty());
         if let Some(raw) = settings_provider {
-            (parse_litellm_provider_mode(Some(raw)), "runtime_settings")
+            (parse_litellm_provider_mode(Some(raw)), "settings")
         } else {
             (LiteLlmProviderMode::OpenAi, "default")
         }
@@ -188,10 +227,15 @@ pub(in crate::llm) fn resolve_provider_settings_with_env(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string);
-    let model = if requested_model.trim().is_empty() {
+    let raw_model = if requested_model.trim().is_empty() {
         settings_model.unwrap_or(requested_model)
     } else {
         requested_model
+    };
+    let model = if raw_model.trim().is_empty() && mode == LiteLlmProviderMode::Minimax {
+        DEFAULT_MINIMAX_MODEL.to_string()
+    } else {
+        normalize_provider_model(mode, raw_model)
     };
     let (api_key, api_key_env) = resolve_api_key_reference(
         runtime_settings.inference.api_key.as_deref(),
@@ -210,7 +254,7 @@ pub(in crate::llm) fn resolve_provider_settings_with_env(
                 .filter(|value| !value.is_empty())
                 .map(ToString::to_string)
         })
-        .unwrap_or_default();
+        .unwrap_or_else(|| DEFAULT_MINIMAX_API_BASE.to_string());
     let timeout_secs = runtime_settings
         .inference
         .timeout

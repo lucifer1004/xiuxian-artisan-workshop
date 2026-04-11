@@ -1,19 +1,24 @@
+#[cfg(feature = "studio")]
+use crate::analyzers::RepositoryAnalysisOutput;
+#[cfg(any(feature = "studio", feature = "search-runtime"))]
+use crate::analyzers::query::ImportSearchQuery;
+#[cfg(feature = "studio")]
+use crate::analyzers::query::{
+    ExampleSearchQuery, ExampleSearchResult, ImportSearchResult, ModuleSearchQuery,
+    ModuleSearchResult, SymbolSearchQuery, SymbolSearchResult,
+};
+#[cfg(feature = "studio")]
+use crate::search::FuzzySearchOptions;
+#[cfg(feature = "studio")]
 use std::sync::Arc;
 
-use crate::analyzers::RepositoryAnalysisOutput;
-use crate::analyzers::query::{
-    ExampleSearchQuery, ExampleSearchResult, ImportSearchQuery, ImportSearchResult,
-    ModuleSearchQuery, ModuleSearchResult, SymbolSearchQuery, SymbolSearchResult,
-};
-use crate::search::FuzzySearchOptions;
-
-#[cfg(feature = "studio")]
-use crate::analyzers::cache::RepositorySearchArtifacts;
 #[cfg(feature = "studio")]
 use super::{
     build_example_search_with_artifacts, build_import_search_with_artifacts,
     build_module_search_with_artifacts, build_symbol_search_with_artifacts,
 };
+#[cfg(feature = "studio")]
+use crate::analyzers::cache::RepositorySearchArtifacts;
 
 #[cfg(feature = "studio")]
 type FallbackQueryBuilder<Q> = dyn Fn(String, String, usize) -> Q + Send + Sync;

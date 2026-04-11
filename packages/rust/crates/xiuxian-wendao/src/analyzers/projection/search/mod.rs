@@ -6,6 +6,7 @@ mod options;
 mod ranking;
 mod sort;
 
+#[cfg(feature = "studio")]
 pub(crate) use indexed::build_projected_page_search_index;
 #[cfg(feature = "studio")]
 pub(crate) use ranking::build_repo_projected_page_search_with_artifacts;

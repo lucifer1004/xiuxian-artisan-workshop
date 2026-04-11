@@ -22,7 +22,9 @@ pub use artifacts::{
     store_cached_repository_search_artifacts,
 };
 #[cfg(feature = "zhenfa-router")]
-pub(crate) use identity::{FingerprintMode, analysis_fingerprint_mode, change_affects_analysis_identity};
+pub(crate) use identity::{
+    FingerprintMode, analysis_fingerprint_mode, change_affects_analysis_identity,
+};
 pub(crate) use keys::build_repository_analysis_cache_key;
 pub use keys::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};
 pub use query::{load_cached_repository_search_result, store_cached_repository_search_result};

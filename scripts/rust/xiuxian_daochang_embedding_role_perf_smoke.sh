@@ -12,7 +12,7 @@ max_batch8_p95_ms="${6:-}"
 min_concurrent_rps="${7:-}"
 report_json="${8:-}"
 
-echo "Running xiuxian-daochang embedding role perf smoke (litellm_rs + mistral_sdk)..."
+echo "Running xiuxian-daochang embedding role perf smoke (litellm_rs + openai_http)..."
 
 local_host="${XIUXIAN_WENDAO_LOCAL_HOST:-localhost}"
 default_ollama_base_url="${XIUXIAN_WENDAO_OLLAMA_BASE_URL:-http://${local_host}:11434}"

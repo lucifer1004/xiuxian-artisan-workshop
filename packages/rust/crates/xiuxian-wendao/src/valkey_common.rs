@@ -1,3 +1,4 @@
+#[cfg(feature = "studio")]
 use std::time::Duration;
 
 #[cfg(test)]

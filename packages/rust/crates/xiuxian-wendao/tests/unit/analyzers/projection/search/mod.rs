@@ -139,6 +139,7 @@ fn test_analysis(
                 title: page.title,
                 path: page.path,
                 format: page.format_hints.first().cloned(),
+                doc_target: None,
             })
             .collect(),
         ..crate::analyzers::RepositoryAnalysisOutput::default()

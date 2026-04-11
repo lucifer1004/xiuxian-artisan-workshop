@@ -1,4 +1,4 @@
-use super::super::types::{ParsedDeclaration, ParsedImport};
+use crate::modelica_plugin::types::{ParsedDeclaration, ParsedImport};
 
 /// Native Modelica file summary consumed by the transitional Rust plugin.
 #[derive(Debug, Clone, PartialEq, Eq)]

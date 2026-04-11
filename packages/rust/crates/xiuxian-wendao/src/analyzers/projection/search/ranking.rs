@@ -1,13 +1,15 @@
+#[cfg(feature = "studio")]
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::{
     ProjectedPageRecord, ProjectionPageKind, RepoProjectedPageSearchQuery,
     RepoProjectedPageSearchResult,
 };
-#[cfg(feature = "studio")]
-use crate::analyzers::cache::RepositorySearchArtifacts;
 
 use super::heuristic::heuristic_projected_page_matches;
-use super::indexed::{search_indexed_projected_pages, search_projected_pages_with_index};
+use super::indexed::search_indexed_projected_pages;
+#[cfg(feature = "studio")]
+use super::indexed::search_projected_pages_with_index;
 use super::lexical::lexical_projected_page_matches;
 use super::options::projected_page_document_search_options;
 use crate::analyzers::projection::pages::build_projected_pages;

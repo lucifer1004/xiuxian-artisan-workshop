@@ -9,16 +9,18 @@ use crate::gateway::studio::types::AstSearchHit;
 #[cfg(test)]
 use crate::gateway::studio::types::UiProjectConfig;
 
-#[cfg(not(test))]
-use super::super::project_scope::index_path_for_entry;
-#[cfg(test)]
-use super::super::project_scope::{configured_project_scan_roots, index_path_for_entry};
-use super::super::support::{first_signature_line, infer_crate_name};
 use super::filters::is_markdown_path;
 #[cfg(test)]
 use super::filters::should_skip_entry;
 use super::markdown::{build_markdown_ast_hits, markdown_scope_name};
 use super::navigation::ast_navigation_target;
+#[cfg(not(test))]
+use crate::gateway::studio::search::project_scope::index_path_for_entry;
+#[cfg(test)]
+use crate::gateway::studio::search::project_scope::{
+    configured_project_scan_roots, index_path_for_entry,
+};
+use crate::gateway::studio::search::support::{first_signature_line, infer_crate_name};
 
 #[cfg(test)]
 pub(crate) fn build_ast_index(

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Check Wendao gateway readiness with PID ownership and Flight-route validation."""
+"""Check Wendao gateway readiness with PID ownership and the health endpoint contract."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import urllib.error
 import urllib.request
@@ -12,7 +13,7 @@ from typing import Any, Callable
 
 GATEWAY_PROCESS_ID_HEADER = "x-wendao-process-id"
 EXPECTED_HEALTH_STATUS = 200
-EXPECTED_FLIGHT_STATUS = 400
+EXPECTED_HEALTH_SERVICE = "wendao-gateway"
 
 Opener = Callable[[Any, float], Any]
 
@@ -31,15 +32,26 @@ def _normalize_process_id(raw_value: str | None) -> str:
     return (raw_value or "").strip()
 
 
-def _flight_probe_status(url: str, timeout_secs: float, opener: Opener) -> int | None:
-    request = urllib.request.Request(url, data=b"", method="POST")
+def _parse_health_payload(raw_payload: bytes) -> tuple[bool, str]:
     try:
-        with opener(request, timeout=timeout_secs) as response:
-            return getattr(response, "status", None)
-    except urllib.error.HTTPError as error:
-        return error.code
-    except urllib.error.URLError:
-        return None
+        payload = json.loads(raw_payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        return False, f"health endpoint returned invalid json: {error}"
+
+    if not isinstance(payload, dict):
+        return False, "health endpoint returned a non-object payload"
+
+    if payload.get("service") != EXPECTED_HEALTH_SERVICE:
+        return (
+            False,
+            "health endpoint reported an unexpected service "
+            f"({payload.get('service')!r} != {EXPECTED_HEALTH_SERVICE!r})",
+        )
+
+    if payload.get("ready") is not True:
+        return False, f"health endpoint did not report ready=true: {payload!r}"
+
+    return True, "ok"
 
 
 def is_gateway_healthy(
@@ -62,6 +74,7 @@ def is_gateway_healthy(
         with opener(health_url, timeout=timeout_secs) as response:
             health_status = getattr(response, "status", None)
             actual_pid = _normalize_process_id(response.headers.get(GATEWAY_PROCESS_ID_HEADER))
+            raw_payload = response.read()
     except urllib.error.HTTPError as error:
         return False, f"health endpoint returned HTTP {error.code}: {health_url}"
     except urllib.error.URLError as error:
@@ -77,14 +90,9 @@ def is_gateway_healthy(
             f"({actual_pid or 'missing'} != {expected_pid})",
         )
 
-    flight_url = f"http://{host}:{port}/arrow.flight.protocol.FlightService/GetFlightInfo"
-    flight_status = _flight_probe_status(flight_url, timeout_secs, opener)
-    if flight_status != EXPECTED_FLIGHT_STATUS:
-        return (
-            False,
-            "Flight GetFlightInfo probe did not return the expected HTTP 400 "
-            f"({flight_status if flight_status is not None else 'unreachable'})",
-        )
+    payload_ok, payload_message = _parse_health_payload(raw_payload)
+    if not payload_ok:
+        return False, payload_message
 
     return True, "healthy"
 

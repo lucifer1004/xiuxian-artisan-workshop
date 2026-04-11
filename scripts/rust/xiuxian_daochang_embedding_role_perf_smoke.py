@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Role-oriented embedding performance smoke benchmark for xiuxian-daochang.
 
-This script validates that `litellm_rs` (provider routing) and `mistral_sdk`
-(in-process Rust SDK runtime) are both operational and reports latency/throughput.
-It is not a winner-takes-all benchmark; each role is measured independently.
+This script validates that `litellm_rs` (provider routing) and `openai_http`
+(OpenAI-compatible upstream routing) are both operational and reports
+latency/throughput. It is not a winner-takes-all benchmark; each role is
+measured independently.
 """
 
 from __future__ import annotations
@@ -117,7 +118,7 @@ def _role_configs(base_port: int, upstream_base_url: str, embedding_model: str) 
             ),
         ),
         RoleConfig(
-            name="mistral_sdk",
+            name="openai_http",
             port=base_port + 1,
             model=model,
             settings_toml=(
@@ -125,13 +126,14 @@ def _role_configs(base_port: int, upstream_base_url: str, embedding_model: str) 
                 'llm_backend = "http"\n'
                 "\n"
                 "[llm.embedding]\n"
-                'backend = "mistral_sdk"\n'
+                'backend = "openai_http"\n'
                 "batch_max_size = 128\n"
                 "batch_max_concurrency = 1\n"
                 f'model = "{model}"\n'
+                f'litellm_api_base = "{upstream}"\n'
                 "\n"
                 "[memory]\n"
-                'embedding_backend = "mistral_sdk"\n'
+                'embedding_backend = "openai_http"\n'
                 f'embedding_model = "{model}"\n'
                 'persistence_backend = "local"\n'
                 "\n"

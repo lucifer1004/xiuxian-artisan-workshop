@@ -584,7 +584,10 @@ pub fn split_anthropic_system_messages(
     let mut others = Vec::new();
 
     for message in messages {
-        if matches!(message.role, LiteMessageRole::System) {
+        if matches!(
+            message.role,
+            LiteMessageRole::System | LiteMessageRole::Developer
+        ) {
             if let Some(content) = &message.content {
                 match content {
                     LiteMessageContent::Text(text) => system_parts.push(text.clone()),
@@ -632,7 +635,7 @@ where
         let role = match message.role {
             LiteMessageRole::User | LiteMessageRole::Tool | LiteMessageRole::Function => "user",
             LiteMessageRole::Assistant => "assistant",
-            LiteMessageRole::System => continue,
+            LiteMessageRole::System | LiteMessageRole::Developer => continue,
         };
         let mut content = convert_litellm_message_content_to_anthropic_with_image_hook(
             client,

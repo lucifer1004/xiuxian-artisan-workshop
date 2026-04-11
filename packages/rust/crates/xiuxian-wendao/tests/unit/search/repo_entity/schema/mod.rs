@@ -281,6 +281,7 @@ fn sample_analysis() -> RepositoryAnalysisOutput {
             title: "Solve Documentation".to_string(),
             path: "docs/solve.md".to_string(),
             format: Some("markdown".to_string()),
+            doc_target: None,
         }],
         relations: vec![
             RelationRecord {

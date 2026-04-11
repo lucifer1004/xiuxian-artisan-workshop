@@ -194,16 +194,7 @@ pub(crate) fn collect_symbol_records(
                 signature: Some(declaration.signature),
                 audit_status: None,
                 verification_state: None,
-                attributes: if declaration.equations.is_empty() {
-                    BTreeMap::new()
-                } else {
-                    let mut attrs = BTreeMap::new();
-                    attrs.insert(
-                        "equation_latex".to_string(),
-                        declaration.equations.join("\n\n"),
-                    );
-                    attrs
-                },
+                attributes: declaration.attributes,
             });
         }
     }
@@ -278,7 +269,9 @@ pub(crate) fn collect_import_records(
                 target_package,
                 source_module,
                 kind: parsed_import.kind,
+                line_start: parsed_import.line_start,
                 resolved_id,
+                attributes: parsed_import.attributes,
             });
         }
     }
@@ -507,6 +500,7 @@ pub(crate) fn collect_doc_records(
                     title,
                     path: relative.clone(),
                     format,
+                    doc_target: None,
                 },
                 target_ids: target_ids.clone(),
             });
@@ -541,6 +535,7 @@ pub(crate) fn collect_doc_records(
                 title: annotation_doc_title(relative.as_str(), symbols),
                 path: format!("{relative}#annotation.documentation"),
                 format: doc_format_hint(relative.as_str(), true),
+                doc_target: None,
             },
             target_ids,
         });
@@ -744,6 +739,7 @@ fn collect_nested_users_guide_section_docs(
                 title: synthetic_section_title(topic.title),
                 path: format!("{relative_path}#section.{}", topic.title),
                 format: Some(topic.format.to_string()),
+                doc_target: None,
             },
             target_ids: target_ids.to_vec(),
         })

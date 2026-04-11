@@ -1,16 +1,18 @@
 use anyhow::Result;
 use litellm_rs::core::types::chat::ChatMessage as LiteChatMessage;
-use litellm_rs::core::types::content::ContentPart as LiteContentPart;
+use litellm_rs::core::types::content::{ContentPart as LiteContentPart, ImageUrl as LiteImageUrl};
 use litellm_rs::core::types::message::{
     MessageContent as LiteMessageContent, MessageRole as LiteMessageRole,
 };
 use litellm_rs::core::types::tools::{FunctionCall as LiteFunctionCall, ToolCall as LiteToolCall};
+use xiuxian_llm::llm::multimodal::{MultimodalContentPart, parse_multimodal_text_content};
 
 use crate::session::{ChatMessage, FunctionCall, ToolCallOut};
 
 fn to_litellm_role(raw_role: &str) -> Result<LiteMessageRole> {
     match raw_role {
         "system" => Ok(LiteMessageRole::System),
+        "developer" => Ok(LiteMessageRole::Developer),
         "user" => Ok(LiteMessageRole::User),
         "assistant" => Ok(LiteMessageRole::Assistant),
         "tool" => Ok(LiteMessageRole::Tool),
@@ -22,12 +24,23 @@ fn to_litellm_role(raw_role: &str) -> Result<LiteMessageRole> {
 }
 
 pub(super) fn chat_message_to_litellm_message(message: ChatMessage) -> Result<LiteChatMessage> {
+    let ChatMessage {
+        role,
+        content,
+        tool_calls,
+        tool_call_id,
+        name,
+    } = message;
     Ok(LiteChatMessage {
-        role: to_litellm_role(message.role.as_str())?,
-        content: message.content.map(LiteMessageContent::Text),
+        role: to_litellm_role(role.as_str())?,
+        content: convert_message_content(
+            role.as_str(),
+            content.as_deref(),
+            tool_call_id.as_deref(),
+        ),
         thinking: None,
-        name: message.name,
-        tool_calls: message.tool_calls.map(|calls| {
+        name,
+        tool_calls: tool_calls.map(|calls| {
             calls
                 .into_iter()
                 .map(|call| LiteToolCall {
@@ -40,9 +53,51 @@ pub(super) fn chat_message_to_litellm_message(message: ChatMessage) -> Result<Li
                 })
                 .collect()
         }),
-        tool_call_id: message.tool_call_id,
+        tool_call_id,
         function_call: None,
     })
+}
+
+fn convert_message_content(
+    role: &str,
+    content: Option<&str>,
+    tool_call_id: Option<&str>,
+) -> Option<LiteMessageContent> {
+    let content = content?;
+
+    if role == "tool"
+        && let Some(tool_use_id) = tool_call_id
+            .map(str::trim)
+            .filter(|tool_use_id| !tool_use_id.is_empty())
+    {
+        return Some(LiteMessageContent::Parts(vec![
+            LiteContentPart::ToolResult {
+                tool_use_id: tool_use_id.to_string(),
+                content: serde_json::Value::String(content.to_string()),
+                is_error: None,
+            },
+        ]));
+    }
+
+    if let Some(parts) = parse_multimodal_text_content(content) {
+        return Some(LiteMessageContent::Parts(
+            parts.into_iter().map(multimodal_part_to_litellm).collect(),
+        ));
+    }
+
+    Some(LiteMessageContent::Text(content.to_string()))
+}
+
+fn multimodal_part_to_litellm(part: MultimodalContentPart) -> LiteContentPart {
+    match part {
+        MultimodalContentPart::Text(text) => LiteContentPart::Text { text },
+        MultimodalContentPart::ImageUrl { url } => LiteContentPart::ImageUrl {
+            image_url: LiteImageUrl {
+                url,
+                detail: Some("high".to_string()),
+            },
+        },
+    }
 }
 
 pub(super) fn content_from_litellm(content: Option<LiteMessageContent>) -> Option<String> {

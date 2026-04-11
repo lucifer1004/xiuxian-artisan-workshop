@@ -69,6 +69,7 @@ impl MarkdownCompiler<'_> {
                     line_start: Some(node.line_start),
                     line_end: Some(node.line_end),
                     surface: Some(surface),
+                    attributes: Vec::new(),
                 })
             })
             .collect()

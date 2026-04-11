@@ -27,6 +27,23 @@ The active bounded slice for this feature does three things:
 This is intentionally narrower than a full search-plane rearchitecture. The
 goal is compile-time ownership clarity first.
 
+## Current Status
+
+As of 2026-04-10, the bounded non-vector consumer slice is implemented and
+validated:
+
+1. `xiuxian-wendao` exposes `vector-store` as an optional feature and the full
+   package `cargo check -p xiuxian-wendao --no-default-features` build is now
+   warning-clean.
+2. `xiuxian-qianji` consumes `xiuxian-wendao` with `default-features = false`.
+3. Qianji's normal dependency tree no longer includes `xiuxian-vector-store`
+   or `lance`.
+4. Focused compile proof also passes for the heavier Wendao matrix:
+   `--no-default-features --features studio,zhenfa-router,julia,builtin-plugins`.
+5. An extra `search-runtime`-only test pass exposed a separate feature-coherence
+   cleanup between standalone `search-runtime` and studio-owned search DTOs.
+   That follow-up is explicitly outside this bounded slice.
+
 ## Target Boundary
 
 The target package boundary is:
@@ -42,7 +59,7 @@ The target package boundary is:
 
 The feature is aligned only when all of the following are true:
 
-1. Qianji's normal dependency tree no longer includes `xiuxian-vector`
+1. Qianji's normal dependency tree no longer includes `xiuxian-vector-store`
 2. Qianji's normal dependency tree no longer includes `lance`
 3. touched Wendao and Qianji slices still compile with focused cargo checks
 4. bounded-work markdown payload contracts remain stable for Qianji callers

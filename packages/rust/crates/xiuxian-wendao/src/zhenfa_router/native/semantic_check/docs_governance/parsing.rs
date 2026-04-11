@@ -84,7 +84,7 @@ pub fn is_canonical_repo_doc(doc_path: &str) -> bool {
     }
 
     if has_component_prefix(&components, &["docs"]) {
-        return !has_component_prefix(&components, &["docs", "GTD"]);
+        return true;
     }
 
     let file_name = path

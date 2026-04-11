@@ -9,9 +9,9 @@ use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use xiuxian_wendao_core::repo_intelligence::{ImportKind, RepoIntelligenceError, RepoSymbolKind};
 
-use super::super::types::{ParsedDeclaration, ParsedImport};
 use super::transport::ParserSummaryRouteKind;
 use super::types::ModelicaParserFileSummary;
+use crate::modelica_plugin::types::{ParsedDeclaration, ParsedImport};
 
 pub(crate) const MODELICA_PARSER_SUMMARY_REQUEST_ID_COLUMN: &str = "request_id";
 pub(crate) const MODELICA_PARSER_SUMMARY_SOURCE_ID_COLUMN: &str = "source_id";
@@ -22,6 +22,7 @@ pub(crate) const MODELICA_PARSER_SUMMARY_SUCCESS_COLUMN: &str = "success";
 pub(crate) const MODELICA_PARSER_SUMMARY_PRIMARY_NAME_COLUMN: &str = "primary_name";
 pub(crate) const MODELICA_PARSER_SUMMARY_ERROR_MESSAGE_COLUMN: &str = "error_message";
 pub(crate) const MODELICA_PARSER_SUMMARY_CLASS_NAME_COLUMN: &str = "class_name";
+pub(crate) const MODELICA_PARSER_SUMMARY_RESTRICTION_COLUMN: &str = "restriction";
 pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_GROUP_COLUMN: &str = "item_group";
 pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_NAME_COLUMN: &str = "item_name";
 pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_KIND_COLUMN: &str = "item_kind";
@@ -38,6 +39,22 @@ pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_LINE_START_COLUMN: &str = "item_li
 pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_LINE_END_COLUMN: &str = "item_line_end";
 pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_OWNER_NAME_COLUMN: &str = "item_owner_name";
 pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_OWNER_PATH_COLUMN: &str = "item_owner_path";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_VISIBILITY_COLUMN: &str = "item_visibility";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_TYPE_NAME_COLUMN: &str = "item_type_name";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_VARIABILITY_COLUMN: &str = "item_variability";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_DIRECTION_COLUMN: &str = "item_direction";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_COMPONENT_KIND_COLUMN: &str = "item_component_kind";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_ARRAY_DIMENSIONS_COLUMN: &str =
+    "item_array_dimensions";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_DEFAULT_VALUE_COLUMN: &str = "item_default_value";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_START_VALUE_COLUMN: &str = "item_start_value";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_MODIFIER_NAMES_COLUMN: &str = "item_modifier_names";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_UNIT_COLUMN: &str = "item_unit";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_CLASS_PATH_COLUMN: &str = "item_class_path";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_TOP_LEVEL_COLUMN: &str = "item_top_level";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_IS_PARTIAL_COLUMN: &str = "item_is_partial";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_IS_FINAL_COLUMN: &str = "item_is_final";
+pub(crate) const MODELICA_PARSER_SUMMARY_ITEM_IS_ENCAPSULATED_COLUMN: &str = "item_is_encapsulated";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ModelicaParserSummaryRequestRow {
@@ -56,6 +73,7 @@ pub(crate) struct ModelicaParserSummaryResponseRow {
     pub(crate) primary_name: Option<String>,
     pub(crate) error_message: Option<String>,
     pub(crate) class_name: Option<String>,
+    pub(crate) restriction: Option<String>,
     pub(crate) item_group: Option<String>,
     pub(crate) item_name: Option<String>,
     pub(crate) item_kind: Option<String>,
@@ -69,6 +87,21 @@ pub(crate) struct ModelicaParserSummaryResponseRow {
     pub(crate) item_line_end: Option<i64>,
     pub(crate) item_owner_name: Option<String>,
     pub(crate) item_owner_path: Option<String>,
+    pub(crate) item_visibility: Option<String>,
+    pub(crate) item_type_name: Option<String>,
+    pub(crate) item_variability: Option<String>,
+    pub(crate) item_direction: Option<String>,
+    pub(crate) item_component_kind: Option<String>,
+    pub(crate) item_array_dimensions: Option<String>,
+    pub(crate) item_default_value: Option<String>,
+    pub(crate) item_start_value: Option<String>,
+    pub(crate) item_modifier_names: Option<String>,
+    pub(crate) item_unit: Option<String>,
+    pub(crate) item_class_path: Option<String>,
+    pub(crate) item_top_level: Option<bool>,
+    pub(crate) item_is_partial: Option<bool>,
+    pub(crate) item_is_final: Option<bool>,
+    pub(crate) item_is_encapsulated: Option<bool>,
 }
 
 pub(crate) fn build_modelica_parser_summary_request_batch(
@@ -151,6 +184,11 @@ pub(crate) fn validate_modelica_parser_summary_response_batches(
         )?;
         let _class_name =
             optional_utf8_values(batch, MODELICA_PARSER_SUMMARY_CLASS_NAME_COLUMN, "response")?;
+        let _restriction = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_RESTRICTION_COLUMN,
+            "response",
+        )?;
         let _item_group =
             optional_utf8_values(batch, MODELICA_PARSER_SUMMARY_ITEM_GROUP_COLUMN, "response")?;
         let _item_name =
@@ -204,6 +242,78 @@ pub(crate) fn validate_modelica_parser_summary_response_batches(
             MODELICA_PARSER_SUMMARY_ITEM_OWNER_PATH_COLUMN,
             "response",
         )?;
+        let _item_visibility = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_VISIBILITY_COLUMN,
+            "response",
+        )?;
+        let _item_type_name = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_TYPE_NAME_COLUMN,
+            "response",
+        )?;
+        let _item_variability = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_VARIABILITY_COLUMN,
+            "response",
+        )?;
+        let _item_direction = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_DIRECTION_COLUMN,
+            "response",
+        )?;
+        let _item_component_kind = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_COMPONENT_KIND_COLUMN,
+            "response",
+        )?;
+        let _item_array_dimensions = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_ARRAY_DIMENSIONS_COLUMN,
+            "response",
+        )?;
+        let _item_default_value = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_DEFAULT_VALUE_COLUMN,
+            "response",
+        )?;
+        let _item_start_value = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_START_VALUE_COLUMN,
+            "response",
+        )?;
+        let _item_modifier_names = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_MODIFIER_NAMES_COLUMN,
+            "response",
+        )?;
+        let _item_unit =
+            optional_utf8_values(batch, MODELICA_PARSER_SUMMARY_ITEM_UNIT_COLUMN, "response")?;
+        let _item_class_path = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_CLASS_PATH_COLUMN,
+            "response",
+        )?;
+        let _item_top_level = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_TOP_LEVEL_COLUMN,
+            "response",
+        )?;
+        let _item_is_partial = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_IS_PARTIAL_COLUMN,
+            "response",
+        )?;
+        let _item_is_final = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_IS_FINAL_COLUMN,
+            "response",
+        )?;
+        let _item_is_encapsulated = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_IS_ENCAPSULATED_COLUMN,
+            "response",
+        )?;
     }
 
     Ok(())
@@ -238,6 +348,11 @@ pub(crate) fn decode_modelica_parser_summary_response_rows(
         )?;
         let class_name =
             optional_utf8_values(batch, MODELICA_PARSER_SUMMARY_CLASS_NAME_COLUMN, "response")?;
+        let restriction = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_RESTRICTION_COLUMN,
+            "response",
+        )?;
         let item_group =
             optional_utf8_values(batch, MODELICA_PARSER_SUMMARY_ITEM_GROUP_COLUMN, "response")?;
         let item_name =
@@ -291,6 +406,78 @@ pub(crate) fn decode_modelica_parser_summary_response_rows(
             MODELICA_PARSER_SUMMARY_ITEM_OWNER_PATH_COLUMN,
             "response",
         )?;
+        let item_visibility = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_VISIBILITY_COLUMN,
+            "response",
+        )?;
+        let item_type_name = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_TYPE_NAME_COLUMN,
+            "response",
+        )?;
+        let item_variability = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_VARIABILITY_COLUMN,
+            "response",
+        )?;
+        let item_direction = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_DIRECTION_COLUMN,
+            "response",
+        )?;
+        let item_component_kind = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_COMPONENT_KIND_COLUMN,
+            "response",
+        )?;
+        let item_array_dimensions = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_ARRAY_DIMENSIONS_COLUMN,
+            "response",
+        )?;
+        let item_default_value = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_DEFAULT_VALUE_COLUMN,
+            "response",
+        )?;
+        let item_start_value = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_START_VALUE_COLUMN,
+            "response",
+        )?;
+        let item_modifier_names = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_MODIFIER_NAMES_COLUMN,
+            "response",
+        )?;
+        let item_unit =
+            optional_utf8_values(batch, MODELICA_PARSER_SUMMARY_ITEM_UNIT_COLUMN, "response")?;
+        let item_class_path = optional_utf8_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_CLASS_PATH_COLUMN,
+            "response",
+        )?;
+        let item_top_level = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_TOP_LEVEL_COLUMN,
+            "response",
+        )?;
+        let item_is_partial = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_IS_PARTIAL_COLUMN,
+            "response",
+        )?;
+        let item_is_final = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_IS_FINAL_COLUMN,
+            "response",
+        )?;
+        let item_is_encapsulated = optional_bool_values(
+            batch,
+            MODELICA_PARSER_SUMMARY_ITEM_IS_ENCAPSULATED_COLUMN,
+            "response",
+        )?;
 
         for index in 0..batch.num_rows() {
             rows.push(ModelicaParserSummaryResponseRow {
@@ -302,6 +489,7 @@ pub(crate) fn decode_modelica_parser_summary_response_rows(
                 primary_name: primary_name[index].clone(),
                 error_message: error_message[index].clone(),
                 class_name: class_name[index].clone(),
+                restriction: restriction[index].clone(),
                 item_group: item_group[index].clone(),
                 item_name: item_name[index].clone(),
                 item_kind: item_kind[index].clone(),
@@ -315,6 +503,21 @@ pub(crate) fn decode_modelica_parser_summary_response_rows(
                 item_line_end: item_line_end[index],
                 item_owner_name: item_owner_name[index].clone(),
                 item_owner_path: item_owner_path[index].clone(),
+                item_visibility: item_visibility[index].clone(),
+                item_type_name: item_type_name[index].clone(),
+                item_variability: item_variability[index].clone(),
+                item_direction: item_direction[index].clone(),
+                item_component_kind: item_component_kind[index].clone(),
+                item_array_dimensions: item_array_dimensions[index].clone(),
+                item_default_value: item_default_value[index].clone(),
+                item_start_value: item_start_value[index].clone(),
+                item_modifier_names: item_modifier_names[index].clone(),
+                item_unit: item_unit[index].clone(),
+                item_class_path: item_class_path[index].clone(),
+                item_top_level: item_top_level[index],
+                item_is_partial: item_is_partial[index],
+                item_is_final: item_is_final[index],
+                item_is_encapsulated: item_is_encapsulated[index],
             });
         }
     }
@@ -406,6 +609,7 @@ pub(crate) fn decode_modelica_parser_file_summary(
                 .map(usize::try_from)
                 .transpose()
                 .map_err(|error| parser_summary_contract_error("response", error.to_string()))?,
+            attributes: build_import_attributes(row),
         });
     }
 
@@ -426,6 +630,11 @@ pub(crate) fn decode_modelica_parser_file_summary(
             .clone()
             .or_else(|| row.item_owner_name.clone())
             .unwrap_or_default();
+        let mut attributes = build_declaration_attributes(row);
+        let equations = equations_by_owner.remove(&owner_key).unwrap_or_default();
+        if !equations.is_empty() {
+            attributes.insert("equation_latex".to_string(), equations.join("\n\n"));
+        }
         declarations.push(ParsedDeclaration {
             name,
             kind,
@@ -444,7 +653,8 @@ pub(crate) fn decode_modelica_parser_file_summary(
                 .map(usize::try_from)
                 .transpose()
                 .map_err(|error| parser_summary_contract_error("response", error.to_string()))?,
-            equations: equations_by_owner.remove(&owner_key).unwrap_or_default(),
+            equations,
+            attributes,
         });
     }
 
@@ -462,12 +672,112 @@ fn modelica_import_kind(form: Option<&str>) -> ImportKind {
     }
 }
 
+fn build_import_attributes(row: &ModelicaParserSummaryResponseRow) -> BTreeMap<String, String> {
+    let mut attributes = BTreeMap::new();
+    insert_text_attribute(
+        &mut attributes,
+        "dependency_form",
+        row.item_dependency_form.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "dependency_alias",
+        row.item_dependency_alias.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "dependency_local_name",
+        row.item_dependency_local_name.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "dependency_target",
+        row.item_dependency_target.as_ref(),
+    );
+    attributes
+}
+
 fn modelica_kind_to_repo_kind(kind: Option<&str>) -> Option<RepoSymbolKind> {
     match kind {
         Some("function") => Some(RepoSymbolKind::Function),
         Some("model" | "record" | "block" | "connector" | "type") => Some(RepoSymbolKind::Type),
         Some("constant" | "parameter") => Some(RepoSymbolKind::Constant),
         _ => None,
+    }
+}
+
+fn build_declaration_attributes(
+    row: &ModelicaParserSummaryResponseRow,
+) -> BTreeMap<String, String> {
+    let mut attributes = BTreeMap::new();
+    insert_text_attribute(&mut attributes, "parser_kind", row.item_kind.as_ref());
+    insert_text_attribute(&mut attributes, "class_name", row.class_name.as_ref());
+    insert_text_attribute(&mut attributes, "restriction", row.restriction.as_ref());
+    insert_text_attribute(&mut attributes, "visibility", row.item_visibility.as_ref());
+    insert_text_attribute(&mut attributes, "type_name", row.item_type_name.as_ref());
+    insert_text_attribute(
+        &mut attributes,
+        "variability",
+        row.item_variability.as_ref(),
+    );
+    insert_text_attribute(&mut attributes, "direction", row.item_direction.as_ref());
+    insert_text_attribute(
+        &mut attributes,
+        "component_kind",
+        row.item_component_kind.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "array_dimensions",
+        row.item_array_dimensions.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "default_value",
+        row.item_default_value.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "start_value",
+        row.item_start_value.as_ref(),
+    );
+    insert_text_attribute(
+        &mut attributes,
+        "modifier_names",
+        row.item_modifier_names.as_ref(),
+    );
+    insert_text_attribute(&mut attributes, "unit", row.item_unit.as_ref());
+    insert_text_attribute(&mut attributes, "owner_name", row.item_owner_name.as_ref());
+    insert_text_attribute(&mut attributes, "owner_path", row.item_owner_path.as_ref());
+    insert_text_attribute(&mut attributes, "class_path", row.item_class_path.as_ref());
+    insert_bool_attribute(&mut attributes, "top_level", row.item_top_level);
+    insert_bool_attribute(&mut attributes, "is_partial", row.item_is_partial);
+    insert_bool_attribute(&mut attributes, "is_final", row.item_is_final);
+    insert_bool_attribute(&mut attributes, "is_encapsulated", row.item_is_encapsulated);
+    attributes
+}
+
+fn insert_text_attribute(
+    attributes: &mut BTreeMap<String, String>,
+    key: &str,
+    value: Option<&String>,
+) {
+    let Some(value) = value
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return;
+    };
+    attributes.insert(key.to_string(), value.to_string());
+}
+
+fn insert_bool_attribute(
+    attributes: &mut BTreeMap<String, String>,
+    key: &str,
+    value: Option<bool>,
+) {
+    if let Some(value) = value {
+        attributes.insert(key.to_string(), value.to_string());
     }
 }
 
@@ -582,6 +892,34 @@ fn required_bool_values(
         ));
     }
     Ok((0..values.len()).map(|index| values.value(index)).collect())
+}
+
+fn optional_bool_values(
+    batch: &RecordBatch,
+    column: &str,
+    stage: &str,
+) -> Result<Vec<Option<bool>>, RepoIntelligenceError> {
+    let Some(array) = batch.column_by_name(column) else {
+        return Ok(vec![None; batch.num_rows()]);
+    };
+    if matches!(array.data_type(), DataType::Null) {
+        return Ok(vec![None; array.len()]);
+    }
+    let values = array
+        .as_any()
+        .downcast_ref::<BooleanArray>()
+        .ok_or_else(|| {
+            parser_summary_contract_error(
+                stage,
+                format!(
+                    "column `{column}` expected Boolean values but found {:?}",
+                    array.data_type()
+                ),
+            )
+        })?;
+    Ok((0..values.len())
+        .map(|index| (!values.is_null(index)).then(|| values.value(index)))
+        .collect())
 }
 
 fn optional_int_values(

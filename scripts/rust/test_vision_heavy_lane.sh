@@ -13,15 +13,12 @@ if [ -z "${resolved_model_root}" ]; then
   fi
 fi
 
-feature="vision-dots"
 default_device="cpu"
 case "$(uname -s)" in
 Darwin)
-  feature="vision-dots-metal"
   default_device="metal"
   ;;
 Linux)
-  feature="vision-dots-cuda"
   default_device="cuda"
   ;;
 esac
@@ -34,14 +31,13 @@ export XIUXIAN_VISION_OCR_MAX_NEW_TOKENS="${XIUXIAN_VISION_OCR_MAX_NEW_TOKENS:-1
 export XIUXIAN_VISION_MAX_TILES="${XIUXIAN_VISION_MAX_TILES:-12}"
 
 echo "[vision-heavy] model_root=${XIUXIAN_VISION_MODEL_PATH}"
-echo "[vision-heavy] device=${XIUXIAN_VISION_DEVICE} feature=${feature}"
+echo "[vision-heavy] device=${XIUXIAN_VISION_DEVICE}"
 
 NEXTTEST_GUARD_LABEL="${NEXTTEST_GUARD_LABEL:-vision-heavy}" \
   NEXTTEST_GUARD_MAX_RSS_GB="${NEXTTEST_GUARD_MAX_RSS_GB:-24}" \
   just nextest-guarded \
   -p xiuxian-llm \
   --release \
-  --features "${feature}" \
   --test llm_vision_deepseek_smoke \
   --test-threads "${VISION_HEAVY_TEST_THREADS:-1}" \
   deepseek_smoke_runs_real_inference_from_local_model_cache

@@ -15,14 +15,15 @@ output contracts rather than whichever subsystem first consumed them.
 
 ## Canonical Parser Families
 
-| Namespace                          | Input shape                     | Canonical output                                | Notes                                                        |
-| ---------------------------------- | ------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
-| `parsers::markdown`                | Markdown notes                  | frontmatter, sections, links, code observations | Shared by indexing, search, enhancement, and semantic checks |
-| `parsers::link_graph::query`       | link-graph search query strings | `ParsedLinkGraphQuery`                          | Shared query-language parsing                                |
-| `parsers::zhixing::tasks`          | zhixing task lines              | task projections and normalized identities      | Shared by ingest and stats                                   |
-| `parsers::cargo::dependencies`     | `Cargo.toml` dependency tables  | dependency projections                          | Shared by dependency indexing                                |
-| `parsers::search::repo_code_query` | repo-code search query strings  | typed repo-code query                           | Shared by repo-search flows                                  |
-| `parsers::graph::persistence`      | graph JSON dicts                | `Entity` and `Relation`                         | Shared by graph save/load persistence                        |
+| Namespace                                             | Input shape                        | Canonical output                                | Notes                                                        |
+| ----------------------------------------------------- | ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| `parsers::markdown`                                   | Markdown notes                     | frontmatter, sections, links, code observations | Shared by indexing, search, enhancement, and semantic checks |
+| `parsers::link_graph::query`                          | link-graph search query strings    | `ParsedLinkGraphQuery`                          | Shared query-language parsing                                |
+| `parsers::zhixing::tasks`                             | zhixing task lines                 | task projections and normalized identities      | Shared by ingest and stats                                   |
+| `parsers::languages::rust::cargo::dependencies`       | `Cargo.toml` dependency tables     | dependency projections                          | Shared by dependency indexing                                |
+| `parsers::languages::python::pyproject::dependencies` | `pyproject.toml` dependency tables | dependency projections                          | Shared by dependency indexing                                |
+| `parsers::search::repo_code_query`                    | repo-code search query strings     | typed repo-code query                           | Shared by repo-search flows                                  |
+| `parsers::graph::persistence`                         | graph JSON dicts                   | `Entity` and `Relation`                         | Shared by graph save/load persistence                        |
 
 ## Parser vs Local Helper Rule
 
@@ -53,6 +54,34 @@ Code stays outside `src/parsers/` when it is one of these:
 4. Parser-owned unit coverage should live under `tests/unit/parsers/<family>/`.
 5. Consumer subsystems may import parser services, but they do not own
    duplicate parser namespaces.
+
+## Cross-Crate Reuse Rule
+
+`xiuxian-wendao` is still the ownership home for Wendao domain parser
+adapters, but not every parser family under `src/parsers/` should stay
+Wendao-owned forever.
+
+When a parser family becomes reusable across packages such as `xiuxian-qianji`
+or future `xiuxian-qianhuan` document flows, the long-term extraction target is
+an independent parser crate, tentatively `xiuxian-wendao-parsers`, rather than
+another consumer-local helper tree.
+
+A parser surface is a direct parser-crate candidate only when all of the
+following are true:
+
+1. the input is a durable document-format grammar such as Markdown or Org
+2. the output can be expressed as parser-owned intermediate contracts without
+   Wendao-owned domain records such as
+   `LinkGraphDocument`, `LinkGraphSearchOptions`, `Entity`, `Relation`, or
+   `WendaoResourceUri`
+3. at least one non-Wendao package can consume the result directly
+
+If the parser surface builds Wendao graph, retrieval, persistence, or other
+business semantics, it stays in `xiuxian-wendao` and should be treated as a
+domain adapter over any future independent parser crate.
+
+See [../06_roadmap/419_parser_substrate_separation.md](../06_roadmap/419_parser_substrate_separation.md)
+for the package-split plan.
 
 ## Parsing Strategy
 
@@ -146,11 +175,11 @@ strings as known semantic relation types. Unknown labels are preserved rather
 than promoted.
 
 :RELATIONS:
-:LINKS: [[02_parser/index]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]], [[03_features/210_search_queries_architecture]], [[06_roadmap/405_large_rust_modularization]]
+:LINKS: [[02_parser/index]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]], [[03_features/210_search_queries_architecture]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-05
+:LAST_SYNC: 2026-04-10
 :END:

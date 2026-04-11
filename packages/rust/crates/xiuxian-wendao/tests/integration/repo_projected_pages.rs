@@ -57,6 +57,7 @@ fn builds_projected_pages_from_stage_one_records() {
                 title: "First Steps".to_string(),
                 path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
                 format: Some("modelica_users_guide_tutorial".to_string()),
+                doc_target: None,
             },
             DocRecord {
                 repo_id: "demo".to_string(),
@@ -64,6 +65,7 @@ fn builds_projected_pages_from_stage_one_records() {
                 title: "PI documentation".to_string(),
                 path: "Controllers/PI.mo#annotation.documentation".to_string(),
                 format: Some("modelica_annotation".to_string()),
+                doc_target: None,
             },
         ],
         relations: vec![

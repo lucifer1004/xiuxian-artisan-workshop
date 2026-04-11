@@ -3,7 +3,7 @@
 mod analysis;
 mod bootstrap;
 mod cached;
-mod helpers;
+pub(crate) mod helpers;
 #[cfg(feature = "zhenfa-router")]
 mod incremental;
 mod julia_transport;
@@ -14,6 +14,7 @@ mod relation_dedupe;
 mod search;
 mod sync;
 
+pub(crate) use analysis::analyze_registered_repository_target_file_with_registry;
 pub use analysis::{
     analyze_registered_repository, analyze_registered_repository_with_registry,
     analyze_repository_from_config, analyze_repository_from_config_with_registry,
@@ -42,14 +43,14 @@ pub use projection::*;
 pub use registry::load_registered_repository;
 #[cfg(feature = "studio")]
 pub(crate) use search::ExampleSearchMetadata;
+#[cfg(feature = "search-runtime")]
+pub(crate) use search::canonical_import_query_text;
 pub use search::*;
 #[cfg(feature = "studio")]
 pub(crate) use search::{
     RepoAnalysisFallbackContract, example_fallback_contract, import_fallback_contract,
     module_fallback_contract, repository_search_artifacts, symbol_fallback_contract,
 };
-#[cfg(feature = "search-runtime")]
-pub(crate) use search::canonical_import_query_text;
 pub use sync::*;
 #[cfg(test)]
 #[path = "../../../tests/unit/analyzers/service/mod.rs"]

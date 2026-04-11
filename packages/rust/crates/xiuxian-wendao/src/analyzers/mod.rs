@@ -101,8 +101,8 @@ pub use query::{
     SymbolSearchHit, SymbolSearchQuery, SymbolSearchResult,
 };
 pub use records::{
-    DiagnosticRecord, DocRecord, ExampleRecord, ImportKind, ImportRecord, ModuleRecord,
-    RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord,
+    DiagnosticRecord, DocRecord, DocTargetRecord, ExampleRecord, ImportKind, ImportRecord,
+    ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord,
 };
 pub use registry::PluginRegistry;
 pub(crate) use repo_source::resolve_registered_repository_source;

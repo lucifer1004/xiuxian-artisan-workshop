@@ -205,6 +205,7 @@ fn sample_docs(
             title: "First Steps".to_string(),
             path: "docs/first_steps.md".to_string(),
             format: Some("tutorial".to_string()),
+            doc_target: None,
         },
         DocRecord {
             repo_id: repo_id.to_string(),
@@ -212,6 +213,7 @@ fn sample_docs(
             title: "solve".to_string(),
             path: "src/Demo.jl#symbol:solve".to_string(),
             format: Some("api".to_string()),
+            doc_target: None,
         },
         DocRecord {
             repo_id: repo_id.to_string(),
@@ -219,6 +221,7 @@ fn sample_docs(
             title: "General Notes".to_string(),
             path: "src/Demo.jl#symbol:drift".to_string(),
             format: Some("api".to_string()),
+            doc_target: None,
         },
         DocRecord {
             repo_id: repo_id.to_string(),
@@ -226,6 +229,7 @@ fn sample_docs(
             title: "Concepts".to_string(),
             path: "docs/users_guide/concepts.md".to_string(),
             format: Some("guide".to_string()),
+            doc_target: None,
         },
     ]
 }

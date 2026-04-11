@@ -237,3 +237,40 @@ fn responses_payload_serializes_tool_result_parts_into_function_call_output() ->
     assert_eq!(function_output["output"], json!(r#"{"ok":true}"#));
     Ok(())
 }
+
+#[test]
+fn responses_payload_preserves_developer_role_messages() -> anyhow::Result<()> {
+    let request = LiteChatRequest {
+        model: "gpt-5-codex".to_string(),
+        messages: vec![
+            ChatMessage {
+                role: MessageRole::Developer,
+                content: Some(MessageContent::Text(
+                    "Prefer terse, implementation-first answers.".to_string(),
+                )),
+                ..Default::default()
+            },
+            ChatMessage {
+                role: MessageRole::User,
+                content: Some(MessageContent::Text("hello".to_string())),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let payload = build_openai_responses_payload(&request).payload;
+    let input = payload["input"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("responses payload should include input array: {payload}")
+    })?;
+    let developer_message = input
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("developer message should be preserved: {input:?}"))?;
+
+    assert_eq!(developer_message["role"], json!("developer"));
+    assert_eq!(
+        developer_message["content"],
+        json!("Prefer terse, implementation-first answers.")
+    );
+    Ok(())
+}

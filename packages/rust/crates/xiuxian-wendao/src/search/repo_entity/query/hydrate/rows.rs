@@ -174,7 +174,8 @@ pub(crate) fn build_import_search_result(
                 candidate.id
             ))
         })?;
-        let attributes = parse_attributes_map(row.attributes_json.as_deref())?;
+        let mut attributes = parse_attributes_map(row.attributes_json.as_deref())?;
+        let resolved_id = attributes.remove("resolved_id");
         let import = ImportRecord {
             repo_id: repo_id.to_string(),
             module_id: row.module_id.clone().unwrap_or_default(),
@@ -182,7 +183,9 @@ pub(crate) fn build_import_search_result(
             target_package: row.summary.clone().unwrap_or_default(),
             source_module: row.signature.clone().unwrap_or_default(),
             kind: parse_import_kind(row.symbol_kind.as_str()),
-            resolved_id: attributes.get("resolved_id").cloned(),
+            line_start: row.line_start.map(|value| value as usize),
+            resolved_id,
+            attributes,
         };
         imports.push(import.clone());
         import_hits.push(ImportSearchHit {

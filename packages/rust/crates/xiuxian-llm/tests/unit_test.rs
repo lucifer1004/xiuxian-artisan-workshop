@@ -10,6 +10,8 @@ mod embedding_openai_compat;
 mod feature_default_litellm_only;
 #[path = "unit/llm_acceleration_unit.rs"]
 mod llm_acceleration_unit;
+#[path = "unit/llm_anthropic_roles.rs"]
+mod llm_anthropic_roles;
 #[path = "unit/llm_backend.rs"]
 mod llm_backend;
 #[path = "unit/llm_multimodal.rs"]

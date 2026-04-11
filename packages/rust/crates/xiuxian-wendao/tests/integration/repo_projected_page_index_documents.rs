@@ -80,6 +80,7 @@ fn sample_projection_analysis_output() -> RepositoryAnalysisOutput {
                 title: "First Steps".to_string(),
                 path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
                 format: Some("modelica_users_guide_tutorial".to_string()),
+                doc_target: None,
             },
             DocRecord {
                 repo_id: "demo".to_string(),
@@ -89,6 +90,7 @@ fn sample_projection_analysis_output() -> RepositoryAnalysisOutput {
                 title: "Version 4.1.0".to_string(),
                 path: "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0".to_string(),
                 format: Some("modelica_users_guide_release_notes_version".to_string()),
+                doc_target: None,
             },
             DocRecord {
                 repo_id: "demo".to_string(),
@@ -96,6 +98,7 @@ fn sample_projection_analysis_output() -> RepositoryAnalysisOutput {
                 title: "PI documentation".to_string(),
                 path: "Controllers/PI.mo#annotation.documentation".to_string(),
                 format: Some("modelica_annotation".to_string()),
+                doc_target: None,
             },
         ],
         relations: vec![

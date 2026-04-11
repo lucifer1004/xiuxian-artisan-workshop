@@ -1,5 +1,7 @@
 use std::path::Path;
 
+#[cfg(feature = "studio")]
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::query::{ImportSearchHit, ImportSearchQuery, ImportSearchResult};
@@ -8,8 +10,6 @@ use crate::analyzers::service::helpers::{import_match_score, normalized_rank_sco
 use crate::analyzers::service::{
     analyze_repository_from_config_with_registry, bootstrap_builtin_registry,
 };
-#[cfg(feature = "studio")]
-use crate::analyzers::cache::RepositorySearchArtifacts;
 
 /// Build an import search result from normalized analysis records.
 #[must_use]

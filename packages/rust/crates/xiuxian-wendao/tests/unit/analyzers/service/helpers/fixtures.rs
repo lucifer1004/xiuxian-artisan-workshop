@@ -64,6 +64,7 @@ pub(crate) fn doc_record(repo_id: &str, doc_id: &str, title: &str, path: &str) -
         title: title.to_string(),
         path: path.to_string(),
         format: Some("markdown".to_string()),
+        doc_target: None,
     }
 }
 
@@ -96,7 +97,9 @@ pub(crate) fn import_record(
         target_package: target_package.to_string(),
         source_module: source_module.to_string(),
         kind: ImportKind::Module,
+        line_start: None,
         resolved_id: None,
+        attributes: BTreeMap::new(),
     }
 }
 

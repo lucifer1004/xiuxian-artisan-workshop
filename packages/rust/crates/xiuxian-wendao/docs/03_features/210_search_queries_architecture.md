@@ -130,24 +130,26 @@ should be read as migration residue rather than long-term architecture:
 - `xiuxian-vector::search_engine::SearchEngineContext` and the
   `src/search_engine/` foundation still provide the request-scoped DataFusion
   discovery, logical-view, and SQL collection machinery that backs the
-  remaining shared fallback path and non-`duckdb` baseline
+  remaining non-`duckdb` baseline and any still-unmigrated shared fallback
 - non-`duckdb` builds now expose that retained fallback explicitly as
   `SearchPlaneService::datafusion_query_engine()` rather than as a generic
   `search_engine()` accessor, but the underlying lane is still same-layer
   DataFusion residue
 - the shared SQL surface under `src/search/queries/sql/` still owns the
-  request-scoped discovery catalogs, logical-view assembly, and DataFusion-led
-  fallback path, even though simple single-table published-Parquet statements
-  can now bypass that execution path through `ParquetQueryEngine`, which is
-  DuckDB-owned in `duckdb` builds
+  request-scoped discovery catalogs and logical-view assembly, but in
+  `duckdb` builds both routed published-Parquet queries and non-routed shared
+  SQL execution now run through DuckDB-owned request-scoped cores built from
+  that shared assembly
 - the surviving shared fallback is now named explicitly as a request-scoped
   DataFusion query core under `SearchQueryService::open_datafusion_core()`,
-  so the remaining owner line is visible at the query-service boundary too
+  so the remaining owner line is visible at the query-service boundary too and
+  stays limited to the non-`duckdb` baseline
 - the current GraphQL adapter no longer plans DataFusion expressions directly,
   and eligible single-table table queries can now hit the same bounded
-  parquet query-engine seam through the shared SQL service, but discovery,
-  logical-view, and multi-source GraphQL translations still ride the
-  DataFusion-led fallback path during cutover
+  parquet query-engine seam through the shared SQL service; in `duckdb`
+  builds the resulting non-routed shared SQL execution now also lands on the
+  request-scoped DuckDB core, while the non-`duckdb` baseline still uses the
+  DataFusion fallback path during cutover
 - bounded paths such as the default markdown helper and some diagnostics
   helpers still keep explicit DataFusion fallbacks or default engines while
   DuckDB cutover remains in progress
@@ -530,6 +532,15 @@ published-Parquet queries now build result metadata from the same
 request-scoped `SqlQuerySurface` that FlightSQL discovery uses, so eligible
 routed SQL no longer opens the residual DataFusion query core just to recover
 catalog, column, and view-source metadata after Parquet execution.
+
+The next bounded shared-SQL execution cutover is landed too. In `duckdb`
+builds the non-routed shared SQL branch now builds one request-scoped
+`SqlSurfaceAssembly`, registers its Parquet tables, logical views, and catalog
+batches into a DuckDB local relation core, and executes discovery-catalog and
+logical-view queries there as well. That means GraphQL-to-SQL, shared SQL, and
+FlightSQL statement fallback no longer keep a same-layer DataFusion execution
+role on the DuckDB production path. The explicit DataFusion query core remains
+only as the non-`duckdb` baseline.
 
 The next bounded diagnostics slice is landed too. The Studio search-index
 status route now computes its top-level total, phase counts,

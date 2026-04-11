@@ -108,6 +108,30 @@ needs a feature-gated second plugin bundle for these languages.
   `direnv exec . cargo test -p xiuxian-wendao load_code_ast_analysis_response_supports_plain_julia_plugin_repository --features julia,zhenfa-router -- --nocapture`
   and
   `direnv exec . cargo test -p xiuxian-wendao load_code_ast_analysis_response_supports_plain_modelica_plugin_repository --features julia,zhenfa-router -- --nocapture`
+- the Rust parser-summary symbol seam now preserves parser-owned line spans and
+  detail attributes all the way into `SymbolRecord`, and the Studio `code_ast`
+  retrieval payload now keeps backend-issued `displayLabel`, `excerpt`, and
+  `attributes` instead of collapsing those details before the frontend
+  language modules can render them
+- the Julia symbol materialization path now keeps same-name parser overloads as
+  distinct Rust symbols instead of collapsing them onto one
+  `repo:<id>:symbol:<module>.<name>` record; only colliding parser symbols pick
+  up a stable disambiguating suffix, and export placeholders no longer survive
+  when a real parser-owned symbol with the same name exists
+- Julia parser-summary docstring attachments now also preserve parser-owned
+  `target_path` and `target_line_start/end`, and the Rust docstring projection
+  uses those fields to bind overload docs to the correct symbol instead of
+  resolving only by `target_name`
+- repo doc coverage transport now also projects parser-owned `doc_target`
+  metadata from Julia docstring records, so the host Flight batch and frontend
+  repo-intelligence doc facet can keep target kind, name, qualified path, and
+  line spans instead of collapsing those docs back into generic `doc` rows
+- the Modelica parser-summary seam now also preserves parser-owned symbol
+  attributes such as visibility, variability, type name, owner path, class
+  path, restriction, and equation text inside `ParsedDeclaration` and
+  `SymbolRecord`, so downstream Studio `code_ast` retrieval atoms and the
+  frontend language projection layer can render parser-backed structured
+  detail instead of collapsing everything to generic fallback strings
 
 ## Ownership Boundary
 
@@ -121,6 +145,22 @@ needs a feature-gated second plugin bundle for these languages.
   transport parsing, Arrow request or response validation, typed summary
   decoding, and the public helper
   `julia_parser_summary_allows_safe_incremental_file_for_repository`.
+- `xiuxian-wendao-julia` also owns the parser-rich symbol identity seam for
+  Julia repo intelligence, including parser-owned line spans, parser detail
+  attributes, and overload-safe symbol materialization before those records are
+  projected into Wendao host analysis or Studio `code_ast` retrieval atoms.
+- `xiuxian-wendao-julia` also owns the parser-rich Julia docstring target seam,
+  including native doc-target path and line metadata decoding plus overload-safe
+  doc-to-symbol resolution before Wendao builds documentation relations.
+- `xiuxian-wendao-julia` also owns the bounded projection from parser-rich
+  Julia docstring targets into `DocRecord`, so downstream repo-doc coverage
+  transport and frontend repo-intelligence doc hits can render parser-owned
+  target identity without regex inference.
+- `xiuxian-wendao-julia` also owns the parser-rich Modelica symbol attribute
+  seam, including parser-summary column decoding, `ParsedDeclaration`
+  attribute preservation, and projection of those attributes into
+  `SymbolRecord` so downstream Studio consumers can render parser-backed
+  structured detail without regex inference.
 - The parser-summary boundary is Flight-only for the touched Julia cutover
   surface. `xiuxian-wendao-julia` does not keep a Rust-local
   Julia or Modelica AST fallback for repo-intelligence or the incremental

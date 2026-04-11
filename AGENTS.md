@@ -98,7 +98,7 @@ text.
 When no dedicated `PRJ_*` variable exists for a repository surface, derive the
 path from `$PRJ_ROOT` instead of using a bare repo-relative literal. Examples:
 `$PRJ_ROOT/.agent/PLANS.md`, `$PRJ_ROOT/.agent/blueprints/_template.md`,
-`$PRJ_ROOT/docs/GTD/DAILY_YYYY_MM_DD.md`, and
+`$PRJ_CACHE_HOME/agent/GTD/DAILY_YYYY_MM_DD.md`, and
 `$PRJ_ROOT/packages/<scope>/<package>/docs/`.
 
 ## 7. Protocol Hygiene & Message Integrity
@@ -210,7 +210,7 @@ All structural changes must follow the **Triple-Sync Protocol**:
     risks of the current task, then record that new blueprint path in the
     ExecPlan before implementation.
 2.  **GTD + Package Docs Synchronization**: Update the daily GTD file
-    (`$PRJ_ROOT/docs/GTD/DAILY_YYYY_MM_DD.md`) and synchronize progress in the
+    (`$PRJ_CACHE_HOME/agent/GTD/DAILY_YYYY_MM_DD.md`) and synchronize progress in the
     corresponding package docs (for example
     `$PRJ_ROOT/packages/<scope>/<package>/docs/` or the package
     `$PRJ_ROOT/packages/<scope>/<package>/README.md`) so package-level

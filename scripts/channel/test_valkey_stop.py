@@ -113,3 +113,38 @@ def test_valkey_stop_rejects_reachable_listener_without_matching_pidfile(tmp_pat
     assert "does not match the listener" in result.stderr
     assert not shutdown_file.exists()
     assert pidfile.exists()
+
+
+def test_valkey_stop_accepts_shared_pidfile(tmp_path: Path) -> None:
+    project_root = Path(__file__).resolve().parents[2]
+    script_path = Path(__file__).resolve().with_name("valkey-stop.sh")
+    fake_bin = _install_fake_valkey_cli(tmp_path)
+    shared_pidfile = tmp_path / ".run" / "valkey" / "valkey.pid"
+    shared_pidfile.parent.mkdir(parents=True, exist_ok=True)
+    shared_pidfile.write_text("12345\n", encoding="utf-8")
+    state_file = tmp_path / "valkey-state"
+    state_file.touch()
+    shutdown_file = tmp_path / "shutdown-called"
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["PRJ_RUNTIME_DIR"] = str(tmp_path / ".run")
+    env["VALKEY_HOST"] = "127.0.0.1"
+    env["VALKEY_DB"] = "0"
+    env["VALKEY_STATE_FILE"] = str(state_file)
+    env["VALKEY_SHUTDOWN_FILE"] = str(shutdown_file)
+    env["VALKEY_INFO_PROCESS_ID"] = "12345"
+
+    result = subprocess.run(
+        ["bash", str(script_path), "6387"],
+        cwd=project_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "Valkey stopped on port 6387." in result.stdout
+    assert shutdown_file.exists()
+    assert not shared_pidfile.exists()
+    assert not state_file.exists()

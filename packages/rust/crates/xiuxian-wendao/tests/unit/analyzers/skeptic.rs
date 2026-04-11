@@ -27,6 +27,7 @@ fn test_audit_symbols_verified() {
         title: "How to use solve_ode".to_string(),
         path: "docs/solve.md".to_string(),
         format: None,
+        doc_target: None,
     }];
 
     let relations = vec![RelationRecord {
@@ -69,6 +70,7 @@ fn test_audit_symbols_unverified() {
         title: "General Tutorial".to_string(),
         path: "docs/tutorial.md".to_string(),
         format: None,
+        doc_target: None,
     }];
 
     let relations = vec![RelationRecord {

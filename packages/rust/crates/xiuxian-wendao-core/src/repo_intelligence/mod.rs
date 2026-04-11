@@ -25,7 +25,7 @@ pub use plugin::{
 };
 pub use projection::ProjectionPageKind;
 pub use records::{
-    DiagnosticRecord, DocRecord, ExampleRecord, ImportKind, ImportRecord, ModuleRecord,
-    RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord,
+    DiagnosticRecord, DocRecord, DocTargetRecord, ExampleRecord, ImportKind, ImportRecord,
+    ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord,
 };
 pub use registry::PluginRegistry;

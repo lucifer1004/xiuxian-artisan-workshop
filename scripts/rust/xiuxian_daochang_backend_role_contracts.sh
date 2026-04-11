@@ -11,11 +11,11 @@ CARGO_TARGET_DIR="${target_dir}" "${cargo_bin}" test -p xiuxian-daochang --bin x
   resolve_runtime_inference_url_uses_minimax_provider_default_when_configured
 
 # Embedding runtime role boundary:
-# - non-mistral backend must not consume mistral.base_url.
+# - gateway embedding guard must preserve an explicit http backend selection.
 CARGO_TARGET_DIR="${target_dir}" "${cargo_bin}" test -p xiuxian-daochang --lib \
-  resolve_runtime_embed_base_url_ignores_mistral_base_url_for_non_mistral_backend
+  gateway_preserves_configured_http_embedding_backend
 
 # Backend parsing contracts:
-# - embedding parser keeps mistral_sdk explicit.
-CARGO_TARGET_DIR="${target_dir}" "${cargo_bin}" test -p xiuxian-daochang --bin xiuxian-daochang \
-  parse_embedding_backend_mode_supports_mistral_sdk_aliases
+# - embedding parser recognizes the active http/openai_http/litellm_rs families.
+CARGO_TARGET_DIR="${target_dir}" "${cargo_bin}" test -p xiuxian-llm --test unit_test \
+  embedding_backend -- --nocapture

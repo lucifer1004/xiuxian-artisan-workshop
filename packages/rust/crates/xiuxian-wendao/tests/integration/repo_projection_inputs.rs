@@ -55,6 +55,7 @@ fn generates_correct_repository_analysis_output() {
             title: "First Steps".to_string(),
             path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
             format: Some("modelica_users_guide_tutorial".to_string()),
+            doc_target: None,
         }],
         relations: vec![
             RelationRecord {

@@ -8,6 +8,9 @@ webhook_url = "http://127.0.0.1:9999"
 webhook_enabled = true
 # webhook_secret = "your-secret-key"
 
+[gateway.runtime]
+studio_request_timeout_secs = 30
+
 [link_graph.cache]
 valkey_url = "redis://127.0.0.1:6379/0"
 key_prefix = "xiuxian_wendao:link_graph:index"

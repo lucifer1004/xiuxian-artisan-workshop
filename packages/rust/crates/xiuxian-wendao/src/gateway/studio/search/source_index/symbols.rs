@@ -6,9 +6,13 @@ use crate::dependency_indexer::extract_symbols;
 use crate::gateway::studio::types::UiProjectConfig;
 use crate::unified_symbol::UnifiedSymbolIndex;
 
-use super::super::project_scope::{configured_project_scan_roots, index_path_for_entry};
-use super::super::support::{infer_crate_name, source_language_label, symbol_kind_label};
 use super::filters::should_skip_entry;
+use crate::gateway::studio::search::project_scope::{
+    configured_project_scan_roots, index_path_for_entry,
+};
+use crate::gateway::studio::search::support::{
+    infer_crate_name, source_language_label, symbol_kind_label,
+};
 
 pub(crate) fn build_symbol_index(
     project_root: &Path,

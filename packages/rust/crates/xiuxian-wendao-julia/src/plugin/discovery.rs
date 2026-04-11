@@ -81,6 +81,7 @@ pub(crate) fn discover_docs(
                 .extension()
                 .and_then(|value| value.to_str())
                 .map(str::to_string),
+            doc_target: None,
         });
     }
 
@@ -108,6 +109,7 @@ pub(crate) fn discover_docs(
                 title,
                 path: relative,
                 format: Some("md".to_string()),
+                doc_target: None,
             });
         }
     }

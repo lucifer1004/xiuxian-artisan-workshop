@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// One message in OpenAI-compatible chat format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
-    /// Role: "system", "user", "assistant".
+    /// Role: "system", "developer", "user", "assistant", "tool", or "function".
     pub role: String,
     /// Text content (none when `tool_calls` present).
     #[serde(skip_serializing_if = "Option::is_none")]

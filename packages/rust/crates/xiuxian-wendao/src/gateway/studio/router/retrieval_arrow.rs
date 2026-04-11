@@ -80,6 +80,18 @@ pub(crate) fn build_retrieval_chunks_flight_batch(
                 .map(ToString::to_string)
         })
         .collect::<Vec<_>>();
+    let attributes_json = chunks
+        .iter()
+        .map(|chunk| {
+            if chunk.attributes.is_empty() {
+                Ok(None)
+            } else {
+                serde_json::to_string(&chunk.attributes)
+                    .map(Some)
+                    .map_err(|error| error.to_string())
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     LanceRecordBatch::try_new(
         Arc::new(LanceSchema::new(vec![
@@ -93,6 +105,7 @@ pub(crate) fn build_retrieval_chunks_flight_batch(
             LanceField::new("lineStart", LanceDataType::UInt64, true),
             LanceField::new("lineEnd", LanceDataType::UInt64, true),
             LanceField::new("surface", LanceDataType::Utf8, true),
+            LanceField::new("attributesJson", LanceDataType::Utf8, true),
         ])),
         vec![
             Arc::new(LanceStringArray::from(owner_ids)),
@@ -105,6 +118,7 @@ pub(crate) fn build_retrieval_chunks_flight_batch(
             Arc::new(LanceUInt64Array::from(line_starts)),
             Arc::new(LanceUInt64Array::from(line_ends)),
             Arc::new(LanceStringArray::from(surfaces)),
+            Arc::new(LanceStringArray::from(attributes_json)),
         ],
     )
     .map_err(|error| error.to_string())
@@ -125,6 +139,7 @@ pub(crate) fn encode_retrieval_chunks_ipc(chunks: &[RetrievalChunk]) -> Result<V
         Field::new("lineStart", DataType::UInt64, true),
         Field::new("lineEnd", DataType::UInt64, true),
         Field::new("surface", DataType::Utf8, true),
+        Field::new("attributesJson", DataType::Utf8, true),
     ]);
     let mut buffer = Cursor::new(Vec::new());
     {

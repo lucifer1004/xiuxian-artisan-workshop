@@ -6,11 +6,9 @@ pub(crate) mod provider;
 #[cfg(feature = "search-runtime")]
 pub(crate) mod registration;
 
-pub use self::execution::{
-    SqlBatchPayload, SqlColumnPayload, SqlQueryMetadata, SqlQueryPayload,
-};
 #[cfg(feature = "search-runtime")]
 pub use self::execution::query_sql_payload;
+pub use self::execution::{SqlBatchPayload, SqlColumnPayload, SqlQueryMetadata, SqlQueryPayload};
 #[cfg(feature = "search-runtime")]
 pub(crate) use self::execution::{
     configured_parquet_query_engine, engine_batches_rows_payload, execute_sql_query,

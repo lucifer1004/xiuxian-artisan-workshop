@@ -1,5 +1,7 @@
 //! Shared types for Modelica repository intelligence.
 
+use std::collections::BTreeMap;
+
 use xiuxian_wendao_core::repo_intelligence::{DocRecord, ImportKind, RepoSymbolKind};
 
 /// Collected documentation record with target IDs.
@@ -20,6 +22,8 @@ pub(crate) struct ParsedImport {
     pub(crate) kind: ImportKind,
     /// Source location: starting line number (1-based).
     pub(crate) line_start: Option<usize>,
+    /// Parser-owned detail attributes preserved for downstream AST consumers.
+    pub(crate) attributes: BTreeMap<String, String>,
 }
 
 /// Parsed symbol declaration from Modelica source.
@@ -37,4 +41,6 @@ pub(crate) struct ParsedDeclaration {
     pub(crate) line_end: Option<usize>,
     /// Mathematical equations within this declaration.
     pub(crate) equations: Vec<String>,
+    /// Parser-owned detail attributes preserved for downstream AST consumers.
+    pub(crate) attributes: BTreeMap<String, String>,
 }

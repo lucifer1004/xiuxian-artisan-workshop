@@ -77,12 +77,35 @@ pub(crate) fn path_has_extension(path: &str, extension: &str) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
 }
 
-pub(crate) fn retrieval_semantic_type(kind: RepoSymbolKind, same_file: bool) -> &'static str {
+pub(crate) fn retrieval_semantic_type(
+    symbol: &crate::analyzers::SymbolRecord,
+    same_file: bool,
+) -> &'static str {
     if !same_file {
         return "externalSymbol";
     }
 
-    match kind {
+    if let Some(parser_kind) = symbol.attributes.get("parser_kind").map(String::as_str) {
+        match parser_kind {
+            "module" => return "module",
+            "macro" => return "macro",
+            "parameter" => return "parameter",
+            "binding" => {
+                if matches!(
+                    symbol.attributes.get("binding_kind").map(String::as_str),
+                    Some("const")
+                ) {
+                    return "constant";
+                }
+                return "binding";
+            }
+            "type" => return "type",
+            "function" => return "function",
+            _ => {}
+        }
+    }
+
+    match symbol.kind {
         RepoSymbolKind::Function => "function",
         RepoSymbolKind::Type => "type",
         RepoSymbolKind::Constant => "constant",
@@ -95,23 +118,21 @@ pub(crate) fn focus_symbol_for_blocks<'a>(
     analysis: &'a RepositoryAnalysisOutput,
     path: &str,
 ) -> Option<&'a crate::analyzers::SymbolRecord> {
-    line_hint
-        .and_then(|line| {
-            analysis.symbols.iter().find(|symbol| {
-                if !repo_relative_path_matches(symbol.path.as_str(), path) {
-                    return false;
-                }
-                match (symbol.line_start, symbol.line_end) {
-                    (Some(start), Some(end)) => start <= line && line <= end,
-                    (Some(start), None) => start == line,
-                    _ => false,
-                }
-            })
-        })
-        .or_else(|| {
-            analysis
-                .symbols
-                .iter()
-                .find(|symbol| repo_relative_path_matches(symbol.path.as_str(), path))
-        })
+    if let Some(line) = line_hint {
+        return analysis.symbols.iter().find(|symbol| {
+            if !repo_relative_path_matches(symbol.path.as_str(), path) {
+                return false;
+            }
+            match (symbol.line_start, symbol.line_end) {
+                (Some(start), Some(end)) => start <= line && line <= end,
+                (Some(start), None) => start == line,
+                _ => false,
+            }
+        });
+    }
+
+    analysis
+        .symbols
+        .iter()
+        .find(|symbol| repo_relative_path_matches(symbol.path.as_str(), path))
 }

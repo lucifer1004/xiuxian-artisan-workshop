@@ -46,7 +46,7 @@ fn detects_hidden_markdown_link_in_docs_tree() {
 #[test]
 fn ignores_hidden_links_in_tracking_docs() {
     let content = "# Daily\n\nTracked in [[.cache/codex/execplans/demo.md]].\n";
-    let issues = collect_doc_governance_issues("docs/GTD/DAILY_2026_04_04.md", content);
+    let issues = collect_doc_governance_issues(".cache/agent/GTD/DAILY_2026_04_04.md", content);
 
     assert!(
         !issues

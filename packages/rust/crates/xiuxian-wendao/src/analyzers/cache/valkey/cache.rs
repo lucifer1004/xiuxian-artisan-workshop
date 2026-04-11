@@ -5,10 +5,12 @@ use crate::analyzers::cache::{RepositoryAnalysisCacheKey, RepositorySearchQueryC
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 
 use super::runtime::{ValkeyAnalysisCacheRuntime, resolve_valkey_analysis_cache_runtime};
+#[cfg(feature = "zhenfa-router")]
+use super::storage::decode_analysis_payload_for_revision;
 use super::storage::{
-    decode_analysis_payload, decode_analysis_payload_for_revision, decode_search_query_payload,
-    encode_analysis_payload, encode_search_query_payload, valkey_analysis_key,
-    valkey_analysis_revision_key, valkey_search_query_key,
+    decode_analysis_payload, decode_search_query_payload, encode_analysis_payload,
+    encode_search_query_payload, valkey_analysis_key, valkey_analysis_revision_key,
+    valkey_search_query_key,
 };
 
 #[derive(Debug, Clone)]

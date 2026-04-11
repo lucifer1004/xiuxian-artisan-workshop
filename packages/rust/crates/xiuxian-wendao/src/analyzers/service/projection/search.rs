@@ -1,16 +1,16 @@
 use std::path::Path;
 
+#[cfg(feature = "studio")]
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::projection::build_projected_page_search;
+#[cfg(feature = "studio")]
+use crate::analyzers::projection::build_repo_projected_page_search_with_artifacts as build_projected_page_search_with_artifacts;
 use crate::analyzers::query::{
     DocsSearchQuery, DocsSearchResult, RepoProjectedPageSearchQuery, RepoProjectedPageSearchResult,
 };
 use crate::analyzers::registry::PluginRegistry;
-#[cfg(feature = "studio")]
-use crate::analyzers::cache::RepositorySearchArtifacts;
-#[cfg(feature = "studio")]
-use crate::analyzers::projection::build_repo_projected_page_search_with_artifacts as build_projected_page_search_with_artifacts;
 
 use super::registry::{with_bootstrapped_repository_analysis, with_repository_analysis};
 

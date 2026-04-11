@@ -81,7 +81,9 @@ fn sample_analysis(
             target_package: "SciMLBase".to_string(),
             source_module: "BaseModelica".to_string(),
             kind: ImportKind::Reexport,
+            line_start: None,
             resolved_id: Some(format!("symbol:{symbol_name}")),
+            attributes: BTreeMap::new(),
         }],
         ..RepositoryAnalysisOutput::default()
     }

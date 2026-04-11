@@ -1,7 +1,7 @@
 use std::fs;
 use std::sync::Arc;
 
-use crate::analyzers::analyze_registered_repository_with_registry;
+use crate::analyzers::service::analyze_registered_repository_target_file_with_registry;
 use crate::gateway::studio::router::code_ast::{
     build_code_ast_analysis_response, resolve_code_ast_repository_and_path,
 };
@@ -29,10 +29,11 @@ pub(crate) async fn load_code_ast_analysis_response(
 
     tokio::task::spawn_blocking(
         move || -> Result<CodeAstAnalysisResponse, crate::analyzers::RepoIntelligenceError> {
-            let analysis = analyze_registered_repository_with_registry(
+            let analysis = analyze_registered_repository_target_file_with_registry(
                 &repository,
                 cwd.as_path(),
                 &plugin_registry,
+                repo_path.as_str(),
             )?;
             let source_content = repository.path.as_ref().and_then(|root| {
                 let source_path = root.join(&repo_path);

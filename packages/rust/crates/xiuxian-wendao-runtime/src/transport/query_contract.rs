@@ -40,9 +40,6 @@ pub use repo::{
     validate_repo_overview_request, validate_repo_projected_page_index_tree_request,
     validate_repo_sync_request,
 };
-pub use rerank::{
-    RerankScoreWeights, RERANK_ROUTE, WENDAO_RERANK_DIMENSION_HEADER,
-};
 #[cfg(feature = "transport")]
 pub use rerank::{
     RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
@@ -54,6 +51,7 @@ pub use rerank::{
     validate_rerank_request_batch, validate_rerank_request_schema, validate_rerank_response_batch,
     validate_rerank_response_schema,
 };
+pub use rerank::{RERANK_ROUTE, RerankScoreWeights, WENDAO_RERANK_DIMENSION_HEADER};
 pub use search::{
     REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN,
     REPO_SEARCH_HIERARCHY_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,

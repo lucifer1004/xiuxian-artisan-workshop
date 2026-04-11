@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use xiuxian_wendao_core::repo_intelligence::{
-    AnalysisContext, DocRecord, ModuleRecord, PluginAnalysisOutput, PluginLinkContext,
-    RegisteredRepository, RelationKind, RelationRecord, RepoIntelligenceError,
+    AnalysisContext, DocRecord, DocTargetRecord, ModuleRecord, PluginAnalysisOutput,
+    PluginLinkContext, RegisteredRepository, RelationKind, RelationRecord, RepoIntelligenceError,
     RepoIntelligencePlugin, RepoSourceFile, RepoSymbolKind, RepositoryAnalysisOutput,
     RepositoryRecord, SymbolRecord,
 };
@@ -189,6 +189,7 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
             relations.extend(build_docstring_relations(
                 &context.repository.id,
                 &module_id,
+                &collected.root_summary.module_name,
                 &symbols,
                 &file.summary.docstrings,
                 &file.path,
@@ -249,21 +250,21 @@ fn collect_symbol_records(
     module_name: &str,
     files: &[JuliaAnalyzedFile],
 ) -> Vec<SymbolRecord> {
-    let mut symbol_map = BTreeMap::new();
+    let mut export_bindings = Vec::new();
+    let mut actual_symbols = Vec::new();
 
     for file in files {
-        for symbol in build_symbol_records(
-            repo_id,
-            &file.path,
-            module_name,
-            &file.summary.exports,
-            &file.summary.symbols,
-        ) {
-            upsert_symbol(&mut symbol_map, symbol);
-        }
+        export_bindings.extend(
+            file.summary
+                .exports
+                .iter()
+                .cloned()
+                .map(|export_name| (file.path.clone(), export_name)),
+        );
+        actual_symbols.extend(collect_pending_symbols(&file.path, &file.summary.symbols));
     }
 
-    symbol_map.into_values().collect()
+    materialize_symbol_records(repo_id, module_name, &export_bindings, actual_symbols)
 }
 
 fn build_symbol_records(
@@ -273,9 +274,97 @@ fn build_symbol_records(
     exports: &[String],
     symbols: &[JuliaParserSymbol],
 ) -> Vec<SymbolRecord> {
-    let mut symbol_map = BTreeMap::new();
+    let export_bindings = exports
+        .iter()
+        .cloned()
+        .map(|export_name| (path.to_string(), export_name))
+        .collect::<Vec<_>>();
+    let actual_symbols = collect_pending_symbols(path, symbols);
+    materialize_symbol_records(repo_id, module_name, &export_bindings, actual_symbols)
+}
 
-    for export_name in exports {
+#[derive(Debug, Clone)]
+struct PendingSymbolRecord {
+    path: String,
+    name: String,
+    kind: RepoSymbolKind,
+    signature: Option<String>,
+    line_start: Option<usize>,
+    line_end: Option<usize>,
+    attributes: BTreeMap<String, String>,
+}
+
+fn collect_pending_symbols(path: &str, symbols: &[JuliaParserSymbol]) -> Vec<PendingSymbolRecord> {
+    symbols
+        .iter()
+        .map(|symbol| PendingSymbolRecord {
+            path: path.to_string(),
+            name: symbol.name.clone(),
+            kind: match symbol.kind {
+                JuliaParserSymbolKind::Function => RepoSymbolKind::Function,
+                JuliaParserSymbolKind::Type => RepoSymbolKind::Type,
+                JuliaParserSymbolKind::Constant => RepoSymbolKind::Constant,
+                JuliaParserSymbolKind::Other => RepoSymbolKind::Other,
+            },
+            signature: symbol.signature.clone(),
+            line_start: symbol.line_start,
+            line_end: symbol.line_end,
+            attributes: symbol.attributes.clone(),
+        })
+        .collect()
+}
+
+fn materialize_symbol_records(
+    repo_id: &str,
+    module_name: &str,
+    export_bindings: &[(String, String)],
+    actual_symbols: Vec<PendingSymbolRecord>,
+) -> Vec<SymbolRecord> {
+    let mut symbol_map = BTreeMap::new();
+    let mut actual_counts = BTreeMap::new();
+    let actual_names = actual_symbols
+        .iter()
+        .map(|symbol| symbol.name.clone())
+        .collect::<BTreeSet<_>>();
+
+    for symbol in &actual_symbols {
+        *actual_counts
+            .entry(base_symbol_id(repo_id, module_name, &symbol.name))
+            .or_insert(0usize) += 1;
+    }
+
+    let mut duplicate_ordinals = BTreeMap::new();
+    for symbol in actual_symbols {
+        let base_id = base_symbol_id(repo_id, module_name, &symbol.name);
+        let duplicate_count = actual_counts.get(&base_id).copied().unwrap_or(0);
+        let duplicate_ordinal = if duplicate_count > 1 {
+            let ordinal = duplicate_ordinals.entry(base_id.clone()).or_insert(0usize);
+            *ordinal += 1;
+            Some(*ordinal)
+        } else {
+            None
+        };
+        let symbol_id =
+            build_materialized_symbol_id(repo_id, module_name, &symbol, duplicate_ordinal);
+        let record = build_symbol_record(
+            repo_id,
+            &symbol.path,
+            module_name,
+            &symbol.name,
+            symbol.kind,
+            symbol.signature,
+            symbol.line_start,
+            symbol.line_end,
+            symbol.attributes,
+            symbol_id,
+        );
+        upsert_symbol(&mut symbol_map, record);
+    }
+
+    for (path, export_name) in export_bindings {
+        if actual_names.contains(export_name) {
+            continue;
+        }
         let symbol = build_symbol_record(
             repo_id,
             path,
@@ -283,26 +372,12 @@ fn build_symbol_records(
             export_name,
             RepoSymbolKind::ModuleExport,
             None,
+            None,
+            None,
+            BTreeMap::new(),
+            base_symbol_id(repo_id, module_name, export_name),
         );
         symbol_map.entry(symbol.symbol_id.clone()).or_insert(symbol);
-    }
-
-    for symbol in symbols {
-        let kind = match symbol.kind {
-            JuliaParserSymbolKind::Function => RepoSymbolKind::Function,
-            JuliaParserSymbolKind::Type => RepoSymbolKind::Type,
-            JuliaParserSymbolKind::Constant => RepoSymbolKind::Constant,
-            JuliaParserSymbolKind::Other => RepoSymbolKind::Other,
-        };
-        let record = build_symbol_record(
-            repo_id,
-            path,
-            module_name,
-            &symbol.name,
-            kind,
-            symbol.signature.clone(),
-        );
-        upsert_symbol(&mut symbol_map, record);
     }
 
     symbol_map.into_values().collect()
@@ -374,15 +449,11 @@ fn build_docstring_records(
     docstrings
         .iter()
         .filter_map(|docstring| {
-            let anchor = match docstring.target_kind {
-                JuliaParserDocTargetKind::Module if docstring.target_name == module_name => {
-                    format!("module:{}", docstring.target_name)
+            let anchor = match resolve_docstring_target(module_name, symbols, docstring)? {
+                ResolvedDocstringTarget::Module => format!("module:{}", docstring.target_name),
+                ResolvedDocstringTarget::Symbol(symbol) => {
+                    docstring_symbol_anchor(docstring, symbol)
                 }
-                JuliaParserDocTargetKind::Symbol => symbols
-                    .iter()
-                    .find(|symbol| symbol.name == docstring.target_name)
-                    .map(|_| format!("symbol:{}", docstring.target_name))?,
-                JuliaParserDocTargetKind::Module => return None,
             };
             Some(DocRecord {
                 repo_id: repo_id.to_string(),
@@ -390,6 +461,7 @@ fn build_docstring_records(
                 title: docstring.target_name.clone(),
                 path: format!("{path}#{anchor}"),
                 format: Some("julia_docstring".to_string()),
+                doc_target: Some(build_doc_target_record(docstring)),
             })
         })
         .collect()
@@ -398,6 +470,7 @@ fn build_docstring_records(
 fn build_docstring_relations(
     repo_id: &str,
     module_id: &str,
+    module_name: &str,
     symbols: &[SymbolRecord],
     docstrings: &[JuliaParserDocAttachment],
     path: &str,
@@ -405,19 +478,17 @@ fn build_docstring_relations(
     docstrings
         .iter()
         .filter_map(|docstring| {
-            let (anchor, target_id) = match docstring.target_kind {
-                JuliaParserDocTargetKind::Module => (
-                    format!("module:{}", docstring.target_name),
-                    module_id.to_string(),
-                ),
-                JuliaParserDocTargetKind::Symbol => (
-                    format!("symbol:{}", docstring.target_name),
-                    symbols
-                        .iter()
-                        .find(|symbol| symbol.name == docstring.target_name)
-                        .map(|symbol| symbol.symbol_id.clone())?,
-                ),
-            };
+            let (anchor, target_id) =
+                match resolve_docstring_target(module_name, symbols, docstring)? {
+                    ResolvedDocstringTarget::Module => (
+                        format!("module:{}", docstring.target_name),
+                        module_id.to_string(),
+                    ),
+                    ResolvedDocstringTarget::Symbol(symbol) => (
+                        docstring_symbol_anchor(docstring, symbol),
+                        symbol.symbol_id.clone(),
+                    ),
+                };
             Some(RelationRecord {
                 repo_id: repo_id.to_string(),
                 source_id: format!("repo:{repo_id}:doc:{path}#{anchor}"),
@@ -428,6 +499,121 @@ fn build_docstring_relations(
         .collect()
 }
 
+enum ResolvedDocstringTarget<'a> {
+    Module,
+    Symbol(&'a SymbolRecord),
+}
+
+fn resolve_docstring_target<'a>(
+    module_name_or_id: &str,
+    symbols: &'a [SymbolRecord],
+    docstring: &JuliaParserDocAttachment,
+) -> Option<ResolvedDocstringTarget<'a>> {
+    match docstring.target_kind {
+        JuliaParserDocTargetKind::Module if docstring.target_name == module_name_or_id => {
+            Some(ResolvedDocstringTarget::Module)
+        }
+        JuliaParserDocTargetKind::Module => None,
+        JuliaParserDocTargetKind::Symbol => {
+            resolve_docstring_symbol(symbols, docstring).map(ResolvedDocstringTarget::Symbol)
+        }
+    }
+}
+
+fn resolve_docstring_symbol<'a>(
+    symbols: &'a [SymbolRecord],
+    docstring: &JuliaParserDocAttachment,
+) -> Option<&'a SymbolRecord> {
+    let mut candidates = symbols
+        .iter()
+        .filter(|symbol| symbol.name == docstring.target_name)
+        .collect::<Vec<_>>();
+
+    if let Some(target_path) = docstring.target_path.as_ref() {
+        let matched = candidates
+            .iter()
+            .copied()
+            .filter(|symbol| symbol_matches_doc_target_path(symbol, target_path))
+            .collect::<Vec<_>>();
+        if !matched.is_empty() {
+            candidates = matched;
+        }
+    }
+
+    if let Some(target_line_start) = docstring.target_line_start {
+        let matched = candidates
+            .iter()
+            .copied()
+            .filter(|symbol| symbol.line_start == Some(target_line_start))
+            .collect::<Vec<_>>();
+        if !matched.is_empty() {
+            candidates = matched;
+        }
+    }
+
+    if let Some(target_line_end) = docstring.target_line_end {
+        let matched = candidates
+            .iter()
+            .copied()
+            .filter(|symbol| {
+                symbol.line_end.unwrap_or(symbol.line_start.unwrap_or(0)) == target_line_end
+            })
+            .collect::<Vec<_>>();
+        if !matched.is_empty() {
+            candidates = matched;
+        }
+    }
+
+    candidates
+        .into_iter()
+        .min_by(|left, right| left.symbol_id.cmp(&right.symbol_id))
+}
+
+fn symbol_matches_doc_target_path(symbol: &SymbolRecord, target_path: &str) -> bool {
+    if symbol.qualified_name == target_path {
+        return true;
+    }
+    if let Some(owner_path) = symbol.attributes.get("owner_path")
+        && format!("{owner_path}.{}", symbol.name) == target_path
+    {
+        return true;
+    }
+    if let Some(module_path) = symbol.attributes.get("module_path")
+        && format!("{module_path}.{}", symbol.name) == target_path
+    {
+        return true;
+    }
+    false
+}
+
+fn docstring_symbol_anchor(docstring: &JuliaParserDocAttachment, symbol: &SymbolRecord) -> String {
+    if docstring.target_line_start.is_some()
+        || docstring.target_line_end.is_some()
+        || docstring.target_path.is_some()
+        || symbol.symbol_id.contains('@')
+    {
+        return format!("symbol-id:{}", symbol.symbol_id);
+    }
+    format!("symbol:{}", docstring.target_name)
+}
+
+fn build_doc_target_record(docstring: &JuliaParserDocAttachment) -> DocTargetRecord {
+    DocTargetRecord {
+        kind: doc_target_kind_label(docstring.target_kind).to_string(),
+        name: docstring.target_name.clone(),
+        path: docstring.target_path.clone(),
+        line_start: docstring.target_line_start,
+        line_end: docstring.target_line_end,
+    }
+}
+
+fn doc_target_kind_label(target_kind: JuliaParserDocTargetKind) -> &'static str {
+    match target_kind {
+        JuliaParserDocTargetKind::Module => "module",
+        JuliaParserDocTargetKind::Symbol => "symbol",
+    }
+}
+
 fn build_symbol_record(
     repo_id: &str,
     path: &str,
@@ -435,23 +621,70 @@ fn build_symbol_record(
     symbol_name: &str,
     kind: RepoSymbolKind,
     signature: Option<String>,
+    line_start: Option<usize>,
+    line_end: Option<usize>,
+    attributes: BTreeMap<String, String>,
+    symbol_id: String,
 ) -> SymbolRecord {
-    let qualified_name = format!("{module_name}.{symbol_name}");
+    let qualified_name = qualified_symbol_name(module_name, symbol_name);
     SymbolRecord {
         repo_id: repo_id.to_string(),
-        symbol_id: format!("repo:{repo_id}:symbol:{qualified_name}"),
+        symbol_id,
         module_id: Some(format!("repo:{repo_id}:module:{module_name}")),
         name: symbol_name.to_string(),
         qualified_name,
         kind,
         path: path.to_string(),
-        line_start: None,
-        line_end: None,
+        line_start,
+        line_end,
         signature,
         audit_status: Some("unreviewed".to_string()),
         verification_state: None,
-        attributes: BTreeMap::new(),
+        attributes,
     }
+}
+
+fn build_materialized_symbol_id(
+    repo_id: &str,
+    module_name: &str,
+    symbol: &PendingSymbolRecord,
+    duplicate_ordinal: Option<usize>,
+) -> String {
+    let base_id = base_symbol_id(repo_id, module_name, &symbol.name);
+    let Some(ordinal) = duplicate_ordinal else {
+        return base_id;
+    };
+
+    let mut segments = vec![normalize_symbol_id_segment(&symbol.path)];
+    if let Some(start) = symbol.line_start {
+        let end = symbol.line_end.unwrap_or(start);
+        segments.push(format!("l{start}-{end}"));
+    }
+    if let Some(signature) = &symbol.signature {
+        segments.push(format!("sig_{}", normalize_symbol_id_segment(signature)));
+    }
+    segments.push(format!("dup{ordinal}"));
+    format!("{base_id}@{}", segments.join("__"))
+}
+
+fn base_symbol_id(repo_id: &str, module_name: &str, symbol_name: &str) -> String {
+    format!(
+        "repo:{repo_id}:symbol:{}",
+        qualified_symbol_name(module_name, symbol_name)
+    )
+}
+
+fn qualified_symbol_name(module_name: &str, symbol_name: &str) -> String {
+    format!("{module_name}.{symbol_name}")
+}
+
+fn normalize_symbol_id_segment(raw: &str) -> String {
+    raw.chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '-' => ch,
+            _ => '_',
+        })
+        .collect()
 }
 
 fn upsert_symbol(symbols: &mut BTreeMap<String, SymbolRecord>, symbol: SymbolRecord) {
@@ -463,5 +696,200 @@ fn upsert_symbol(symbols: &mut BTreeMap<String, SymbolRecord>, symbol: SymbolRec
         None => {
             symbols.insert(symbol.symbol_id.clone(), symbol);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{
+        JuliaAnalyzedFile, JuliaParserDocAttachment, JuliaParserDocTargetKind,
+        JuliaParserFileSummary, JuliaParserSymbol, JuliaParserSymbolKind, RelationKind,
+        RepoSymbolKind, build_docstring_records, build_docstring_relations, build_symbol_records,
+        collect_symbol_records,
+    };
+
+    #[test]
+    fn build_symbol_records_preserves_same_file_overloads_without_export_placeholder() {
+        let records = build_symbol_records(
+            "demo",
+            "src/SameFile.jl",
+            "Demo",
+            &["solve".to_string()],
+            &[
+                JuliaParserSymbol {
+                    name: "solve".to_string(),
+                    kind: JuliaParserSymbolKind::Function,
+                    signature: Some("solve(problem::Problem)".to_string()),
+                    line_start: Some(10),
+                    line_end: Some(12),
+                    attributes: BTreeMap::new(),
+                },
+                JuliaParserSymbol {
+                    name: "solve".to_string(),
+                    kind: JuliaParserSymbolKind::Function,
+                    signature: Some("solve(problem::Problem, dt::Float64)".to_string()),
+                    line_start: Some(14),
+                    line_end: Some(18),
+                    attributes: BTreeMap::new(),
+                },
+            ],
+        );
+
+        assert_eq!(records.len(), 2);
+        assert!(
+            records
+                .iter()
+                .all(|record| record.kind == RepoSymbolKind::Function)
+        );
+        assert!(
+            records
+                .iter()
+                .all(|record| record.symbol_id.starts_with("repo:demo:symbol:Demo.solve@"))
+        );
+        assert_ne!(records[0].symbol_id, records[1].symbol_id);
+    }
+
+    #[test]
+    fn collect_symbol_records_preserves_cross_file_overloads_without_export_placeholder() {
+        let records = collect_symbol_records(
+            "demo",
+            "Demo",
+            &[
+                JuliaAnalyzedFile {
+                    path: "src/A.jl".to_string(),
+                    summary: JuliaParserFileSummary {
+                        module_name: Some("Demo".to_string()),
+                        exports: vec!["solve".to_string()],
+                        imports: Vec::new(),
+                        symbols: vec![JuliaParserSymbol {
+                            name: "solve".to_string(),
+                            kind: JuliaParserSymbolKind::Function,
+                            signature: Some("solve(problem::Problem)".to_string()),
+                            line_start: Some(10),
+                            line_end: Some(12),
+                            attributes: BTreeMap::new(),
+                        }],
+                        docstrings: Vec::new(),
+                        includes: Vec::new(),
+                    },
+                },
+                JuliaAnalyzedFile {
+                    path: "src/B.jl".to_string(),
+                    summary: JuliaParserFileSummary {
+                        module_name: Some("Demo".to_string()),
+                        exports: Vec::new(),
+                        imports: Vec::new(),
+                        symbols: vec![JuliaParserSymbol {
+                            name: "solve".to_string(),
+                            kind: JuliaParserSymbolKind::Function,
+                            signature: Some("solve(problem::Problem, dt::Float64)".to_string()),
+                            line_start: Some(20),
+                            line_end: Some(24),
+                            attributes: BTreeMap::new(),
+                        }],
+                        docstrings: Vec::new(),
+                        includes: Vec::new(),
+                    },
+                },
+            ],
+        );
+
+        assert_eq!(records.len(), 2);
+        assert!(
+            records
+                .iter()
+                .all(|record| record.kind == RepoSymbolKind::Function)
+        );
+        assert!(
+            records
+                .iter()
+                .all(|record| record.symbol_id.starts_with("repo:demo:symbol:Demo.solve@"))
+        );
+        assert_ne!(records[0].symbol_id, records[1].symbol_id);
+    }
+
+    #[test]
+    fn build_docstring_records_and_relations_resolve_overloaded_targets_by_parser_lines() {
+        let symbols = build_symbol_records(
+            "demo",
+            "src/SameFile.jl",
+            "Demo",
+            &[],
+            &[
+                JuliaParserSymbol {
+                    name: "solve".to_string(),
+                    kind: JuliaParserSymbolKind::Function,
+                    signature: Some("solve(problem::Problem)".to_string()),
+                    line_start: Some(10),
+                    line_end: Some(12),
+                    attributes: BTreeMap::from([("owner_path".to_string(), "Demo".to_string())]),
+                },
+                JuliaParserSymbol {
+                    name: "solve".to_string(),
+                    kind: JuliaParserSymbolKind::Function,
+                    signature: Some("solve(problem::Problem, dt::Float64)".to_string()),
+                    line_start: Some(20),
+                    line_end: Some(24),
+                    attributes: BTreeMap::from([("owner_path".to_string(), "Demo".to_string())]),
+                },
+            ],
+        );
+
+        let docstrings = vec![
+            JuliaParserDocAttachment {
+                target_name: "solve".to_string(),
+                target_kind: JuliaParserDocTargetKind::Symbol,
+                target_path: Some("Demo.solve".to_string()),
+                target_line_start: Some(10),
+                target_line_end: Some(12),
+                content: "Solve the main problem.".to_string(),
+            },
+            JuliaParserDocAttachment {
+                target_name: "solve".to_string(),
+                target_kind: JuliaParserDocTargetKind::Symbol,
+                target_path: Some("Demo.solve".to_string()),
+                target_line_start: Some(20),
+                target_line_end: Some(24),
+                content: "Solve with an explicit timestep.".to_string(),
+            },
+        ];
+
+        let docs =
+            build_docstring_records("demo", "src/SameFile.jl", "Demo", &symbols, &docstrings);
+        let relations = build_docstring_relations(
+            "demo",
+            "repo:demo:module:Demo",
+            "Demo",
+            &symbols,
+            &docstrings,
+            "src/SameFile.jl",
+        );
+
+        assert_eq!(docs.len(), 2);
+        assert_eq!(relations.len(), 2);
+        assert!(docs.iter().all(|doc| {
+            doc.doc_id
+                .contains("#symbol-id:repo:demo:symbol:Demo.solve@")
+        }));
+        assert_eq!(
+            docs[0]
+                .doc_target
+                .as_ref()
+                .map(|target| target.path.as_deref()),
+            Some(Some("Demo.solve"))
+        );
+        assert_eq!(
+            docs[1].doc_target.as_ref().map(|target| target.line_start),
+            Some(Some(20))
+        );
+        assert_ne!(docs[0].doc_id, docs[1].doc_id);
+        assert!(
+            relations
+                .iter()
+                .all(|relation| relation.kind == RelationKind::Documents)
+        );
+        assert_ne!(relations[0].target_id, relations[1].target_id);
     }
 }

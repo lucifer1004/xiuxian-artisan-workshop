@@ -118,6 +118,7 @@ pub fn sample_projection_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
                 title: "README.md".to_string(),
                 path: "README.md".to_string(),
                 format: Some("md".to_string()),
+                doc_target: None,
             },
             DocRecord {
                 repo_id: repo_id.to_string(),
@@ -125,6 +126,7 @@ pub fn sample_projection_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
                 title: "Problem".to_string(),
                 path: "src/ProjectionPkg.jl#symbol:Problem".to_string(),
                 format: Some("julia_docstring".to_string()),
+                doc_target: None,
             },
             DocRecord {
                 repo_id: repo_id.to_string(),
@@ -132,6 +134,7 @@ pub fn sample_projection_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
                 title: "solve".to_string(),
                 path: "src/ProjectionPkg.jl#symbol:solve".to_string(),
                 format: Some("julia_docstring".to_string()),
+                doc_target: None,
             },
         ],
         relations: vec![

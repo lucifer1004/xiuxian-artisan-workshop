@@ -140,6 +140,24 @@ pub enum RelationKind {
     Imports,
 }
 
+/// Parser-owned target metadata attached to a documentation entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocTargetRecord {
+    /// Stable parser-owned target kind such as `symbol` or `module`.
+    pub kind: String,
+    /// Display name of the documented target.
+    pub name: String,
+    /// Optional parser-owned qualified target path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Optional 1-based declaration start line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_start: Option<usize>,
+    /// Optional 1-based declaration end line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
+}
+
 /// Record representing a documentation entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct DocRecord {
@@ -153,6 +171,9 @@ pub struct DocRecord {
     pub path: String,
     /// Optional normalized document format.
     pub format: Option<String>,
+    /// Optional parser-owned target metadata for code-attached docs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doc_target: Option<DocTargetRecord>,
 }
 
 /// Record representing a code example.
@@ -213,6 +234,13 @@ pub struct ImportRecord {
     pub source_module: String,
     /// Kind of import.
     pub kind: ImportKind,
+    /// Optional 1-based starting line where the import occurs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_start: Option<usize>,
     /// Resolved identifier if the import was resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_id: Option<String>,
+    /// Free-form parser-owned import attributes emitted by analyzers.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub attributes: BTreeMap<String, String>,
 }

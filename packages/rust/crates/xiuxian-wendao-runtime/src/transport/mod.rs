@@ -45,9 +45,9 @@ pub use plugin_arrow_exchange::{
     prepare_plugin_arrow_request_rows_from_vector_store, project_plugin_arrow_scored_candidates,
     roundtrip_plugin_arrow_score_rows_with_binding, validate_plugin_arrow_response_batches,
 };
+pub use query_contract::RerankScoreWeights;
 #[cfg(feature = "transport")]
 pub use query_contract::validate_sql_query_request;
-pub use query_contract::RerankScoreWeights;
 pub use query_contract::{
     ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, ANALYSIS_REFINE_DOC_ROUTE,
     ANALYSIS_REPO_DOC_COVERAGE_ROUTE, ANALYSIS_REPO_INDEX_ROUTE, ANALYSIS_REPO_INDEX_STATUS_ROUTE,
@@ -101,8 +101,8 @@ pub use query_contract::{
 #[cfg(feature = "transport")]
 pub use query_contract::{
     RerankScoredCandidate, score_rerank_request_batch, score_rerank_request_batch_with_weights,
-    validate_rerank_request_batch, validate_rerank_request_schema,
-    validate_rerank_response_batch, validate_rerank_response_schema,
+    validate_rerank_request_batch, validate_rerank_request_schema, validate_rerank_response_batch,
+    validate_rerank_response_schema,
 };
 #[cfg(feature = "transport")]
 pub use server::{

@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -10,14 +12,18 @@ use crate::analyzers::cache::{
 use crate::analyzers::config::RegisteredRepository;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::{
-    AnalysisContext, PluginLinkContext, RepoIntelligencePlugin, RepositoryAnalysisOutput,
+    AnalysisContext, PluginLinkContext, RepoIntelligencePlugin, RepoSourceFile,
+    RepositoryAnalysisOutput,
 };
 use crate::analyzers::registry::PluginRegistry;
 use crate::analyzers::resolve_registered_repository_source;
 use crate::analyzers::skeptic;
+use crate::analyzers::{RelationKind, RelationRecord};
 
 use super::bootstrap::bootstrap_builtin_registry;
-use super::cached::CachedRepositoryAnalysis;
+use super::cached::{
+    CachedRepositoryAnalysis, analyze_registered_repository_cached_bundle_with_registry,
+};
 use super::merge::{hydrate_repository_record, merge_repository_analysis};
 use super::registry::load_registered_repository;
 use super::relation_dedupe::dedupe_relations;
@@ -65,6 +71,104 @@ pub fn analyze_registered_repository_with_registry(
 ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
     analyze_registered_repository_bundle_with_registry(repository, cwd, registry)
         .map(|cached| cached.analysis)
+}
+
+/// Analyze one repository-relative file through configured plugins without
+/// traversing the entire repository.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the repository source cannot be
+/// resolved, the target file cannot be read, or a plugin file-analysis step
+/// fails.
+pub(crate) fn analyze_registered_repository_target_file_with_registry(
+    repository: &RegisteredRepository,
+    cwd: &Path,
+    registry: &PluginRegistry,
+    repo_relative_path: &str,
+) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+    let repository_source = resolve_target_file_analysis_source(repository, cwd)?;
+    let repository_root = repository_source.checkout_root.clone();
+    let checkout_metadata = discover_checkout_metadata(repository_root.as_path());
+    if let Some(mut cached_output) =
+        load_cached_target_file_analysis(repository, cwd, registry, repo_relative_path)?
+    {
+        finalize_target_file_analysis_output(
+            repository,
+            repository_root.as_path(),
+            checkout_metadata.as_ref(),
+            &mut cached_output,
+        );
+        return Ok(cached_output);
+    }
+
+    let analysis_context = AnalysisContext {
+        repository: repository.clone(),
+        repository_root: repository_root.clone(),
+    };
+    let plugins = registry.resolve_for_repository(repository)?;
+    let source_path = repository_root.join(repo_relative_path);
+    let source_text = fs::read_to_string(&source_path).map_err(|error| {
+        RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "failed to read repository source `{}` for repo `{}`: {error}",
+                source_path.display(),
+                repository.id,
+            ),
+        }
+    })?;
+    let source_file = RepoSourceFile {
+        path: repo_relative_path.to_string(),
+        contents: source_text,
+    };
+
+    let mut output = RepositoryAnalysisOutput::default();
+    let mut any_plugin_output = false;
+    for plugin in &plugins {
+        let plugin_output = plugin.analyze_file(&analysis_context, &source_file)?;
+        any_plugin_output |= !(plugin_output.modules.is_empty()
+            && plugin_output.symbols.is_empty()
+            && plugin_output.examples.is_empty()
+            && plugin_output.docs.is_empty()
+            && plugin_output.diagnostics.is_empty());
+        output.modules.extend(plugin_output.modules);
+        output.symbols.extend(plugin_output.symbols);
+        output.examples.extend(plugin_output.examples);
+        output.docs.extend(plugin_output.docs);
+        output.diagnostics.extend(plugin_output.diagnostics);
+    }
+
+    if !any_plugin_output {
+        return Err(RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "repo `{}` produced no file analysis output for `{repo_relative_path}`",
+                repository.id,
+            ),
+        });
+    }
+
+    finalize_target_file_analysis_output(
+        repository,
+        repository_root.as_path(),
+        checkout_metadata.as_ref(),
+        &mut output,
+    );
+    for plugin in &plugins {
+        let link_context = PluginLinkContext {
+            repository: repository.clone(),
+            repository_root: repository_root.clone(),
+            modules: output.modules.clone(),
+            symbols: output.symbols.clone(),
+            examples: output.examples.clone(),
+            docs: output.docs.clone(),
+        };
+        output
+            .relations
+            .extend(plugin.enrich_relations(&link_context)?);
+    }
+    dedupe_relations(&mut output.relations);
+
+    Ok(output)
 }
 
 /// Analyze one already-resolved registered repository and preserve its stable cache identity.
@@ -191,6 +295,163 @@ fn resolve_analysis_source(
     }
 }
 
+fn resolve_target_file_analysis_source(
+    repository: &RegisteredRepository,
+    cwd: &Path,
+) -> Result<MaterializedRepo, RepoIntelligenceError> {
+    let status_source = resolve_registered_repository_source(repository, cwd, SyncMode::Status)?;
+    if status_source.checkout_root.is_dir() {
+        Ok(status_source)
+    } else {
+        resolve_registered_repository_source(repository, cwd, SyncMode::Ensure)
+    }
+}
+
+fn load_cached_target_file_analysis(
+    repository: &RegisteredRepository,
+    cwd: &Path,
+    registry: &PluginRegistry,
+    repo_relative_path: &str,
+) -> Result<Option<RepositoryAnalysisOutput>, RepoIntelligenceError> {
+    match analyze_registered_repository_cached_bundle_with_registry(repository, cwd, registry) {
+        Ok(cached) => {
+            let filtered =
+                filter_repository_analysis_to_target_path(cached.analysis, repo_relative_path);
+            if target_file_analysis_has_records(&filtered) {
+                Ok(Some(filtered))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(RepoIntelligenceError::PendingRepositoryIndex { .. }) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn filter_repository_analysis_to_target_path(
+    analysis: RepositoryAnalysisOutput,
+    repo_relative_path: &str,
+) -> RepositoryAnalysisOutput {
+    let modules = analysis
+        .modules
+        .into_iter()
+        .filter(|module| module.path == repo_relative_path)
+        .collect::<Vec<_>>();
+    let module_ids = modules
+        .iter()
+        .map(|module| module.module_id.clone())
+        .collect::<BTreeSet<_>>();
+    let symbols = analysis
+        .symbols
+        .into_iter()
+        .filter(|symbol| {
+            symbol.path == repo_relative_path
+                || symbol
+                    .module_id
+                    .as_ref()
+                    .is_some_and(|module_id| module_ids.contains(module_id))
+        })
+        .collect::<Vec<_>>();
+    let symbol_ids = symbols
+        .iter()
+        .map(|symbol| symbol.symbol_id.clone())
+        .collect::<BTreeSet<_>>();
+    let imports = analysis
+        .imports
+        .into_iter()
+        .filter(|import| module_ids.contains(import.module_id.as_str()))
+        .collect::<Vec<_>>();
+    let examples = analysis
+        .examples
+        .into_iter()
+        .filter(|example| example.path == repo_relative_path)
+        .collect::<Vec<_>>();
+    let example_ids = examples
+        .iter()
+        .map(|example| example.example_id.clone())
+        .collect::<BTreeSet<_>>();
+    let docs = analysis
+        .docs
+        .into_iter()
+        .filter(|doc| doc.path == repo_relative_path)
+        .collect::<Vec<_>>();
+    let doc_ids = docs
+        .iter()
+        .map(|doc| doc.doc_id.clone())
+        .collect::<BTreeSet<_>>();
+    let diagnostic_paths = [repo_relative_path, "package.mo"];
+    let diagnostics = analysis
+        .diagnostics
+        .into_iter()
+        .filter(|diagnostic| diagnostic_paths.contains(&diagnostic.path.as_str()))
+        .collect::<Vec<_>>();
+    let kept_relation_ids = module_ids
+        .iter()
+        .chain(symbol_ids.iter())
+        .chain(example_ids.iter())
+        .chain(doc_ids.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let relations = analysis
+        .relations
+        .into_iter()
+        .filter(|relation| {
+            kept_relation_ids.contains(relation.source_id.as_str())
+                && kept_relation_ids.contains(relation.target_id.as_str())
+        })
+        .collect::<Vec<_>>();
+
+    RepositoryAnalysisOutput {
+        repository: analysis.repository,
+        modules,
+        symbols,
+        imports,
+        examples,
+        docs,
+        relations,
+        diagnostics,
+    }
+}
+
+fn target_file_analysis_has_records(analysis: &RepositoryAnalysisOutput) -> bool {
+    !(analysis.modules.is_empty()
+        && analysis.symbols.is_empty()
+        && analysis.imports.is_empty()
+        && analysis.examples.is_empty()
+        && analysis.docs.is_empty()
+        && analysis.diagnostics.is_empty())
+}
+
+fn finalize_target_file_analysis_output(
+    repository: &RegisteredRepository,
+    repository_root: &Path,
+    checkout_metadata: Option<&xiuxian_git_repo::LocalCheckoutMetadata>,
+    output: &mut RepositoryAnalysisOutput,
+) {
+    let link_context = PluginLinkContext {
+        repository: repository.clone(),
+        repository_root: repository_root.to_path_buf(),
+        modules: output.modules.clone(),
+        symbols: output.symbols.clone(),
+        examples: output.examples.clone(),
+        docs: output.docs.clone(),
+    };
+    output
+        .relations
+        .extend(build_target_file_structural_relations(
+            repository.id.as_str(),
+            &link_context,
+        ));
+    dedupe_relations(&mut output.relations);
+
+    if output.repository.is_none() {
+        output.repository = Some(repository.into());
+    }
+    if let Some(record) = output.repository.as_mut() {
+        hydrate_repository_record(record, repository, repository_root, checkout_metadata);
+    }
+}
+
 fn preflight_repository_plugins(
     plugins: &[Arc<dyn RepoIntelligencePlugin>],
     analysis_context: &AnalysisContext,
@@ -254,4 +515,30 @@ fn enrich_repository_relations(
             .extend(plugin.enrich_relations(link_context)?);
     }
     Ok(())
+}
+
+fn build_target_file_structural_relations(
+    repo_id: &str,
+    link_context: &PluginLinkContext,
+) -> Vec<RelationRecord> {
+    let repository_node_id = format!("repo:{repo_id}");
+    let mut relations = link_context
+        .modules
+        .iter()
+        .map(|module| RelationRecord {
+            repo_id: repo_id.to_string(),
+            source_id: repository_node_id.clone(),
+            target_id: module.module_id.clone(),
+            kind: RelationKind::Contains,
+        })
+        .collect::<Vec<_>>();
+    relations.extend(link_context.symbols.iter().filter_map(|symbol| {
+        symbol.module_id.as_ref().map(|module_id| RelationRecord {
+            repo_id: repo_id.to_string(),
+            source_id: module_id.clone(),
+            target_id: symbol.symbol_id.clone(),
+            kind: RelationKind::Contains,
+        })
+    }));
+    relations
 }

@@ -125,7 +125,10 @@ pub(crate) fn record_query_core_telemetry(
     );
 }
 
-fn retrieval_row_to_search_hit(repo_id: &str, row: &xiuxian_vector_store::RetrievalRow) -> SearchHit {
+fn retrieval_row_to_search_hit(
+    repo_id: &str,
+    row: &xiuxian_vector_store::RetrievalRow,
+) -> SearchHit {
     let doc_type = row.doc_type.clone().or_else(|| Some("file".to_string()));
     let kind_tag = doc_type.clone().unwrap_or_else(|| "unknown".to_string());
     let mut tags = vec![

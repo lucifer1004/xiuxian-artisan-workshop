@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tonic::Status;
-use xiuxian_vector_store::{LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray};
+use xiuxian_vector_store::{
+    LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray,
+};
 use xiuxian_wendao_runtime::transport::{
     AnalysisFlightRouteResponse, RefineDocFlightRouteProvider,
 };

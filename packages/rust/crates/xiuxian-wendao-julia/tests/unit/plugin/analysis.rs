@@ -3,6 +3,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 use std::fs;
 use std::path::Path;
 
+use serde_json::json;
 use tempfile::TempDir;
 use xiuxian_wendao_core::repo_intelligence::RepositoryPluginConfig;
 use xiuxian_wendao_core::repo_intelligence::{AnalysisContext, RegisteredRepository};
@@ -76,6 +77,44 @@ fn analyze_repository_supports_dominant_nested_root_package() -> TestResult {
                 && symbol.qualified_name == "Modelica.Blocks")
     );
     assert_eq!(output.diagnostics[0].path, "Modelica/package.mo");
+    Ok(())
+}
+
+#[test]
+fn analyze_repository_preserves_import_backed_package_attributes() -> TestResult {
+    ensure_linked_modelica_parser_summary_service()?;
+    let tempdir = TempDir::new()?;
+    write_modelica_file(
+        tempdir.path().join("Modelica/package.mo").as_path(),
+        "within ;\npackage Modelica\nend Modelica;\n",
+    )?;
+    write_modelica_file(
+        tempdir.path().join("Modelica/Blocks/package.mo").as_path(),
+        "within Modelica;\npackage Blocks\n  import SI = Modelica.Units.SI;\n  import Modelica.Math;\n  import Modelica.Math.*;\nend Blocks;\n",
+    )?;
+
+    let output = analyze_repository(&analysis_context("mcl", tempdir.path()), tempdir.path())?;
+    let payload = output
+        .imports
+        .iter()
+        .map(|import| {
+            json!({
+                "module_id": import.module_id,
+                "import_name": import.import_name,
+                "target_package": import.target_package,
+                "source_module": import.source_module,
+                "kind": format!("{:?}", import.kind),
+                "line_start": import.line_start,
+                "resolved_id": import.resolved_id,
+                "attributes": import.attributes,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    insta::assert_json_snapshot!(
+        "analyze_repository_preserves_import_backed_package_attributes",
+        payload
+    );
     Ok(())
 }
 

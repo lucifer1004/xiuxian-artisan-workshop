@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use xiuxian_vector_store::EngineRecordBatch;
 
-use crate::analyzers::service::{
+use crate::analyzers::service::helpers::{
     example_match_score, import_match_score, module_match_score, normalized_rank_score,
     symbol_match_score,
 };
@@ -251,7 +251,9 @@ fn candidate_score(inputs: &CandidateScoreInputs<'_>) -> Option<f64> {
                 target_package: inputs.summary_folded.to_string(),
                 source_module: inputs.signature_folded.to_string(),
                 kind: crate::analyzers::ImportKind::Symbol,
+                line_start: None,
                 resolved_id: None,
+                attributes: std::collections::BTreeMap::new(),
             };
             import_match_score(
                 inputs.import_package_filter,

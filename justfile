@@ -139,10 +139,10 @@ probe-ocr-image-guarded image_path:
       -- bash scripts/channel/probe_single_image_ocr.sh "{{image_path}}"
 
 # Run real OCR smoke against local Dots model with guarded memory limits.
-# Default acceleration:
-#   - macOS: `vision-dots-metal`, `XIUXIAN_VISION_DEVICE=metal`
-#   - Linux: `vision-dots-cuda`, `XIUXIAN_VISION_DEVICE=cuda`
-#   - others: `vision-dots`, `XIUXIAN_VISION_DEVICE=cpu`
+# Default device:
+#   - macOS: `XIUXIAN_VISION_DEVICE=metal`
+#   - Linux: `XIUXIAN_VISION_DEVICE=cuda`
+#   - others: `XIUXIAN_VISION_DEVICE=cpu`
 # Usage:
 #   just test-ocr-real-smoke
 #   just test-ocr-real-smoke ".data/models/dots-ocr"
@@ -167,15 +167,12 @@ test-ocr-real-smoke model_root="":
       fi
     fi
 
-    feature="vision-dots"
     default_device="cpu"
     case "$(uname -s)" in
       Darwin)
-        feature="vision-dots-metal"
         default_device="metal"
         ;;
       Linux)
-        feature="vision-dots-cuda"
         default_device="cuda"
         ;;
     esac
@@ -188,7 +185,7 @@ test-ocr-real-smoke model_root="":
     export XIUXIAN_VISION_MAX_TILES="${XIUXIAN_VISION_MAX_TILES:-12}"
 
     echo "[ocr-real-smoke] model_root=${XIUXIAN_VISION_MODEL_PATH}"
-    echo "[ocr-real-smoke] device=${XIUXIAN_VISION_DEVICE} feature=${feature}"
+    echo "[ocr-real-smoke] device=${XIUXIAN_VISION_DEVICE}"
 
     NEXTTEST_GUARD_LABEL="${NEXTTEST_GUARD_LABEL:-ocr-real-smoke}" \
     NEXTTEST_GUARD_MAX_RSS_GB="${NEXTTEST_GUARD_MAX_RSS_GB:-20}" \
@@ -196,7 +193,6 @@ test-ocr-real-smoke model_root="":
     NEXTTEST_GUARD_PROCESS_SPIKE_RULES="${NEXTTEST_GUARD_PROCESS_SPIKE_RULES:-}" \
       just nextest-guarded \
       -p xiuxian-llm \
-      --features "${feature}" \
       --test llm_vision_deepseek_smoke \
       deepseek_smoke_runs_real_inference_from_local_model_cache
 
@@ -288,7 +284,7 @@ nextest-guarded-ocr +nextest_args:
 
 # Run nextest with AGGRESSIVE process monitoring.
 # Kills everything immediately if any process exceeds limits.
-# Usage: just nextest-aggressive -p xiuxian-llm --features vision-dots-metal test_real_metal
+# Usage: just nextest-aggressive -p xiuxian-llm test_real_metal
 # Env overrides:
 #   NEXTTEST_AGGR_MAX_RSS_GB (default 10)
 #   NEXTTEST_AGGR_MAX_VSZ_GB (default 0, disabled - macOS VSZ is misleading)
@@ -398,7 +394,7 @@ test-metal-stress:
     # Step 2: Metal smoke test with telemetry
     echo "=== Step 2: Metal Smoke Test with Telemetry ==="
     RUST_LOG=xiuxian_llm=debug \
-    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture 2>&1 | \
+    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --nocapture 2>&1 | \
         tee "{{metal_stress_report_dir}}/metal_smoke_${TIMESTAMP}.log" || true
 
     # Step 3: Buffer boundary probe
@@ -406,7 +402,7 @@ test-metal-stress:
     for dim in 512 768 1024 1280 1536 1792 2048; do
         echo "Testing max_dimension=$dim"
         XIUXIAN_VISION_OCR_MAX_DIMENSION=$dim \
-        cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture 2>&1 | \
+        cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --nocapture 2>&1 | \
             grep -E "(PASS|FAIL|Buffer|Metal)" | tee -a "{{metal_stress_report_dir}}/buffer_boundary_${TIMESTAMP}.log" || true
     done
 
@@ -416,7 +412,7 @@ test-metal-stress:
         echo "Iteration $i/{{metal_stress_iterations}}"
         echo "Memory before: $(vm_stat | grep -E 'free|active' | head -2)" | \
             tee -a "{{metal_stress_report_dir}}/memory_reclaim_${TIMESTAMP}.log"
-        cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture 2>&1 | \
+        cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --nocapture 2>&1 | \
             tee -a "{{metal_stress_report_dir}}/memory_reclaim_${TIMESTAMP}.log" || true
         echo "Memory after: $(vm_stat | grep -E 'free|active' | head -2)" | \
             tee -a "{{metal_stress_report_dir}}/memory_reclaim_${TIMESTAMP}.log"
@@ -437,7 +433,7 @@ test-dsq-alignment:
 # Usage: just test-metal-buffer 1024
 test-metal-buffer dimension="1024":
     XIUXIAN_VISION_OCR_MAX_DIMENSION={{dimension}} \
-    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture
+    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --nocapture
 
 # Real Metal inference test with capacity check and runtime memory guard.
 # 1. Uses capfox to check capacity before starting
@@ -457,13 +453,13 @@ test-real-metal *args:
     # Ensure test binary exists
     if ! ls target/debug/deps/llm_vision_deepseek_real_metal-* 2>/dev/null | head -1 | xargs -I{} test -x {}; then
         echo "Building test binary..."
-        cargo build -p xiuxian-llm --features vision-dots-metal --tests
+        cargo build -p xiuxian-llm --tests
     fi
 
     # Run with capfox check + memory guard
     uv run python scripts/run_real_metal_test.py {{args}}
 
-# Unified local-model safe interface (mistral-sdk + vision).
+# Unified local-model safe interface (embedding warmup + vision).
 # Profiles:
 #   - safe: embedding warmup + vision smoke (default)
 #   - full: embedding warmup + real OCR heavy lane
@@ -2140,10 +2136,6 @@ agent-channel-discord-ingress:
     resolved_features=""
     if [ "${XIUXIAN_DAOCHANG_CARGO_FEATURES+x}" = "x" ]; then
       resolved_features="${XIUXIAN_DAOCHANG_CARGO_FEATURES}"
-    elif [ "$(uname -s)" = "Darwin" ]; then
-      resolved_features="xiuxian-llm/vision-dots-metal,xiuxian-llm/mistral-accel-metal"
-    elif [ "$(uname -s)" = "Linux" ]; then
-      resolved_features="xiuxian-llm/vision-dots-cuda,xiuxian-llm/mistral-accel-cuda"
     fi
 
     runtime_target_dir="${XIUXIAN_DAOCHANG_RUNTIME_TARGET_DIR:-${CARGO_TARGET_DIR:-target}}"

@@ -55,7 +55,7 @@ metadata:
 
 1. **One Concept, One Note**: Each note should focus on a single atomic concept or decision.
 2. **Permanent vs. Ephemeral**:
-   - **Daily Notes** (`docs/GTD/DAILY_*.md`) serve as the "Roam-style" journal for raw input.
+   - **Daily Notes** (`$PRJ_CACHE_HOME/agent/GTD/DAILY_*.md`) serve as the "Roam-style" journal for raw input.
    - **Permanent Notes** (categorized core docs) are refined, alchemized knowledge.
 
 ## 5. Link and Lineage Rules

@@ -15,16 +15,6 @@ resolve_xiuxian_daochang_cargo_features() {
     return 0
   fi
 
-  if [ "$(uname -s)" = "Darwin" ]; then
-    printf '%s' "xiuxian-llm/vision-dots-metal,xiuxian-llm/mistral-accel-metal"
-    return 0
-  fi
-
-  if [ "$(uname -s)" = "Linux" ]; then
-    printf '%s' "xiuxian-llm/vision-dots-cuda,xiuxian-llm/mistral-accel-cuda"
-    return 0
-  fi
-
   printf ''
 }
 

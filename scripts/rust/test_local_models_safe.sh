@@ -15,16 +15,6 @@ run_embedding_warmup_safe() {
   guard_growth="${LOCAL_MODEL_EMBED_MAX_GROWTH_GB_PER_MIN:-0}"
   embed_text="${LOCAL_MODEL_EMBED_TEXT:-local model embedding warmup}"
 
-  local feature=""
-  case "$(uname -s)" in
-  Darwin)
-    feature="xiuxian-llm/mistral-accel-metal"
-    ;;
-  Linux)
-    feature="xiuxian-llm/mistral-accel-cuda"
-    ;;
-  esac
-
   local cmd=(
     "${PROJECT_ROOT}/scripts/rust/cargo_exec.sh"
     run
@@ -32,10 +22,7 @@ run_embedding_warmup_safe() {
     xiuxian-daochang
     --no-default-features
   )
-  if [ -n "${feature}" ]; then
-    cmd+=(--features "${feature}")
-  fi
-  cmd+=(-- embedding-warmup --mistral-sdk-only --text "${embed_text}")
+  cmd+=(-- embedding-warmup --text "${embed_text}")
 
   UV_CACHE_DIR="${UV_CACHE_DIR:-.cache/uv}" \
     uv run python "${PROJECT_ROOT}/scripts/guarded_nextest.py" \

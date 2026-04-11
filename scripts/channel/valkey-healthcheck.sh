@@ -12,10 +12,10 @@ if ! command -v valkey-cli >/dev/null 2>&1; then
   exit 1
 fi
 
-PIDFILE="$(valkey_resolve_path "$PROJECT_ROOT" "$(valkey_effective_pidfile)")"
+PIDFILE="$(valkey_resolved_pidfile "$PROJECT_ROOT")"
 URL="$(valkey_effective_url)"
 
-if valkey_listener_matches_pidfile "$PIDFILE" "$URL" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
+if valkey_matching_pidfile "$PROJECT_ROOT" "$URL" >/dev/null && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
   echo "PONG"
   exit 0
 fi

@@ -93,9 +93,7 @@ pub use query_support::{
 };
 #[cfg(feature = "vector-store")]
 pub use search::SearchOptions;
-pub use search_engine::{
-    SearchEngineContext, SearchEnginePartitionColumn,
-};
+pub use search_engine::{SearchEngineContext, SearchEnginePartitionColumn};
 #[cfg(feature = "vector-store")]
 pub use search_engine::{
     engine_batch_to_lance_batch, engine_batches_to_lance_batches, lance_batch_to_engine_batch,

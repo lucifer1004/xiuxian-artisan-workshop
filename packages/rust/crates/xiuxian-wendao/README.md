@@ -351,6 +351,15 @@ of opening the residual DataFusion query core just to recover discovery
 metadata. Non-routed discovery, logical-view, and multi-source fallback still
 stay on the shared DataFusion core.
 
+The next shared-SQL execution cutover is landed too: in `duckdb` builds the
+non-routed shared SQL branch now builds one request-scoped
+`SqlSurfaceAssembly`, registers Parquet tables, logical views, and catalog
+batches into a DuckDB local relation core, and executes discovery-catalog and
+logical-view queries there as well. That means GraphQL-to-SQL, shared SQL, and
+FlightSQL statement fallback no longer keep a same-layer DataFusion execution
+role on the DuckDB production path. The explicit DataFusion query core remains
+only as the non-`duckdb` baseline.
+
 The canonical shared-query implementation owner is now `src/search/queries/`.
 The former gateway-side `src/gateway/studio/search/queries/` shadow tree is
 retired; native Flight now imports the canonical adapters directly instead of

@@ -327,6 +327,23 @@ fn test_health_endpoint_reports_process_id_header() {
     );
 }
 
+#[tokio::test]
+async fn test_health_endpoint_reports_ready_payload() {
+    let response = gateway_health_response(None);
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap_or_else(|error| panic!("health response should be readable: {error}"));
+    let payload: serde_json::Value = serde_json::from_slice(&body)
+        .unwrap_or_else(|error| panic!("health response should be valid json: {error}"));
+    assert_eq!(payload["status"], "ok");
+    assert_eq!(payload["ready"], serde_json::json!(true));
+    assert_eq!(payload["service"], "wendao-gateway");
+    assert_eq!(payload["processId"], serde_json::json!(std::process::id()));
+    assert_eq!(payload["planes"]["http"], "ready");
+}
+
 #[test]
 fn test_health_endpoint_accepts_owned_pidfile() {
     let pidfile = write_temp_gateway_pidfile(&std::process::id().to_string());
@@ -359,9 +376,13 @@ async fn test_health_endpoint_rejects_mismatched_pidfile() {
         .unwrap_or_else(|error| panic!("health error response should be readable: {error}"));
     let payload: serde_json::Value = serde_json::from_slice(&body)
         .unwrap_or_else(|error| panic!("health error response should be valid json: {error}"));
+    assert_eq!(payload["status"], "degraded");
+    assert_eq!(payload["ready"], serde_json::json!(false));
+    assert_eq!(payload["service"], "wendao-gateway");
     assert_eq!(payload["error"], "gateway is not ready");
     assert_eq!(payload["expectedPid"], serde_json::json!(mismatched_pid()));
     assert_eq!(payload["processId"], serde_json::json!(std::process::id()));
+    assert_eq!(payload["planes"]["http"], "ready");
 }
 
 #[tokio::test]

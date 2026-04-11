@@ -1,12 +1,14 @@
+use std::ffi::OsStr;
 use std::path::Path;
 
 use xiuxian_wendao_core::repo_intelligence::{
-    AnalysisContext, PluginAnalysisOutput, PluginLinkContext, PluginRegistry, RegisteredRepository,
-    RelationRecord, RepoIntelligenceError, RepoIntelligencePlugin, RepoSourceFile,
-    RepositoryAnalysisOutput,
+    AnalysisContext, ModuleRecord, PluginAnalysisOutput, PluginLinkContext, PluginRegistry,
+    RegisteredRepository, RelationRecord, RepoIntelligenceError, RepoIntelligencePlugin,
+    RepoSourceFile, RepositoryAnalysisOutput, SymbolRecord,
 };
 
 use super::analysis;
+use super::parser_summary::fetch_modelica_parser_file_summary_blocking_for_repository;
 
 const MODELICA_PLUGIN_ID: &str = "modelica";
 
@@ -45,10 +47,60 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
 
     fn analyze_file(
         &self,
-        _context: &AnalysisContext,
-        _file: &RepoSourceFile,
+        context: &AnalysisContext,
+        file: &RepoSourceFile,
     ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
-        Ok(PluginAnalysisOutput::default())
+        let summary = fetch_modelica_parser_file_summary_blocking_for_repository(
+            &context.repository,
+            file.path.as_str(),
+            file.contents.as_str(),
+        )?;
+        let module_name = summary.class_name.unwrap_or_else(|| {
+            std::path::Path::new(file.path.as_str())
+                .file_stem()
+                .and_then(OsStr::to_str)
+                .unwrap_or("modelica")
+                .to_string()
+        });
+        let module_id = format!("repo:{}:module:{module_name}", context.repository.id);
+        let symbols = summary
+            .declarations
+            .into_iter()
+            .map(|declaration| {
+                let qualified_name = if declaration.name == module_name {
+                    module_name.clone()
+                } else {
+                    format!("{module_name}.{}", declaration.name)
+                };
+                SymbolRecord {
+                    repo_id: context.repository.id.clone(),
+                    symbol_id: format!("repo:{}:symbol:{qualified_name}", context.repository.id),
+                    module_id: Some(module_id.clone()),
+                    name: declaration.name,
+                    qualified_name,
+                    kind: declaration.kind,
+                    path: file.path.clone(),
+                    line_start: declaration.line_start,
+                    line_end: declaration.line_end,
+                    signature: Some(declaration.signature),
+                    audit_status: None,
+                    verification_state: None,
+                    attributes: declaration.attributes,
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(PluginAnalysisOutput {
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id,
+                qualified_name: module_name,
+                path: file.path.clone(),
+            }],
+            symbols,
+            examples: Vec::new(),
+            docs: Vec::new(),
+            diagnostics: Vec::new(),
+        })
     }
 
     fn preflight_repository(
@@ -74,3 +126,7 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
         Ok(Vec::new())
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/plugin/modelica_entry.rs"]
+mod tests;

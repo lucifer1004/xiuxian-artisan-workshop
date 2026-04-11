@@ -54,4 +54,7 @@ pub struct RetrievalChunk {
     /// Optional surface kind for richer UI routing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub surface: Option<RetrievalChunkSurface>,
+    /// Optional parser- or compiler-owned attributes for richer UI projection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attributes: Vec<(String, String)>,
 }

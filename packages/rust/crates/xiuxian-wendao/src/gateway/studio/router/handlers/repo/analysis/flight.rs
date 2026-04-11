@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use xiuxian_vector_store::{LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray};
+use xiuxian_vector_store::{
+    LanceDataType, LanceField, LanceInt32Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+};
 use xiuxian_wendao_runtime::transport::{
     AnalysisFlightRouteResponse, RepoDocCoverageFlightRouteProvider,
 };
@@ -65,6 +67,38 @@ fn build_repo_doc_coverage_flight_batch(docs: &[DocRecord]) -> Result<LanceRecor
         .iter()
         .map(|doc| doc.format.clone())
         .collect::<Vec<_>>();
+    let target_kinds = docs
+        .iter()
+        .map(|doc| doc.doc_target.as_ref().map(|target| target.kind.clone()))
+        .collect::<Vec<_>>();
+    let target_names = docs
+        .iter()
+        .map(|doc| doc.doc_target.as_ref().map(|target| target.name.clone()))
+        .collect::<Vec<_>>();
+    let target_paths = docs
+        .iter()
+        .map(|doc| {
+            doc.doc_target
+                .as_ref()
+                .and_then(|target| target.path.clone())
+        })
+        .collect::<Vec<_>>();
+    let target_line_starts = docs
+        .iter()
+        .map(|doc| {
+            doc.doc_target
+                .as_ref()
+                .and_then(|target| target.line_start.and_then(|line| i32::try_from(line).ok()))
+        })
+        .collect::<Vec<_>>();
+    let target_line_ends = docs
+        .iter()
+        .map(|doc| {
+            doc.doc_target
+                .as_ref()
+                .and_then(|target| target.line_end.and_then(|line| i32::try_from(line).ok()))
+        })
+        .collect::<Vec<_>>();
 
     LanceRecordBatch::try_new(
         Arc::new(LanceSchema::new(vec![
@@ -73,6 +107,11 @@ fn build_repo_doc_coverage_flight_batch(docs: &[DocRecord]) -> Result<LanceRecor
             LanceField::new("title", LanceDataType::Utf8, false),
             LanceField::new("path", LanceDataType::Utf8, false),
             LanceField::new("format", LanceDataType::Utf8, true),
+            LanceField::new("targetKind", LanceDataType::Utf8, true),
+            LanceField::new("targetName", LanceDataType::Utf8, true),
+            LanceField::new("targetPath", LanceDataType::Utf8, true),
+            LanceField::new("targetLineStart", LanceDataType::Int32, true),
+            LanceField::new("targetLineEnd", LanceDataType::Int32, true),
         ])),
         vec![
             Arc::new(LanceStringArray::from(repo_ids)),
@@ -80,6 +119,11 @@ fn build_repo_doc_coverage_flight_batch(docs: &[DocRecord]) -> Result<LanceRecor
             Arc::new(LanceStringArray::from(titles)),
             Arc::new(LanceStringArray::from(paths)),
             Arc::new(LanceStringArray::from(formats)),
+            Arc::new(LanceStringArray::from(target_kinds)),
+            Arc::new(LanceStringArray::from(target_names)),
+            Arc::new(LanceStringArray::from(target_paths)),
+            Arc::new(LanceInt32Array::from(target_line_starts)),
+            Arc::new(LanceInt32Array::from(target_line_ends)),
         ],
     )
     .map_err(|error| error.to_string())
