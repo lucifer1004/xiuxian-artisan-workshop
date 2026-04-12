@@ -105,18 +105,22 @@ in
         depends_on = {
           wendao-gateway.condition = "process_healthy";
         };
-        # readiness_probe = {
-        #   http_get = {
-        #     host = wendaoFrontendHost;
-        #     port = wendaoFrontendPort;
-        #     path = "/";
-        #     scheme = "http";
-        #   };
-        #   initial_delay_seconds = 5;
-        #   period_seconds = 2;
-        #   timeout_seconds = 3;
-        #   failure_threshold = 30;
-        # };
+        readiness_probe = {
+          exec = {
+            command = ''
+              ROOT_DIR="''${PRJ_ROOT:-''${DEVENV_ROOT:-$(pwd)}}"
+              RUNTIME_DIR="''${PRJ_RUNTIME_DIR:-$ROOT_DIR/.run}"
+              export WENDAO_FRONTEND_HOST=${wendaoFrontendHost}
+              export WENDAO_FRONTEND_PORT=${toString wendaoFrontendPort}
+              export WENDAO_FRONTEND_PIDFILE="$RUNTIME_DIR/${wendaoFrontendRuntimeDirName}/${wendaoFrontendPidFilename}"
+              bash "$ROOT_DIR/scripts/channel/wendao-frontend-healthcheck.sh" >/dev/null
+            '';
+          };
+          initial_delay_seconds = 5;
+          period_seconds = 2;
+          timeout_seconds = 3;
+          failure_threshold = 30;
+        };
       };
     };
 

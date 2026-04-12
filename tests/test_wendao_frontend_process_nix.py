@@ -25,8 +25,12 @@ def test_wendao_frontend_process_nix_delegates_to_scripts() -> None:
         'export WENDAO_FRONTEND_STDERR_LOG="$LOG_DIR/${wendaoFrontendStderrLogFilename}"' in content
     )
     assert 'bash "$ROOT_DIR/scripts/channel/wendao-frontend-launch.sh"' in content
-    assert "http_get = {" in content
-    assert "host = wendaoFrontendHost;" in content
-    assert "port = wendaoFrontendPort;" in content
-    assert 'path = "/";' in content
-    assert 'scheme = "http";' in content
+    assert "exec = {" in content
+    assert "RUNTIME_DIR=\"''${PRJ_RUNTIME_DIR:-$ROOT_DIR/.run}\"" in content
+    assert "export WENDAO_FRONTEND_HOST=${wendaoFrontendHost}" in content
+    assert "export WENDAO_FRONTEND_PORT=${toString wendaoFrontendPort}" in content
+    assert (
+        'export WENDAO_FRONTEND_PIDFILE="$RUNTIME_DIR/${wendaoFrontendRuntimeDirName}/${wendaoFrontendPidFilename}"'
+        in content
+    )
+    assert 'bash "$ROOT_DIR/scripts/channel/wendao-frontend-healthcheck.sh" >/dev/null' in content

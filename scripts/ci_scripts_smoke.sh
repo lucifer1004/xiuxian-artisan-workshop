@@ -16,6 +16,7 @@ bash -n \
   scripts/channel/valkey-runtime.sh \
   scripts/channel/valkey-launch.sh \
   scripts/channel/valkey-healthcheck.sh \
+  scripts/channel/wendao-frontend-healthcheck.sh \
   scripts/gate_wendao_ppr.sh \
   scripts/wendao_ppr_rollout_ci.sh
 
