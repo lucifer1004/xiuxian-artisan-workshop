@@ -53,23 +53,29 @@ impl NativeTool for WendaoSearchTool {
     }
 
     fn description(&self) -> &str {
-        "Query Wendao knowledge through a bounded natural-language to SQL workflow. Use for repo knowledge lookups, schema discovery, entity listing, or constrained document searches."
+        "Search indexed project knowledge, code, docs, schema catalogs, and entities through a bounded workflow. Use this for repo-specific questions instead of answering from memory."
     }
 
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
             "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language knowledge search query. Examples: 'find Daochang architecture docs', 'list Wendao SQL tables', or 'what does the memory gate do?'."
+                },
                 "request": {
                     "type": "string",
-                    "description": "Natural-language search request for Wendao knowledge."
+                    "description": "Legacy alias for `query`. Prefer `query` for new tool calls.",
+                    "deprecated": true
                 },
                 "project_root": {
                     "type": "string",
-                    "description": "Optional explicit project-root override for the search scope."
+                    "description": "Optional explicit project-root override. Usually omit this unless the user explicitly wants a different repo or workspace."
                 }
             },
-            "required": ["request"]
+            "required": ["query"],
+            "additionalProperties": false
         })
     }
 
@@ -79,7 +85,7 @@ impl NativeTool for WendaoSearchTool {
         context: &NativeToolCallContext,
     ) -> Result<String> {
         let config = self.resolve_config()?;
-        let request = required_string(arguments.as_ref(), "request")?;
+        let request = required_query(arguments.as_ref())?;
         let explicit_project_root = optional_string(arguments.as_ref(), "project_root");
         let project_root = config.resolve_project_root(
             explicit_project_root.as_deref(),
@@ -142,8 +148,10 @@ impl WendaoSearchTool {
     }
 }
 
-fn required_string(arguments: Option<&Value>, key: &str) -> Result<String> {
-    optional_string(arguments, key).ok_or_else(|| anyhow!("Missing `{key}` argument"))
+fn required_query(arguments: Option<&Value>) -> Result<String> {
+    optional_string(arguments, "query")
+        .or_else(|| optional_string(arguments, "request"))
+        .ok_or_else(|| anyhow!("Missing `query` argument"))
 }
 
 fn optional_string(arguments: Option<&Value>, key: &str) -> Option<String> {

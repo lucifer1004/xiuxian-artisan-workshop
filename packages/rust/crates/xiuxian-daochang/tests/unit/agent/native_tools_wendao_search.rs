@@ -59,7 +59,7 @@ async fn wendao_search_tool_runs_bounded_workflow_against_gateway() -> Result<()
     let output = tool
         .call(
             Some(json!({
-                "request": "Show me the available SQL tables."
+                "query": "Show me the available SQL tables."
             })),
             &NativeToolCallContext {
                 session_id: Some("discord:123".to_string()),
@@ -81,6 +81,37 @@ async fn wendao_search_tool_runs_bounded_workflow_against_gateway() -> Result<()
         observed_queries[2],
         "SELECT sql_table_name FROM wendao_sql_tables ORDER BY sql_table_name ASC LIMIT 1"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn wendao_search_tool_accepts_legacy_request_alias() -> Result<()> {
+    let state = MockGatewayState::default();
+    let endpoint = spawn_mock_gateway(state.clone()).await?;
+    let project_root = tempdir()?;
+    let tool = WendaoSearchTool::new_with_llm_mode(
+        WendaoSearchToolConfig::new(
+            endpoint,
+            Some(project_root.path().display().to_string()),
+            HashMap::new(),
+        ),
+        BootcampLlmMode::Mock {
+            response: AUTHOR_RESPONSE_XML.to_string(),
+        },
+    );
+
+    let output = tool
+        .call(
+            Some(json!({
+                "request": "Show me the available SQL tables."
+            })),
+            &NativeToolCallContext::default(),
+        )
+        .await?;
+
+    assert!(output.contains("- Status: success"));
+    let observed_queries = state.observed_queries.lock().await.clone();
+    assert_eq!(observed_queries.len(), 3);
     Ok(())
 }
 

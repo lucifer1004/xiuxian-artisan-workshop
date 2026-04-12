@@ -12,7 +12,7 @@ use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
 #[cfg(feature = "zhenfa-router")]
 use axum::routing::any_service;
-use axum::routing::{Router, get};
+use axum::routing::{Router, get, post};
 use log::{error, info};
 use tokio::sync::mpsc;
 #[cfg(feature = "zhenfa-router")]
@@ -27,6 +27,7 @@ use crate::execute::gateway::{
         resolve_port, resolve_webhook_config,
     },
     health::health,
+    query::{GATEWAY_QUERY_AXUM_PATH, query},
     registry::build_plugin_registry,
     shared::AppState,
     status::{notify_status, stats},
@@ -208,6 +209,7 @@ pub(crate) fn build_gateway_router(
         .route(openapi_paths::API_HEALTH_AXUM_PATH, get(health))
         .route(openapi_paths::API_STATS_AXUM_PATH, get(stats))
         .route(openapi_paths::API_NOTIFY_AXUM_PATH, get(notify_status))
+        .route(GATEWAY_QUERY_AXUM_PATH, post(query))
         .merge(studio_app)
         .with_state(app_state.clone());
 

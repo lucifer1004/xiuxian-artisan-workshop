@@ -10,6 +10,7 @@
 mod command;
 mod config;
 mod health;
+mod query;
 mod registry;
 mod shared;
 mod status;

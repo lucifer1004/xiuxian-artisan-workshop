@@ -208,6 +208,25 @@ fn mounts_wendao_search_when_gateway_configured() -> Result<()> {
     mount_native_tool_cauldron(Some(&config), None, None, &mut registry, &mut mounts);
 
     assert!(registry.get("wendao.search").is_some());
+    assert!(registry.get("knowledge.search").is_some());
+    let knowledge_search = registry
+        .get("knowledge.search")
+        .ok_or_else(|| anyhow!("knowledge search alias should exist"))?;
+    let parameters = knowledge_search.parameters();
+    assert!(
+        parameters
+            .get("properties")
+            .and_then(|value| value.get("query"))
+            .is_some()
+    );
+    assert_eq!(
+        parameters
+            .get("required")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
+        vec![serde_json::Value::String("query".to_string())]
+    );
     let records = mounts.finish();
     let record = records
         .iter()
@@ -220,6 +239,13 @@ fn mounts_wendao_search_when_gateway_configured() -> Result<()> {
     assert_eq!(
         record.endpoint.as_deref(),
         Some("http://127.0.0.1:18093/query")
+    );
+    assert!(
+        record
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("aliases=knowledge.search")
     );
     Ok(())
 }
@@ -238,6 +264,7 @@ fn mounts_wendao_search_even_when_gateway_endpoint_is_not_preconfigured() -> Res
     );
 
     assert!(registry.get("wendao.search").is_some());
+    assert!(registry.get("knowledge.search").is_some());
     let records = mounts.finish();
     let record = records
         .iter()
@@ -253,6 +280,13 @@ fn mounts_wendao_search_even_when_gateway_endpoint_is_not_preconfigured() -> Res
             .as_deref()
             .unwrap_or_default()
             .contains("config=runtime_dynamic")
+    );
+    assert!(
+        record
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("aliases=knowledge.search")
     );
     assert!(record.endpoint.is_none());
     Ok(())

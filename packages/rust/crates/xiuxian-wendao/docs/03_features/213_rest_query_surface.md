@@ -14,13 +14,17 @@
 the shared `search/queries/` system. The first REST slice is intentionally
 narrow: it proves that a REST-shaped request and response contract can reuse
 the same `SearchQueryService` as SQL and GraphQL without introducing a second
-planner path or widening native business HTTP routes.
+planner path. The runtime now also mounts one bounded gateway compatibility
+route at `/query` for external clients such as Daochang's native
+`wendao.search` tool, but that route is still just a transport shim over the
+same shared query service.
 
 The first REST surface stays transport-neutral:
 
 - request decoding lives in `search/queries/rest/`
 - execution delegates into the already-landed SQL or GraphQL adapters
 - the first proof is the CLI entrypoint `wendao query rest --payload ...`
+- the gateway compatibility route `POST /query` reuses the same adapter
 
 ## Design Rules
 
@@ -58,6 +62,7 @@ The first response contract mirrors that boundary and returns tagged payloads:
 - shared adapter internals: `search/queries/rest/`
 - CLI adapter:
   `wendao query rest --payload '{"query_language":"sql","query":"SELECT ..."}'`
+- gateway compatibility route: `POST /query`
 
 ## Snapshot Contract
 
@@ -69,7 +74,6 @@ REST now also keeps snapshot-level regression coverage under
 
 This first REST slice does not yet include:
 
-- a native HTTP route
 - OpenAPI growth for search query execution
 - REST-specific planning logic
 - REST-specific business semantics outside the shared query system

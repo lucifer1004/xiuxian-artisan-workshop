@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::agent::bootstrap::service_mount::{ServiceMountCatalog, ServiceMountMeta};
 use crate::agent::native_tools::NativeAliasTool;
 use crate::agent::native_tools::macros::register_native_tools;
+use crate::agent::native_tools::registry::NativeTool;
 use crate::agent::native_tools::registry::NativeToolRegistry;
 use crate::agent::native_tools::spider::SpiderCrawlTool;
 use crate::agent::native_tools::wendao_search::{WendaoSearchTool, WendaoSearchToolConfig};
@@ -225,14 +226,25 @@ fn mount_wendao_search_tool(
     let endpoint = xiuxian_cfg
         .and_then(WendaoSearchToolConfig::from_xiuxian_config)
         .map(|config| config.query_endpoint().to_string());
-    native_tools.register(Arc::new(WendaoSearchTool::new_runtime_default()));
+    let tool = Arc::new(WendaoSearchTool::new_runtime_default());
+    let alias = Arc::new(NativeAliasTool::new(
+        "knowledge.search".to_string(),
+        "Search indexed project knowledge, code, docs, schema catalogs, and entities. Preferred knowledge-facing alias of `wendao.search`.".to_string(),
+        tool.parameters(),
+        tool.clone(),
+    ));
+    native_tools.register(tool);
+    native_tools.register(alias);
     mounts.mounted(
         "native.wendao_search",
         "tooling",
         ServiceMountMeta {
             endpoint,
             storage: None,
-            detail: Some("workflow=wendao_sql_authoring_v1,config=runtime_dynamic".to_string()),
+            detail: Some(
+                "workflow=wendao_sql_authoring_v1,config=runtime_dynamic,aliases=knowledge.search"
+                    .to_string(),
+            ),
         },
     );
 }

@@ -8,7 +8,7 @@ Minimal Rust agent loop (Phase B): one user turn with LLM and optional external 
 - **Session**: in-memory `SessionStore` per `session_id`; or when `window_max_turns` is set, **omni-window** (ring buffer) for bounded history and scalable context (1k–10k turns).
 - **LLM** (`LlmClient`): OpenAI-compatible chat completions with optional tool definitions and `tool_calls` parsing.
 - **Agent** (`Agent`): `run_turn(session_id, user_message)` — builds messages, optionally fetches external tools, calls LLM, handles tool calls, repeats until no tool_calls or `max_tool_rounds`.
-- **Bounded native search** (`wendao.search`): a Daochang-owned native tool that invokes the bundled Qianji Wendao SQL authoring workflow against a configured gateway endpoint.
+- **Bounded native search** (`wendao.search`, alias `knowledge.search`): a Daochang-owned native tool that invokes the bundled Qianji Wendao SQL authoring workflow against a configured gateway endpoint.
 
 ## Usage
 
@@ -34,10 +34,11 @@ let reply = agent.run_turn("my-session", "What's the weather?").await?;
 
 ## Bounded Wendao Search
 
-`wendao.search` is mounted only when `xiuxian.toml` configures a direct gateway
-endpoint under `[wendao_gateway]`. Daochang resolves the effective project root
-from explicit tool arguments, session-id overrides, or a configured default,
-then passes that scope into the bundled Qianji workflow.
+`wendao.search` and its knowledge-facing alias `knowledge.search` are mounted
+when Daochang boots. At call time, the tool reads `[wendao_gateway]` from
+`xiuxian.toml`, resolves the effective project root from explicit tool
+arguments, session-id overrides, or a configured default, then passes that
+scope into the bundled Qianji workflow.
 
 ```toml
 [wendao_gateway]
@@ -50,11 +51,13 @@ default_project_root = "/path/to/project"
 
 The native tool calls the bounded workflow preset that lives in
 `xiuxian-qianji`; Daochang owns configuration, session scope resolution, and
-result formatting. The legacy zhenfa bridge intentionally does not register
-`wendao.search`; direct gateway native-tool dispatch is the only supported
-ownership path. Native-only agents also advertise `wendao.search` to the LLM
-even when no external tool runtime is configured, so real tool-calling does
-not depend on MCP/external-tool startup.
+result formatting. The preferred tool argument is `query`; the legacy `request`
+field remains accepted for compatibility. The legacy zhenfa bridge
+intentionally does not register `wendao.search`; direct gateway native-tool
+dispatch is the only supported ownership path. Native-only agents advertise
+both `wendao.search` and `knowledge.search` to the LLM even when no external
+tool runtime is configured, so real tool-calling does not depend on
+MCP/external-tool startup.
 
 ## Discord Mention Policy
 

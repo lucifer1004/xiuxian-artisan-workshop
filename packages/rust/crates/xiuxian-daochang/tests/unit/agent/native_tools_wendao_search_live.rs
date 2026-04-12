@@ -390,6 +390,27 @@ async fn native_only_agent_advertises_wendao_search_tool_to_llm() -> Result<()> 
         }),
         "expected wendao.search in first llm request tools payload: {tools:#?}"
     );
+    let wendao_search = tools
+        .iter()
+        .find(|tool| {
+            tool.get("function")
+                .and_then(|value| value.get("name"))
+                .and_then(Value::as_str)
+                == Some("wendao.search")
+        })
+        .cloned()
+        .unwrap_or_else(|| {
+            panic!("expected wendao.search in first llm request tools payload: {tools:#?}")
+        });
+    assert!(
+        wendao_search
+            .get("function")
+            .and_then(|value| value.get("parameters"))
+            .and_then(|value| value.get("properties"))
+            .and_then(|value| value.get("query"))
+            .is_some(),
+        "expected wendao.search schema to expose `query`: {wendao_search:#?}"
+    );
     assert_eq!(
         first_payload.get("tool_choice").and_then(Value::as_str),
         Some("auto")
