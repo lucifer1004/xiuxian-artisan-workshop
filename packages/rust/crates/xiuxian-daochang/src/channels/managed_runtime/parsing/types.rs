@@ -41,6 +41,21 @@ pub(crate) struct SessionPartitionCommand<Mode> {
     pub(crate) format: OutputFormat,
 }
 
+#[cfg_attr(test, allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionMentionMode {
+    Require,
+    Open,
+    Inherit,
+}
+
+#[cfg_attr(test, allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SessionMentionCommand {
+    pub(crate) mode: Option<SessionMentionMode>,
+    pub(crate) format: OutputFormat,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SessionPartitionModeToken {
     Chat,

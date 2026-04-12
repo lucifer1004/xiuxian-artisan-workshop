@@ -14,6 +14,17 @@ impl SearchPlaneCache {
     where
         T: DeserializeOwned,
     {
+        #[cfg(test)]
+        if let Some(payload) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .generic_json_payloads
+            .get(key)
+            .cloned()
+        {
+            return serde_json::from_str(payload.as_str()).ok();
+        }
         let client = self.client.as_ref()?;
         let mut connection = client
             .get_multiplexed_async_connection_with_config(&self.async_connection_config())

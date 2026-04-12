@@ -1,6 +1,7 @@
 /// Memory-recall state snapshot and persistence tests for agent sessions.
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::unit::live_gates::{live_valkey_enabled, resolve_live_valkey_url};
 use anyhow::Result;
 use serde_json::json;
 use std::collections::HashMap;
@@ -32,14 +33,10 @@ async fn build_agent() -> Result<Agent> {
 }
 
 fn live_redis_url() -> Option<String> {
-    for key in ["VALKEY_URL"] {
-        if let Ok(url) = std::env::var(key)
-            && !url.trim().is_empty()
-        {
-            return Some(url);
-        }
+    if !live_valkey_enabled() {
+        return None;
     }
-    None
+    resolve_live_valkey_url()
 }
 
 async fn build_agent_with_shared_redis(redis_url: &str, key_prefix: &str) -> Result<Agent> {
@@ -255,10 +252,9 @@ async fn inspect_memory_recall_snapshot_ignores_invalid_payload() -> Result<()> 
 }
 
 #[tokio::test]
-#[ignore = "requires live valkey server"]
 async fn memory_recall_snapshot_is_shared_across_agent_instances_with_valkey() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
+        eprintln!("skip: set VALKEY_URL or XIUXIAN_WENDAO_VALKEY_URL");
         return Ok(());
     };
 
@@ -280,10 +276,9 @@ async fn memory_recall_snapshot_is_shared_across_agent_instances_with_valkey() -
 }
 
 #[tokio::test]
-#[ignore = "requires live valkey server"]
 async fn record_memory_recall_snapshot_publishes_stream_event() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
+        eprintln!("skip: set VALKEY_URL or XIUXIAN_WENDAO_VALKEY_URL");
         return Ok(());
     };
 

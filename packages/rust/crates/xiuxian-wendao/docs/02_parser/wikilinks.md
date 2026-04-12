@@ -9,9 +9,10 @@
 
 ## Objective
 
-Wendao keeps ordinary body wikilink parsing under
-`src/parsers/markdown/wikilinks/` as the narrower Obsidian-style subset of the
-shared `src/parsers/markdown/references/` parser surface.
+Wendao now treats ordinary body wikilink parsing as the narrower
+Obsidian-style subset of the shared parser-owned reference surface in
+`xiuxian-wendao-parsers`, backed by the same parser-owned addressed-target
+core that ordinary Markdown references use.
 
 ## Syntax Contract
 
@@ -43,6 +44,11 @@ parser, not regex-driven:
 
 This gives Wendao one parser-owned structural interpretation for body links
 before any consumer-specific reduction happens.
+
+`MarkdownWikiLink` is now the Markdown-local naming surface for
+`LiteralAddressedTarget`. That means the note target plus optional scoped
+address come from the shared `AddressedTarget` contract, while the original
+literal comes from the shared source-preserved literal wrapper.
 
 ## Consumer Boundary
 
@@ -81,17 +87,18 @@ drawers, section tags, or other subsystem-owned metadata.
 
 Coverage for this contract lives in:
 
-1. `tests/unit/parsers/markdown/wikilinks.rs`
-2. `tests/snapshots/parser/markdown/wikilinks.json`
-3. `tests/unit/link_graph_refs.rs`
-4. `src/zhenfa_router/native/semantic_check/docs_governance/tests/index_links/relations.rs`
+1. `packages/rust/crates/xiuxian-wendao-parsers/tests/unit/wikilinks.rs`
+2. `tests/unit/parsers/markdown/wikilinks.rs`
+3. `tests/snapshots/parser/markdown/wikilinks.json`
+4. `tests/unit/link_graph_refs.rs`
+5. `src/zhenfa_router/native/semantic_check/docs_governance/tests/index_links/relations.rs`
 
 :RELATIONS:
-:LINKS: [[02_parser/index]], [[02_parser/references]], [[02_parser/architecture]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]]
+:LINKS: [[02_parser/index]], [[02_parser/addressed_target]], [[02_parser/references]], [[02_parser/architecture]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-05
+:LAST_SYNC: 2026-04-11
 :END:

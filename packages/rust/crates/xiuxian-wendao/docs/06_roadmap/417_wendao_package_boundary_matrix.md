@@ -128,6 +128,56 @@ The main mismatches today are:
 3. most downstream consumers still depend on `xiuxian-wendao` directly, even
    when they only need a narrower `core` or `runtime` surface
 
+One bounded follow-up is now closed: `WendaoResourceUri` moved into
+`xiuxian-wendao-core`, and URI-only consumers in `xiuxian-qianji` and
+`xiuxian-qianhuan` now import that shared contract from `core` directly.
+Another bounded follow-up is now closed: `KnowledgeEntry` moved into
+`xiuxian-wendao-core`, `xiuxian-qianji` record-only contract-feedback
+consumers now import that shared payload from `core` directly, and
+`KnowledgeStorage` remains in `xiuxian-wendao`.
+Another bounded follow-up is now closed:
+`WendaoContractFeedbackAdapter` moved into `xiuxian-wendao-core`,
+`xiuxian-qianji` now imports that pure contract-feedback projection helper
+from `core` directly, and `xiuxian-wendao` keeps only a thin compatibility
+re-export for the adapter path.
+Another bounded follow-up is now closed: `CognitiveTraceRecord`,
+`LinkGraphSemanticDocument`, and `LinkGraphSemanticDocumentKind` moved into
+`xiuxian-wendao-core`, `xiuxian-qianji` sovereign-memory consumers now import
+those shared semantic-document payloads from `core` directly, and
+`xiuxian-wendao` keeps only a thin compatibility re-export while retaining
+link-graph indexing and ingestion behavior.
+Another bounded follow-up is now closed: the pure link-graph query-contract
+family moved into `xiuxian-wendao-core`, `xiuxian-qianji` now imports
+`LinkGraphSearchOptions` from `core` directly, and `xiuxian-wendao` keeps
+query execution and retrieval semantics while only re-exporting the stable
+query DTO family.
+Another bounded follow-up is now closed: the stable entity-record family moved
+into `xiuxian-wendao-core`, `xiuxian-qianji` now imports `Entity`,
+`Relation`, `EntityType`, and `RelationType` from `core` directly, and
+`xiuxian-wendao` keeps graph execution and persistence semantics while only
+re-exporting the stable entity payload family.
+Another bounded follow-up is now closed: `LinkGraphRefreshMode` moved into
+`xiuxian-wendao-core`, `xiuxian-qianji` now imports that stable refresh-mode
+enum from `core` directly, and `xiuxian-wendao` keeps `LinkGraphIndex`
+refresh execution while only re-exporting the shared status enum.
+Another bounded follow-up is now closed: the stable SQL result DTO family
+(`SqlQueryPayload`, `SqlQueryMetadata`, `SqlBatchPayload`, and
+`SqlColumnPayload`) moved into `xiuxian-wendao-core`, `xiuxian-qianji` now
+imports `SqlQueryPayload` from `core` directly, and `xiuxian-wendao` keeps
+SQL execution and bounded-work query wiring while only re-exporting the
+shared result payload family.
+Another bounded follow-up is now closed: the embedded zhixing text/path/mount
+helper family moved into `xiuxian-wendao-runtime`, `xiuxian-qianji` now
+imports the direct text helper from `runtime`, and `xiuxian-wendao` keeps
+discovery, registry, and resolver semantics while only re-exporting the thin
+runtime compatibility seam for embedded artifact access.
+Another bounded follow-up is now closed: the bundled Wendao gateway `OpenAPI`
+artifact helper family moved into `xiuxian-wendao-runtime`, `xiuxian-qianji`
+now imports the direct bundled artifact helpers from `runtime`, and
+`xiuxian-wendao` keeps gateway route inventory and `OpenAPI` semantics while
+only re-exporting the thin runtime compatibility seam for bundled artifact
+access.
+
 ## Practical Heuristics
 
 If unsure, ask these questions in order:

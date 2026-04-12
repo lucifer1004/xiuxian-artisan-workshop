@@ -1,5 +1,4 @@
 use crate::contracts::NodeDefinition;
-#[cfg(feature = "llm")]
 use crate::error::QianjiError;
 
 pub(super) fn retry_targets(node_def: &NodeDefinition) -> Vec<String> {
@@ -18,6 +17,17 @@ pub(super) fn retry_targets(node_def: &NodeDefinition) -> Vec<String> {
 
 pub(super) fn uses_llm_controller(node_def: &NodeDefinition) -> bool {
     node_def.qianhuan.is_some() && node_def.llm.is_some()
+}
+
+pub(super) fn ensure_native_retry_budget_not_configured(
+    node_def: &NodeDefinition,
+) -> Result<(), QianjiError> {
+    if node_def.params.get("max_retries").is_some() {
+        return Err(QianjiError::Topology(
+            "formal_audit.max_retries requires `[nodes.qianhuan] + [nodes.llm]`; native formal_audit only supports retry_targets.".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(feature = "llm")]
@@ -67,6 +77,17 @@ pub(super) fn max_retries(node_def: &NodeDefinition) -> Result<u32, QianjiError>
     u32::try_from(raw).map_err(|_error| {
         QianjiError::Topology("formal_audit.max_retries must fit in u32".to_string())
     })
+}
+
+#[cfg(feature = "llm")]
+pub(super) fn ensure_llm_retry_targets(node_def: &NodeDefinition) -> Result<(), QianjiError> {
+    let max_retries = max_retries(node_def)?;
+    if max_retries > 0 && retry_targets(node_def).is_empty() {
+        return Err(QianjiError::Topology(
+            "formal_audit.retry_targets must be non-empty when LLM-augmented formal_audit.max_retries is greater than 0.".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(feature = "llm")]

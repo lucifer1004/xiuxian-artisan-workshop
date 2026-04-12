@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::super::types::{
     DiscordAclAllowSettings, DiscordAclControlSettings, DiscordAclPrincipalSettings,
-    DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings,
+    DiscordAclSettings, DiscordAclSlashSettings, DiscordChannelSettings, DiscordSettings,
 };
 
 impl DiscordSettings {
@@ -10,9 +10,14 @@ impl DiscordSettings {
         Self {
             acl: self.acl.merge(overlay.acl),
             runtime_mode: overlay.runtime_mode.or(self.runtime_mode),
+            require_mention: overlay.require_mention.or(self.require_mention),
+            require_mention_persist: overlay
+                .require_mention_persist
+                .or(self.require_mention_persist),
             ingress_bind: overlay.ingress_bind.or(self.ingress_bind),
             ingress_path: overlay.ingress_path.or(self.ingress_path),
             ingress_secret_token: overlay.ingress_secret_token.or(self.ingress_secret_token),
+            channels: merge_discord_channel_map(self.channels, overlay.channels),
             session_partition: overlay.session_partition.or(self.session_partition),
             session_partition_persist: overlay
                 .session_partition_persist
@@ -37,6 +42,14 @@ impl DiscordAclSettings {
             admin: merge_option_discord_principal_settings(self.admin, overlay.admin),
             control: merge_option_discord_control_settings(self.control, overlay.control),
             slash: merge_option_discord_slash_settings(self.slash, overlay.slash),
+        }
+    }
+}
+
+impl DiscordChannelSettings {
+    fn merge(self, overlay: Self) -> Self {
+        Self {
+            require_mention: overlay.require_mention.or(self.require_mention),
         }
     }
 }
@@ -168,6 +181,29 @@ fn merge_string_map(
         (Some(mut base_values), Some(overlay_values)) => {
             for (key, value) in overlay_values {
                 base_values.insert(key, value);
+            }
+            Some(base_values)
+        }
+    }
+}
+
+fn merge_discord_channel_map(
+    base: Option<HashMap<String, DiscordChannelSettings>>,
+    overlay: Option<HashMap<String, DiscordChannelSettings>>,
+) -> Option<HashMap<String, DiscordChannelSettings>> {
+    match (base, overlay) {
+        (None, None) => None,
+        (Some(values), None) | (None, Some(values)) => Some(values),
+        (Some(mut base_values), Some(overlay_values)) => {
+            for (key, value) in overlay_values {
+                match base_values.remove(&key) {
+                    Some(base_value) => {
+                        base_values.insert(key, base_value.merge(value));
+                    }
+                    None => {
+                        base_values.insert(key, value);
+                    }
+                }
             }
             Some(base_values)
         }

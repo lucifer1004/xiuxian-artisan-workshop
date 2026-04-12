@@ -14,6 +14,7 @@ mod relation_dedupe;
 mod search;
 mod sync;
 
+#[cfg(feature = "studio")]
 pub(crate) use analysis::analyze_registered_repository_target_file_with_registry;
 pub use analysis::{
     analyze_registered_repository, analyze_registered_repository_with_registry,

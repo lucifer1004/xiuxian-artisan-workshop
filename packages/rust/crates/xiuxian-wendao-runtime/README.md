@@ -16,6 +16,11 @@ Current ownership:
 - settings merge, parse, and directory helpers
 - transport negotiation and Flight client/server helpers
 - runtime artifact resolve/render helpers
+- embedded zhixing artifact path, mount, and text helpers that only depend on
+  embedded resources, parser-derived frontmatter metadata, and Wendao URI
+  parsing
+- bundled Wendao gateway `OpenAPI` text, path, and parsed-document helpers
+  that only depend on checked-in artifact access and JSON parsing
 
 ## Bounded DuckDB Runtime Lane
 

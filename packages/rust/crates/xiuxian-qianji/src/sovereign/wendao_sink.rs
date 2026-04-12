@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use xiuxian_wendao::link_graph::{CognitiveTraceRecord, LinkGraphSemanticDocument};
+use xiuxian_wendao_core::{CognitiveTraceRecord, LinkGraphSemanticDocument};
 
 /// File-based Wendao ingestion sink.
 ///

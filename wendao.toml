@@ -1,3 +1,5 @@
+imports = [".data/wendao-frontend/wendao.toml"]
+
 # Gateway HTTP server configuration
 [gateway]
 # Port for the Wendao API gateway (default: 9517)

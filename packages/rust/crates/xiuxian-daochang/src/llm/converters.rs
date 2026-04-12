@@ -9,6 +9,12 @@ use xiuxian_llm::llm::multimodal::{MultimodalContentPart, parse_multimodal_text_
 
 use crate::session::{ChatMessage, FunctionCall, ToolCallOut};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::llm) enum ToolMessageEncoding {
+    OpenAiCompatibleText,
+    ToolResultParts,
+}
+
 fn to_litellm_role(raw_role: &str) -> Result<LiteMessageRole> {
     match raw_role {
         "system" => Ok(LiteMessageRole::System),
@@ -24,6 +30,22 @@ fn to_litellm_role(raw_role: &str) -> Result<LiteMessageRole> {
 }
 
 pub(super) fn chat_message_to_litellm_message(message: ChatMessage) -> Result<LiteChatMessage> {
+    chat_message_to_litellm_message_with_encoding(message, ToolMessageEncoding::ToolResultParts)
+}
+
+pub(in crate::llm) fn chat_message_to_litellm_message_for_openai_chat(
+    message: ChatMessage,
+) -> Result<LiteChatMessage> {
+    chat_message_to_litellm_message_with_encoding(
+        message,
+        ToolMessageEncoding::OpenAiCompatibleText,
+    )
+}
+
+fn chat_message_to_litellm_message_with_encoding(
+    message: ChatMessage,
+    tool_message_encoding: ToolMessageEncoding,
+) -> Result<LiteChatMessage> {
     let ChatMessage {
         role,
         content,
@@ -37,6 +59,7 @@ pub(super) fn chat_message_to_litellm_message(message: ChatMessage) -> Result<Li
             role.as_str(),
             content.as_deref(),
             tool_call_id.as_deref(),
+            tool_message_encoding,
         ),
         thinking: None,
         name,
@@ -62,10 +85,12 @@ fn convert_message_content(
     role: &str,
     content: Option<&str>,
     tool_call_id: Option<&str>,
+    tool_message_encoding: ToolMessageEncoding,
 ) -> Option<LiteMessageContent> {
     let content = content?;
 
     if role == "tool"
+        && matches!(tool_message_encoding, ToolMessageEncoding::ToolResultParts)
         && let Some(tool_use_id) = tool_call_id
             .map(str::trim)
             .filter(|tool_use_id| !tool_use_id.is_empty())

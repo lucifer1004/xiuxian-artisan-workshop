@@ -8,7 +8,7 @@ use crate::search::queries::sql::registration::{
     SqlQuerySurface, register_datafusion_sql_query_surface,
 };
 
-/// Shared request-scoped DataFusion query core over the visible search-plane data.
+/// Shared request-scoped `DataFusion` query core over the visible search-plane data.
 #[cfg(not(feature = "duckdb"))]
 pub(crate) struct DataFusionQueryCore {
     datafusion_query_engine: SearchEngineContext,

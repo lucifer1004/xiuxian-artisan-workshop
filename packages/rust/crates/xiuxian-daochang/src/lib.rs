@@ -38,6 +38,7 @@ pub use agent::{
     SessionMemoryRecallSnapshot,
     native_tools::registry::{NativeTool, NativeToolCallContext},
     native_tools::spider::SpiderCrawlTool,
+    native_tools::wendao_search::{WendaoSearchTool, WendaoSearchToolConfig},
     native_tools::zhixing::{AgendaViewTool, JournalRecordTool, TaskAddTool},
     prune_messages_for_token_budget, summarise_drained_turns,
 };
@@ -50,8 +51,8 @@ pub use channels::{
     DiscordControlCommandPolicy, DiscordIngressApp, DiscordIngressBuildRequest,
     DiscordIngressRunRequest, DiscordRuntimeConfig, DiscordSessionPartition,
     DiscordSlashCommandPolicy, ForegroundQueueMode, RecipientCommandAdminUsersMutation,
-    SessionGate, TELEGRAM_MAX_MESSAGE_LENGTH, TelegramAclOverrides, TelegramChannel,
-    TelegramCommandAdminRule, TelegramControlCommandPolicy, TelegramRuntimeConfig,
+    RecipientMentionPolicyStatus, SessionGate, TELEGRAM_MAX_MESSAGE_LENGTH, TelegramAclOverrides,
+    TelegramChannel, TelegramCommandAdminRule, TelegramControlCommandPolicy, TelegramRuntimeConfig,
     TelegramSessionPartition, TelegramSlashCommandPolicy, TelegramWebhookApp,
     TelegramWebhookControlPolicyBuildRequest, TelegramWebhookPartitionBuildRequest,
     TelegramWebhookPolicyRunRequest, TelegramWebhookRunRequest, WebhookDedupBackend,
@@ -68,12 +69,12 @@ pub use channels::{
     split_message_for_discord, split_message_for_telegram,
 };
 pub use config::{
-    AgentConfig, ContextBudgetStrategy, DiscordSettings, EmbeddingSettings, InferenceSettings,
-    LITELLM_DEFAULT_URL, MemoryConfig, MemorySettings, RuntimeSettings, SessionSettings,
-    TelegramAclAllowSettings, TelegramAclControlSettings, TelegramAclPrincipalSettings,
-    TelegramAclSettings, TelegramAclSlashSettings, TelegramSettings, ToolConfigFile,
-    ToolRuntimeSettings, ToolServerEntry, ToolServerEntryFile, XiuxianConfig,
-    load_runtime_settings, load_runtime_settings_from_paths, load_tool_config,
+    AgentConfig, ContextBudgetStrategy, DiscordChannelSettings, DiscordSettings, EmbeddingSettings,
+    InferenceSettings, LITELLM_DEFAULT_URL, MemoryConfig, MemorySettings, RuntimeSettings,
+    SessionSettings, TelegramAclAllowSettings, TelegramAclControlSettings,
+    TelegramAclPrincipalSettings, TelegramAclSettings, TelegramAclSlashSettings, TelegramSettings,
+    ToolConfigFile, ToolRuntimeSettings, ToolServerEntry, ToolServerEntryFile, WendaoGatewayConfig,
+    XiuxianConfig, load_runtime_settings, load_runtime_settings_from_paths, load_tool_config,
     load_xiuxian_config_from_bases, load_xiuxian_config_from_paths, set_config_home_override,
 };
 pub use contracts::{

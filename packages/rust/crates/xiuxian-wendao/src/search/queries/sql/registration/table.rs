@@ -192,37 +192,6 @@ pub(crate) struct RegisteredSqlColumn {
 }
 
 impl RegisteredSqlColumn {
-    fn from_registered_table(
-        table: &RegisteredSqlTable,
-        ordinal_position: usize,
-        column_name: impl Into<String>,
-        arrow_field: &Field,
-        source_column_name: Option<String>,
-        data_type: impl Into<String>,
-        is_nullable: bool,
-        column_origin_kind: impl Into<String>,
-    ) -> Self {
-        Self {
-            sql_table_name: table.sql_table_name.clone(),
-            engine_table_name: table.engine_table_name.clone(),
-            column_name: column_name.into(),
-            arrow_field: Field::new(
-                arrow_field.name().clone(),
-                arrow_field.data_type().clone(),
-                arrow_field.is_nullable(),
-            ),
-            source_column_name,
-            data_type: data_type.into(),
-            is_nullable,
-            ordinal_position: u64::try_from(ordinal_position).unwrap_or(u64::MAX),
-            corpus: table.corpus.clone(),
-            scope: table.scope.clone(),
-            sql_object_kind: table.sql_object_kind.clone(),
-            column_origin_kind: column_origin_kind.into(),
-            repo_id: table.repo_id.clone(),
-        }
-    }
-
     pub(crate) fn from_arrow_field(
         table: &RegisteredSqlTable,
         ordinal_position: usize,
@@ -231,16 +200,25 @@ impl RegisteredSqlColumn {
         let column_name = field.name().clone();
         let (source_column_name, column_origin_kind) =
             registered_sql_column_origin(table, column_name.as_str());
-        Self::from_registered_table(
-            table,
-            ordinal_position,
+        Self {
+            sql_table_name: table.sql_table_name.clone(),
+            engine_table_name: table.engine_table_name.clone(),
             column_name,
-            field,
+            arrow_field: Field::new(
+                field.name().clone(),
+                field.data_type().clone(),
+                field.is_nullable(),
+            ),
             source_column_name,
-            canonical_sql_data_type_name(field.data_type()),
-            field.is_nullable(),
-            column_origin_kind,
-        )
+            data_type: canonical_sql_data_type_name(field.data_type()),
+            is_nullable: field.is_nullable(),
+            ordinal_position: u64::try_from(ordinal_position).unwrap_or(u64::MAX),
+            corpus: table.corpus.clone(),
+            scope: table.scope.clone(),
+            sql_object_kind: table.sql_object_kind.clone(),
+            column_origin_kind: column_origin_kind.to_string(),
+            repo_id: table.repo_id.clone(),
+        }
     }
 }
 

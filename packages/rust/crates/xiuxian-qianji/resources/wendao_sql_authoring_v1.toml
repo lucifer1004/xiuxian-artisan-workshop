@@ -1,0 +1,148 @@
+name = "Wendao_Search_Sql_Authoring_v1"
+
+[[nodes]]
+id = "Discover"
+task_type = "wendao_sql_discover"
+weight = 1.0
+params = { output_key = "surface_bundle_xml", endpoint_key = "wendao_query_endpoint", project_root_key = "project_root", allowed_objects = ["repo_content_chunk", "repo_entity", "wendao_sql_tables", "wendao_sql_columns", "wendao_sql_view_sources"], max_limit = 8, allowed_ops = ["eq", "contains"], require_filter_for = ["repo_content_chunk"] }
+
+[[nodes]]
+id = "Author_Annotate"
+task_type = "annotation"
+weight = 1.0
+params = { output_key = "author_prompt" }
+[nodes.qianhuan]
+persona_id = "artisan-engineer"
+execution_mode = "isolated"
+input_keys = ["request", "surface_bundle_xml"]
+
+[[nodes]]
+id = "Author_Generate"
+task_type = "llm"
+weight = 1.0
+params = { model = "gpt-4o-mini", output_key = "author_spec_xml", prompt = "{{author_prompt}}" }
+
+[[nodes]]
+id = "Validate_1"
+task_type = "wendao_sql_validate"
+weight = 1.0
+params = { surface_bundle_key = "surface_bundle_xml", author_spec_key = "author_spec_xml", output_key = "validated_sql_1", report_key = "validation_report_xml_1", error_key = "validation_error_1", accepted_branch_label = "validate_1.ok", rejected_branch_label = "validate_1.repair" }
+
+[[nodes]]
+id = "Execute_1"
+task_type = "wendao_sql_execute"
+weight = 1.0
+params = { sql_key = "validated_sql_1", output_key = "query_result_1", report_key = "execution_report_xml_1", error_key = "execution_error_1", endpoint_key = "wendao_query_endpoint", success_branch_label = "execute_1.done", error_branch_label = "execute_1.repair", max_report_rows = 3 }
+
+[[nodes]]
+id = "Repair_Annotate"
+task_type = "annotation"
+weight = 1.0
+params = { output_key = "repair_prompt" }
+[nodes.qianhuan]
+persona_id = "artisan-engineer"
+execution_mode = "isolated"
+input_keys = ["request", "surface_bundle_xml", "validation_report_xml_1", "execution_report_xml_1", "validation_error_1", "execution_error_1"]
+
+[[nodes]]
+id = "Repair_Generate"
+task_type = "llm"
+weight = 1.0
+params = { model = "gpt-4o-mini", output_key = "repair_spec_xml", prompt = "{{repair_prompt}}" }
+
+[[nodes]]
+id = "Validate_2"
+task_type = "wendao_sql_validate"
+weight = 1.0
+params = { surface_bundle_key = "surface_bundle_xml", author_spec_key = "repair_spec_xml", output_key = "validated_sql_2", report_key = "validation_report_xml_2", error_key = "validation_error_2", accepted_branch_label = "validate_2.ok", rejected_branch_label = "validate_2.failed" }
+
+[[nodes]]
+id = "Execute_2"
+task_type = "wendao_sql_execute"
+weight = 1.0
+params = { sql_key = "validated_sql_2", output_key = "query_result_2", report_key = "execution_report_xml_2", error_key = "execution_error_2", endpoint_key = "wendao_query_endpoint", success_branch_label = "execute_2.done", error_branch_label = "execute_2.failed", max_report_rows = 3 }
+
+[[nodes]]
+id = "Done"
+task_type = "command"
+weight = 1.0
+params = { command = "printf workflow_done" }
+
+[[nodes]]
+id = "Failed"
+task_type = "command"
+weight = 1.0
+params = { command = "printf workflow_failed" }
+
+[[edges]]
+from = "Discover"
+to = "Author_Annotate"
+weight = 1.0
+
+[[edges]]
+from = "Author_Annotate"
+to = "Author_Generate"
+weight = 1.0
+
+[[edges]]
+from = "Author_Generate"
+to = "Validate_1"
+weight = 1.0
+
+[[edges]]
+from = "Validate_1"
+to = "Execute_1"
+label = "validate_1.ok"
+weight = 1.0
+
+[[edges]]
+from = "Validate_1"
+to = "Repair_Annotate"
+label = "validate_1.repair"
+weight = 1.0
+
+[[edges]]
+from = "Execute_1"
+to = "Done"
+label = "execute_1.done"
+weight = 1.0
+
+[[edges]]
+from = "Execute_1"
+to = "Repair_Annotate"
+label = "execute_1.repair"
+weight = 1.0
+
+[[edges]]
+from = "Repair_Annotate"
+to = "Repair_Generate"
+weight = 1.0
+
+[[edges]]
+from = "Repair_Generate"
+to = "Validate_2"
+weight = 1.0
+
+[[edges]]
+from = "Validate_2"
+to = "Execute_2"
+label = "validate_2.ok"
+weight = 1.0
+
+[[edges]]
+from = "Validate_2"
+to = "Failed"
+label = "validate_2.failed"
+weight = 1.0
+
+[[edges]]
+from = "Execute_2"
+to = "Done"
+label = "execute_2.done"
+weight = 1.0
+
+[[edges]]
+from = "Execute_2"
+to = "Failed"
+label = "execute_2.failed"
+weight = 1.0

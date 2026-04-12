@@ -15,23 +15,10 @@ use xiuxian_memory_engine::{
     StoreConfig, default_valkey_state_hash_keys, default_valkey_state_key,
 };
 use xiuxian_qianhuan::ManifestationManager;
-use xiuxian_wendao::LinkGraphIndex;
 use xiuxian_zhenfa::{
     ZhenfaContext, ZhenfaError, ZhenfaOrchestrator, ZhenfaOrchestratorHooks, ZhenfaRegistry,
     ZhenfaSignal, ZhenfaTool,
 };
-
-fn build_wendao_index_fixture() -> (tempfile::TempDir, Arc<LinkGraphIndex>) {
-    let notebook = tempfile::tempdir().unwrap_or_else(|error| panic!("create temp dir: {error}"));
-    std::fs::write(
-        notebook.path().join("alpha.md"),
-        "# Native Bridge\n\nWendao native zhenfa search smoke.\n",
-    )
-    .unwrap_or_else(|error| panic!("write notebook note: {error}"));
-    let index = LinkGraphIndex::build(notebook.path())
-        .unwrap_or_else(|error| panic!("build link graph index: {error}"));
-    (notebook, Arc::new(index))
-}
 
 struct RewardEmitterTool;
 
@@ -92,25 +79,16 @@ fn build_manifestation_manager() -> Arc<ManifestationManager> {
 }
 
 #[test]
-fn from_xiuxian_config_enables_default_wendao_search_tool() {
+fn from_xiuxian_config_requires_explicit_supported_tool_enablement() {
     let config = XiuxianConfig::default();
-    let (_notebook, index) = build_wendao_index_fixture();
-    let deps = ZhenfaRuntimeDeps {
-        embedding_client: None,
-        manifestation_manager: None,
-        link_graph_index: Some(index),
-        skill_vfs_resolver: None,
-        memory_store: None,
-    };
-    let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &deps)
-        .unwrap_or_else(|| panic!("bridge should be enabled"));
-    assert!(bridge.handles_tool("wendao.search"));
-    assert!(!bridge.valkey_hooks_enabled());
+    let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &ZhenfaRuntimeDeps::default());
+    assert!(bridge.is_none());
 }
 
 #[test]
-fn from_xiuxian_config_skips_default_wendao_search_without_index_dependency() {
-    let config = XiuxianConfig::default();
+fn from_xiuxian_config_skips_explicit_wendao_search_request() {
+    let mut config = XiuxianConfig::default();
+    config.zhenfa.enabled_tools = Some(vec!["wendao.search".to_string()]);
     let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &ZhenfaRuntimeDeps::default());
     assert!(bridge.is_none());
 }
@@ -145,10 +123,7 @@ fn from_xiuxian_config_enables_qianhuan_tools_when_runtime_dependency_is_availab
     ]);
     let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        embedding_client: None,
         manifestation_manager: Some(manager),
-        link_graph_index: None,
-        skill_vfs_resolver: None,
         memory_store: None,
     };
 
@@ -161,13 +136,11 @@ fn from_xiuxian_config_enables_qianhuan_tools_when_runtime_dependency_is_availab
 #[test]
 fn from_xiuxian_config_enables_valkey_hooks_when_configured() {
     let mut config = XiuxianConfig::default();
+    config.zhenfa.enabled_tools = Some(vec!["qianhuan.reload".to_string()]);
     config.zhenfa.valkey.url = Some("redis://127.0.0.1:6379/0".to_string());
-    let (_notebook, index) = build_wendao_index_fixture();
+    let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        embedding_client: None,
-        manifestation_manager: None,
-        link_graph_index: Some(index),
-        skill_vfs_resolver: None,
+        manifestation_manager: Some(manager),
         memory_store: None,
     };
     let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &deps)
@@ -175,65 +148,50 @@ fn from_xiuxian_config_enables_valkey_hooks_when_configured() {
     assert!(bridge.valkey_hooks_enabled());
 }
 
-#[tokio::test]
-async fn call_tool_dispatches_wendao_search_natively() {
-    let (notebook, index) = build_wendao_index_fixture();
+#[test]
+fn from_xiuxian_config_ignores_wendao_search_when_mixed_with_supported_tools() {
     let mut config = XiuxianConfig::default();
-    config.wendao.zhixing.notebook_path = Some(notebook.path().to_string_lossy().to_string());
+    config.zhenfa.enabled_tools = Some(vec![
+        "wendao.search".to_string(),
+        "qianhuan.reload".to_string(),
+    ]);
+    let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        embedding_client: None,
-        manifestation_manager: None,
-        link_graph_index: Some(index),
-        skill_vfs_resolver: None,
+        manifestation_manager: Some(manager),
         memory_store: None,
     };
     let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &deps)
         .unwrap_or_else(|| panic!("bridge should be enabled"));
-
-    let output = bridge
-        .call_tool(
-            Some("telegram:12345"),
-            "wendao.search",
-            Some(json!({
-                "query": "native zhenfa",
-                "limit": 5
-            })),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("zhenfa native tool call should succeed: {error}"));
-    assert!(output.contains("<hit id=\"alpha.md\""));
+    assert!(bridge.handles_tool("qianhuan.reload"));
+    assert!(!bridge.handles_tool("wendao.search"));
 }
 
 #[tokio::test]
-async fn call_tool_dispatches_wendao_search_with_query_vector_natively() {
-    let (notebook, index) = build_wendao_index_fixture();
+async fn call_tool_rejects_wendao_search_when_bridge_has_other_tools() {
     let mut config = XiuxianConfig::default();
-    config.wendao.zhixing.notebook_path = Some(notebook.path().to_string_lossy().to_string());
+    config.zhenfa.enabled_tools = Some(vec![
+        "wendao.search".to_string(),
+        "qianhuan.reload".to_string(),
+    ]);
+    let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        embedding_client: None,
-        manifestation_manager: None,
-        link_graph_index: Some(index),
-        skill_vfs_resolver: None,
+        manifestation_manager: Some(manager),
         memory_store: None,
     };
     let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &deps)
         .unwrap_or_else(|| panic!("bridge should be enabled"));
 
-    let output = bridge
+    let error = bridge
         .call_tool(
             Some("telegram:12345"),
             "wendao.search",
             Some(json!({
-                "query": "native zhenfa",
-                "query_vector": [1.0, 0.0, 0.0],
-                "limit": 5
+                "request": "show me docs"
             })),
         )
         .await
-        .unwrap_or_else(|error| {
-            panic!("zhenfa native tool call with query_vector should succeed: {error}")
-        });
-    assert!(output.contains("<hit id=\"alpha.md\""));
+        .expect_err("wendao.search should no longer be bridged through zhenfa");
+    assert!(error.to_string().contains("not enabled"));
 }
 
 #[tokio::test]
@@ -242,10 +200,7 @@ async fn call_tool_dispatches_qianhuan_reload_natively() {
     config.zhenfa.enabled_tools = Some(vec!["qianhuan.reload".to_string()]);
     let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        embedding_client: None,
         manifestation_manager: Some(manager),
-        link_graph_index: None,
-        skill_vfs_resolver: None,
         memory_store: None,
     };
     let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &deps)

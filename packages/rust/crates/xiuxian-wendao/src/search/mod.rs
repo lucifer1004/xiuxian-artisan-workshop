@@ -39,8 +39,6 @@ pub(crate) mod repo_search;
 mod repo_staging;
 #[cfg(feature = "search-runtime")]
 mod service;
-#[cfg(all(test, feature = "search-runtime"))]
-mod staged_mutation;
 #[cfg(feature = "search-runtime")]
 mod status;
 /// Shared Tantivy-backed search primitives.

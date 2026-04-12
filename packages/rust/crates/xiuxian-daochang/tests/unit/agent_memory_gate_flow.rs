@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::unit::live_gates::{live_valkey_enabled, resolve_live_valkey_url};
 use anyhow::Result;
 use axum::{Json, Router, extract::State, routing::post};
 use tokio::time::{Duration, sleep};
@@ -109,14 +110,10 @@ fn has_metric_key_prefix(metrics: &HashMap<String, String>, prefix: &str) -> boo
 }
 
 fn live_redis_url() -> Option<String> {
-    for key in ["VALKEY_URL"] {
-        if let Ok(url) = std::env::var(key)
-            && !url.trim().is_empty()
-        {
-            return Some(url);
-        }
+    if !live_valkey_enabled() {
+        return None;
     }
-    None
+    resolve_live_valkey_url()
 }
 
 fn unique_id(prefix: &str) -> String {
@@ -515,10 +512,9 @@ async fn custom_gate_policy_can_delay_obsolete_after_repeated_failures() -> Resu
 }
 
 #[tokio::test]
-#[ignore = "requires live valkey server"]
 async fn memory_gate_events_are_emitted_into_valkey_stream_metrics() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
+        eprintln!("skip: set VALKEY_URL or XIUXIAN_WENDAO_VALKEY_URL");
         return Ok(());
     };
 

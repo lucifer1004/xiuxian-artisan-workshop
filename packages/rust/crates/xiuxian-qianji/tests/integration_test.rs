@@ -6,8 +6,12 @@ xiuxian_testing::crate_test_policy_harness!();
 mod executors_annotation;
 #[path = "integration/executors_formal_audit.rs"]
 mod executors_formal_audit;
+#[path = "integration/llm_augmented_formal_audit.rs"]
+mod llm_augmented_formal_audit;
 #[path = "integration/manifest_requires_llm.rs"]
 mod manifest_requires_llm;
+#[path = "integration/runtime_live_llm.rs"]
+mod runtime_live_llm;
 #[path = "integration/test_agenda_validation_pipeline.rs"]
 mod test_agenda_validation_pipeline;
 #[path = "integration/test_bootcamp_api.rs"]
@@ -56,5 +60,7 @@ mod test_swarm_orchestration;
 mod test_wendao_ingester_mechanism;
 #[path = "integration/test_wendao_refresh_mechanism.rs"]
 mod test_wendao_refresh_mechanism;
+#[path = "integration/test_wendao_sql_mechanism.rs"]
+mod test_wendao_sql_mechanism;
 #[path = "integration/test_write_file_mechanism.rs"]
 mod test_write_file_mechanism;

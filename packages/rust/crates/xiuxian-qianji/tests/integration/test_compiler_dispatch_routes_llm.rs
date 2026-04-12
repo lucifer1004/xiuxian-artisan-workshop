@@ -37,6 +37,21 @@ template_target = "critique_agenda.j2"
 model = "test-model"
 "#;
 
+const FORMAL_AUDIT_LLM_WITHOUT_RETRY_TARGETS_MANIFEST: &str = r#"
+name = "FormalAuditLlmWithoutRetryTargetsDispatchFeature"
+
+[[nodes]]
+id = "Teacher"
+task_type = "formal_audit"
+weight = 1.0
+params = { threshold_score = 0.8, max_retries = 2 }
+[nodes.qianhuan]
+persona_id = "strict_teacher"
+template_target = "critique_agenda.j2"
+[nodes.llm]
+model = "test-model"
+"#;
+
 struct StubLlmClient;
 
 #[async_trait]
@@ -85,6 +100,22 @@ fn compiler_dispatches_llm_augmented_formal_audit_with_global_llm_client()
     let compiler = build_compiler_with_client(temp.path(), Some(llm_client))?;
     let engine = compiler.compile(FORMAL_AUDIT_LLM_MANIFEST)?;
     assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_rejects_llm_augmented_formal_audit_with_positive_max_retries_and_no_retry_targets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let llm_client: Arc<xiuxian_qianji::QianjiLlmClient> = Arc::new(StubLlmClient);
+    let compiler = build_compiler_with_client(temp.path(), Some(llm_client))?;
+    let error = compiler
+        .compile(FORMAL_AUDIT_LLM_WITHOUT_RETRY_TARGETS_MANIFEST)
+        .err()
+        .unwrap_or_else(|| panic!("llm formal_audit without retry_targets should fail"));
+    let message = error.to_string();
+    assert!(message.contains("formal_audit.retry_targets"));
+    assert!(message.contains("max_retries"));
     Ok(())
 }
 

@@ -50,6 +50,7 @@ impl Agent {
         let timeout_secs = self.config.tool_timeout_secs.max(1);
         let context = NativeToolCallContext {
             session_id: session_id.map(ToString::to_string),
+            tool_call_id: tool_call_id.map(ToString::to_string),
         };
         let call_result = tokio::time::timeout(
             Duration::from_secs(timeout_secs),

@@ -4,6 +4,8 @@ use super::runtime::{build_link_graph_index, unix_timestamp_millis};
 use super::{BootcampRunOptions, BootcampVfsMount, WorkflowReport};
 use crate::QianjiApp;
 use crate::error::QianjiError;
+#[cfg(feature = "llm")]
+use crate::runtime_config::resolve_qianji_runtime_llm_config;
 use crate::scheduler::preflight::{RuntimeWendaoMount, install_runtime_wendao_mounts};
 use serde_json::Value;
 use std::sync::Arc;
@@ -54,8 +56,76 @@ pub async fn run_workflow_with_mounts(
     }
 
     let manifest_toml = resolve_flow_manifest_toml(trimmed_flow_uri, vfs_mounts)?;
-    let manifest = parse_manifest(manifest_toml.as_str())?;
+    run_workflow_from_manifest_payload(
+        trimmed_flow_uri,
+        manifest_toml.as_str(),
+        initial_context,
+        vfs_mounts,
+        options,
+    )
+    .await
+}
+
+/// Runs one workflow from raw manifest TOML without `wendao://` URI
+/// resolution.
+///
+/// This helper is intended for bounded host-owned workflows that ship their
+/// manifest as a built-in string constant and still want the standard bootcamp
+/// runtime assembly.
+///
+/// # Errors
+///
+/// Returns [`QianjiError`] when manifest parsing, dependency bootstrap,
+/// workflow compilation, or runtime execution fails.
+pub async fn run_workflow_from_manifest_toml(
+    manifest_toml: &str,
+    initial_context: Value,
+    options: BootcampRunOptions,
+) -> Result<WorkflowReport, QianjiError> {
+    let trimmed_manifest_toml = manifest_toml.trim();
+    if trimmed_manifest_toml.is_empty() {
+        return Err(QianjiError::Topology(
+            "bootcamp manifest TOML must be non-empty".to_string(),
+        ));
+    }
+
+    run_workflow_from_manifest_payload(
+        "inline://qianji/manifest",
+        trimmed_manifest_toml,
+        initial_context,
+        &[],
+        options,
+    )
+    .await
+}
+
+/// Compatibility alias of [`run_workflow`] for scenario-style callers.
+///
+/// This API accepts extra `include_dir` mounts so domain crates can provide
+/// embedded resources directly without requiring hardcoded path wiring.
+///
+/// # Errors
+///
+/// Returns the same errors as [`run_workflow_with_mounts`].
+pub async fn run_scenario(
+    flow_uri: &str,
+    initial_context: Value,
+    vfs_mounts: &[BootcampVfsMount],
+    options: BootcampRunOptions,
+) -> Result<WorkflowReport, QianjiError> {
+    run_workflow_with_mounts(flow_uri, initial_context, vfs_mounts, options).await
+}
+
+async fn run_workflow_from_manifest_payload(
+    flow_uri: &str,
+    manifest_toml: &str,
+    initial_context: Value,
+    vfs_mounts: &[BootcampVfsMount],
+    options: BootcampRunOptions,
+) -> Result<WorkflowReport, QianjiError> {
+    let manifest = parse_manifest(manifest_toml)?;
     let requires_llm = parsed_manifest_requires_llm(&manifest);
+    let mut initial_context = initial_context;
 
     let BootcampRunOptions {
         repo_path,
@@ -69,6 +139,8 @@ pub async fn run_workflow_with_mounts(
         consensus_manager,
     } = options;
 
+    inject_runtime_default_llm_model_fallback_if_missing(&mut initial_context, &llm_mode)?;
+
     let index = match index {
         Some(index) => index,
         None => Arc::new(build_link_graph_index(repo_path.as_deref())?),
@@ -78,7 +150,7 @@ pub async fn run_workflow_with_mounts(
     let registry = persona_registry.unwrap_or_else(|| Arc::new(PersonaRegistry::with_builtins()));
     let llm_client = resolve_bootcamp_llm_client(requires_llm, llm_mode)?;
     let scheduler = QianjiApp::create_pipeline_from_manifest_with_consensus(
-        manifest_toml.as_str(),
+        manifest_toml,
         index,
         orchestrator,
         registry,
@@ -101,7 +173,7 @@ pub async fn run_workflow_with_mounts(
     let duration_ms = started_at.elapsed().as_millis();
 
     Ok(WorkflowReport {
-        flow_uri: trimmed_flow_uri.to_string(),
+        flow_uri: flow_uri.to_string(),
         manifest_name: manifest.name,
         node_count: manifest.nodes.len(),
         edge_count: manifest.edges.len(),
@@ -113,19 +185,88 @@ pub async fn run_workflow_with_mounts(
     })
 }
 
-/// Compatibility alias of [`run_workflow`] for scenario-style callers.
-///
-/// This API accepts extra `include_dir` mounts so domain crates can provide
-/// embedded resources directly without requiring hardcoded path wiring.
-///
-/// # Errors
-///
-/// Returns the same errors as [`run_workflow_with_mounts`].
-pub async fn run_scenario(
-    flow_uri: &str,
-    initial_context: Value,
-    vfs_mounts: &[BootcampVfsMount],
-    options: BootcampRunOptions,
-) -> Result<WorkflowReport, QianjiError> {
-    run_workflow_with_mounts(flow_uri, initial_context, vfs_mounts, options).await
+#[cfg(feature = "llm")]
+fn inject_runtime_default_llm_model_fallback_if_missing(
+    context: &mut Value,
+    llm_mode: &super::BootcampLlmMode,
+) -> Result<(), QianjiError> {
+    if !matches!(llm_mode, super::BootcampLlmMode::RuntimeDefault) {
+        return Ok(());
+    }
+
+    let runtime = resolve_qianji_runtime_llm_config().map_err(|error| {
+        QianjiError::Topology(format!(
+            "failed to resolve qianji llm runtime config for bootcamp context injection: {error}"
+        ))
+    })?;
+    inject_llm_model_fallback_if_missing(context, runtime.model.as_str());
+    Ok(())
+}
+
+#[cfg(not(feature = "llm"))]
+fn inject_runtime_default_llm_model_fallback_if_missing(
+    _context: &mut Value,
+    _llm_mode: &super::BootcampLlmMode,
+) -> Result<(), QianjiError> {
+    Ok(())
+}
+
+#[cfg(any(feature = "llm", test))]
+fn inject_llm_model_fallback_if_missing(context: &mut Value, default_model: &str) {
+    let Some(map) = context.as_object_mut() else {
+        return;
+    };
+
+    let has_explicit_model = map
+        .get("llm_model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    let has_fallback_model = map
+        .get("llm_model_fallback")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    if has_explicit_model || has_fallback_model || default_model.trim().is_empty() {
+        return;
+    }
+
+    map.insert(
+        "llm_model_fallback".to_string(),
+        Value::String(default_model.to_string()),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inject_llm_model_fallback_if_missing;
+    use serde_json::json;
+
+    #[test]
+    fn injects_llm_model_fallback_when_missing() {
+        let mut context = json!({
+            "request": "Critique this agenda."
+        });
+        inject_llm_model_fallback_if_missing(&mut context, "mimo-v2-pro");
+        assert_eq!(context["llm_model_fallback"], json!("mimo-v2-pro"));
+    }
+
+    #[test]
+    fn preserves_existing_explicit_llm_model() {
+        let mut context = json!({
+            "llm_model": "override-model"
+        });
+        inject_llm_model_fallback_if_missing(&mut context, "mimo-v2-pro");
+        assert!(context.get("llm_model_fallback").is_none());
+        assert_eq!(context["llm_model"], json!("override-model"));
+    }
+
+    #[test]
+    fn preserves_existing_llm_model_fallback() {
+        let mut context = json!({
+            "llm_model_fallback": "preset-model"
+        });
+        inject_llm_model_fallback_if_missing(&mut context, "mimo-v2-pro");
+        assert_eq!(context["llm_model_fallback"], json!("preset-model"));
+    }
 }

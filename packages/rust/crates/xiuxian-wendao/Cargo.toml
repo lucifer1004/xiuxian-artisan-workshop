@@ -98,6 +98,7 @@ xiuxian-vector-store = { path = "../xiuxian-vector-store", optional = true }
 xiuxian-io = { path = "../xiuxian-io" }
 xiuxian-git-repo = { path = "../xiuxian-git-repo" }
 xiuxian-llm = { path = "../xiuxian-llm" }
+xiuxian-wendao-parsers = { path = "../xiuxian-wendao-parsers" }
 xiuxian-wendao-builtin = { path = "../xiuxian-wendao-builtin", default-features = false, optional = true }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-julia = { path = "../xiuxian-wendao-julia", optional = true }

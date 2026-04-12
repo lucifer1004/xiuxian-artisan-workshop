@@ -2,6 +2,7 @@
 
 use crate as xiuxian_wendao;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Error as IoError;
 use std::path::Path;
@@ -15,13 +16,20 @@ use axum::http::{Request, StatusCode};
 use serde_json::Value;
 use tower::util::ServiceExt;
 
-use xiuxian_wendao::analyzers::{
-    DocsProjectedGapReportQuery, ProjectedPageIndexNode, ProjectionPageKind,
-    RefineEntityDocRequest, RepoProjectedPageIndexTreesQuery, RepoProjectedPagesQuery,
-    analyze_registered_repository_with_registry, docs_projected_gap_report_from_config,
-    load_repo_intelligence_config, repo_projected_page_index_trees_from_config,
-    repo_projected_pages_from_config,
+use xiuxian_git_repo::{SyncMode, discover_checkout_metadata};
+use xiuxian_wendao::analyzers::cache::{
+    build_repository_analysis_cache_key, store_cached_repository_analysis,
 };
+use xiuxian_wendao::analyzers::resolve_registered_repository_source;
+use xiuxian_wendao::analyzers::{
+    DocRecord, DocsProjectedGapReportQuery, ExampleRecord, ProjectedPageIndexNode,
+    ProjectionPageKind, RefineEntityDocRequest, RepoProjectedPageIndexTreesQuery,
+    RepoProjectedPagesQuery, RepoSymbolKind, RepositoryAnalysisOutput, RepositoryRecord,
+    SymbolRecord, analyze_registered_repository_with_registry,
+    docs_projected_gap_report_from_config, load_repo_intelligence_config,
+    repo_projected_page_index_trees_from_config, repo_projected_pages_from_config,
+};
+use xiuxian_wendao::analyzers::{ModuleRecord, RelationKind, RelationRecord};
 use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::{
     add_git_remote, assert_studio_json_snapshot, commit_all, init_git_repository,
@@ -396,7 +404,7 @@ async fn repo_cached_search_endpoints_return_pending_without_ready_analysis_cach
         repo_dir.join("examples").join("solve_demo.jl"),
         "using GatewaySyncPkg\nsolve()\n",
     )?;
-    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    write_default_repo_config_without_priming(temp.path(), &repo_dir, "gateway-sync")?;
     let router = studio_router(gateway_state_for_project_with_options(
         temp.path(),
         false,
@@ -3762,6 +3770,7 @@ fn gateway_state_for_project_with_options(
         studio: Arc::new(StudioState {
             project_root: project_root.to_path_buf(),
             config_root,
+            bootstrap_config_path: None,
             bootstrap_background_indexing: false,
             bootstrap_background_indexing_deferred_activation: Arc::new(RwLock::new(None)),
             ui_config: Arc::new(RwLock::new(ui_config)),
@@ -3784,6 +3793,16 @@ fn write_default_repo_config(
     repo_dir: &Path,
     repo_id: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    write_default_repo_config_without_priming(base, repo_dir, repo_id)?;
+    prime_local_julia_fixture_analysis_cache(base, repo_id)?;
+    Ok(())
+}
+
+fn write_default_repo_config_without_priming(
+    base: &Path,
+    repo_dir: &Path,
+    repo_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     fs::write(
         base.join("wendao.toml"),
         format!(
@@ -3795,6 +3814,443 @@ plugins = ["julia"]
         ),
     )?;
     Ok(())
+}
+
+fn prime_local_julia_fixture_analysis_cache(
+    project_root: &Path,
+    repo_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = project_root.join("wendao.toml");
+    let repo_config = load_repo_intelligence_config(Some(config_path.as_path()), project_root)?;
+    let repository = repo_config
+        .repos
+        .iter()
+        .find(|repository| repository.id == repo_id)
+        .ok_or_else(|| IoError::other(format!("missing repository `{repo_id}`")))?;
+    let repository_source =
+        resolve_registered_repository_source(repository, project_root, SyncMode::Status)?;
+    let checkout_metadata = discover_checkout_metadata(repository_source.checkout_root.as_path());
+    let cache_key = build_repository_analysis_cache_key(
+        repository,
+        &repository_source,
+        checkout_metadata.as_ref(),
+    );
+    let analysis = build_local_julia_fixture_analysis(
+        repo_id,
+        repository_source.checkout_root.as_path(),
+        checkout_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.revision.clone()),
+    )?;
+    store_cached_repository_analysis(cache_key, &analysis)?;
+    Ok(())
+}
+
+fn build_local_julia_fixture_analysis(
+    repo_id: &str,
+    repo_root: &Path,
+    revision: Option<String>,
+) -> Result<RepositoryAnalysisOutput, Box<dyn std::error::Error>> {
+    let (project_name, version, uuid) = local_project_metadata(repo_root)?;
+    let mut modules = Vec::new();
+    let mut symbols = Vec::new();
+    let mut docs = Vec::new();
+    let mut relations = Vec::new();
+
+    for relative_path in collect_relative_files_under(repo_root, "src", "jl")? {
+        let contents = fs::read_to_string(repo_root.join(&relative_path))?;
+        parse_local_julia_source(
+            repo_id,
+            &relative_path,
+            &contents,
+            &mut modules,
+            &mut symbols,
+            &mut docs,
+            &mut relations,
+        );
+    }
+
+    if repo_root.join("README.md").exists() {
+        docs.push(DocRecord {
+            repo_id: repo_id.to_string(),
+            doc_id: format!("repo:{repo_id}:doc:README.md"),
+            title: "README.md".to_string(),
+            path: "README.md".to_string(),
+            format: Some("md".to_string()),
+            doc_target: None,
+        });
+        if let Some(module) = modules.first() {
+            relations.push(RelationRecord {
+                repo_id: repo_id.to_string(),
+                source_id: format!("repo:{repo_id}:doc:README.md"),
+                target_id: module.module_id.clone(),
+                kind: RelationKind::Documents,
+            });
+        }
+    }
+
+    for relative_path in collect_relative_files_under(repo_root, "docs", "md")? {
+        let contents = fs::read_to_string(repo_root.join(&relative_path))?;
+        let title = markdown_title(&relative_path, &contents);
+        let doc_id = format!("repo:{repo_id}:doc:{relative_path}");
+        docs.push(DocRecord {
+            repo_id: repo_id.to_string(),
+            doc_id: doc_id.clone(),
+            title: title.clone(),
+            path: relative_path.clone(),
+            format: Some("md".to_string()),
+            doc_target: None,
+        });
+        if let Some(target_id) = matching_doc_target_id(&title, &modules, &symbols) {
+            relations.push(RelationRecord {
+                repo_id: repo_id.to_string(),
+                source_id: doc_id,
+                target_id,
+                kind: RelationKind::Documents,
+            });
+        }
+    }
+
+    let mut examples = Vec::new();
+    for relative_path in collect_relative_files_under(repo_root, "examples", "jl")? {
+        let contents = fs::read_to_string(repo_root.join(&relative_path))?;
+        let example_id = format!("repo:{repo_id}:example:{relative_path}");
+        examples.push(ExampleRecord {
+            repo_id: repo_id.to_string(),
+            example_id: example_id.clone(),
+            title: example_title(&relative_path),
+            path: relative_path.clone(),
+            summary: None,
+        });
+        for target_id in example_target_ids(&contents, &modules, &symbols) {
+            relations.push(RelationRecord {
+                repo_id: repo_id.to_string(),
+                source_id: example_id.clone(),
+                target_id,
+                kind: RelationKind::ExampleOf,
+            });
+        }
+    }
+
+    modules.sort_by(|left, right| {
+        left.qualified_name
+            .cmp(&right.qualified_name)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    symbols.sort_by(|left, right| {
+        left.qualified_name
+            .cmp(&right.qualified_name)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    docs.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.doc_id.cmp(&right.doc_id))
+    });
+    examples.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(RepositoryAnalysisOutput {
+        repository: Some(RepositoryRecord {
+            repo_id: repo_id.to_string(),
+            name: project_name
+                .or_else(|| modules.first().map(|module| module.qualified_name.clone()))
+                .unwrap_or_else(|| repo_id.to_string()),
+            path: repo_root.display().to_string(),
+            url: None,
+            revision,
+            version,
+            uuid,
+            dependencies: Vec::new(),
+        }),
+        modules,
+        symbols,
+        imports: Vec::new(),
+        examples,
+        docs,
+        relations,
+        diagnostics: Vec::new(),
+    })
+}
+
+fn local_project_metadata(
+    repo_root: &Path,
+) -> Result<(Option<String>, Option<String>, Option<String>), Box<dyn std::error::Error>> {
+    let project_toml = repo_root.join("Project.toml");
+    if !project_toml.exists() {
+        return Ok((None, None, None));
+    }
+    let contents = fs::read_to_string(project_toml)?;
+    let mut name = None;
+    let mut version = None;
+    let mut uuid = None;
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if let Some(value) = toml_string_value(trimmed, "name") {
+            name = Some(value);
+        } else if let Some(value) = toml_string_value(trimmed, "version") {
+            version = Some(value);
+        } else if let Some(value) = toml_string_value(trimmed, "uuid") {
+            uuid = Some(value);
+        }
+    }
+    Ok((name, version, uuid))
+}
+
+fn toml_string_value(line: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key} = ");
+    line.strip_prefix(prefix.as_str())
+        .and_then(|value| value.trim().strip_prefix('"'))
+        .and_then(|value| value.strip_suffix('"'))
+        .map(ToString::to_string)
+}
+
+fn collect_relative_files_under(
+    repo_root: &Path,
+    relative_root: &str,
+    extension: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let root = repo_root.join(relative_root);
+    let mut relative_paths = Vec::new();
+    if !root.exists() {
+        return Ok(relative_paths);
+    }
+    collect_relative_files_recursive(repo_root, root.as_path(), extension, &mut relative_paths)?;
+    relative_paths.sort();
+    Ok(relative_paths)
+}
+
+fn collect_relative_files_recursive(
+    repo_root: &Path,
+    current_dir: &Path,
+    extension: &str,
+    relative_paths: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in fs::read_dir(current_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_relative_files_recursive(repo_root, path.as_path(), extension, relative_paths)?;
+            continue;
+        }
+        if path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value == extension)
+        {
+            relative_paths.push(repo_relative_path(repo_root, path.as_path())?);
+        }
+    }
+    Ok(())
+}
+
+fn repo_relative_path(repo_root: &Path, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(path
+        .strip_prefix(repo_root)?
+        .to_string_lossy()
+        .replace('\\', "/"))
+}
+
+fn parse_local_julia_source(
+    repo_id: &str,
+    relative_path: &str,
+    contents: &str,
+    modules: &mut Vec<ModuleRecord>,
+    symbols: &mut Vec<SymbolRecord>,
+    docs: &mut Vec<DocRecord>,
+    relations: &mut Vec<RelationRecord>,
+) {
+    let Some(module_name) = contents.lines().find_map(parse_module_name) else {
+        return;
+    };
+    let module_id = format!("repo:{repo_id}:module:{module_name}");
+    modules.push(ModuleRecord {
+        repo_id: repo_id.to_string(),
+        module_id: module_id.clone(),
+        qualified_name: module_name.clone(),
+        path: relative_path.to_string(),
+    });
+
+    let mut pending_docstring = false;
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if is_single_line_docstring(trimmed) {
+            pending_docstring = true;
+            continue;
+        }
+        if let Some((symbol_name, signature, kind)) = parse_source_symbol(trimmed) {
+            let symbol_id = format!("repo:{repo_id}:symbol:{module_name}.{symbol_name}");
+            symbols.push(SymbolRecord {
+                repo_id: repo_id.to_string(),
+                symbol_id: symbol_id.clone(),
+                module_id: Some(module_id.clone()),
+                name: symbol_name.clone(),
+                qualified_name: format!("{module_name}.{symbol_name}"),
+                kind,
+                path: relative_path.to_string(),
+                line_start: None,
+                line_end: None,
+                signature,
+                audit_status: None,
+                verification_state: Some("unknown".to_string()),
+                attributes: BTreeMap::new(),
+            });
+            if pending_docstring {
+                let doc_path = format!("{relative_path}#symbol-id:{symbol_id}");
+                let doc_id = format!("repo:{repo_id}:doc:{doc_path}");
+                docs.push(DocRecord {
+                    repo_id: repo_id.to_string(),
+                    doc_id: doc_id.clone(),
+                    title: symbol_name.clone(),
+                    path: doc_path,
+                    format: Some("julia_docstring".to_string()),
+                    doc_target: None,
+                });
+                relations.push(RelationRecord {
+                    repo_id: repo_id.to_string(),
+                    source_id: doc_id,
+                    target_id: symbol_id,
+                    kind: RelationKind::Documents,
+                });
+            }
+            pending_docstring = false;
+            continue;
+        }
+        if pending_docstring && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            pending_docstring = false;
+        }
+    }
+}
+
+fn parse_module_name(line: &str) -> Option<String> {
+    let module_name = line.strip_prefix("module ")?;
+    valid_identifier(module_name).then(|| module_name.to_string())
+}
+
+fn parse_source_symbol(line: &str) -> Option<(String, Option<String>, RepoSymbolKind)> {
+    if let Some(name) = line.strip_prefix("struct ") {
+        let name = name.split_whitespace().next()?;
+        return valid_identifier(name).then(|| {
+            (
+                name.to_string(),
+                Some(format!("struct {name}")),
+                RepoSymbolKind::Type,
+            )
+        });
+    }
+    let (head, _) = line.split_once('(')?;
+    let name = head.trim();
+    if !valid_identifier(name) {
+        return None;
+    }
+    let (_, tail) = line.split_once(')')?;
+    tail.trim_start().starts_with('=').then(|| {
+        (
+            name.to_string(),
+            Some(line.to_string()),
+            RepoSymbolKind::Function,
+        )
+    })
+}
+
+fn valid_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '!')
+}
+
+fn is_single_line_docstring(line: &str) -> bool {
+    line.starts_with("\"\"\"") && line.ends_with("\"\"\"") && line.len() >= 6
+}
+
+fn markdown_title(relative_path: &str, contents: &str) -> String {
+    if relative_path == "README.md" {
+        return "README.md".to_string();
+    }
+    contents
+        .lines()
+        .find_map(|line| {
+            let trimmed = line.trim();
+            trimmed
+                .strip_prefix('#')
+                .map(|rest| rest.trim_start_matches('#').trim())
+                .filter(|title| !title.is_empty())
+        })
+        .map(ToString::to_string)
+        .unwrap_or_else(|| example_title(relative_path))
+}
+
+fn example_title(relative_path: &str) -> String {
+    Path::new(relative_path)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or(relative_path)
+        .to_string()
+}
+
+fn matching_doc_target_id(
+    title: &str,
+    modules: &[ModuleRecord],
+    symbols: &[SymbolRecord],
+) -> Option<String> {
+    symbols
+        .iter()
+        .find(|symbol| symbol.name == title || symbol.qualified_name == title)
+        .map(|symbol| symbol.symbol_id.clone())
+        .or_else(|| {
+            modules
+                .iter()
+                .find(|module| {
+                    module.qualified_name == title
+                        || module
+                            .qualified_name
+                            .rsplit('.')
+                            .next()
+                            .is_some_and(|name| name == title)
+                })
+                .map(|module| module.module_id.clone())
+        })
+}
+
+fn example_target_ids(
+    contents: &str,
+    modules: &[ModuleRecord],
+    symbols: &[SymbolRecord],
+) -> Vec<String> {
+    let mut target_ids = Vec::new();
+    for symbol in symbols {
+        if symbol_mentioned_in_example(contents, &symbol.name) {
+            push_unique_string(&mut target_ids, symbol.symbol_id.clone());
+            if let Some(module_id) = symbol.module_id.as_ref() {
+                push_unique_string(&mut target_ids, module_id.clone());
+            }
+        }
+    }
+    if !target_ids.is_empty() {
+        return target_ids;
+    }
+    for module in modules {
+        if module_mentioned_in_example(contents, &module.qualified_name) {
+            push_unique_string(&mut target_ids, module.module_id.clone());
+        }
+    }
+    target_ids
+}
+
+fn symbol_mentioned_in_example(contents: &str, symbol_name: &str) -> bool {
+    contents.contains(&format!("{symbol_name}(")) || contents.contains(&format!(".{symbol_name}("))
+}
+
+fn module_mentioned_in_example(contents: &str, module_name: &str) -> bool {
+    contents.contains(&format!("using {module_name}"))
+        || contents.contains(&format!("import {module_name}"))
+}
+
+fn push_unique_string(values: &mut Vec<String>, value: String) {
+    if !values.contains(&value) {
+        values.push(value);
+    }
 }
 
 fn create_local_git_repo(

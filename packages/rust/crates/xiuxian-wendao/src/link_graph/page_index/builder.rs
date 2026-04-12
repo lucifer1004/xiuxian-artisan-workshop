@@ -1,8 +1,8 @@
 use crate::link_graph::index::IndexedSection;
 use crate::link_graph::models::{PageIndexMeta, PageIndexNode};
-use crate::parsers::markdown::extract_blocks;
 use std::collections::HashMap;
 use std::sync::Arc;
+use xiuxian_wendao_parsers::blocks::extract_blocks;
 
 /// Build a deterministic page tree for one document from flat parsed sections.
 pub(crate) fn build_page_index_tree(

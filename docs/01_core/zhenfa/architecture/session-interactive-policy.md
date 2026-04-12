@@ -72,6 +72,8 @@ The policy is now partially operational in live channels with concrete command-p
 - **Authorization is stable** because ACL selectors are evaluated against canonical command identity.
 - **Reply text is normalized** to `channel` scope language in both channels.
 - **Partition persistence is available** via user TOML when explicitly enabled.
+- **Discord mention policy is available** with default + per-channel TOML control and runtime
+  `/session mention [status|on|off|inherit] [json]` updates for the current recipient channel.
 
 ### 6.1 Persistence Controls
 
@@ -79,11 +81,16 @@ User TOML:
 
 - `telegram.session_partition_persist`
 - `discord.session_partition_persist`
+- `discord.require_mention`
+- `discord.require_mention_persist`
+- `discord.channels."<recipient>".require_mention`
 
 Environment overrides:
 
 - `XIUXIAN_DAOCHANG_TELEGRAM_SESSION_PARTITION_PERSIST`
 - `XIUXIAN_DAOCHANG_DISCORD_SESSION_PARTITION_PERSIST`
+- `OMNI_AGENT_DISCORD_REQUIRE_MENTION`
+- `OMNI_AGENT_DISCORD_REQUIRE_MENTION_PERSIST`
 
 ### 6.2 Live Operator Check
 
@@ -93,3 +100,16 @@ Recommended quick check sequence:
 2. Send `/session scope user json`.
 3. Validate persisted value in `.config/xiuxian-artisan-workshop/xiuxian.toml`.
 4. Send `/session scope json` to confirm runtime and persisted mode match.
+
+### 6.3 Discord Mention Gate Check
+
+Recommended quick check sequence:
+
+1. Enable `discord.require_mention = true` in user `xiuxian.toml`.
+2. In one Discord channel, send `/session mention off json` to clear mention gating for that
+   recipient only.
+3. In another Discord channel, leave inherited policy active and verify plain guild text is ignored
+   unless the bot is directly mentioned or replied to.
+4. Validate persisted channel-specific override under
+   `discord.channels."<recipient>".require_mention` when
+   `discord.require_mention_persist = true`.

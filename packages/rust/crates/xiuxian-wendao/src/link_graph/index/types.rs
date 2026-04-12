@@ -158,14 +158,3 @@ pub struct LinkGraphIndex {
     /// Maps symbol names extracted from :OBSERVE: patterns to their document locations.
     pub(crate) symbol_to_docs: HashMap<String, Vec<SymbolRef>>,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Refresh execution mode selected by `LinkGraph` incremental refresh logic.
-pub enum LinkGraphRefreshMode {
-    /// No-op (no changed paths provided).
-    Noop,
-    /// Apply incremental delta updates.
-    Delta,
-    /// Run full index rebuild.
-    Full,
-}

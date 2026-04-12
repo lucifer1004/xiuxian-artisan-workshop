@@ -61,3 +61,53 @@ imports = ["wendao.shared.toml"]
     );
     Ok(())
 }
+
+#[test]
+fn test_wendao_gateway_config_loading() -> TestResult {
+    let tmp = tempdir()?;
+    let system_base = tmp.path().join("system");
+    let user_base = tmp.path().join("user");
+    fs::create_dir_all(&system_base)?;
+    fs::create_dir_all(&user_base)?;
+
+    fs::write(
+        user_base.join("xiuxian.toml"),
+        r#"
+[wendao_gateway]
+query_endpoint = "http://127.0.0.1:18093/query"
+default_project_root = "/repo/default"
+
+[wendao_gateway.session_project_roots]
+"discord:123" = "/repo/discord"
+"telegram:456" = "/repo/telegram"
+"#,
+    )?;
+
+    let config = load_xiuxian_config_from_bases(&system_base, &user_base);
+
+    assert_eq!(
+        config.wendao_gateway.query_endpoint.as_deref(),
+        Some("http://127.0.0.1:18093/query")
+    );
+    assert_eq!(
+        config.wendao_gateway.default_project_root.as_deref(),
+        Some("/repo/default")
+    );
+    assert_eq!(
+        config
+            .wendao_gateway
+            .session_project_roots
+            .get("discord:123")
+            .map(String::as_str),
+        Some("/repo/discord")
+    );
+    assert_eq!(
+        config
+            .wendao_gateway
+            .session_project_roots
+            .get("telegram:456")
+            .map(String::as_str),
+        Some("/repo/telegram")
+    );
+    Ok(())
+}

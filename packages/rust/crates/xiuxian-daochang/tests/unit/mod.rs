@@ -74,6 +74,7 @@ mod gateway_stdio;
 mod gateway_validation;
 mod jobs_manager;
 mod jobs_scheduler;
+mod live_gates;
 mod llm;
 mod multiple_tools;
 mod nodes_warmup;

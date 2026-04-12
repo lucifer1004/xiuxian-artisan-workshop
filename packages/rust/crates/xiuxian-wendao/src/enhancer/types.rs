@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-
-use crate::parsers::markdown::NoteFrontmatter;
+use xiuxian_wendao_parsers::NoteFrontmatter;
 
 /// Input for a single note to be enhanced.
 #[derive(Debug, Clone)]

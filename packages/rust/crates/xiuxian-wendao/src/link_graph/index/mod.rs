@@ -31,6 +31,7 @@ pub use search::quantum_fusion::orchestrate::QuantumContextBuildError;
 pub use search::quantum_fusion::semantic_ignition::{
     QuantumSemanticIgnition, QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture,
 };
+pub use xiuxian_wendao_core::LinkGraphRefreshMode;
 
 pub(in crate::link_graph::index) use constants::{
     DEFAULT_MIN_SECTION_WORDS, DEFAULT_PER_DOC_SECTION_CAP, INCOMING_RANK_FACTOR,
@@ -48,8 +49,8 @@ pub(in crate::link_graph::index) use shared::{
 };
 pub(crate) use types::{IndexedSection, SectionCandidate, SectionMatch};
 pub use types::{
-    LinkGraphCacheBuildMeta, LinkGraphIndex, LinkGraphRefreshMode, LinkGraphVirtualNode,
-    PageIndexParent, SymbolCacheStats, SymbolRef,
+    LinkGraphCacheBuildMeta, LinkGraphIndex, LinkGraphVirtualNode, PageIndexParent,
+    SymbolCacheStats, SymbolRef,
 };
 
 #[cfg(test)]

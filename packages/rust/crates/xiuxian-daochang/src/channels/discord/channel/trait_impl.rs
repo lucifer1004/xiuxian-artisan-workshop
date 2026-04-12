@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::channels::traits::{Channel, ChannelMessage, RecipientCommandAdminUsersMutation};
+use crate::channels::traits::{
+    Channel, ChannelMessage, RecipientCommandAdminUsersMutation, RecipientMentionPolicyStatus,
+};
 
 use super::super::session_partition::DiscordSessionPartition;
 use super::auth::normalize_discord_identity;
@@ -72,6 +74,21 @@ impl Channel for DiscordChannel {
         mutation: RecipientCommandAdminUsersMutation,
     ) -> anyhow::Result<Option<Vec<String>>> {
         self.mutate_recipient_override_admin_users(recipient, mutation)
+    }
+
+    fn recipient_mention_policy_status(
+        &self,
+        recipient: &str,
+    ) -> anyhow::Result<RecipientMentionPolicyStatus> {
+        DiscordChannel::recipient_mention_policy_status(self, recipient)
+    }
+
+    fn set_recipient_require_mention(
+        &self,
+        recipient: &str,
+        require_mention: Option<bool>,
+    ) -> anyhow::Result<RecipientMentionPolicyStatus> {
+        DiscordChannel::set_recipient_require_mention(self, recipient, require_mention)
     }
 
     async fn send(&self, message: &str, recipient: &str) -> anyhow::Result<()> {

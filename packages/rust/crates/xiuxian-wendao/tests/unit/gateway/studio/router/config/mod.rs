@@ -47,6 +47,15 @@ plugins = [
 ]
 "#,
     )?;
+    fs::write(
+        &overlay_path,
+        r#"imports = ["wendao.toml"]
+
+[link_graph.projects.stale]
+root = "."
+plugins = ["stale"]
+"#,
+    )?;
 
     persist_ui_config_to_wendao_toml(
         temp.path(),
@@ -69,25 +78,22 @@ plugins = [
         panic!("sample project should remain intact in base config");
     };
     assert_eq!(base_project.plugins.len(), 2);
-
-    let persisted_overlay: WendaoTomlConfig = toml::from_str(&fs::read_to_string(&overlay_path)?)?;
-    assert_eq!(persisted_overlay.imports, vec!["wendao.toml".to_string()]);
-    let Some(project) = persisted_overlay.link_graph.projects.get("sample") else {
-        panic!("sample project should persist in overlay");
-    };
-    assert_eq!(project.plugins.len(), 2);
     assert!(matches!(
-        &project.plugins[0],
+        &base_project.plugins[0],
         WendaoTomlPluginEntry::Id(id) if id == "julia"
     ));
     assert!(matches!(
-        &project.plugins[1],
+        &base_project.plugins[1],
         WendaoTomlPluginEntry::Config(config)
             if config.id == "julia" && config.extra.contains_key("flight_transport")
     ));
+    assert!(
+        !overlay_path.exists(),
+        "legacy overlay should be removed after persisting base config"
+    );
 
     let Some(config) = load_ui_config_from_wendao_toml(temp.path()) else {
-        panic!("ui config should load through overlay");
+        panic!("ui config should load from the persisted base config");
     };
     assert_eq!(config.repo_projects.len(), 1);
     assert_eq!(config.repo_projects[0].id, "sample");
@@ -116,7 +122,7 @@ dirs = ["docs", "src"]
     )?;
 
     let Some(config) = load_ui_config_from_wendao_toml(temp.path()) else {
-        panic!("ui config should load through overlay");
+        panic!("ui config should load from the persisted base config");
     };
     assert_eq!(config.projects.len(), 1);
     assert_eq!(config.projects[0].name, "kernel");

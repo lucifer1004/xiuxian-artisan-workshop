@@ -15,10 +15,10 @@ pub(super) fn has_external_scheme(lower: &str) -> bool {
 }
 
 pub(super) fn strip_fragment_and_query(raw: &str) -> &str {
-    raw.split_once('#')
-        .map_or(raw, |(base, _)| base)
+    let without_fragment = raw.split_once('#').map_or(raw, |(base, _)| base);
+    without_fragment
         .split_once('?')
-        .map_or(raw, |(base, _)| base)
+        .map_or(without_fragment, |(base, _)| base)
 }
 
 pub(super) fn has_supported_note_extension(path: &str) -> bool {

@@ -30,7 +30,7 @@ id = "High_Rigor_Formal_Audit"
 task_type = "formal_audit"
 label = "Formal Validator"
 weight = 1.0
-params = { max_retries = 10, context_uri = "$wendao://skills/paper-banana/references/formal_validator.md" }
+params = { context_uri = "$wendao://skills/paper-banana/references/formal_validator.md" }
 
 [[nodes]]
 id = "Sovereign_Conclusion"

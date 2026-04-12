@@ -14,6 +14,9 @@ pub(super) enum TaskType {
     SecurityScan,
     WendaoIngester,
     WendaoRefresh,
+    WendaoSqlDiscover,
+    WendaoSqlValidate,
+    WendaoSqlExecute,
     Router,
 }
 
@@ -32,6 +35,9 @@ impl TaskType {
             "security_scan" => Ok(Self::SecurityScan),
             "wendao_ingester" => Ok(Self::WendaoIngester),
             "wendao_refresh" => Ok(Self::WendaoRefresh),
+            "wendao_sql_discover" => Ok(Self::WendaoSqlDiscover),
+            "wendao_sql_validate" => Ok(Self::WendaoSqlValidate),
+            "wendao_sql_execute" => Ok(Self::WendaoSqlExecute),
             "router" => Ok(Self::Router),
             _ => Err(QianjiError::Topology(format!("Unknown task type: {raw}"))),
         }

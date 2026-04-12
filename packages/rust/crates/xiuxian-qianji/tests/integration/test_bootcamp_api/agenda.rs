@@ -6,7 +6,11 @@ use super::common::{
 #[cfg(feature = "llm")]
 use serde_json::json;
 #[cfg(feature = "llm")]
+use std::sync::Arc;
+#[cfg(feature = "llm")]
 use xiuxian_qianji::run_scenario;
+#[cfg(feature = "llm")]
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 #[cfg(feature = "llm")]
 #[tokio::test]
@@ -16,7 +20,13 @@ async fn bootcamp_runs_real_adversarial_flow() {
     let Some(initial_context) = bootcamp_context_from_env() else {
         return;
     };
-    let options = runtime_default_llm_options();
+    let empty_index_root =
+        tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir should succeed: {error}"));
+    let mut options = runtime_default_llm_options();
+    options.index = Some(Arc::new(
+        LinkGraphIndex::build(empty_index_root.path())
+            .unwrap_or_else(|error| panic!("empty bootcamp index should build: {error}")),
+    ));
 
     let flow_uri = "wendao://skills/zhixing/references/agenda_flow.toml";
     let report = run_scenario(flow_uri, initial_context, &mounts, options)

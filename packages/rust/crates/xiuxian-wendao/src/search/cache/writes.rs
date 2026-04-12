@@ -14,14 +14,20 @@ impl SearchPlaneCache {
     where
         T: Serialize,
     {
-        let Some(client) = self.client.as_ref() else {
-            return;
-        };
         let ttl_seconds = ttl.as_seconds(&self.config);
         if ttl_seconds == 0 {
             return;
         }
         let Ok(payload) = serde_json::to_string(value) else {
+            return;
+        };
+        #[cfg(test)]
+        self.shadow
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .generic_json_payloads
+            .insert(key.to_string(), payload.clone());
+        let Some(client) = self.client.as_ref() else {
             return;
         };
         let Ok(mut connection) = client

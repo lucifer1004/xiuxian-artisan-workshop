@@ -30,9 +30,42 @@
 
 //! Unit tests: config and session store (no network).
 
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
 use xiuxian_daochang::{
     AgentConfig, ChatMessage, ContextBudgetStrategy, MemoryConfig, SessionStore,
+    set_config_home_override,
 };
+
+fn runtime_settings_test_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn runtime_settings_test_root() -> &'static PathBuf {
+    static ROOT: OnceLock<PathBuf> = OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = std::env::temp_dir()
+            .join("xiuxian-daochang-tests")
+            .join(format!("config-and-session-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("xiuxian-artisan-workshop"))
+            .unwrap_or_else(|error| panic!("create test config root: {error}"));
+        set_config_home_override(root.clone());
+        root
+    })
+}
+
+fn write_runtime_settings_override(raw: &str) {
+    let root = runtime_settings_test_root();
+    let path = root.join("xiuxian-artisan-workshop").join("xiuxian.toml");
+    std::fs::write(&path, raw).unwrap_or_else(|error| {
+        panic!(
+            "write runtime settings override {}: {error}",
+            path.display()
+        )
+    });
+}
 
 #[test]
 fn config_resolve_api_key_from_field() {
@@ -41,6 +74,68 @@ fn config_resolve_api_key_from_field() {
         ..Default::default()
     };
     assert_eq!(config.resolve_api_key().as_deref(), Some("sk-test"));
+}
+
+#[test]
+fn config_resolve_api_key_prefers_matching_runtime_settings_env_reference() {
+    let _guard = runtime_settings_test_lock()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    write_runtime_settings_override(
+        r#"
+[llm]
+default_provider = "openai"
+
+[llm.providers.openai]
+base_url = "https://token-plan-sgp.xiaomimimo.com/v1"
+api_key = "MIMO_API_KEY"
+model = "mimo-v2-pro"
+"#,
+    );
+    let config = AgentConfig {
+        inference_url: "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions".to_string(),
+        api_key: None,
+        ..Default::default()
+    };
+
+    let resolved = config.resolve_api_key_with_env_reader(|key| match key {
+        "MIMO_API_KEY" => Some("tp-test".to_string()),
+        "OPENAI_API_KEY" => Some("sk-should-not-win".to_string()),
+        _ => None,
+    });
+
+    assert_eq!(resolved.as_deref(), Some("tp-test"));
+}
+
+#[test]
+fn config_resolve_api_key_keeps_url_heuristic_for_non_matching_runtime_settings() {
+    let _guard = runtime_settings_test_lock()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    write_runtime_settings_override(
+        r#"
+[llm]
+default_provider = "openai"
+
+[llm.providers.openai]
+base_url = "https://token-plan-sgp.xiaomimimo.com/v1"
+api_key = "MIMO_API_KEY"
+model = "mimo-v2-pro"
+"#,
+    );
+    let config = AgentConfig {
+        inference_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        api_key: None,
+        ..Default::default()
+    };
+
+    let resolved = config.resolve_api_key_with_env_reader(|key| match key {
+        "OPENAI_API_KEY" => Some("sk-openai".to_string()),
+        "MIMO_API_KEY" => Some("tp-should-not-win".to_string()),
+        _ => None,
+    });
+
+    assert_eq!(resolved.as_deref(), Some("sk-openai"));
 }
 
 #[test]

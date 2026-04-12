@@ -22,6 +22,8 @@ pub mod suspend;
 pub mod wendao_ingester;
 /// Incremental-first LinkGraph refresh trigger for Wendao.
 pub mod wendao_refresh;
+/// Deterministic bounded SQL discovery, validation, and execution for Wendao.
+pub mod wendao_sql;
 /// Native file writing mechanism with parent-directory bootstrap.
 pub mod write_file;
 

@@ -9,7 +9,7 @@ publish = false
 
 [features]
 default = []
-llm = ["dep:xiuxian-llm", "dep:reqwest"]
+llm = ["dep:xiuxian-llm"]
 
 [dependencies]
 petgraph = { workspace = true }
@@ -33,7 +33,12 @@ walkdir = { workspace = true }
 globset = { workspace = true }
 tempfile = { workspace = true }
 merman-core = "0.4"
+quick-xml = { workspace = true, features = ["serialize"] }
+reqwest = { workspace = true }
 xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
+xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
+xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime" }
+xiuxian-wendao-parsers = { path = "../xiuxian-wendao-parsers" }
 xiuxian-qianhuan = { path = "../xiuxian-qianhuan" }
 xiuxian-ast = { path = "../xiuxian-ast" }
 xiuxian-macros = { path = "../xiuxian-macros" }
@@ -43,9 +48,9 @@ xiuxian-llm = { path = "../xiuxian-llm", optional = true }
 xiuxian-window = { path = "../xiuxian-window" }
 xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
-reqwest = { workspace = true, optional = true }
 
 [dev-dependencies]
+axum = { workspace = true }
 insta = { workspace = true }
 xiuxian-zhixing = { path = "../xiuxian-zhixing" }
 

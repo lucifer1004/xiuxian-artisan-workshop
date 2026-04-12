@@ -1,9 +1,12 @@
 #[cfg(feature = "duckdb")]
 use std::fs;
+#[cfg(feature = "duckdb")]
 use std::path::Path;
 use std::sync::Arc;
 
+#[cfg(feature = "duckdb")]
 use crate::gateway::studio::build_ast_index;
+#[cfg(feature = "duckdb")]
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
 #[cfg(feature = "duckdb")]
 use crate::set_link_graph_wendao_config_override;
@@ -27,6 +30,7 @@ pub(crate) fn test_studio_state() -> crate::gateway::studio::router::StudioState
     )
 }
 
+#[cfg(feature = "duckdb")]
 pub(crate) fn configure_local_workspace(
     studio: &mut crate::gateway::studio::router::StudioState,
     root: &Path,
@@ -54,6 +58,7 @@ pub(crate) fn write_search_duckdb_runtime_override(
     Ok(temp)
 }
 
+#[cfg(feature = "duckdb")]
 pub(crate) async fn publish_local_symbol_index(
     studio: &crate::gateway::studio::router::StudioState,
 ) {
@@ -83,6 +88,7 @@ pub(crate) async fn publish_local_symbol_index(
         .unwrap_or_else(|error| panic!("publish local symbol epoch: {error}"));
 }
 
+#[cfg(feature = "duckdb")]
 pub(crate) async fn publish_knowledge_section_index(
     studio: &crate::gateway::studio::router::StudioState,
 ) {

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::gateway::studio::pathing::studio_display_path;
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{VfsContentResponse, VfsEntry};
 
@@ -62,21 +63,37 @@ pub(super) fn resolve_vfs_path(
     state: &StudioState,
     path: &str,
 ) -> Result<ResolvedVfsPath, VfsError> {
+    let path = path.trim();
+    if let Some(resolved) = resolve_vfs_path_from_roots(state, path) {
+        return Ok(resolved);
+    }
+
+    let canonical_path = studio_display_path(state, path);
+    if canonical_path != path
+        && let Some(resolved) = resolve_vfs_path_from_roots(state, canonical_path.as_str())
+    {
+        return Ok(resolved);
+    }
+
+    Err(VfsError::not_found(format!("VFS path not found: {path}")))
+}
+
+fn resolve_vfs_path_from_roots(state: &StudioState, path: &str) -> Option<ResolvedVfsPath> {
     for root in resolve_all_vfs_roots(state) {
         if path == root.request_root {
-            return Ok(ResolvedVfsPath {
+            return Some(ResolvedVfsPath {
                 full_path: root.full_path,
             });
         }
         let prefix = format!("{}/", root.request_root);
         if path.starts_with(&prefix) {
             let rel = &path[prefix.len()..];
-            return Ok(ResolvedVfsPath {
+            return Some(ResolvedVfsPath {
                 full_path: root.full_path.join(rel),
             });
         }
     }
-    Err(VfsError::not_found(format!("VFS path not found: {path}")))
+    None
 }
 
 pub(super) fn unix_timestamp_secs(metadata: &fs::Metadata) -> u64 {
@@ -86,3 +103,7 @@ pub(super) fn unix_timestamp_secs(metadata: &fs::Metadata) -> u64 {
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |duration| duration.as_secs())
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/gateway/studio/vfs/content.rs"]
+mod tests;

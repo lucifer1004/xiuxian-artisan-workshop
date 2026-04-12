@@ -10,7 +10,8 @@ use xiuxian_macros::env_non_empty;
 
 use crate::cli::DiscordRuntimeMode;
 use crate::resolve::{
-    resolve_discord_runtime_mode, resolve_positive_u64, resolve_positive_usize, resolve_string,
+    resolve_bool, resolve_discord_runtime_mode, resolve_positive_u64, resolve_positive_usize,
+    resolve_string,
 };
 use xiuxian_daochang::build_agent;
 
@@ -127,6 +128,31 @@ fn resolve_discord_runtime_launch_config(
     let ingress_secret_token = env_non_empty!("OMNI_AGENT_DISCORD_INGRESS_SECRET_TOKEN")
         .or_else(|| runtime_settings.discord.ingress_secret_token.clone())
         .and_then(|secret| normalize_non_empty_secret(&secret));
+    let require_mention = resolve_bool(
+        None,
+        "OMNI_AGENT_DISCORD_REQUIRE_MENTION",
+        runtime_settings.discord.require_mention,
+        false,
+    );
+    let require_mention_persist = resolve_bool(
+        None,
+        "OMNI_AGENT_DISCORD_REQUIRE_MENTION_PERSIST",
+        runtime_settings.discord.require_mention_persist,
+        false,
+    );
+    let mention_overrides = runtime_settings
+        .discord
+        .channels
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(recipient, settings)| {
+            settings
+                .require_mention
+                .map(|value| (recipient.trim().to_string(), value))
+        })
+        .filter(|(recipient, _)| !recipient.is_empty())
+        .collect();
 
     Ok(DiscordRuntimeLaunchConfig {
         bot_token,
@@ -134,6 +160,9 @@ fn resolve_discord_runtime_launch_config(
         runtime_mode,
         runtime_config: DiscordRuntimeConfig {
             session_partition,
+            require_mention,
+            require_mention_persist,
+            mention_overrides,
             inbound_queue_capacity,
             turn_timeout_secs,
             foreground_max_in_flight_messages,

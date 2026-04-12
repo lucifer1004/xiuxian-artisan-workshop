@@ -124,8 +124,8 @@ pub fn resolve_openai_runtime_profile(
 
     let model = first_non_empty([
         env.model_override.as_deref(),
-        input.model.as_deref(),
         provider_cfg.and_then(|cfg| cfg.model.as_deref()),
+        input.model.as_deref(),
         input.default_model.as_deref(),
         Some(defaults.model.as_str()),
     ])
@@ -135,8 +135,8 @@ pub fn resolve_openai_runtime_profile(
 
     let base_url = first_non_empty([
         env.base_url_override.as_deref(),
-        input.base_url.as_deref(),
         provider_cfg.and_then(|cfg| cfg.base_url.as_deref()),
+        input.base_url.as_deref(),
         Some(defaults.base_url.as_str()),
     ])
     .ok_or_else(|| LlmError::Internal {
@@ -207,10 +207,6 @@ fn resolve_api_key(
 
     if let Some(explicit_key) = normalize_non_empty(env.api_key_override.as_deref()) {
         return Ok((explicit_key, configured_api_key_env));
-    }
-
-    if let Some(openai_key) = resolve_env_value(env, "OPENAI_API_KEY") {
-        return Ok((openai_key, configured_api_key_env));
     }
 
     if let Some(env_name) = parse_env_reference(key_selector.as_str()) {

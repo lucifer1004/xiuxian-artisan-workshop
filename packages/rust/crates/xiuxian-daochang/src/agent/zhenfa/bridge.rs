@@ -6,8 +6,6 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use xiuxian_memory_engine::{EpisodeStore, ValkeyMemoryStateStore};
 use xiuxian_qianhuan::ManifestationManager;
-use xiuxian_wendao::LinkGraphIndex;
-use xiuxian_wendao::skill_vfs::SkillVfsResolver;
 use xiuxian_zhenfa::{
     ZhenfaContext, ZhenfaError, ZhenfaOrchestrator, ZhenfaRegistry, ZhenfaSignal, ZhenfaSignalSink,
     ZhenfaTool,
@@ -22,22 +20,16 @@ const ZHENFA_BASE_URL_ENV: &str = "ZHENFA_BASE_URL";
 #[derive(Clone, Default)]
 pub(crate) struct ZhenfaRuntimeDeps {
     pub(crate) manifestation_manager: Option<Arc<ManifestationManager>>,
-    pub(crate) link_graph_index: Option<Arc<LinkGraphIndex>>,
-    pub(crate) skill_vfs_resolver: Option<Arc<SkillVfsResolver>>,
     pub(crate) memory_store: Option<Arc<EpisodeStore>>,
     pub(crate) memory_state_backend: Option<Arc<MemoryStateBackend>>,
 }
 
 pub(crate) fn test_runtime_deps(
     manifestation_manager: Option<Arc<ManifestationManager>>,
-    link_graph_index: Option<Arc<LinkGraphIndex>>,
-    skill_vfs_resolver: Option<Arc<SkillVfsResolver>>,
     memory_store: Option<Arc<EpisodeStore>>,
 ) -> ZhenfaRuntimeDeps {
     ZhenfaRuntimeDeps {
         manifestation_manager,
-        link_graph_index,
-        skill_vfs_resolver,
         memory_store,
         memory_state_backend: None,
     }
@@ -50,8 +42,6 @@ pub(crate) struct ZhenfaToolBridge {
     tools: HashMap<String, Value>,
     gateway_base_url: Option<String>,
     valkey_hooks_enabled: bool,
-    context_link_graph_index: Option<Arc<LinkGraphIndex>>,
-    context_skill_vfs_resolver: Option<Arc<SkillVfsResolver>>,
     context_manifestation_manager: Option<Arc<ManifestationManager>>,
     context_memory_store: Option<Arc<EpisodeStore>>,
 }
@@ -92,8 +82,6 @@ impl ZhenfaToolBridge {
             tools: active_tools,
             gateway_base_url: resolve_zhenfa_base_url(config),
             valkey_hooks_enabled,
-            context_link_graph_index: deps.link_graph_index.as_ref().map(Arc::clone),
-            context_skill_vfs_resolver: deps.skill_vfs_resolver.as_ref().map(Arc::clone),
             context_manifestation_manager: deps.manifestation_manager.as_ref().map(Arc::clone),
             context_memory_store: deps.memory_store.as_ref().map(Arc::clone),
         })
@@ -144,12 +132,6 @@ impl ZhenfaToolBridge {
         }
         let params = normalize_tool_arguments(arguments)?;
         let mut ctx = ZhenfaContext::new(session_id.map(ToString::to_string), None, HashMap::new());
-        if let Some(index) = self.context_link_graph_index.as_ref() {
-            let _ = ctx.insert_shared_extension::<LinkGraphIndex>(Arc::clone(index));
-        }
-        if let Some(resolver) = self.context_skill_vfs_resolver.as_ref() {
-            let _ = ctx.insert_shared_extension::<SkillVfsResolver>(Arc::clone(resolver));
-        }
         if let Some(manager) = self.context_manifestation_manager.as_ref() {
             let _ = ctx.insert_shared_extension::<ManifestationManager>(Arc::clone(manager));
         }
@@ -320,9 +302,6 @@ fn should_retry_with_null_arguments(params: &Value) -> bool {
 
 fn build_native_tool(name: &str, deps: &ZhenfaRuntimeDeps) -> Option<Arc<dyn ZhenfaTool>> {
     match name {
-        "wendao.search" => deps.link_graph_index.as_ref().map(|_index| {
-            Arc::new(xiuxian_wendao::zhenfa_router::WendaoSearchTool) as Arc<dyn ZhenfaTool>
-        }),
         "qianhuan.render" => deps.manifestation_manager.as_ref().map(|_manager| {
             Arc::new(xiuxian_qianhuan::zhenfa_router::QianhuanRenderTool) as Arc<dyn ZhenfaTool>
         }),
@@ -349,8 +328,9 @@ fn resolve_zhenfa_base_url(config: &XiuxianConfig) -> Option<String> {
 }
 
 fn resolve_enabled_tool_names(config: &XiuxianConfig) -> Vec<String> {
-    config.zhenfa.enabled_tools.as_ref().map_or_else(
-        || vec!["wendao.search".to_string()],
-        std::clone::Clone::clone,
-    )
+    config
+        .zhenfa
+        .enabled_tools
+        .as_ref()
+        .map_or_else(Vec::new, std::clone::Clone::clone)
 }

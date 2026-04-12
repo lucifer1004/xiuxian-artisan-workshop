@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use crate::unit::live_gates::resolve_enabled_live_valkey_url;
 use tokio::sync::oneshot;
 use xiuxian_daochang::SessionGate;
 
@@ -161,13 +162,8 @@ async fn waiting_tasks_keep_session_entry_alive() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires live valkey server"]
 async fn distributed_same_session_is_serialized_across_gate_instances() -> anyhow::Result<()> {
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        eprintln!("skip: set VALKEY_URL for live session gate test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live session gate test") else {
         return Ok(());
     };
     let prefix = format!(
@@ -207,14 +203,9 @@ async fn distributed_same_session_is_serialized_across_gate_instances() -> anyho
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires live valkey server"]
 async fn distributed_different_sessions_run_in_parallel_across_gate_instances() -> anyhow::Result<()>
 {
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        eprintln!("skip: set VALKEY_URL for live session gate test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live session gate test") else {
         return Ok(());
     };
     let prefix = format!(

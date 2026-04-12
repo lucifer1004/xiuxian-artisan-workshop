@@ -5,11 +5,13 @@ use super::resolver_chain;
 mod io_control;
 mod quality_guard;
 mod wendao_router;
+mod wendao_sql;
 
-const LEAF_RESOLVERS: [resolver_chain::ResolverFn; 3] = [
+const LEAF_RESOLVERS: [resolver_chain::ResolverFn; 4] = [
     io_control::build,
     quality_guard::build,
     wendao_router::build,
+    wendao_sql::build,
 ];
 
 pub(super) fn build(

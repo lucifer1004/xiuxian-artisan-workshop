@@ -4,7 +4,7 @@
 //! them into `CognitiveTrace` artifacts for persistent storage in Wendao.
 
 use std::sync::Arc;
-use xiuxian_wendao::link_graph::CognitiveTraceRecord;
+use xiuxian_wendao_core::CognitiveTraceRecord;
 use xiuxian_zhenfa::ZhenfaStreamingEvent;
 
 /// Aggregates streaming events into a cognitive trace artifact.

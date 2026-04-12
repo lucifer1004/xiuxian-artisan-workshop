@@ -346,18 +346,7 @@ fn materialize_symbol_records(
         };
         let symbol_id =
             build_materialized_symbol_id(repo_id, module_name, &symbol, duplicate_ordinal);
-        let record = build_symbol_record(
-            repo_id,
-            &symbol.path,
-            module_name,
-            &symbol.name,
-            symbol.kind,
-            symbol.signature,
-            symbol.line_start,
-            symbol.line_end,
-            symbol.attributes,
-            symbol_id,
-        );
+        let record = build_symbol_record(repo_id, module_name, symbol, symbol_id);
         upsert_symbol(&mut symbol_map, record);
     }
 
@@ -367,14 +356,16 @@ fn materialize_symbol_records(
         }
         let symbol = build_symbol_record(
             repo_id,
-            path,
             module_name,
-            export_name,
-            RepoSymbolKind::ModuleExport,
-            None,
-            None,
-            None,
-            BTreeMap::new(),
+            PendingSymbolRecord {
+                path: path.clone(),
+                name: export_name.clone(),
+                kind: RepoSymbolKind::ModuleExport,
+                signature: None,
+                line_start: None,
+                line_end: None,
+                attributes: BTreeMap::new(),
+            },
             base_symbol_id(repo_id, module_name, export_name),
         );
         symbol_map.entry(symbol.symbol_id.clone()).or_insert(symbol);
@@ -616,31 +607,25 @@ fn doc_target_kind_label(target_kind: JuliaParserDocTargetKind) -> &'static str 
 
 fn build_symbol_record(
     repo_id: &str,
-    path: &str,
     module_name: &str,
-    symbol_name: &str,
-    kind: RepoSymbolKind,
-    signature: Option<String>,
-    line_start: Option<usize>,
-    line_end: Option<usize>,
-    attributes: BTreeMap<String, String>,
+    symbol: PendingSymbolRecord,
     symbol_id: String,
 ) -> SymbolRecord {
-    let qualified_name = qualified_symbol_name(module_name, symbol_name);
+    let qualified_name = qualified_symbol_name(module_name, &symbol.name);
     SymbolRecord {
         repo_id: repo_id.to_string(),
         symbol_id,
         module_id: Some(format!("repo:{repo_id}:module:{module_name}")),
-        name: symbol_name.to_string(),
+        name: symbol.name,
         qualified_name,
-        kind,
-        path: path.to_string(),
-        line_start,
-        line_end,
-        signature,
+        kind: symbol.kind,
+        path: symbol.path,
+        line_start: symbol.line_start,
+        line_end: symbol.line_end,
+        signature: symbol.signature,
         audit_status: Some("unreviewed".to_string()),
         verification_state: None,
-        attributes,
+        attributes: symbol.attributes,
     }
 }
 

@@ -13,8 +13,17 @@ Current ownership:
 - stable ids and selectors
 - capability binding and version records
 - artifact selectors, launch specs, and payload records
+- stable knowledge payload records such as `KnowledgeEntry`
+- pure contract-feedback projection helpers such as
+  `WendaoContractFeedbackAdapter`
+- stable entity and relation records such as `Entity` and `RelationType`
+- stable link-graph refresh-mode contracts such as `LinkGraphRefreshMode`
+- stable link-graph query contracts such as `LinkGraphSearchOptions`
+- stable SQL result DTOs such as `SqlQueryPayload`
+- stable semantic-document and cognitive-trace payload records
 - transport endpoint and transport kind descriptors
 - stable repo-intelligence contract shapes
+- stable `wendao://` resource URI parsing and normalization
 
 ## Non-Goals
 

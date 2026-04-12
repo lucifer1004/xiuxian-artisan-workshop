@@ -22,7 +22,7 @@ output_key = "steward_feedback"
 id = "Professor_Audit"
 task_type = "formal_audit"
 weight = 1.0
-params = { execution_mode = "appended", threshold_score = 0.4, max_retries = 2, output_key = "professor_conclusion", score_key = "governance_score" }
+params = { execution_mode = "appended", threshold_score = 0.4, max_retries = 2, retry_targets = ["Professor_Audit"], output_key = "professor_conclusion", score_key = "governance_score" }
 [nodes.qianhuan]
 persona_id = "$wendao://skills/agenda-management/references/teacher.md"
 output_key = "professor_annotated_prompt"

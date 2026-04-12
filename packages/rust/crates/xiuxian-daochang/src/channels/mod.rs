@@ -33,4 +33,7 @@ pub use telegram::{
     run_telegram, run_telegram_webhook, run_telegram_webhook_with_control_command_policy,
     run_telegram_with_control_command_policy, split_message_for_telegram,
 };
-pub use traits::{Channel, ChannelAttachment, ChannelMessage, RecipientCommandAdminUsersMutation};
+pub use traits::{
+    Channel, ChannelAttachment, ChannelMessage, RecipientCommandAdminUsersMutation,
+    RecipientMentionPolicyStatus,
+};

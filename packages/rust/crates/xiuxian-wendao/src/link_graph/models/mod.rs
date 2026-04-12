@@ -12,6 +12,7 @@ pub use query::{
     LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder,
     LinkGraphSortTerm, LinkGraphTagFilter,
 };
+pub(crate) use records::markdown_block_matches_kind;
 pub use records::{
     BlockAddress, CognitiveTraceRecord, LINK_GRAPH_POLICY_REASON_VOCAB,
     LINK_GRAPH_REASON_BACKEND_UNAVAILABLE, LINK_GRAPH_REASON_GRAPH_INSUFFICIENT,

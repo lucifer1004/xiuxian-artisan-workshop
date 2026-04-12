@@ -42,10 +42,12 @@ pub mod telemetry;
 /// Bounded work-surface parsing, validation, and CLI support helpers.
 pub mod workdir;
 
-pub use app::{MEMORY_PROMOTION_PIPELINE_TOML, QianjiApp, RESEARCH_TRINITY_TOML};
+pub use app::{
+    MEMORY_PROMOTION_PIPELINE_TOML, QianjiApp, RESEARCH_TRINITY_TOML, WENDAO_SQL_AUTHORING_V1_TOML,
+};
 pub use bootcamp::{
     BootcampLlmMode, BootcampRunOptions, BootcampVfsMount, WorkflowReport, run_scenario,
-    run_workflow, run_workflow_with_mounts,
+    run_workflow, run_workflow_from_manifest_toml, run_workflow_with_mounts,
 };
 pub use contract_feedback::{QianjiContractFeedbackRun, run_contract_feedback_flow};
 #[cfg(feature = "llm")]

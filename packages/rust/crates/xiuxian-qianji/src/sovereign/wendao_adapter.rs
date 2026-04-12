@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use xiuxian_wendao::link_graph::{CognitiveTraceRecord, LinkGraphSemanticDocument};
+use xiuxian_wendao_core::{CognitiveTraceRecord, LinkGraphSemanticDocument};
 
 use super::artifact_observer::WendaoIngestionSink;
 use super::wendao_sink::{FileWendaoSink, InMemoryWendaoSink};

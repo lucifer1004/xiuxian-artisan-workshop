@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::gateway::studio::analysis::markdown::{CompiledDocument, compile_markdown_ir};
 use crate::gateway::studio::analysis::projection;
+use crate::gateway::studio::pathing::{normalize_path_like, studio_display_path};
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{AnalysisNode, MarkdownAnalysisResponse};
 use crate::gateway::studio::vfs::resolve_vfs_file_path;
@@ -33,10 +34,17 @@ pub(crate) async fn analyze_markdown(
     state: &StudioState,
     path: &str,
 ) -> Result<MarkdownAnalysisResponse, AnalysisError> {
+    let normalized_path = normalize_path_like(path).unwrap_or_else(|| path.trim().to_string());
     if !is_markdown_path(path) {
         return Err(AnalysisError::UnsupportedContentType(
             infer_content_type(path).to_string(),
         ));
+    }
+    if studio_display_path(state, path) != normalized_path {
+        return Err(AnalysisError::Vfs(format!(
+            "VFS path not found: {}",
+            path.trim()
+        )));
     }
 
     let full_path = resolve_vfs_file_path(state, path).map_err(|error| {

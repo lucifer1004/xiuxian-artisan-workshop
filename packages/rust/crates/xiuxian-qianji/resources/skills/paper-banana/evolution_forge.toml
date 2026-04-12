@@ -39,7 +39,6 @@ task_type = "formal_audit"
 weight = 1.0
 params = { 
     threshold_score = 0.98, 
-    max_retries = 10,
     output_key = "audit_verdict", 
     score_key = "aesthetic_purity_score" 
 }

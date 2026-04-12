@@ -9,14 +9,40 @@
 
 This directory is the stable documentation home for parser ownership,
 canonical parser families, and parser implementation rules in
-`xiuxian-wendao`.
+`xiuxian-wendao`, including the package boundary between Wendao-owned parser
+adapters and the independent `xiuxian-wendao-parsers` crate.
+
+Org remains a documented placeholder boundary only. This directory records the
+shared parser contracts that a future Org slice may reuse, but it does not
+claim that an Org parser implementation is active today.
 
 ## Documents
 
 - [architecture.md](architecture.md): Canonical parser namespace, parser-family
   matrix, parser-vs-helper decision rule, and structural parsing principles.
+- [addressed_target.md](addressed_target.md): Parser-owned shared
+  `target + target_address` contract, the shared source-preserved
+  literal wrapper, and the shared reference-core payload reused by Markdown
+  references and ordinary wikilinks.
+- [blocks.md](blocks.md): Parser-owned shared block core, Markdown block
+  naming surface, parser-owned block extraction, and the Wendao page-index
+  addressing boundary.
+- [document.md](document.md): Parser-owned cross-format document core,
+  shared document-envelope wrapper, Markdown document naming surface, and
+  the Wendao `LinkGraphDocument` adapter boundary.
+- [note.md](note.md): Parser-owned Markdown note aggregation and the Wendao
+  workspace-aware note adapter boundary, including the shared note-core shape
+  and shared top-level note aggregate.
+- [targets.md](targets.md): Parser-owned target-occurrence core, Markdown
+  target-occurrence naming surface, parser-visible source ranges, and the
+  Wendao target-normalization and section-partition adapter boundary.
+- [sections.md](sections.md): Parser-owned Markdown section structure,
+  shared full section core with nested section scope and section metadata,
+  property-drawer extraction, logbook extraction, and the Wendao adapter
+  boundary.
 - [references.md](references.md): Unified ordinary Markdown reference grammar
-  for `[...](...)` and `[[...]]`, plus the parser-owned consumer boundary.
+  for `[...](...)` and `[[...]]`, plus the shared `ReferenceCore<Kind>`
+  boundary and current parser-owned consumers.
 - [wikilinks.md](wikilinks.md): Obsidian-aligned ordinary body wikilink
   grammar, comrak-backed extraction, and the `link_graph_refs` consumer
   boundary.
@@ -29,6 +55,18 @@ canonical parser families, and parser implementation rules in
 
 ## Current Canonical Parser Families
 
+- `packages/rust/crates/xiuxian-wendao-parsers/src/addressed_target.rs`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/blocks/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/document/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/frontmatter/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/literal_addressed_target.rs`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/note/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/reference_core.rs`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/references/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/sections/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/targets/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/wikilinks/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/sourcepos.rs`
 - `src/parsers/markdown/`
 - `src/parsers/link_graph/query/`
 - `src/parsers/zhixing/tasks/`
@@ -51,15 +89,32 @@ canonical parser families, and parser implementation rules in
 7. How ordinary Markdown reference parsing stays parser-owned and comrak-backed
 8. How the narrower ordinary wikilink subset relates to the shared reference
    parser surface
-9. How shared syntax-only document parsing should be separated from
-   Wendao-owned domain adapters for cross-crate consumers
+9. How parser-owned shared addressed-target coordinates, the
+   source-preserved literal-addressed-target wrapper, and the shared
+   reference-core payload are separated from Markdown-specific wrappers and
+   Wendao-owned relation targets
+10. How parser-owned cross-format document metadata and the shared
+    document-envelope wrapper are separated from the Markdown-specific naming
+    surface and from `LinkGraphDocument` assembly
+11. How parser-owned Markdown note aggregation is separated from the
+    shared note-core shape, the shared top-level note aggregate, and the
+    workspace-aware Wendao note adapter
+12. How parser-owned shared full section core, nested section scope, and
+    shared section metadata are separated from Wendao-side enrichments
+13. How parser-owned shared target-occurrence core and Markdown
+    target-occurrence naming surface are separated from Wendao-side target
+    normalization and section-byte-range partitioning
+14. How parser-owned shared block core and Markdown block naming surface are
+    separated from Wendao-side block-path addressing
+15. How shared syntax-only document parsing should be separated from
+    Wendao-owned domain adapters for cross-crate consumers
 
 :RELATIONS:
-:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]], [[03_features/210_search_queries_architecture]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]]
+:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]], [[03_features/210_search_queries_architecture]], [[02_parser/addressed_target]], [[02_parser/blocks]], [[02_parser/document]], [[02_parser/note]], [[02_parser/targets]], [[02_parser/sections]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-10
+:LAST_SYNC: 2026-04-12
 :END:

@@ -229,12 +229,18 @@ pub struct DiscordSettings {
     pub acl: DiscordAclSettings,
     /// Discord runtime mode selector.
     pub runtime_mode: Option<String>,
+    /// Require explicit mention/reply trigger for guild text messages.
+    pub require_mention: Option<bool>,
+    /// Persist runtime mention-policy mutations into user settings.
+    pub require_mention_persist: Option<bool>,
     /// Ingress bind address.
     pub ingress_bind: Option<String>,
     /// Ingress HTTP path.
     pub ingress_path: Option<String>,
     /// Ingress shared secret token.
     pub ingress_secret_token: Option<String>,
+    /// Per-channel override map keyed by Discord recipient/channel id or `*`.
+    pub channels: Option<HashMap<String, DiscordChannelSettings>>,
     /// Session partition strategy.
     pub session_partition: Option<String>,
     /// Persist `/session partition|scope` mode updates to user settings.
@@ -247,6 +253,13 @@ pub struct DiscordSettings {
     pub foreground_max_in_flight_messages: Option<usize>,
     /// Foreground queue mode (`interrupt` or `queue`).
     pub foreground_queue_mode: Option<String>,
+}
+
+/// Discord per-channel override settings.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DiscordChannelSettings {
+    /// Require explicit mention in this channel override.
+    pub require_mention: Option<bool>,
 }
 
 /// Discord ACL subtree.

@@ -17,6 +17,35 @@ managed_process_command() {
   ps -p "$pid" -o command= 2>/dev/null || true
 }
 
+managed_project_root() {
+  if [ -n "${PRJ_ROOT:-}" ]; then
+    printf '%s\n' "$PRJ_ROOT"
+    return 0
+  fi
+  if [ -n "${DEVENV_ROOT:-}" ]; then
+    printf '%s\n' "$DEVENV_ROOT"
+    return 0
+  fi
+  return 1
+}
+
+managed_command_matches_pattern() {
+  local command="$1"
+  local pattern="$2"
+
+  [ -n "$pattern" ] || return 0
+  [[ $command == *"$pattern"* ]] && return 0
+
+  local project_root relative_pattern
+  project_root="$(managed_project_root 2>/dev/null || true)"
+  if [ -n "$project_root" ] && [[ $pattern == "$project_root/"* ]]; then
+    relative_pattern="${pattern#"$project_root"/}"
+    [[ $command == *"$relative_pattern"* ]] && return 0
+  fi
+
+  return 1
+}
+
 managed_pid_matches_patterns() {
   local pid="$1"
   shift
@@ -27,8 +56,7 @@ managed_pid_matches_patterns() {
 
   local pattern
   for pattern in "$@"; do
-    [ -n "$pattern" ] || continue
-    [[ $command == *"$pattern"* ]] || return 1
+    managed_command_matches_pattern "$command" "$pattern" || return 1
   done
 }
 

@@ -5,7 +5,7 @@ use crate::search::SearchPlaneService;
 use crate::search::queries::core::scope::{DataFusionQueryCore, open_datafusion_query_core};
 use crate::search::queries::sql::registration::{SqlQuerySurface, build_sql_query_surface};
 
-/// Canonical shared-query service owner above the residual request-scoped DataFusion query core.
+/// Canonical shared-query service owner above the residual request-scoped `DataFusion` query core.
 #[derive(Clone)]
 pub struct SearchQueryService {
     search_plane: SearchPlaneService,

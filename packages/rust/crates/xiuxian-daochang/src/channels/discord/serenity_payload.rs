@@ -14,6 +14,9 @@ pub(super) struct DiscordIngressPayload {
     pub(super) author_id: UserId,
     pub(super) author_username: Option<String>,
     pub(super) author_role_ids: Vec<String>,
+    pub(super) mentioned_user_ids: Vec<String>,
+    pub(super) referenced_message_author_id: Option<String>,
+    pub(super) is_interaction: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +37,10 @@ pub(super) struct DiscordIngressMessagePayload {
     pub(super) author: DiscordIngressAuthorPayload,
     #[serde(default)]
     pub(super) member: Option<DiscordIngressMemberPayload>,
+    #[serde(default)]
+    pub(super) mentions: Vec<DiscordIngressAuthorPayload>,
+    #[serde(default)]
+    pub(super) referenced_message: Option<DiscordIngressReferencedMessagePayload>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,6 +61,11 @@ pub(super) struct DiscordIngressMessageAttachmentPayload {
     pub(super) url: String,
     #[serde(default)]
     pub(super) content_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct DiscordIngressReferencedMessagePayload {
+    pub(super) author: DiscordIngressAuthorPayload,
 }
 
 pub(super) fn parse_discord_ingress_payload(
@@ -92,6 +104,16 @@ pub(super) fn parse_discord_ingress_payload(
                         .collect()
                 })
                 .unwrap_or_default(),
+            mentioned_user_ids: message
+                .mentions
+                .iter()
+                .map(|mention| mention.id.get().to_string())
+                .collect(),
+            referenced_message_author_id: message
+                .referenced_message
+                .as_ref()
+                .map(|message| message.author.id.get().to_string()),
+            is_interaction: false,
         })
         .or_else(|| parse_discord_command_interaction(event))
 }
@@ -131,6 +153,9 @@ fn parse_discord_command_interaction(event: &serde_json::Value) -> Option<Discor
         author_id: command.user.id,
         author_username: (!username.is_empty()).then_some(username),
         author_role_ids,
+        mentioned_user_ids: Vec::new(),
+        referenced_message_author_id: None,
+        is_interaction: true,
     })
 }
 

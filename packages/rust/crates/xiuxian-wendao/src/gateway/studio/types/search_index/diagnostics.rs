@@ -40,13 +40,16 @@ pub(crate) struct SearchIndexDiagnosticsRollup {
 #[cfg(all(test, feature = "duckdb"))]
 pub(crate) fn configured_status_diagnostics_engine_kind() -> Result<LocalRelationEngineKind, String>
 {
-    configured_status_diagnostics_engine().map(|engine| engine.kind())
+    Ok(configured_status_diagnostics_engine()?.kind())
 }
 
 pub(crate) async fn summarize_status_diagnostics(
     snapshot: &SearchPlaneStatusSnapshot,
 ) -> Result<SearchIndexDiagnosticsSummary, String> {
+    #[cfg(feature = "duckdb")]
     let engine = configured_status_diagnostics_engine()?;
+    #[cfg(not(feature = "duckdb"))]
+    let engine = configured_status_diagnostics_engine();
     let (schema, batches) = status_snapshot_relation(snapshot)?;
     engine.register_record_batches(STATUS_DIAGNOSTICS_TABLE, schema, batches)?;
     let rollup_batches = engine
@@ -67,6 +70,7 @@ pub(crate) async fn summarize_status_diagnostics(
     })
 }
 
+#[cfg(feature = "duckdb")]
 fn configured_status_diagnostics_engine() -> Result<Box<dyn LocalRelationEngine>, String> {
     #[cfg(feature = "duckdb")]
     {
@@ -80,6 +84,11 @@ fn configured_status_diagnostics_engine() -> Result<Box<dyn LocalRelationEngine>
     Ok(Box::new(
         DataFusionLocalRelationEngine::new_with_information_schema(),
     ))
+}
+
+#[cfg(not(feature = "duckdb"))]
+fn configured_status_diagnostics_engine() -> Box<dyn LocalRelationEngine> {
+    Box::new(DataFusionLocalRelationEngine::new_with_information_schema())
 }
 
 async fn summarize_query_telemetry_diagnostics(

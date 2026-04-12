@@ -48,6 +48,10 @@ pub(crate) async fn handle_inbound_managed_command(
             session::handle_session_feedback(agent, channel, msg, &session_id, command).await;
             true
         }
+        ManagedCommand::SessionMention(command) => {
+            session::handle_session_mention(channel, msg, command).await;
+            true
+        }
         ManagedCommand::SessionPartition(command) => {
             session::handle_session_partition(channel, msg, command).await;
             true

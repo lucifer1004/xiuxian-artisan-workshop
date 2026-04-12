@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
 use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao_core::LinkGraphSearchOptions;
 
 /// Mechanism responsible for performing topological graph search.
 pub struct KnowledgeSeeker {
@@ -20,9 +21,9 @@ impl QianjiMechanism for KnowledgeSeeker {
             .and_then(|v| v.as_str())
             .ok_or("Missing 'query' in context")?;
 
-        let (_, hits) =
-            self.index
-                .search_planned(query, 5, xiuxian_wendao::LinkGraphSearchOptions::default());
+        let (_, hits) = self
+            .index
+            .search_planned(query, 5, LinkGraphSearchOptions::default());
 
         Ok(QianjiOutput {
             data: json!({ "raw_facts": hits }),

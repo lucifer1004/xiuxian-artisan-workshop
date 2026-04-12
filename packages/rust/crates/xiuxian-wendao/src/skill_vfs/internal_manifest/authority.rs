@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
+use xiuxian_wendao_parsers::{extract_references, parse_frontmatter};
 
 use super::load::load_internal_skill_manifest_from_path;
 use super::types::{
     INTERNAL_SKILL_URI_PREFIX, InternalSkillAuthorityOutcome, InternalSkillAuthorityReport,
     InternalSkillManifestError,
 };
-use crate::parsers::markdown::{extract_references, parse_frontmatter};
 
 /// Resolve internal skill authority by intersecting intent links and physical manifests.
 ///
@@ -177,7 +177,13 @@ fn collect_intent_manifest_uris(
 fn extract_markdown_links(markdown: &str) -> Vec<String> {
     extract_references(markdown)
         .into_iter()
-        .filter_map(|reference| reference.target)
+        .filter_map(|reference| {
+            reference
+                .literal_addressed_target
+                .addressed_target
+                .target
+                .clone()
+        })
         .collect()
 }
 

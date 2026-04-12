@@ -11,9 +11,11 @@
 ## Overview
 
 `xiuxian-wendao` now ships one checked-in gateway `OpenAPI` artifact at
-`resources/openapi/wendao_gateway.openapi.json` and exposes stable helpers in
-`crate::gateway::openapi` so downstream contract lanes can consume the real
-gateway surface without regenerating schemas during tests.
+`resources/openapi/wendao_gateway.openapi.json`. The bundled artifact helpers
+now live in `xiuxian-wendao-runtime`, while `xiuxian-wendao::gateway::openapi`
+keeps the stable compatibility seam plus the gateway route-contract inventory
+so downstream contract lanes can consume the real gateway surface without
+regenerating schemas during tests.
 
 This gives `xiuxian-qianji` a file-backed input for `rest_docs` contract
 feedback, keeps the runtime route inventory aligned with the bundled document,
@@ -26,10 +28,12 @@ downstream proof.
    constants plus `WENDAO_GATEWAY_ROUTE_CONTRACTS`.
 2. Runtime alignment: the gateway router uses those shared path constants
    instead of duplicating literal route strings.
-3. Bundled artifact access: `src/gateway/openapi/document.rs` exposes:
-   `bundled_wendao_gateway_openapi_document()`,
+3. Bundled artifact access: `xiuxian-wendao-runtime::artifacts::openapi`
+   owns `bundled_wendao_gateway_openapi_document()`,
    `bundled_wendao_gateway_openapi_path()`, and
-   `load_bundled_wendao_gateway_openapi_document()`.
+   `load_bundled_wendao_gateway_openapi_document()`, while
+   `xiuxian-wendao::gateway::openapi` re-exports the same helper family as a
+   thin compatibility seam.
 4. Clean-surface validation: `xiuxian-qianji` runs
    `run_rest_docs_contract_feedback(...)` against the bundled artifact in
    `tests/integration/test_wendao_live_rest_docs_contract_feedback.rs`.

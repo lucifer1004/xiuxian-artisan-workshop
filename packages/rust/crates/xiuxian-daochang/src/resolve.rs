@@ -63,6 +63,24 @@ pub(crate) fn resolve_positive_usize(
     default
 }
 
+pub(crate) fn resolve_bool(
+    cli_value: Option<bool>,
+    env_name: &str,
+    settings_value: Option<bool>,
+    default: bool,
+) -> bool {
+    if let Some(value) = cli_value {
+        return value;
+    }
+    if let Some(value) = parse_bool_from_env(env_name) {
+        return value;
+    }
+    if let Some(value) = settings_value {
+        return value;
+    }
+    default
+}
+
 pub(crate) fn resolve_channel_mode(
     cli_mode: Option<TelegramChannelMode>,
     settings_mode: Option<&str>,
@@ -220,4 +238,17 @@ fn parse_env_value<T>(
         tracing::warn!(env_var = %name, value = %raw, "{invalid_message}");
         None
     }
+}
+
+fn parse_bool(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub(crate) fn parse_bool_from_env(name: &str) -> Option<bool> {
+    parse_env_value(name, parse_bool, "invalid bool env value")
 }

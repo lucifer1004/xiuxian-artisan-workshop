@@ -37,6 +37,7 @@ pub(super) fn formal_audit_with_llm(
     node_def: &NodeDefinition,
     client: Arc<dyn LlmClient>,
 ) -> Result<Arc<dyn QianjiMechanism>, QianjiError> {
+    formal_audit::ensure_llm_retry_targets(node_def)?;
     let threshold_score = formal_audit::threshold_score(node_def)?;
     let max_retries = formal_audit::max_retries(node_def)?;
     let llm_config = llm_node::mechanism_config(node_def);
@@ -101,6 +102,8 @@ pub(super) fn llm(
         crate::executors::llm::StreamingLlmAnalyzer::builder()
             .client(client)
             .model(llm_cfg.model)
+            .context_keys(llm_cfg.context_keys)
+            .prompt_template(llm_cfg.prompt_template)
             .output_key(llm_cfg.output_key)
             .parse_json_output(llm_cfg.parse_json_output)
             .fallback_repo_tree(llm_cfg.fallback_repo_tree_on_parse_failure)

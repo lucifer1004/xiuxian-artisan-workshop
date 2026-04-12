@@ -15,6 +15,19 @@ pub enum RecipientCommandAdminUsersMutation {
     Clear,
 }
 
+/// Effective recipient-scoped mention policy snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecipientMentionPolicyStatus {
+    /// Default policy when no recipient override applies.
+    pub default_require_mention: bool,
+    /// Explicit recipient override, if any.
+    pub recipient_override: Option<bool>,
+    /// Effective policy after applying override fallback.
+    pub effective_require_mention: bool,
+    /// Whether runtime mutations persist to user settings.
+    pub persist_enabled: bool,
+}
+
 /// Structured attachment attached to a channel message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChannelAttachment {
@@ -133,6 +146,31 @@ pub trait Channel: Send + Sync {
     ) -> anyhow::Result<Option<Vec<String>>> {
         Err(anyhow::anyhow!(
             "recipient-scoped command admin overrides are not supported for this channel"
+        ))
+    }
+
+    /// Returns mention-policy status for one recipient.
+    fn recipient_mention_policy_status(
+        &self,
+        _recipient: &str,
+    ) -> anyhow::Result<RecipientMentionPolicyStatus> {
+        Err(anyhow::anyhow!(
+            "recipient-scoped mention policy is not supported for this channel"
+        ))
+    }
+
+    /// Updates recipient-scoped mention policy override.
+    ///
+    /// `Some(true)` enables mention requirement, `Some(false)` disables it,
+    /// and `None` clears the recipient override back to inherited/default
+    /// behavior.
+    fn set_recipient_require_mention(
+        &self,
+        _recipient: &str,
+        _require_mention: Option<bool>,
+    ) -> anyhow::Result<RecipientMentionPolicyStatus> {
+        Err(anyhow::anyhow!(
+            "recipient-scoped mention policy is not supported for this channel"
         ))
     }
 

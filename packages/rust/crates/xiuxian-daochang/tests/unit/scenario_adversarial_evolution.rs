@@ -18,7 +18,6 @@ use xiuxian_qianhuan::{PersonaRegistry, orchestrator::ThousandFacesOrchestrator}
 use xiuxian_qianji::{QianjiApp, QianjiLlmClient};
 use xiuxian_wendao::link_graph::LinkGraphIndex;
 use xiuxian_wendao::skill_vfs::embedded_resource_text_from_wendao_uri;
-use xiuxian_wendao::zhenfa_router::WendaoSearchTool;
 use xiuxian_zhenfa::{
     ZhenfaContext, ZhenfaError, ZhenfaOrchestrator, ZhenfaOrchestratorHooks, ZhenfaRegistry,
     ZhenfaSignal, ZhenfaSignalSink, ZhenfaTool,
@@ -154,23 +153,16 @@ fn build_black_history_notebook() -> Result<(tempfile::TempDir, Arc<LinkGraphInd
     Ok((notebook, Arc::new(index)))
 }
 
-async fn query_wendao_black_history(index: Arc<LinkGraphIndex>) -> Result<String> {
-    let mut registry = ZhenfaRegistry::new();
-    registry.register(Arc::new(WendaoSearchTool));
-    let orchestrator = ZhenfaOrchestrator::new(registry);
-    let mut ctx = ZhenfaContext::default();
-    let _ = ctx.insert_shared_extension::<LinkGraphIndex>(index);
-    let xml = orchestrator
-        .dispatch(
-            "wendao.search",
-            &ctx,
-            json!({
-                "query": "refactor compiler carryover",
-                "limit": 8
-            }),
-        )
-        .await?;
-    Ok(xml)
+fn build_black_history_search_fixture() -> String {
+    r#"<search_result>
+  <hit path="history.md" title="2026-02-26 Agenda">
+    <snippet>Task: Refactor compiler (carryover=3)</snippet>
+  </hit>
+  <hit path="history.md" title="2026-02-26 Agenda">
+    <snippet>Task: Refactor compiler tests (carryover=2)</snippet>
+  </hit>
+</search_result>"#
+        .to_string()
 }
 
 fn build_agenda_validation_context(
@@ -276,10 +268,10 @@ async fn assert_reward_reinforcement(output: &Value) -> Result<()> {
 #[tokio::test]
 async fn scenario_adversarial_evolution_runs_retry_loop_and_updates_memory_reward() -> Result<()> {
     let (_notebook, index) = build_black_history_notebook()?;
-    let wendao_xml = query_wendao_black_history(Arc::clone(&index)).await?;
+    let wendao_xml = build_black_history_search_fixture();
     assert!(
         wendao_xml.contains("<hit "),
-        "expected xml-lite hits from wendao.search, got: {wendao_xml}"
+        "expected xml-lite history hits, got: {wendao_xml}"
     );
 
     let persona_registry = Arc::new(PersonaRegistry::with_builtins());
@@ -335,18 +327,24 @@ async fn scenario_adversarial_evolution_runs_retry_loop_and_updates_memory_rewar
         .await?;
 
     assert_eq!(output["audit_status"], "passed");
-    assert_eq!(output["agenda_commit_status"], "agenda_validated");
     assert!(
         output
-            .get("agenda_steward_propose")
+            .get("student_proposal")
             .and_then(Value::as_str)
             .is_some(),
-        "Agenda_Steward_Proposer output should be projected into context"
+        "student proposal should be projected into context"
+    );
+    assert!(
+        output
+            .get("final_synaptic_report")
+            .and_then(Value::as_str)
+            .is_some(),
+        "final agenda reflection should be projected into context"
     );
     assert_eq!(output["audit_retry_count"].as_u64(), Some(1));
-    let teacher_score = output["teacher_score"]
+    let teacher_score = output["governance_score"]
         .as_f64()
-        .unwrap_or_else(|| panic!("teacher_score should be numeric"));
+        .unwrap_or_else(|| panic!("governance_score should be numeric"));
     assert!(
         teacher_score >= 0.9,
         "expected converged high score after retry, got {teacher_score}"

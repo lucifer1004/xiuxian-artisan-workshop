@@ -35,10 +35,12 @@ fn build_code_ast_analysis_response_does_not_fallback_to_first_symbol_when_line_
     );
 
     assert!(payload.focus_node_id.is_none());
-    assert!(!payload
-        .retrieval_atoms
-        .iter()
-        .any(|atom| matches!(atom.surface, Some(CodeAstRetrievalAtomScope::Block))));
+    assert!(
+        !payload
+            .retrieval_atoms
+            .iter()
+            .any(|atom| matches!(atom.surface, Some(CodeAstRetrievalAtomScope::Block)))
+    );
 }
 
 fn sample_analysis() -> RepositoryAnalysisOutput {

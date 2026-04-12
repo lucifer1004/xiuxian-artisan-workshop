@@ -2,8 +2,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use anyhow::{Result, anyhow};
+use xiuxian_wendao_core::WendaoResourceUri;
 
-use super::super::{SkillVfsResolver, WendaoResourceUri};
+use super::super::SkillVfsResolver;
 use crate::link_graph::LinkGraphIndex;
 
 const INTERNAL_SKILL_DOC_NAME: &str = "SKILL.md";

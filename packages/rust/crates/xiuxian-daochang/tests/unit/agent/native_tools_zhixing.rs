@@ -188,6 +188,7 @@ async fn task_add_tool_binds_recipient_from_session_context()
         })),
         &NativeToolCallContext {
             session_id: Some("telegram:1304799691".to_string()),
+            tool_call_id: None,
         },
     )
     .await?;
@@ -222,6 +223,7 @@ async fn task_add_tool_normalizes_human_local_time_input()
             })),
             &NativeToolCallContext {
                 session_id: Some("telegram:1304799691".to_string()),
+                tool_call_id: None,
             },
         )
         .await?;

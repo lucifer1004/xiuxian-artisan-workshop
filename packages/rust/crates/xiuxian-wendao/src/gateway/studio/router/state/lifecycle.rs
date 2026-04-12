@@ -5,7 +5,8 @@ use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::analyzers::registry::PluginRegistry;
 use crate::gateway::studio::router::config::{
-    load_ui_config_from_wendao_toml, resolve_studio_config_root,
+    load_ui_config_from_wendao_toml, load_ui_config_from_wendao_toml_path,
+    resolve_studio_config_root,
 };
 use crate::gateway::studio::router::state::types::{GatewayState, StudioState};
 use crate::gateway::studio::symbol_index::SymbolIndexCoordinator;
@@ -45,11 +46,33 @@ impl GatewayState {
         webhook_url: Option<String>,
         plugin_registry: Arc<PluginRegistry>,
     ) -> Self {
+        Self::new_with_webhook_url_and_config_path(
+            index,
+            signal_tx,
+            webhook_url,
+            None,
+            plugin_registry,
+        )
+    }
+
+    /// Create gateway state shared by the CLI endpoints and Studio router
+    /// with the effective webhook URL and config path chosen at startup.
+    #[must_use]
+    pub fn new_with_webhook_url_and_config_path(
+        index: Option<Arc<LinkGraphIndex>>,
+        signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+        webhook_url: Option<String>,
+        bootstrap_config_path: Option<&std::path::Path>,
+        plugin_registry: Arc<PluginRegistry>,
+    ) -> Self {
         Self {
             index,
             signal_tx,
             webhook_url,
-            studio: Arc::new(StudioState::new_with_bootstrap_ui_config(plugin_registry)),
+            studio: Arc::new(StudioState::new_with_bootstrap_ui_config_from_path(
+                plugin_registry,
+                bootstrap_config_path,
+            )),
         }
     }
 }
@@ -59,6 +82,7 @@ impl StudioState {
         plugin_registry: Arc<PluginRegistry>,
         project_root: std::path::PathBuf,
         config_root: std::path::PathBuf,
+        bootstrap_config_path: Option<std::path::PathBuf>,
         search_plane: SearchPlaneService,
         bootstrap_background_indexing: bool,
     ) -> Self {
@@ -74,6 +98,7 @@ impl StudioState {
         Self {
             project_root,
             config_root,
+            bootstrap_config_path,
             bootstrap_background_indexing,
             bootstrap_background_indexing_deferred_activation: Arc::new(std::sync::RwLock::new(
                 None,
@@ -101,13 +126,29 @@ impl StudioState {
     /// Create a new `StudioState` and bootstrap UI config from `wendao.toml`.
     #[must_use]
     pub fn new_with_bootstrap_ui_config(plugin_registry: Arc<PluginRegistry>) -> Self {
+        Self::new_with_bootstrap_ui_config_from_path(plugin_registry, None)
+    }
+
+    /// Create a new `StudioState` and bootstrap UI config from one explicit
+    /// gateway config path when available.
+    #[must_use]
+    pub fn new_with_bootstrap_ui_config_from_path(
+        plugin_registry: Arc<PluginRegistry>,
+        bootstrap_config_path: Option<&std::path::Path>,
+    ) -> Self {
         let project_root = xiuxian_io::PrjDirs::project_root();
-        let config_root = resolve_studio_config_root(project_root.as_path());
+        let config_root = bootstrap_config_path
+            .and_then(std::path::Path::parent)
+            .map_or_else(
+                || resolve_studio_config_root(project_root.as_path()),
+                std::path::Path::to_path_buf,
+            );
         let search_plane = SearchPlaneService::new(project_root.clone());
-        Self::new_with_bootstrap_ui_config_for_roots_and_search_plane(
+        Self::new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path(
             plugin_registry,
             project_root,
             config_root,
+            bootstrap_config_path,
             search_plane,
         )
     }
@@ -120,15 +161,38 @@ impl StudioState {
         config_root: std::path::PathBuf,
         search_plane: SearchPlaneService,
     ) -> Self {
+        Self::new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path(
+            plugin_registry,
+            project_root,
+            config_root,
+            None,
+            search_plane,
+        )
+    }
+
+    /// Create a new `StudioState` with explicit project/config roots, an
+    /// optional boot config path, and search-plane state.
+    #[must_use]
+    pub(crate) fn new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path(
+        plugin_registry: Arc<PluginRegistry>,
+        project_root: std::path::PathBuf,
+        config_root: std::path::PathBuf,
+        bootstrap_config_path: Option<&std::path::Path>,
+        search_plane: SearchPlaneService,
+    ) -> Self {
         let eager_background_indexing = gateway_bootstrap_background_indexing();
         let state = Self::build_runtime_state(
             plugin_registry,
             project_root,
             config_root,
+            bootstrap_config_path.map(std::path::Path::to_path_buf),
             search_plane,
             eager_background_indexing,
         );
-        if let Some(config) = load_ui_config_from_wendao_toml(state.config_root.as_path()) {
+        let boot_config = bootstrap_config_path
+            .and_then(load_ui_config_from_wendao_toml_path)
+            .or_else(|| load_ui_config_from_wendao_toml(state.config_root.as_path()));
+        if let Some(config) = boot_config {
             info!(
                 "Studio bootstrap loaded {} link_graph.projects and {} repo projects; startup background indexing is {}",
                 config.projects.len(),
@@ -166,6 +230,7 @@ impl StudioState {
             plugin_registry,
             project_root,
             config_root,
+            None,
             search_plane,
             false,
         )

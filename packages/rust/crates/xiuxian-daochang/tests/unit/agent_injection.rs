@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::unit::live_gates::{live_valkey_enabled, resolve_live_valkey_url};
 use anyhow::Result;
 use axum::{Json, Router, extract::State, routing::post};
 use rmcp::ServerHandler;
@@ -450,14 +451,10 @@ fn base_config(inference_url: String, tool_url: String) -> AgentConfig {
 }
 
 fn live_redis_url() -> Option<String> {
-    for key in ["VALKEY_URL"] {
-        if let Ok(url) = std::env::var(key)
-            && !url.trim().is_empty()
-        {
-            return Some(url);
-        }
+    if !live_valkey_enabled() {
+        return None;
     }
-    None
+    resolve_live_valkey_url()
 }
 
 fn unique_key_prefix(prefix: &str) -> String {
@@ -740,7 +737,6 @@ async fn react_loop_tool_timeout_is_ko_and_turn_continues() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "requires live valkey server (VALKEY_URL)"]
 async fn graph_shortcut_publishes_route_trace_to_route_events_stream() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
         return Ok(());

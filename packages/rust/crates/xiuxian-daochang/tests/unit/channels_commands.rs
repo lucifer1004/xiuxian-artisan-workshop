@@ -30,11 +30,12 @@
 )]
 use xiuxian_daochang::test_support::{
     ResumeContextCommand, SessionAdminAction, SessionFeedbackDirection, SessionInjectionAction,
-    SessionPartitionMode, is_reset_context_command, parse_background_prompt, parse_help_command,
-    parse_job_status_command, parse_jobs_summary_command, parse_resume_context_command,
-    parse_session_admin_command, parse_session_context_budget_command,
-    parse_session_context_memory_command, parse_session_context_status_command,
-    parse_session_feedback_command, parse_session_injection_command,
+    SessionMentionMode, SessionPartitionMode, is_reset_context_command, parse_background_prompt,
+    parse_help_command, parse_job_status_command, parse_jobs_summary_command,
+    parse_resume_context_command, parse_session_admin_command,
+    parse_session_context_budget_command, parse_session_context_memory_command,
+    parse_session_context_status_command, parse_session_feedback_command,
+    parse_session_injection_command, parse_session_mention_command,
     parse_session_partition_command,
 };
 
@@ -254,6 +255,24 @@ fn parse_session_commands_accepts_aliases() {
         Some(SessionPartitionMode::ChatThreadUser)
     );
     assert!(partition_explicit.format.is_json());
+    let mention_status =
+        parse_session_mention_command("/session mention").expect("expected mention status");
+    assert!(mention_status.mode.is_none());
+    assert!(!mention_status.format.is_json());
+    let mention_status_json = parse_session_mention_command("/session mention status json")
+        .expect("expected mention status json");
+    assert!(mention_status_json.mode.is_none());
+    assert!(mention_status_json.format.is_json());
+    let mention_on =
+        parse_session_mention_command("/session mention on").expect("expected mention on");
+    assert_eq!(mention_on.mode, Some(SessionMentionMode::Require));
+    let mention_off =
+        parse_session_mention_command("/session mention off").expect("expected mention off");
+    assert_eq!(mention_off.mode, Some(SessionMentionMode::Open));
+    let mention_inherit = parse_session_mention_command("/session mention inherit json")
+        .expect("expected mention inherit json");
+    assert_eq!(mention_inherit.mode, Some(SessionMentionMode::Inherit));
+    assert!(mention_inherit.format.is_json());
     assert!(is_reset_context_command("/reset"));
     assert!(is_reset_context_command("reset"));
     assert!(is_reset_context_command("/clear"));
@@ -308,6 +327,9 @@ fn parse_session_commands_rejects_invalid_shape() {
     assert!(parse_session_partition_command("/session partition guild_channel_user").is_none());
     assert!(parse_session_partition_command("/session partition channel").is_none());
     assert!(parse_session_partition_command("/session partition guild_user").is_none());
+    assert!(parse_session_mention_command("/session mention maybe").is_none());
+    assert!(parse_session_mention_command("/session mention status pretty").is_none());
+    assert!(parse_session_mention_command("/session mention json extra").is_none());
     assert!(parse_session_feedback_command("/session feedback").is_none());
     assert!(parse_session_feedback_command("/session feedback maybe").is_none());
     assert!(parse_session_feedback_command("/feedback").is_none());

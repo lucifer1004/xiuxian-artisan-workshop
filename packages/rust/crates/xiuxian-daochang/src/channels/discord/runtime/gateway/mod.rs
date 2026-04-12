@@ -32,6 +32,7 @@ pub async fn run_discord_gateway_listener(
         !channel.bot_token.trim().is_empty(),
         "discord bot token cannot be empty"
     );
+    channel.hydrate_bot_identity().await?;
     let mut client = Client::builder(channel.bot_token.clone(), default_gateway_intents())
         .event_handler(DiscordGatewayEventHandler { channel, tx })
         .await?;
@@ -53,6 +54,9 @@ pub async fn run_discord_gateway(
 ) -> Result<()> {
     let DiscordRuntimeConfig {
         session_partition,
+        require_mention,
+        require_mention_persist,
+        mention_overrides,
         inbound_queue_capacity,
         turn_timeout_secs,
         foreground_max_in_flight_messages,
@@ -71,6 +75,8 @@ pub async fn run_discord_gateway(
             session_partition,
         ),
     );
+    channel.configure_mention_policy(require_mention, require_mention_persist, mention_overrides);
+    channel.hydrate_bot_identity().await?;
     let channel_for_send: Arc<dyn Channel> = channel.clone();
     let (tx, mut inbound_rx) = mpsc::channel::<ChannelMessage>(inbound_queue_capacity);
     let inbound_snapshot_tx = tx.clone();
@@ -151,7 +157,7 @@ fn print_gateway_banner(
     );
     println!("Background commands: /bg <prompt>, /job <id> [json], /jobs [json]");
     println!(
-        "Session commands: /help [json], /session [json], /session budget [json], /session memory [json], /session feedback up|down [json], /session partition|scope [mode|on|off] [json], /session admin [list|set|add|remove|clear] [json], /session inject [status|clear|<qa>...</qa>] [json], /feedback up|down [json], /reset, /clear, /resume, /resume drop, /stop"
+        "Session commands: /help [json], /session [json], /session budget [json], /session memory [json], /session feedback up|down [json], /session mention [status|on|off|inherit] [json], /session partition|scope [mode|on|off] [json], /session admin [list|set|add|remove|clear] [json], /session inject [status|clear|<qa>...</qa>] [json], /feedback up|down [json], /reset, /clear, /resume, /resume drop, /stop"
     );
 }
 

@@ -1,9 +1,11 @@
 use crate::skill_vfs::index::preload::{
     preload_reference_dir_with_internal_flag, semantic_resource_uri_key,
 };
-use crate::skill_vfs::{SkillVfsError, WendaoResourceUri};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use xiuxian_wendao_core::WendaoResourceUri;
+
+use crate::skill_vfs::SkillVfsError;
 
 /// One mounted semantic namespace in skill VFS.
 #[derive(Debug, Clone, PartialEq, Eq)]

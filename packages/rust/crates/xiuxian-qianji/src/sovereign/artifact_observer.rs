@@ -16,7 +16,7 @@
 use crate::telemetry::{NodeTransitionPhase, SwarmEvent};
 use async_trait::async_trait;
 use std::sync::Arc;
-use xiuxian_wendao::link_graph::{CognitiveTraceRecord, LinkGraphSemanticDocument};
+use xiuxian_wendao_core::{CognitiveTraceRecord, LinkGraphSemanticDocument};
 
 /// Result of artifact observation and ingestion.
 #[derive(Debug, Clone, PartialEq)]

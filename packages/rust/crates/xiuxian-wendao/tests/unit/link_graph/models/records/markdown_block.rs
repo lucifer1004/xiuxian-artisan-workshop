@@ -1,6 +1,7 @@
 //! Unit tests for `markdown_block` module.
 
 use super::*;
+use xiuxian_wendao_parsers::blocks::compute_block_hash;
 
 #[test]
 fn test_block_kind_id_prefix() {
@@ -139,8 +140,14 @@ fn test_block_matches_kind() {
         "text",
         vec!["Section".to_string()],
     );
-    assert!(para.matches_kind(&BlockKindSpecifier::Paragraph));
-    assert!(!para.matches_kind(&BlockKindSpecifier::CodeFence));
+    assert!(super::matching::markdown_block_matches_kind(
+        &para,
+        &BlockKindSpecifier::Paragraph
+    ));
+    assert!(!super::matching::markdown_block_matches_kind(
+        &para,
+        &BlockKindSpecifier::CodeFence
+    ));
 
     let code = MarkdownBlock::new(
         MarkdownBlockKind::CodeFence {
@@ -152,8 +159,14 @@ fn test_block_matches_kind() {
         "fn main() {}",
         vec!["Section".to_string(), "Code".to_string()],
     );
-    assert!(code.matches_kind(&BlockKindSpecifier::CodeFence));
-    assert!(!code.matches_kind(&BlockKindSpecifier::Paragraph));
+    assert!(super::matching::markdown_block_matches_kind(
+        &code,
+        &BlockKindSpecifier::CodeFence
+    ));
+    assert!(!super::matching::markdown_block_matches_kind(
+        &code,
+        &BlockKindSpecifier::Paragraph
+    ));
 }
 
 #[test]

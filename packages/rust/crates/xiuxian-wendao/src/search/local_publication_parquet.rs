@@ -1,9 +1,10 @@
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use arrow::array::{Array, BooleanArray, LargeStringArray, StringArray, StringViewArray};
 use arrow::compute::filter_record_batch;
 use xiuxian_vector_store::{
-    EngineRecordBatch, LanceRecordBatch, SearchEngineContext, VectorStoreError,
+    EngineRecordBatch, LanceRecordBatch, LanceSchema, SearchEngineContext, VectorStoreError,
     lance_batches_to_engine_batches, write_engine_batches_to_parquet_file,
 };
 
@@ -23,6 +24,7 @@ pub(crate) async fn rewrite_local_publication_parquet(
     path_column: &str,
     replaced_paths: &BTreeSet<String>,
     changed_batches: &[LanceRecordBatch],
+    empty_schema: Option<Arc<LanceSchema>>,
 ) -> Result<LocalParquetPublicationStats, VectorStoreError> {
     let mut output_batches = if let Some(base_table_name) = base_table_name {
         load_local_publication_parquet_batches(service, corpus, base_table_name).await?
@@ -46,16 +48,32 @@ pub(crate) async fn rewrite_local_publication_parquet(
 
     let parquet_path = service.local_table_parquet_path(corpus, target_table_name);
     if output_batches.is_empty() {
-        match std::fs::remove_file(parquet_path.as_path()) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(VectorStoreError::Io(error)),
+        if let Some(schema) = empty_schema {
+            write_empty_local_publication_parquet(parquet_path.as_path(), schema)?;
+        } else {
+            match std::fs::remove_file(parquet_path.as_path()) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(VectorStoreError::Io(error)),
+            }
         }
-        return Ok(stats_from_batches(&output_batches));
+        return Ok(LocalParquetPublicationStats {
+            row_count: 0,
+            fragment_count: 0,
+        });
     }
 
     write_engine_batches_to_parquet_file(parquet_path.as_path(), &output_batches)?;
     Ok(stats_from_batches(&output_batches))
+}
+
+fn write_empty_local_publication_parquet(
+    output_path: &std::path::Path,
+    schema: Arc<LanceSchema>,
+) -> Result<(), VectorStoreError> {
+    let empty_batch = LanceRecordBatch::new_empty(schema);
+    let engine_batches = lance_batches_to_engine_batches(&[empty_batch])?;
+    write_engine_batches_to_parquet_file(output_path, &engine_batches)
 }
 
 async fn load_local_publication_parquet_batches(

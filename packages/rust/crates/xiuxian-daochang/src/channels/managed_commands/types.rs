@@ -51,6 +51,7 @@ pub(crate) enum ManagedControlCommand {
     ResumeDrop,
     SessionAdmin,
     SessionInjection,
+    SessionMention,
     SessionPartition,
 }
 
@@ -63,6 +64,7 @@ impl ManagedControlCommand {
             Self::ResumeDrop => "/resume drop",
             Self::SessionAdmin => "/session admin",
             Self::SessionInjection => "/session inject",
+            Self::SessionMention => "/session mention",
             Self::SessionPartition => "/session partition",
         }
     }

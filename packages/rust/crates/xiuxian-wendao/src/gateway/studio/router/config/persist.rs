@@ -11,7 +11,7 @@ use super::paths::{
 use super::sanitize::merge_repo_plugins;
 use super::types::{WendaoTomlConfig, WendaoTomlProjectConfig};
 
-/// Persists UI config as a Studio overlay TOML.
+/// Persists UI config into the base Wendao TOML.
 ///
 /// # Errors
 ///
@@ -20,20 +20,98 @@ pub fn persist_ui_config_to_wendao_toml(
     config_root: &Path,
     config: &UiConfig,
 ) -> Result<(), String> {
-    let base_path = studio_wendao_toml_path(config_root);
-    let overlay_path = studio_wendao_overlay_toml_path(config_root);
     let effective_path = studio_effective_wendao_toml_path(config_root);
+    persist_ui_config_to_wendao_toml_path(effective_path.as_path(), config)
+}
 
-    let mut parsed = if effective_path.is_file() {
-        load_wendao_toml_config(effective_path.as_path()).map_err(|details| {
+/// Persists UI config using one explicit effective Wendao TOML path.
+///
+/// # Errors
+///
+/// Returns an error string if reading, parsing, or writing fails.
+pub fn persist_ui_config_to_wendao_toml_path(
+    config_path: &Path,
+    config: &UiConfig,
+) -> Result<(), String> {
+    let paths = resolve_persist_paths(config_path)?;
+    let mut effective = load_or_default_wendao_config(paths.effective.as_path())?;
+    let projects = merge_ui_projects(&mut effective, config);
+    let mut base = load_raw_or_default_wendao_config(paths.base.as_path())?;
+    base.link_graph.projects = projects;
+    write_base_config(paths.base.as_path(), &base)?;
+    remove_legacy_overlay(paths.legacy_overlay.as_path(), paths.base.as_path())
+}
+
+struct PersistPaths {
+    base: std::path::PathBuf,
+    effective: std::path::PathBuf,
+    legacy_overlay: std::path::PathBuf,
+}
+
+fn resolve_persist_paths(config_path: &Path) -> Result<PersistPaths, String> {
+    let Some(config_root) = config_path.parent() else {
+        return Err(format!(
+            "failed to resolve config dir for `{}`",
+            config_path.display()
+        ));
+    };
+    let legacy_overlay = studio_wendao_overlay_toml_path(config_root);
+    let base = if config_path == legacy_overlay.as_path() {
+        studio_wendao_toml_path(config_root)
+    } else {
+        config_path.to_path_buf()
+    };
+    let effective = if legacy_overlay.is_file() {
+        legacy_overlay.clone()
+    } else if base.is_file() {
+        base.clone()
+    } else {
+        config_path.to_path_buf()
+    };
+
+    Ok(PersistPaths {
+        base,
+        effective,
+        legacy_overlay,
+    })
+}
+
+fn load_or_default_wendao_config(effective_path: &Path) -> Result<WendaoTomlConfig, String> {
+    if effective_path.is_file() {
+        load_wendao_toml_config(effective_path).map_err(|details| {
             format!(
                 "failed to read `{}` before persisting UI config: {details}",
                 effective_path.display()
             )
-        })?
+        })
     } else {
-        WendaoTomlConfig::default()
-    };
+        Ok(WendaoTomlConfig::default())
+    }
+}
+
+fn load_raw_or_default_wendao_config(config_path: &Path) -> Result<WendaoTomlConfig, String> {
+    if !config_path.is_file() {
+        return Ok(WendaoTomlConfig::default());
+    }
+
+    let raw = fs::read_to_string(config_path).map_err(|error| {
+        format!(
+            "failed to read `{}` before persisting UI config: {error}",
+            config_path.display()
+        )
+    })?;
+    toml::from_str(&raw).map_err(|error| {
+        format!(
+            "failed to parse raw TOML `{}` before persisting UI config: {error}",
+            config_path.display()
+        )
+    })
+}
+
+fn merge_ui_projects(
+    parsed: &mut WendaoTomlConfig,
+    config: &UiConfig,
+) -> BTreeMap<String, WendaoTomlProjectConfig> {
     let local_project_ids = config
         .projects
         .iter()
@@ -82,25 +160,22 @@ pub fn persist_ui_config_to_wendao_toml(
         if local_and_repo_ids.contains(&id) {
             continue;
         }
-
         entry.dirs.clear();
         entry.plugins.clear();
         projects.insert(id, entry);
     }
 
-    let mut overlay = WendaoTomlConfig::default();
-    if base_path.is_file() {
-        overlay.imports.push("wendao.toml".to_string());
-    }
-    overlay.link_graph.projects = projects;
+    projects
+}
 
-    let serialized = toml::to_string_pretty(&overlay).map_err(|error| {
+fn write_base_config(config_path: &Path, config: &WendaoTomlConfig) -> Result<(), String> {
+    let serialized = toml::to_string_pretty(config).map_err(|error| {
         format!(
             "failed to serialize UI config into TOML `{}`: {error}",
-            overlay_path.display()
+            config_path.display()
         )
     })?;
-    if let Some(parent) = overlay_path.parent() {
+    if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
             format!(
                 "failed to create config dir `{}`: {error}",
@@ -108,9 +183,22 @@ pub fn persist_ui_config_to_wendao_toml(
             )
         })?;
     }
-    fs::write(overlay_path.as_path(), serialized).map_err(|error| {
+    fs::write(config_path, serialized).map_err(|error| {
         format!(
             "failed to write persisted UI config `{}`: {error}",
+            config_path.display()
+        )
+    })
+}
+
+fn remove_legacy_overlay(overlay_path: &Path, base_path: &Path) -> Result<(), String> {
+    if overlay_path == base_path || !overlay_path.is_file() {
+        return Ok(());
+    }
+
+    fs::remove_file(overlay_path).map_err(|error| {
+        format!(
+            "failed to remove legacy Studio overlay `{}` after persisting base config: {error}",
             overlay_path.display()
         )
     })

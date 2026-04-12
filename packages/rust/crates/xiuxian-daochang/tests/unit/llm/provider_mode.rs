@@ -73,6 +73,35 @@ fn provider_settings_default_to_openai_when_unspecified() {
 }
 
 #[test]
+fn provider_settings_accept_openai_aliases_without_fallback_warning_mode() {
+    for provider in [
+        "openai",
+        "openai_like",
+        "openai-compatible",
+        "openai_compatible",
+        "deepseek",
+    ] {
+        let settings = settings_with_inference(
+            Some(provider),
+            Some("CUSTOM_KEY"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        let resolved = resolve_provider_settings_with_env(&settings, String::new(), None, None);
+        assert_eq!(
+            resolved.mode,
+            LiteLlmProviderMode::OpenAi,
+            "provider={provider}"
+        );
+        assert_eq!(resolved.source, "settings", "provider={provider}");
+        assert_eq!(resolved.api_key_env, "CUSTOM_KEY", "provider={provider}");
+    }
+}
+
+#[test]
 fn provider_settings_honor_settings_for_minimax() {
     let settings = settings_with_inference(
         Some("minimax"),

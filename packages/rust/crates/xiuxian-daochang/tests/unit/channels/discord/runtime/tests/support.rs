@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
+use std::{collections::HashMap, sync::PoisonError};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -9,7 +11,8 @@ pub(super) use xiuxian_daochang::test_support::{
     process_discord_message_with_interrupt,
 };
 use xiuxian_daochang::{
-    Agent, AgentConfig, Channel, ChannelMessage, JobManager, JobManagerConfig, TurnRunner,
+    Agent, AgentConfig, Channel, ChannelMessage, JobManager, JobManagerConfig,
+    RecipientMentionPolicyStatus, TurnRunner,
 };
 
 #[derive(Default)]
@@ -18,6 +21,9 @@ pub(super) struct MockChannel {
     partition_mode: RwLock<String>,
     allow_control_commands: bool,
     denied_slash_scopes: Vec<String>,
+    default_require_mention: StdRwLock<bool>,
+    persist_enabled: StdRwLock<bool>,
+    recipient_require_mention: StdRwLock<HashMap<String, bool>>,
 }
 
 impl MockChannel {
@@ -33,6 +39,9 @@ impl MockChannel {
                 .into_iter()
                 .map(|scope| scope.as_ref().to_string())
                 .collect(),
+            default_require_mention: StdRwLock::new(false),
+            persist_enabled: StdRwLock::new(false),
+            recipient_require_mention: StdRwLock::new(HashMap::new()),
         }
     }
 
@@ -78,6 +87,53 @@ impl Channel for MockChannel {
             .denied_slash_scopes
             .iter()
             .any(|scope| scope == command_scope)
+    }
+
+    fn recipient_mention_policy_status(
+        &self,
+        recipient: &str,
+    ) -> anyhow::Result<RecipientMentionPolicyStatus> {
+        let recipient_override = self
+            .recipient_require_mention
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(recipient)
+            .copied();
+        let default_require_mention = *self
+            .default_require_mention
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        let persist_enabled = *self
+            .persist_enabled
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        Ok(RecipientMentionPolicyStatus {
+            default_require_mention,
+            recipient_override,
+            effective_require_mention: recipient_override.unwrap_or(default_require_mention),
+            persist_enabled,
+        })
+    }
+
+    fn set_recipient_require_mention(
+        &self,
+        recipient: &str,
+        require_mention: Option<bool>,
+    ) -> anyhow::Result<RecipientMentionPolicyStatus> {
+        let mut overrides = self
+            .recipient_require_mention
+            .write()
+            .unwrap_or_else(PoisonError::into_inner);
+        match require_mention {
+            Some(value) => {
+                overrides.insert(recipient.to_string(), value);
+            }
+            None => {
+                overrides.remove(recipient);
+            }
+        }
+        drop(overrides);
+        self.recipient_mention_policy_status(recipient)
     }
 
     async fn send(&self, message: &str, recipient: &str) -> Result<()> {

@@ -214,7 +214,6 @@ pub use link_graph_refs::{
     parse_entity_ref,
 };
 pub use parsers::link_graph::query::{ParsedLinkGraphQuery, parse_search_query};
-pub use parsers::markdown::{NoteFrontmatter, parse_frontmatter};
 pub use search::{
     FuzzyMatch, FuzzyMatcher, FuzzyScore, FuzzySearchOptions, LexicalMatcher, SearchDocument,
     SearchDocumentFields, SearchDocumentIndex, TantivyDocumentMatch, TantivyMatcher, edit_distance,
@@ -223,9 +222,9 @@ pub use search::{
 pub use skill_vfs::{
     ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_REMINDED, ATTR_TIMER_SCHEDULED, AssetRequest,
     InternalSkillManifest, InternalSkillWorkflowType, SkillNamespaceIndex, SkillNamespaceMount,
-    SkillVfsError, SkillVfsResolver, WENDAO_URI_SCHEME, WendaoAssetHandle, WendaoResourceUri,
-    ZHIXING_SKILL_DOC_PATH, ZhixingIndexSummary, ZhixingWendaoIndexer,
-    build_embedded_wendao_registry, embedded_discover_canonical_uris, embedded_resource_text,
+    SkillVfsError, SkillVfsResolver, WendaoAssetHandle, ZHIXING_SKILL_DOC_PATH,
+    ZhixingIndexSummary, ZhixingWendaoIndexer, build_embedded_wendao_registry,
+    embedded_discover_canonical_uris, embedded_resource_text,
     embedded_resource_text_from_wendao_uri, embedded_skill_links_for_id,
     embedded_skill_links_for_reference_type, embedded_skill_links_index, embedded_skill_markdown,
 };
@@ -236,6 +235,7 @@ pub use sync::{
 };
 pub use types::{KnowledgeCategory, KnowledgeEntry, KnowledgeSearchQuery, KnowledgeStats};
 pub use unified_symbol::{SymbolSource, UnifiedIndexStats, UnifiedSymbol, UnifiedSymbolIndex};
+pub use xiuxian_wendao_core::{WENDAO_URI_SCHEME, WendaoResourceUri, WendaoResourceUriError};
 
 #[cfg(feature = "zhenfa-router")]
 pub use zhenfa_router::WendaoZhenfaRouter;

@@ -142,3 +142,55 @@ fn runtime_profile_wire_override_takes_precedence() {
         .unwrap_or_else(|err| panic!("runtime profile resolution should succeed: {err}"));
     assert_eq!(resolved.wire_api, OpenAIWireApi::ChatCompletions);
 }
+
+#[test]
+fn runtime_profile_prefers_provider_specific_model_and_base_url_over_flat_defaults() {
+    let mut providers = HashMap::new();
+    providers.insert(
+        "openai".to_string(),
+        LlmProviderProfileInput {
+            model: Some("mimo-v2-pro".to_string()),
+            base_url: Some("https://token-plan-sgp.xiaomimimo.com/v1".to_string()),
+            api_key: Some("MIMO_API_KEY".to_string()),
+            api_key_env: None,
+            wire_api: None,
+        },
+    );
+    let profile = LlmRuntimeProfileInput {
+        model: Some("system-flat-model".to_string()),
+        default_model: Some("system-default-model".to_string()),
+        base_url: Some("http://localhost:3002/v1".to_string()),
+        api_key_env: Some("SYSTEM_API_KEY".to_string()),
+        api_key: None,
+        wire_api: None,
+        default_provider: Some("openai".to_string()),
+        providers,
+    };
+    let env = LlmRuntimeProfileEnv {
+        provider_override: None,
+        model_override: None,
+        base_url_override: None,
+        api_key_override: None,
+        wire_api_override: None,
+        env_vars: vec![
+            (
+                "OPENAI_API_KEY".to_string(),
+                "generic-openai-secret".to_string(),
+            ),
+            ("MIMO_API_KEY".to_string(), "mimo-secret".to_string()),
+            ("SYSTEM_API_KEY".to_string(), "system-secret".to_string()),
+        ],
+    };
+    let defaults = LlmRuntimeDefaults::default();
+
+    let resolved = resolve_openai_runtime_profile(&profile, &env, &defaults)
+        .unwrap_or_else(|err| panic!("runtime profile resolution should succeed: {err}"));
+
+    assert_eq!(resolved.model, "mimo-v2-pro");
+    assert_eq!(
+        resolved.base_url,
+        "https://token-plan-sgp.xiaomimimo.com/v1"
+    );
+    assert_eq!(resolved.api_key_env, "MIMO_API_KEY");
+    assert_eq!(resolved.api_key, "mimo-secret");
+}

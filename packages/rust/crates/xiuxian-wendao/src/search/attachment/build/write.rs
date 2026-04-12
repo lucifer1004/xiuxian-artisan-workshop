@@ -1,7 +1,9 @@
 use xiuxian_vector_store::VectorStoreError;
 
 use crate::search::attachment::build::{AttachmentBuildPlan, AttachmentWriteResult};
-use crate::search::attachment::schema::{attachment_batches, source_path_column};
+use crate::search::attachment::schema::{
+    attachment_batches, attachment_schema, source_path_column,
+};
 use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
 
@@ -27,6 +29,7 @@ pub(crate) async fn write_attachment_epoch(
         source_path_column(),
         &plan.replaced_paths,
         &changed_batches,
+        Some(attachment_schema()),
     )
     .await?;
     Ok(AttachmentWriteResult {

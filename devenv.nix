@@ -121,7 +121,7 @@ in
   '';
 
   cachix.pull = [ "tao3k" ];
-  cachix.push = "tao3k";
+  # cachix.push = "tao3k";
   # https://devenv.sh/tests/
   enterTest = "";
 

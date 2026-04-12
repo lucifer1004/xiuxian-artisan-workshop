@@ -125,7 +125,7 @@ async fn set_ui_config_still_eagerly_enqueues_background_indexes() {
 }
 
 #[tokio::test]
-async fn set_ui_config_handler_persists_overlay_without_overwriting_base_wendao_toml() {
+async fn set_ui_config_handler_persists_base_wendao_toml_and_clears_legacy_overlay() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let project_root = temp.path().join("project");
     let config_root = temp.path().join("config");
@@ -144,6 +144,16 @@ root = "."
 dirs = ["docs"]
 "#;
     fs::write(&config_path, original_toml).unwrap_or_else(|error| panic!("write config: {error}"));
+    fs::write(
+        studio_wendao_overlay_toml_path(config_root.as_path()),
+        r#"imports = ["wendao.toml"]
+
+[link_graph.projects.stale]
+root = "."
+dirs = ["legacy"]
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write overlay config: {error}"));
 
     let studio = StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane(
         Arc::new(PluginRegistry::new()),
@@ -171,26 +181,139 @@ dirs = ["docs"]
         Json(pushed_config.clone()),
     )
     .await
-    .unwrap_or_else(|error| panic!("set_ui_config should persist overlay: {error:?}"));
+    .unwrap_or_else(|error| panic!("set_ui_config should persist base config: {error:?}"));
 
     assert_eq!(response.0, pushed_config);
     assert_eq!(state.studio.ui_config(), pushed_config);
-    assert_eq!(
-        fs::read_to_string(&config_path).unwrap_or_else(|error| panic!("read config: {error}")),
-        original_toml
-    );
     let overlay_path = studio_wendao_overlay_toml_path(config_root.as_path());
-    let overlay = fs::read_to_string(&overlay_path)
-        .unwrap_or_else(|error| panic!("read overlay config: {error}"));
     assert!(
-        overlay.contains("imports = [\"wendao.toml\"]"),
-        "overlay should import the base wendao.toml"
+        !overlay_path.exists(),
+        "legacy overlay should be removed after persisting base config"
+    );
+    let persisted: toml::Value = toml::from_str(
+        &fs::read_to_string(&config_path)
+            .unwrap_or_else(|error| panic!("read persisted config: {error}")),
+    )
+    .unwrap_or_else(|error| panic!("parse persisted config: {error}"));
+    assert_eq!(
+        persisted
+            .get("gateway")
+            .and_then(toml::Value::as_table)
+            .and_then(|gateway| gateway.get("runtime_note")),
+        Some(&toml::Value::String("keep-me".to_string())),
+        "base gateway settings should remain intact"
+    );
+    let Some(project) = persisted
+        .get("link_graph")
+        .and_then(toml::Value::as_table)
+        .and_then(|link_graph| link_graph.get("projects"))
+        .and_then(toml::Value::as_table)
+        .and_then(|projects| projects.get("main"))
+        .and_then(toml::Value::as_table)
+    else {
+        panic!("persisted config should contain the new UI project");
+    };
+    assert_eq!(
+        project
+            .get("dirs")
+            .and_then(toml::Value::as_array)
+            .map(|dirs| {
+                dirs.iter()
+                    .filter_map(toml::Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            }),
+        Some(vec!["docs".to_string(), "src".to_string()]),
+        "persisted config should contain the new UI dirs"
+    );
+    let kernel_dirs = persisted
+        .get("link_graph")
+        .and_then(toml::Value::as_table)
+        .and_then(|link_graph| link_graph.get("projects"))
+        .and_then(toml::Value::as_table)
+        .and_then(|projects| projects.get("kernel"))
+        .and_then(toml::Value::as_table)
+        .and_then(|project| project.get("dirs"))
+        .and_then(toml::Value::as_array)
+        .map(|dirs| dirs.len())
+        .unwrap_or(0);
+    assert_eq!(
+        kernel_dirs, 0,
+        "stale UI-owned base projects should be tombstoned in the rewritten base config"
     );
 
     let Some(effective_config) = load_ui_config_from_wendao_toml(config_root.as_path()) else {
-        panic!("effective UI config should reload from overlay");
+        panic!("effective UI config should reload from the persisted base config");
     };
     assert_eq!(effective_config, pushed_config);
+}
+
+#[test]
+fn studio_bootstrap_uses_explicit_gateway_config_path_and_its_imports() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let project_root = temp.path().join("project");
+    let frontend_root = project_root.join(".data").join("wendao-frontend");
+    fs::create_dir_all(frontend_root.as_path())
+        .unwrap_or_else(|error| panic!("create frontend root: {error}"));
+
+    let gateway_config_path = project_root.join("wendao.toml");
+    fs::write(
+        &gateway_config_path,
+        r#"imports = [".data/wendao-frontend/wendao.toml"]
+
+[link_graph.projects.main]
+root = "."
+dirs = ["docs"]
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write gateway config: {error}"));
+    fs::write(
+        frontend_root.join("wendao.toml"),
+        r#"[link_graph.projects.kernel]
+root = "."
+dirs = ["docs"]
+
+[link_graph.projects.frontend]
+root = "."
+dirs = ["src"]
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write frontend config: {error}"));
+
+    let studio = StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path(
+        Arc::new(PluginRegistry::new()),
+        project_root.clone(),
+        gateway_config_path
+            .parent()
+            .unwrap_or_else(|| panic!("gateway config should have parent"))
+            .to_path_buf(),
+        Some(gateway_config_path.as_path()),
+        SearchPlaneService::new(project_root),
+    );
+
+    assert_eq!(
+        studio.ui_config(),
+        UiConfig {
+            projects: vec![
+                UiProjectConfig {
+                    name: "frontend".to_string(),
+                    root: ".".to_string(),
+                    dirs: vec!["src".to_string()],
+                },
+                UiProjectConfig {
+                    name: "kernel".to_string(),
+                    root: ".".to_string(),
+                    dirs: vec!["docs".to_string()],
+                },
+                UiProjectConfig {
+                    name: "main".to_string(),
+                    root: ".".to_string(),
+                    dirs: vec!["docs".to_string()],
+                },
+            ],
+            repo_projects: Vec::new(),
+        }
+    );
 }
 
 #[tokio::test]

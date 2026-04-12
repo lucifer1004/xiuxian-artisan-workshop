@@ -30,11 +30,17 @@ pub(crate) fn load_wendao_toml_config(path: &Path) -> Result<WendaoTomlConfig, S
 #[must_use]
 pub fn load_ui_config_from_wendao_toml(config_root: &Path) -> Option<UiConfig> {
     let config_path = studio_effective_wendao_toml_path(config_root);
+    load_ui_config_from_wendao_toml_path(config_path.as_path())
+}
+
+/// Loads UI config from one explicit effective Wendao TOML path if it exists.
+#[must_use]
+pub fn load_ui_config_from_wendao_toml_path(config_path: &Path) -> Option<UiConfig> {
     if !config_path.is_file() {
         return None;
     }
 
-    let parsed = load_wendao_toml_config(config_path.as_path()).ok()?;
+    let parsed = load_wendao_toml_config(config_path).ok()?;
     Some(ui_config_from_wendao_toml(parsed))
 }
 

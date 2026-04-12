@@ -1,14 +1,13 @@
-use super::content::{
-    count_words, extract_doc_type, extract_lead, extract_saliency_params, extract_tags,
-    extract_title, parse_frontmatter,
-};
-use super::links::extract_link_targets;
+use super::content::extract_saliency_params;
+use super::links::extract_link_targets_from_occurrences;
 use super::paths::{normalize_slashes, relative_doc_id};
-use super::sections::extract_sections;
+use super::sections::adapt_sections;
 use super::time::resolve_note_timestamps;
 use super::types::ParsedNote;
 use crate::link_graph::LinkGraphDocument;
 use std::path::Path;
+use xiuxian_wendao_parsers::note::MarkdownNoteCore;
+use xiuxian_wendao_parsers::note::parse_markdown_note;
 
 /// Parse one note file into structured document row plus outgoing link targets.
 #[must_use]
@@ -27,23 +26,26 @@ pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote>
             )
             .as_str(),
     );
-    let (frontmatter, body) = parse_frontmatter(content);
-    let title = extract_title(frontmatter.as_ref(), body, &stem);
-    let tags = extract_tags(frontmatter.as_ref());
-    let doc_type = extract_doc_type(frontmatter.as_ref());
-    let lead = extract_lead(body);
-    let word_count = count_words(body);
+    let parser_note = parse_markdown_note(content, &stem);
+    let parsed_document = parser_note.document;
+    let frontmatter = parsed_document.raw_metadata;
+    let core = parsed_document.core;
     let (saliency_base, decay_rate) = extract_saliency_params(frontmatter.as_ref());
-    let search_text = body.to_string();
+    let (created_ts, modified_ts) = resolve_note_timestamps(frontmatter.as_ref(), path);
+    let search_text = core.body;
     let search_text_lower = search_text.to_lowercase();
     let id_lower = doc_id.to_lowercase();
     let stem_lower = stem.to_lowercase();
     let path_lower = rel_path.to_lowercase();
-    let title_lower = title.to_lowercase();
-    let tags_lower: Vec<String> = tags.iter().map(|tag| tag.to_lowercase()).collect();
-    let (created_ts, modified_ts) = resolve_note_timestamps(frontmatter.as_ref(), path);
-    let extracted = extract_link_targets(body, path, root);
-    let sections = extract_sections(body, path, root);
+    let title_lower = core.title.to_lowercase();
+    let tags_lower: Vec<String> = core.tags.iter().map(|tag| tag.to_lowercase()).collect();
+    let MarkdownNoteCore {
+        references: _,
+        targets,
+        sections,
+    } = parser_note.core;
+    let extracted = extract_link_targets_from_occurrences(&targets, path, root);
+    let sections = adapt_sections(sections, &targets, path, root);
     Some(ParsedNote {
         doc: LinkGraphDocument {
             id: doc_id,
@@ -52,13 +54,13 @@ pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote>
             stem_lower,
             path: rel_path,
             path_lower,
-            title,
+            title: core.title,
             title_lower,
-            tags,
+            tags: core.tags,
             tags_lower,
-            lead,
-            doc_type,
-            word_count,
+            lead: core.lead,
+            doc_type: core.doc_type,
+            word_count: core.word_count,
             search_text,
             search_text_lower,
             saliency_base,

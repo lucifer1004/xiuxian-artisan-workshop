@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::unit::live_gates::resolve_enabled_live_valkey_url;
 use anyhow::{Result, anyhow};
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use tokio::sync::Mutex;
@@ -110,13 +111,8 @@ async fn wait_for_listener(addr: std::net::SocketAddr) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires live valkey server"]
 async fn telegram_send_gate_valkey_enforces_cross_instance_rate_limit_window() -> Result<()> {
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        eprintln!("skip: set VALKEY_URL for live telegram send gate test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live telegram send gate test") else {
         return Ok(());
     };
     let key_prefix = format!(

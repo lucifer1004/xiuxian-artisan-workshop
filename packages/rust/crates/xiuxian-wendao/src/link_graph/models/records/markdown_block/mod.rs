@@ -2,14 +2,13 @@
 
 mod address;
 mod block;
-mod hash;
 mod kind;
+mod matching;
 
 pub use address::{BlockAddress, BlockKindSpecifier};
 pub use block::MarkdownBlock;
 pub use kind::MarkdownBlockKind;
-
-pub(super) use hash::compute_block_hash;
+pub(crate) use matching::markdown_block_matches_kind;
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/link_graph/models/records/markdown_block.rs"]

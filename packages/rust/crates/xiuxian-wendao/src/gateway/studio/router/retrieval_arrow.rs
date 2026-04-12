@@ -94,19 +94,7 @@ pub(crate) fn build_retrieval_chunks_flight_batch(
         .collect::<Result<Vec<_>, _>>()?;
 
     LanceRecordBatch::try_new(
-        Arc::new(LanceSchema::new(vec![
-            LanceField::new("ownerId", LanceDataType::Utf8, false),
-            LanceField::new("chunkId", LanceDataType::Utf8, false),
-            LanceField::new("semanticType", LanceDataType::Utf8, false),
-            LanceField::new("fingerprint", LanceDataType::Utf8, false),
-            LanceField::new("tokenEstimate", LanceDataType::UInt64, false),
-            LanceField::new("displayLabel", LanceDataType::Utf8, true),
-            LanceField::new("excerpt", LanceDataType::Utf8, true),
-            LanceField::new("lineStart", LanceDataType::UInt64, true),
-            LanceField::new("lineEnd", LanceDataType::UInt64, true),
-            LanceField::new("surface", LanceDataType::Utf8, true),
-            LanceField::new("attributesJson", LanceDataType::Utf8, true),
-        ])),
+        retrieval_chunks_flight_schema(),
         vec![
             Arc::new(LanceStringArray::from(owner_ids)),
             Arc::new(LanceStringArray::from(chunk_ids)),
@@ -122,6 +110,22 @@ pub(crate) fn build_retrieval_chunks_flight_batch(
         ],
     )
     .map_err(|error| error.to_string())
+}
+
+fn retrieval_chunks_flight_schema() -> Arc<LanceSchema> {
+    Arc::new(LanceSchema::new(vec![
+        LanceField::new("ownerId", LanceDataType::Utf8, false),
+        LanceField::new("chunkId", LanceDataType::Utf8, false),
+        LanceField::new("semanticType", LanceDataType::Utf8, false),
+        LanceField::new("fingerprint", LanceDataType::Utf8, false),
+        LanceField::new("tokenEstimate", LanceDataType::UInt64, false),
+        LanceField::new("displayLabel", LanceDataType::Utf8, true),
+        LanceField::new("excerpt", LanceDataType::Utf8, true),
+        LanceField::new("lineStart", LanceDataType::UInt64, true),
+        LanceField::new("lineEnd", LanceDataType::UInt64, true),
+        LanceField::new("surface", LanceDataType::Utf8, true),
+        LanceField::new("attributesJson", LanceDataType::Utf8, true),
+    ]))
 }
 
 #[cfg(test)]

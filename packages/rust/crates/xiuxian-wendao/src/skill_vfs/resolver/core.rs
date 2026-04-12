@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use include_dir::Dir;
+use xiuxian_wendao_core::WendaoResourceUri;
 
-use super::super::{InternalSkillManifest, SkillNamespaceIndex, SkillVfsError, WendaoResourceUri};
+use super::super::{InternalSkillManifest, SkillNamespaceIndex, SkillVfsError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::skill_vfs::resolver) struct EmbeddedSemanticMount {

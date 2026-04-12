@@ -16,8 +16,6 @@ pub mod internal_authority;
 pub mod internal_manifest;
 /// Skill VFS resolver core implementation.
 pub mod resolver;
-/// URI parsing and normalization for wendao:// scheme.
-pub mod uri;
 /// Zhixing domain specific indexing and address constants.
 pub mod zhixing;
 
@@ -26,7 +24,6 @@ pub use error::SkillVfsError;
 pub use index::{SkillNamespaceIndex, SkillNamespaceMount};
 pub use internal_manifest::{InternalSkillManifest, InternalSkillWorkflowType};
 pub use resolver::core::SkillVfsResolver;
-pub use uri::{WENDAO_URI_SCHEME, WendaoResourceUri};
 pub use xiuxian_skills::InternalSkillManifestScan;
 pub use zhixing::{
     ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_REMINDED, ATTR_TIMER_SCHEDULED, Error, Result,

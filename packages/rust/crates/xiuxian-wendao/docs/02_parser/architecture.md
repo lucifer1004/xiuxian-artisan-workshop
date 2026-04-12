@@ -9,21 +9,22 @@
 
 ## Objective
 
-`xiuxian-wendao` keeps domain-core parser behavior under a single crate-root
-namespace, `src/parsers/`, so parser ownership reflects durable input and
-output contracts rather than whichever subsystem first consumed them.
+`xiuxian-wendao` keeps Wendao-owned parser adapters under the single crate-root
+namespace `src/parsers/`, while reusable parser-owned syntax, block, target,
+and note-aggregate contracts may move to `xiuxian-wendao-parsers` once they
+are cleanly separated from Wendao domain records.
 
 ## Canonical Parser Families
 
-| Namespace                                             | Input shape                        | Canonical output                                | Notes                                                        |
-| ----------------------------------------------------- | ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
-| `parsers::markdown`                                   | Markdown notes                     | frontmatter, sections, links, code observations | Shared by indexing, search, enhancement, and semantic checks |
-| `parsers::link_graph::query`                          | link-graph search query strings    | `ParsedLinkGraphQuery`                          | Shared query-language parsing                                |
-| `parsers::zhixing::tasks`                             | zhixing task lines                 | task projections and normalized identities      | Shared by ingest and stats                                   |
-| `parsers::languages::rust::cargo::dependencies`       | `Cargo.toml` dependency tables     | dependency projections                          | Shared by dependency indexing                                |
-| `parsers::languages::python::pyproject::dependencies` | `pyproject.toml` dependency tables | dependency projections                          | Shared by dependency indexing                                |
-| `parsers::search::repo_code_query`                    | repo-code search query strings     | typed repo-code query                           | Shared by repo-search flows                                  |
-| `parsers::graph::persistence`                         | graph JSON dicts                   | `Entity` and `Relation`                         | Shared by graph save/load persistence                        |
+| Namespace                                             | Input shape                        | Canonical output                           | Notes                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parsers::markdown`                                   | Markdown notes                     | sections, code observations, note adapters | Shared by indexing, search, enhancement, and semantic checks; frontmatter, block extraction, document metadata, target occurrences, note aggregation, references, wikilinks, sourcepos, and parser-owned section structure now live in `xiuxian-wendao-parsers`, while Wendao keeps enrichments and note adapters |
+| `parsers::link_graph::query`                          | link-graph search query strings    | `ParsedLinkGraphQuery`                     | Shared query-language parsing                                                                                                                                                                                                                                                                                     |
+| `parsers::zhixing::tasks`                             | zhixing task lines                 | task projections and normalized identities | Shared by ingest and stats                                                                                                                                                                                                                                                                                        |
+| `parsers::languages::rust::cargo::dependencies`       | `Cargo.toml` dependency tables     | dependency projections                     | Shared by dependency indexing                                                                                                                                                                                                                                                                                     |
+| `parsers::languages::python::pyproject::dependencies` | `pyproject.toml` dependency tables | dependency projections                     | Shared by dependency indexing                                                                                                                                                                                                                                                                                     |
+| `parsers::search::repo_code_query`                    | repo-code search query strings     | typed repo-code query                      | Shared by repo-search flows                                                                                                                                                                                                                                                                                       |
+| `parsers::graph::persistence`                         | graph JSON dicts                   | `Entity` and `Relation`                    | Shared by graph save/load persistence                                                                                                                                                                                                                                                                             |
 
 ## Parser vs Local Helper Rule
 
@@ -66,6 +67,18 @@ or future `xiuxian-qianhuan` document flows, the long-term extraction target is
 an independent parser crate, tentatively `xiuxian-wendao-parsers`, rather than
 another consumer-local helper tree.
 
+That extraction is no longer theoretical: the parser-owned frontmatter
+contract, raw frontmatter splitter, cross-format addressed-target core,
+cross-format literal-addressed-target core, cross-format reference core,
+cross-format document core, cross-format document-envelope core, cross-format
+note core, cross-format note-aggregate core, shared target-occurrence core
+with Markdown naming surface, shared block core with Markdown block naming
+surface, Markdown reference grammar, Markdown wikilink grammar, shared
+source-position helper, shared full section-core contract with its nested
+section-scope core, and the parser-owned Markdown naming surfaces already live in
+`xiuxian-wendao-parsers`, while `xiuxian-wendao` keeps only Wendao-owned
+adapters and domain-side consumption.
+
 A parser surface is a direct parser-crate candidate only when all of the
 following are true:
 
@@ -80,8 +93,134 @@ If the parser surface builds Wendao graph, retrieval, persistence, or other
 business semantics, it stays in `xiuxian-wendao` and should be treated as a
 domain adapter over any future independent parser crate.
 
+Org remains a placeholder architecture target in this lane. The current parser
+substrate is shaped so an Org slice can reuse the shared contracts later, but
+no active Org parser implementation is implied until a direct consumer or
+explicit slice reopens that work.
+
 See [../06_roadmap/419_parser_substrate_separation.md](../06_roadmap/419_parser_substrate_separation.md)
 for the package-split plan.
+
+## Block Contract Boundary
+
+Markdown block extraction is now split across five explicit contracts:
+
+1. `xiuxian_wendao_parsers::blocks::BlockCore<Kind>` owns one reusable block
+   payload shape for block identity, ranges, content hash, raw content,
+   optional explicit ID, and structural path
+2. `xiuxian_wendao_parsers::blocks::MarkdownBlockKind` owns the Markdown-local
+   block variants
+3. `xiuxian_wendao_parsers::blocks::MarkdownBlock` is the Markdown-local
+   naming surface over `BlockCore<MarkdownBlockKind>`
+4. `xiuxian_wendao_parsers::blocks::extract_blocks` is the shared parser-owned
+   entry point for block extraction from one section body
+5. `xiuxian_wendao::link_graph::BlockAddress` and
+   `xiuxian_wendao::link_graph::BlockKindSpecifier` remain Wendao-owned
+   because they encode semantic addressing grammar, not Markdown parsing
+6. Wendao page-index building consumes parser-owned Markdown blocks directly
+7. block-to-address matching stays Wendao-owned as a domain helper layered on
+   top of parser-owned block payloads
+
+## Section Contract Boundary
+
+Markdown section extraction is now split across five explicit contracts:
+
+1. `xiuxian_wendao_parsers::sections::SectionCore` owns shared normalized
+   section text plus one nested `SectionScope` and one nested
+   `SectionMetadata`
+2. `xiuxian_wendao_parsers::sections::SectionMetadata` owns shared
+   property-drawer attributes and logbook entries reusable across formats
+3. `xiuxian_wendao_parsers::sections::SectionScope` stays the nested shared
+   heading-ancestry and source-range contract inside `SectionCore`
+4. `xiuxian_wendao_parsers::sections::MarkdownSection` is the Markdown-local
+   naming surface over `SectionCore`
+5. `xiuxian_wendao::parsers::markdown::ParsedSection` is an enriched adapter
+   that adds Wendao-owned `entities` and `CodeObservation` rows
+6. property-relation parsing can consume the parser-owned section contract
+   because it only needs heading scope and parser-owned metadata attributes
+7. note parsing that assembles `LinkGraphDocument` remains Wendao-owned
+
+## Document Contract Boundary
+
+Markdown document-content parsing is now split across four explicit contracts:
+
+1. `xiuxian_wendao_parsers::document::DocumentCore` owns cross-format
+   document format, normalized body, title, tags, doc type, lead, and word
+   count
+2. `xiuxian_wendao_parsers::document::DocumentEnvelope<RawMetadata>` owns one
+   shared top-level `raw metadata + document core` contract reusable across
+   formats
+3. `xiuxian_wendao_parsers::document::MarkdownDocument` is the Markdown-local
+   alias over `DocumentEnvelope<serde_yaml::Value>`
+4. `xiuxian_wendao::parsers::markdown::parse_note` is the Wendao adapter that
+   adds `doc_id`, path identity, timestamps, saliency defaults, links,
+   sections, and `LinkGraphDocument` assembly
+5. this keeps content-owned parsing reusable without moving graph or retrieval
+   semantics into the parser crate
+
+## Note Aggregate Boundary
+
+Markdown note parsing is now split across four explicit contracts:
+
+1. `xiuxian_wendao_parsers::note::NoteCore<Reference, Target, Section>` owns
+   one reusable note-body aggregation shape for ordered references, targets,
+   and sections
+2. `xiuxian_wendao_parsers::note::NoteAggregate<Document, Reference, Target, Section>`
+   owns one reusable top-level `document + note-core` aggregate shape
+3. `xiuxian_wendao_parsers::note::MarkdownNote` is the Markdown-local alias
+   over `NoteAggregate<MarkdownDocument, MarkdownReference, MarkdownTargetOccurrence, MarkdownSection>`
+4. `xiuxian_wendao_parsers::note::parse_markdown_note` is the shared
+   parser-owned entry point for Markdown note aggregation
+5. `xiuxian_wendao::parsers::markdown::parse_note` is the Wendao adapter that
+   consumes `MarkdownDocument.core` for reusable document metadata, consumes
+   `MarkdownDocument.raw_metadata` for current Markdown-specific adapters,
+   consumes `MarkdownNote.core` for reusable note-body aggregation, and adds
+   workspace-aware link normalization, attachment classification, enriched
+   sections, and final `LinkGraphDocument` assembly
+6. this keeps parser orchestration reusable without moving filesystem or graph
+   semantics into the parser crate
+
+## Addressed Target and Reference Boundary
+
+Markdown ordinary body links now split across five explicit contracts:
+
+1. `xiuxian_wendao_parsers::AddressedTarget` owns one reusable parser-owned
+   `target + target_address` contract for cross-format structural link
+   coordinates
+2. `xiuxian_wendao_parsers::LiteralAddressedTarget` owns one reusable
+   parser-owned `AddressedTarget + original literal` contract for
+   source-preserved link items
+3. `xiuxian_wendao_parsers::ReferenceCore<Kind>` owns one reusable
+   parser-owned `kind + LiteralAddressedTarget` contract for
+   source-preserved reference items that still carry one format-local kind tag
+4. `xiuxian_wendao_parsers::references::MarkdownReference` is the
+   Markdown-local alias over `ReferenceCore<MarkdownReferenceKind>`
+5. `xiuxian_wendao_parsers::wikilinks::MarkdownWikiLink` is the
+   Markdown-local naming surface over `LiteralAddressedTarget`
+6. Wendao consumers such as `link_graph_refs` and `skill_vfs` reduce this
+   parser-owned core into their own domain-specific adapters
+7. Wendao-owned relation targets still use `Address` and are not part of this
+   parser-owned addressed-target and reference contract
+
+## Target Occurrence Boundary
+
+Markdown note-level target capture is now split across two explicit contracts:
+
+1. `xiuxian_wendao_parsers::targets::TargetOccurrenceCore<Kind>` owns the
+   shared parser-visible `kind + target + source ranges` occurrence payload
+   reusable across formats
+2. `xiuxian_wendao_parsers::targets::MarkdownTargetOccurrence` is the
+   Markdown-local naming surface over that shared core
+3. `xiuxian_wendao_parsers::targets::extract_targets` is the shared
+   parser-owned entry point for note-level target capture
+4. `xiuxian_wendao::parsers::markdown::extract_link_targets_from_occurrences`
+   is the Wendao adapter that applies workspace-aware normalization and
+   attachment classification
+5. Wendao section enrichment now filters note-level parser occurrences by
+   section byte range before normalization, instead of re-running a second
+   Markdown syntax pass per section
+6. embedded wikilinks remain ignored on the current comrak-backed target path,
+   matching the existing Wendao note-level behavior
 
 ## Parsing Strategy
 
@@ -128,14 +267,15 @@ contract:
 
 These address fragments are structural coordinates, not semantic type tags.
 
-The canonical implementation for ordinary Markdown references lives under
-`src/parsers/markdown/references/` and uses comrak AST parsing plus source-span
+The canonical implementation for ordinary Markdown references now lives in
+`xiuxian-wendao-parsers` and uses comrak AST parsing plus source-span
 reconstruction, so ordinary Markdown reference parsing is not owned by
-consumer-local scanners.
+consumer-local scanners or by the Wendao domain crate itself.
 
-The narrower wikilink-only subset is exposed under
-`src/parsers/markdown/wikilinks/` for consumers that only care about ordinary
-Obsidian-style topology links.
+The narrower wikilink-only subset is also exposed from
+`xiuxian-wendao-parsers` for consumers that only care about ordinary
+Obsidian-style topology links, while `xiuxian-wendao` keeps compatibility
+re-exports for existing internal consumers.
 
 Typed relation semantics belong to explicit metadata surfaces, such as
 property drawers or subsystem-owned metadata, not to hardcoded string matches
@@ -165,6 +305,10 @@ Path- and hash-scoped targets are still preserved by the parser, but the
 current graph adapter only resolves the safe subset that can be mapped without
 guessing.
 
+The shared property-drawer and logbook extraction now live in
+`xiuxian-wendao-parsers`, so Wendao relation and indexing flows consume one
+parser-owned section metadata contract before adding domain semantics.
+
 See [relation_semantics.md](relation_semantics.md) for the detailed contract.
 
 ## Persistence Rule
@@ -175,11 +319,11 @@ strings as known semantic relation types. Unknown labels are preserved rather
 than promoted.
 
 :RELATIONS:
-:LINKS: [[02_parser/index]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]], [[03_features/210_search_queries_architecture]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]]
+:LINKS: [[02_parser/index]], [[02_parser/addressed_target]], [[02_parser/document]], [[02_parser/note]], [[02_parser/targets]], [[02_parser/sections]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]], [[01_core/103_package_layering]], [[03_features/210_search_queries_architecture]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-10
+:LAST_SYNC: 2026-04-12
 :END:

@@ -2,11 +2,11 @@
 
 use xiuxian_daochang::test_support::{
     ManagedControlCommand, ManagedSlashCommand, OutputFormat, ResumeContextCommand,
-    SessionAdminAction, SessionFeedbackDirection, SessionInjectionAction, SessionPartitionMode,
-    detect_managed_control_command, detect_managed_slash_command, is_agenda_command,
-    parse_help_command, parse_job_status_command, parse_resume_context_command,
+    SessionAdminAction, SessionFeedbackDirection, SessionInjectionAction, SessionMentionMode,
+    SessionPartitionMode, detect_managed_control_command, detect_managed_slash_command,
+    is_agenda_command, parse_help_command, parse_job_status_command, parse_resume_context_command,
     parse_session_admin_command, parse_session_feedback_command, parse_session_injection_command,
-    parse_session_partition_command,
+    parse_session_mention_command, parse_session_partition_command,
 };
 
 #[test]
@@ -66,6 +66,12 @@ fn test_support_maps_resume_feedback_and_partition_modes() {
         admin.action,
         SessionAdminAction::Add(vec!["1001".to_string(), "1002".to_string()])
     );
+
+    let Some(mention) = parse_session_mention_command("/session mention inherit json") else {
+        panic!("expected /session mention inherit json parse");
+    };
+    assert_eq!(mention.mode, Some(SessionMentionMode::Inherit));
+    assert_eq!(mention.format, OutputFormat::Json);
 }
 
 #[test]
@@ -81,6 +87,10 @@ fn test_support_managed_detectors_remain_stable() {
     assert_eq!(
         detect_managed_control_command("/session admin add 1001"),
         Some(ManagedControlCommand::SessionAdmin)
+    );
+    assert_eq!(
+        detect_managed_control_command("/session mention off"),
+        Some(ManagedControlCommand::SessionMention)
     );
     assert_eq!(
         detect_managed_control_command("/session inject status json"),

@@ -1,6 +1,7 @@
 use super::super::session_partition::DiscordSessionPartition;
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::config::{DiscordSettings, load_runtime_settings};
+use std::collections::HashMap;
 use xiuxian_macros::env_non_empty;
 
 const DISCORD_DEFAULT_INBOUND_QUEUE_CAPACITY: usize = 512;
@@ -12,6 +13,12 @@ const DISCORD_DEFAULT_FOREGROUND_MAX_IN_FLIGHT_MESSAGES: usize = 16;
 pub struct DiscordRuntimeConfig {
     /// Session partition strategy used for Discord messages.
     pub session_partition: DiscordSessionPartition,
+    /// Default guild-channel mention gate.
+    pub require_mention: bool,
+    /// Persist mention-policy runtime mutations.
+    pub require_mention_persist: bool,
+    /// Per-channel mention overrides keyed by recipient/channel id or `*`.
+    pub mention_overrides: HashMap<String, bool>,
     /// Inbound ingress queue capacity.
     pub inbound_queue_capacity: usize,
     /// Per-turn timeout in seconds.
@@ -37,6 +44,32 @@ impl DiscordRuntimeConfig {
         let defaults = Self::default();
         Self {
             session_partition: DiscordSessionPartition::from_env(),
+            require_mention: resolve_bool(
+                &lookup,
+                "OMNI_AGENT_DISCORD_REQUIRE_MENTION",
+                settings.and_then(|s| s.require_mention),
+                defaults.require_mention,
+            ),
+            require_mention_persist: resolve_bool(
+                &lookup,
+                "OMNI_AGENT_DISCORD_REQUIRE_MENTION_PERSIST",
+                settings.and_then(|s| s.require_mention_persist),
+                defaults.require_mention_persist,
+            ),
+            mention_overrides: settings
+                .and_then(|s| s.channels.as_ref())
+                .map(|channels| {
+                    channels
+                        .iter()
+                        .filter_map(|(recipient, settings)| {
+                            settings.require_mention.map(|require_mention| {
+                                (recipient.trim().to_string(), require_mention)
+                            })
+                        })
+                        .filter(|(recipient, _)| !recipient.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
             inbound_queue_capacity: resolve_usize(
                 &lookup,
                 "OMNI_AGENT_DISCORD_INBOUND_QUEUE_CAPACITY",
@@ -69,6 +102,9 @@ impl Default for DiscordRuntimeConfig {
     fn default() -> Self {
         Self {
             session_partition: DiscordSessionPartition::from_env(),
+            require_mention: false,
+            require_mention_persist: false,
+            mention_overrides: HashMap::new(),
             inbound_queue_capacity: DISCORD_DEFAULT_INBOUND_QUEUE_CAPACITY,
             turn_timeout_secs: DISCORD_DEFAULT_TURN_TIMEOUT_SECS,
             foreground_max_in_flight_messages: DISCORD_DEFAULT_FOREGROUND_MAX_IN_FLIGHT_MESSAGES,
@@ -165,4 +201,29 @@ where
         );
     }
     default
+}
+
+fn resolve_bool<F>(lookup: &F, name: &str, setting_value: Option<bool>, default: bool) -> bool
+where
+    F: Fn(&str) -> Option<String>,
+{
+    if let Some(raw) = lookup(name) {
+        if let Some(value) = parse_bool(raw.as_str()) {
+            return value;
+        }
+        tracing::warn!(
+            env_var = %name,
+            value = %raw,
+            "invalid runtime config bool env value; using settings/default"
+        );
+    }
+    setting_value.unwrap_or(default)
+}
+
+fn parse_bool(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
 }

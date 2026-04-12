@@ -2,10 +2,11 @@ use crate::contracts::QianjiMechanism;
 use crate::error::QianjiError;
 use std::sync::Arc;
 
+use crate::engine::compiler::formal_audit as formal_audit_cfg;
+#[cfg(feature = "llm")]
+use crate::engine::compiler::llm_client;
 use crate::engine::compiler::mechanism_dispatch::resolver_chain;
 use crate::engine::compiler::stateful_mechanisms;
-#[cfg(feature = "llm")]
-use crate::engine::compiler::{formal_audit as formal_audit_cfg, llm_client};
 
 #[cfg(feature = "llm")]
 pub(super) fn build(
@@ -23,6 +24,7 @@ pub(super) fn build(
             client,
         );
     }
+    formal_audit_cfg::ensure_native_retry_budget_not_configured(node_def)?;
     Ok(stateful_mechanisms::formal_audit_native(node_def))
 }
 
@@ -32,5 +34,6 @@ pub(super) fn build(
 ) -> Result<Arc<dyn QianjiMechanism>, QianjiError> {
     let resolver_chain::DispatchContext { node_def, .. } = context;
     stateful_mechanisms::formal_audit_requires_llm_guard(node_def)?;
+    formal_audit_cfg::ensure_native_retry_budget_not_configured(node_def)?;
     Ok(stateful_mechanisms::formal_audit_native(node_def))
 }

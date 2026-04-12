@@ -10,7 +10,7 @@ pub(crate) struct IntentSearchTransportMetadata {
     pub(crate) knowledge_query_engine: Option<&'static str>,
     #[cfg(test)]
     pub(crate) local_symbol_query_engine: Option<&'static str>,
-    #[cfg(test)]
+    #[cfg(all(test, feature = "duckdb"))]
     pub(crate) repo_query_engine: Option<&'static str>,
     #[cfg(test)]
     pub(crate) repo_content_transport: Option<&'static str>,

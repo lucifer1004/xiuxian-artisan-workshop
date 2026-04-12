@@ -34,6 +34,7 @@ fn qianji_toml_candidates(
 ) -> Vec<PathBuf> {
     let mut candidates = vec![
         project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
+        config_home.join("xiuxian-artisan-workshop/xiuxian.toml"),
         config_home.join("xiuxian-artisan-workshop/qianji.toml"),
     ];
 

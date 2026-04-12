@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
+use crate::unit::live_gates::resolve_enabled_live_valkey_url;
 use anyhow::{Result, anyhow};
 use axum::{
     Router,
@@ -108,14 +109,9 @@ async fn webhook_concurrent_duplicate_update_id_enqueues_once() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires live valkey server and socket access"]
 async fn webhook_live_valkey_concurrent_duplicate_update_id_enqueues_once() -> Result<()> {
     const CONCURRENCY: usize = 256;
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        eprintln!("skip: set VALKEY_URL for live dedup stress test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live dedup stress test") else {
         return Ok(());
     };
     let unique_prefix = format!(
@@ -172,14 +168,9 @@ async fn webhook_live_valkey_concurrent_duplicate_update_id_enqueues_once() -> R
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires live valkey server and socket access"]
 async fn webhook_live_valkey_duplicate_update_id_across_two_http_servers_enqueues_once()
 -> Result<()> {
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        eprintln!("skip: set VALKEY_URL for live dual-http dedup test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live dual-http dedup test") else {
         return Ok(());
     };
     let unique_prefix = format!(
@@ -443,7 +434,6 @@ async fn webhook_concurrent_chat_user_partition_keeps_isolated_session_keys() ->
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-#[ignore = "requires live valkey server"]
 async fn webhook_live_valkey_chat_user_partition_keeps_isolated_session_keys() -> Result<()> {
     const REQUESTS_PER_USER: usize = 100;
     const USER_A: i64 = 888;
@@ -451,11 +441,8 @@ async fn webhook_live_valkey_chat_user_partition_keeps_isolated_session_keys() -
     const CHAT_ID: i64 = -200_123;
     let total_requests = REQUESTS_PER_USER * 2;
 
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live chat-user session partition test")
     else {
-        eprintln!("skip: set VALKEY_URL for live chat-user session partition test");
         return Ok(());
     };
     let unique_prefix = format!(

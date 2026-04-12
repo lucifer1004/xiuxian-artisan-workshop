@@ -5,7 +5,9 @@ use crate::agent::native_tools::NativeAliasTool;
 use crate::agent::native_tools::macros::register_native_tools;
 use crate::agent::native_tools::registry::NativeToolRegistry;
 use crate::agent::native_tools::spider::SpiderCrawlTool;
+use crate::agent::native_tools::wendao_search::{WendaoSearchTool, WendaoSearchToolConfig};
 use crate::agent::native_tools::zhixing::{AgendaViewTool, JournalRecordTool, TaskAddTool};
+use crate::config::XiuxianConfig;
 use xiuxian_skills::{InternalSkillNativeAliasSpec, InternalSkillWorkflowType};
 use xiuxian_wendao::ingress::SpiderWendaoBridge;
 use xiuxian_wendao::skill_vfs::SkillVfsResolver;
@@ -13,6 +15,7 @@ use xiuxian_wendao::skill_vfs::internal_authority::AuthorizedInternalSkillNative
 use xiuxian_zhixing::ZhixingHeyi;
 
 pub(in crate::agent::bootstrap) fn mount_native_tool_cauldron(
+    xiuxian_cfg: Option<&XiuxianConfig>,
     heyi: Option<&Arc<ZhixingHeyi>>,
     skill_vfs_resolver: Option<&Arc<SkillVfsResolver>>,
     native_tools: &mut NativeToolRegistry,
@@ -29,6 +32,7 @@ pub(in crate::agent::bootstrap) fn mount_native_tool_cauldron(
     }
 
     mount_spider_tool(heyi, native_tools, mounts);
+    mount_wendao_search_tool(xiuxian_cfg, native_tools, mounts);
     mount_internal_skill_aliases(skill_vfs_resolver, native_tools, mounts);
 }
 
@@ -211,6 +215,26 @@ fn register_internal_aliases(
     }
 
     (mounted, issues)
+}
+
+fn mount_wendao_search_tool(
+    xiuxian_cfg: Option<&XiuxianConfig>,
+    native_tools: &mut NativeToolRegistry,
+    mounts: &mut ServiceMountCatalog,
+) {
+    let endpoint = xiuxian_cfg
+        .and_then(WendaoSearchToolConfig::from_xiuxian_config)
+        .map(|config| config.query_endpoint().to_string());
+    native_tools.register(Arc::new(WendaoSearchTool::new_runtime_default()));
+    mounts.mounted(
+        "native.wendao_search",
+        "tooling",
+        ServiceMountMeta {
+            endpoint,
+            storage: None,
+            detail: Some("workflow=wendao_sql_authoring_v1,config=runtime_dynamic".to_string()),
+        },
+    );
 }
 
 #[cfg(test)]

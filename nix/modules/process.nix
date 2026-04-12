@@ -12,6 +12,13 @@ let
   gatewayLogDir = ".run/logs";
   gatewayStdoutLog = "${gatewayLogDir}/wendao-gateway.stdout.log";
   gatewayStderrLog = "${gatewayLogDir}/wendao-gateway.stderr.log";
+  wendaoFrontendRepoUrl = "https://github.com/tao3k/wendao-frontend.git";
+  wendaoFrontendRuntimeDirName = "wendao-frontend";
+  wendaoFrontendPidFilename = "wendao-frontend.pid";
+  wendaoFrontendHost = "127.0.0.1";
+  wendaoFrontendPort = 9518;
+  wendaoFrontendStdoutLogFilename = "wendao-frontend.stdout.log";
+  wendaoFrontendStderrLogFilename = "wendao-frontend.stderr.log";
   sentinelRuntimeDir = ".run/wendao-sentinel";
   sentinelPidFile = "${sentinelRuntimeDir}/wendao-sentinel.pid";
   valkeyDataDir = ".data/valkey";
@@ -79,6 +86,40 @@ in
     agent.exec = "just agent-channel-webhook-restart";
 
     # Wendao Phase 7.6 Integrated Services
+    "wendao-frontend" = {
+      exec = ''
+        ROOT_DIR="''${PRJ_ROOT:-''${DEVENV_ROOT:-$(pwd)}}"
+        RUNTIME_DIR="''${PRJ_RUNTIME_DIR:-$ROOT_DIR/.run}"
+        LOG_DIR="$RUNTIME_DIR/logs"
+        export WENDAO_FRONTEND_MANAGED=1
+        export WENDAO_FRONTEND_HOST=${wendaoFrontendHost}
+        export WENDAO_FRONTEND_PORT=${toString wendaoFrontendPort}
+        export WENDAO_FRONTEND_REPO_URL="${wendaoFrontendRepoUrl}"
+        export WENDAO_FRONTEND_RUNTIME_DIR="$RUNTIME_DIR/${wendaoFrontendRuntimeDirName}"
+        export WENDAO_FRONTEND_PIDFILE="$RUNTIME_DIR/${wendaoFrontendRuntimeDirName}/${wendaoFrontendPidFilename}"
+        export WENDAO_FRONTEND_STDOUT_LOG="$LOG_DIR/${wendaoFrontendStdoutLogFilename}"
+        export WENDAO_FRONTEND_STDERR_LOG="$LOG_DIR/${wendaoFrontendStderrLogFilename}"
+        bash "$ROOT_DIR/scripts/channel/wendao-frontend-launch.sh"
+      '';
+      process-compose = {
+        depends_on = {
+          wendao-gateway.condition = "process_healthy";
+        };
+        # readiness_probe = {
+        #   http_get = {
+        #     host = wendaoFrontendHost;
+        #     port = wendaoFrontendPort;
+        #     path = "/";
+        #     scheme = "http";
+        #   };
+        #   initial_delay_seconds = 5;
+        #   period_seconds = 2;
+        #   timeout_seconds = 3;
+        #   failure_threshold = 30;
+        # };
+      };
+    };
+
     wendao-gateway = {
       exec = ''
         ROOT_DIR="''${PRJ_ROOT:-''${DEVENV_ROOT:-$(pwd)}}"
@@ -119,10 +160,10 @@ in
             export WENDAO_GATEWAY_PYTHON=${pythonBin}
             bash "$ROOT_DIR/scripts/channel/wendao-gateway-healthcheck.sh" >/dev/null
           '';
-          initial_delay_seconds = 60;
+          initial_delay_seconds = 15;
           period_seconds = 5;
           timeout_seconds = 2;
-          failure_threshold = 48;
+          failure_threshold = 30;
         };
       };
     };

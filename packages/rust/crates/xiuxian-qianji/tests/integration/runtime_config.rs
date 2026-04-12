@@ -232,7 +232,7 @@ api_key_env = "EXPLICIT_API_KEY"
 }
 
 #[test]
-fn runtime_config_ignores_legacy_user_xiuxian_toml() {
+fn runtime_config_uses_user_xiuxian_toml_as_llm_overlay_when_user_qianji_toml_is_missing() {
     let tmp = TempDir::new()
         .unwrap_or_else(|err| panic!("failed to create temp dir for runtime config test: {err}"));
     let project_root = tmp.path().join("project");
@@ -251,9 +251,74 @@ api_key_env = "SYSTEM_API_KEY"
         &config_home.join("xiuxian-artisan-workshop/xiuxian.toml"),
         r#"
 [llm]
-model = "legacy-user-model"
+default_model = "legacy-user-model"
+default_provider = "openai"
+
+[llm.providers.openai]
 base_url = "http://legacy-user.local/v1"
-api_key_env = "LEGACY_USER_API_KEY"
+api_key = "LEGACY_USER_API_KEY"
+model = "legacy-user-model"
+"#,
+    );
+
+    let cfg = resolve(&QianjiRuntimeEnv {
+        prj_root: Some(project_root),
+        prj_config_home: Some(config_home),
+        extra_env: vec![
+            (
+                "OPENAI_API_KEY".to_string(),
+                "generic-openai-secret".to_string(),
+            ),
+            (
+                "LEGACY_USER_API_KEY".to_string(),
+                "legacy-user-secret".to_string(),
+            ),
+        ],
+        ..QianjiRuntimeEnv::default()
+    });
+
+    assert_eq!(cfg.model, "legacy-user-model");
+    assert_eq!(cfg.base_url, "http://legacy-user.local/v1");
+    assert_eq!(cfg.api_key_env, "LEGACY_USER_API_KEY");
+    assert_eq!(cfg.api_key, "legacy-user-secret");
+}
+
+#[test]
+fn runtime_config_user_qianji_toml_overrides_user_xiuxian_toml() {
+    let tmp = TempDir::new()
+        .unwrap_or_else(|err| panic!("failed to create temp dir for runtime config test: {err}"));
+    let project_root = tmp.path().join("project");
+    let config_home = project_root.join(".config");
+
+    write_file(
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
+        r#"
+[llm]
+model = "system-model"
+base_url = "http://system.local/v1"
+api_key_env = "SYSTEM_API_KEY"
+"#,
+    );
+    write_file(
+        &config_home.join("xiuxian-artisan-workshop/xiuxian.toml"),
+        r#"
+[llm]
+default_model = "legacy-user-model"
+default_provider = "openai"
+
+[llm.providers.openai]
+base_url = "http://legacy-user.local/v1"
+api_key = "LEGACY_USER_API_KEY"
+model = "legacy-user-model"
+"#,
+    );
+    write_file(
+        &config_home.join("xiuxian-artisan-workshop/qianji.toml"),
+        r#"
+[llm]
+model = "user-qianji-model"
+base_url = "http://user-qianji.local/v1"
+api_key_env = "USER_QIANJI_API_KEY"
 "#,
     );
 
@@ -262,15 +327,22 @@ api_key_env = "LEGACY_USER_API_KEY"
         prj_config_home: Some(config_home),
         extra_env: vec![
             ("OPENAI_API_KEY".to_string(), String::new()),
-            ("SYSTEM_API_KEY".to_string(), "system-secret".to_string()),
+            (
+                "LEGACY_USER_API_KEY".to_string(),
+                "legacy-user-secret".to_string(),
+            ),
+            (
+                "USER_QIANJI_API_KEY".to_string(),
+                "user-qianji-secret".to_string(),
+            ),
         ],
         ..QianjiRuntimeEnv::default()
     });
 
-    assert_eq!(cfg.model, "system-model");
-    assert_eq!(cfg.base_url, "http://system.local/v1");
-    assert_eq!(cfg.api_key_env, "SYSTEM_API_KEY");
-    assert_eq!(cfg.api_key, "system-secret");
+    assert_eq!(cfg.model, "user-qianji-model");
+    assert_eq!(cfg.base_url, "http://user-qianji.local/v1");
+    assert_eq!(cfg.api_key_env, "USER_QIANJI_API_KEY");
+    assert_eq!(cfg.api_key, "user-qianji-secret");
 }
 
 #[test]

@@ -74,6 +74,7 @@ impl StudioBootstrapBackgroundIndexingTelemetry {
 pub struct StudioState {
     pub(crate) project_root: PathBuf,
     pub(crate) config_root: PathBuf,
+    pub(crate) bootstrap_config_path: Option<PathBuf>,
     pub(crate) bootstrap_background_indexing: bool,
     pub(crate) bootstrap_background_indexing_deferred_activation:
         Arc<RwLock<Option<DeferredBootstrapBackgroundIndexingActivation>>>,

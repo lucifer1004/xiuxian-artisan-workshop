@@ -135,11 +135,15 @@ fn fetch_modelica_standard_library_package_summary_via_process_managed_parser_su
     );
     assert_eq!(class_name.as_deref(), Some("Blocks"));
     assert!(
-        declarations.iter().any(|declaration| declaration.name == "Blocks"),
+        declarations
+            .iter()
+            .any(|declaration| declaration.name == "Blocks"),
         "expected top-level Blocks declaration"
     );
     assert!(
-        declarations.iter().any(|declaration| declaration.name == "Init"),
+        declarations
+            .iter()
+            .any(|declaration| declaration.name == "Init"),
         "expected nested Init declaration from package.mo"
     );
     Ok(())

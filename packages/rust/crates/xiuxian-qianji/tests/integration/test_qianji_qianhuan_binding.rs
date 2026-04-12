@@ -10,7 +10,7 @@ use xiuxian_qianhuan::{
 };
 use xiuxian_qianji::{QianjiCompiler, QianjiManifest, QianjiScheduler};
 use xiuxian_wendao::link_graph::LinkGraphIndex;
-use xiuxian_wendao::skill_vfs::embedded_resource_text_from_wendao_uri;
+use xiuxian_wendao_runtime::artifacts::zhixing::embedded_resource_text_from_wendao_uri;
 
 #[test]
 fn qianji_manifest_parses_node_level_qianhuan_binding() {

@@ -15,10 +15,10 @@ The merge order is:
 1. embedded defaults from `resources/config/wendao.toml`
 2. boot-time base config from `$PRJ_ROOT/wendao.toml` or an explicit override
    path
-3. optional Studio overlay wrapper from `wendao.studio.overlay.toml`
+3. optional legacy Studio overlay wrapper from `wendao.studio.overlay.toml`
 
 `imports` are merged before the importing file body, so the importing file wins
-on conflicts. That means the Studio wrapper must import the base file:
+on conflicts. That means any legacy Studio wrapper must import the base file:
 
 ```toml
 imports = ["wendao.toml"]
@@ -37,10 +37,10 @@ overlay on merge.
 - shared runtime settings in `src/settings/` resolve through
   `xiuxian-config-core`
 - gateway CLI config resolution prefers the sibling
-  `wendao.studio.overlay.toml` wrapper when it exists
+  `wendao.studio.overlay.toml` wrapper only when a legacy file still exists
 - Studio bootstrap config loading reads the same effective path
-- repo-intelligence config loading is import-aware, so base-plus-overlay repo
-  registrations use the same merged TOML contract
+- repo-intelligence config loading is import-aware, so base config plus any
+  legacy overlay repo registrations use the same merged TOML contract
 - `nix/modules/process.nix` now points at the root config and uses a bounded
   TOML-aware helper under `scripts/channel/` for readiness-port discovery
 
@@ -60,7 +60,7 @@ studio_request_timeout_secs = 15
 
 Resolution order for these fields is:
 
-1. merged `wendao.toml` / overlay settings
+1. merged `wendao.toml` plus any legacy overlay settings
 2. env fallback:
    `XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG`
    `XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT`
@@ -73,7 +73,7 @@ keys are omitted.
 
 Gateway webhook fallback now follows the same trim-aware precedence hygiene:
 
-1. merged `wendao.toml` / overlay `gateway.webhook_*` settings
+1. merged `wendao.toml` plus any legacy overlay `gateway.webhook_*` settings
 2. env fallback:
    `WENDAO_WEBHOOK_URL`
    `WENDAO_WEBHOOK_SECRET`
@@ -101,17 +101,18 @@ imports = ["${PRJ_ROOT}/packages/rust/crates/xiuxian-wendao/resources/config/wen
 This support is intentionally limited to import paths. Wendao does not treat
 arbitrary string values in TOML as general environment-template fields.
 
-## Studio Overlay Persistence
+## Studio UI Persistence
 
-`POST /api/ui/config` now persists the live Studio state as
-`wendao.studio.overlay.toml` instead of mutating the base `wendao.toml`
-directly.
+`POST /api/ui/config` now persists the live Studio state back into the base
+`wendao.toml` instead of generating a new `wendao.studio.overlay.toml`.
 
-The overlay writer preserves the base file and uses empty-array tombstones to
-shadow UI-owned entries that should disappear on the next boot:
+The persistence path still loads any legacy overlay to preserve effective UI
+state during migration, then writes the merged result back into the base file
+and removes the old overlay.
 
-- `dirs = []` suppresses a base local-project entry
-- `plugins = []` suppresses a base repo-project entry
+UI-owned entries that disappear from the live state are tombstoned in the base
+file by clearing the UI-owned arrays that would otherwise keep them visible in
+the effective Studio config.
 
 That keeps restart behavior aligned with the effective UI state while leaving
 non-UI base sections such as `[gateway]` untouched.
@@ -122,8 +123,8 @@ non-UI base sections such as `[gateway]` untouched.
   semantics
 - `xiuxian-wendao/src/settings/` owns conversion from merged TOML into Wendao
   runtime settings
-- `gateway/studio/router/config/` owns overlay file naming and `UiConfig`
-  projection
+- `gateway/studio/router/config/` owns legacy overlay compatibility plus
+  `UiConfig` projection and base-file persistence
 - `src/bin/wendao/execute/gateway/config.rs` consumes merged gateway settings
   instead of scanning TOML text, and now consumes the shared
   `xiuxian-config-core` project-root helper for `$PRJ_ROOT/wendao.toml`

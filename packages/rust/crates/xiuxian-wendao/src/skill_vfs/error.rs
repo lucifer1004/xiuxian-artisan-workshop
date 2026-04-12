@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use thiserror::Error;
+use xiuxian_wendao_core::WendaoResourceUriError;
 
 /// Errors produced by skill VFS URI parsing/indexing/resolution.
 #[derive(Debug, Error)]
@@ -112,4 +113,24 @@ pub enum SkillVfsError {
         /// Full URI string.
         uri: String,
     },
+}
+
+impl From<WendaoResourceUriError> for SkillVfsError {
+    fn from(error: WendaoResourceUriError) -> Self {
+        match error {
+            WendaoResourceUriError::UnsupportedScheme { uri, scheme } => {
+                Self::UnsupportedScheme { uri, scheme }
+            }
+            WendaoResourceUriError::InvalidUri(uri) => Self::InvalidUri(uri),
+            WendaoResourceUriError::MissingUriSegment { uri, segment } => {
+                Self::MissingUriSegment { uri, segment }
+            }
+            WendaoResourceUriError::InvalidEntityPath { uri, entity } => {
+                Self::InvalidEntityPath { uri, entity }
+            }
+            WendaoResourceUriError::MissingEntityExtension { uri, entity } => {
+                Self::MissingEntityExtension { uri, entity }
+            }
+        }
+    }
 }

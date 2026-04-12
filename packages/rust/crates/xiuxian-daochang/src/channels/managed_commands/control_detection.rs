@@ -1,4 +1,5 @@
 use crate::channels::managed_runtime::parsing::{
+    parse_session_mention_command,
     parse_session_partition_command as parse_session_partition_shared,
     parse_session_partition_mode_token,
 };
@@ -38,6 +39,9 @@ pub(crate) fn detect_managed_control_command(input: &str) -> Option<ManagedContr
 
     if is_session_partition_control_command(normalized) {
         return Some(ManagedControlCommand::SessionPartition);
+    }
+    if is_session_mention_control_command(normalized) {
+        return Some(ManagedControlCommand::SessionMention);
     }
     if is_session_admin_control_command(normalized) {
         return Some(ManagedControlCommand::SessionAdmin);
@@ -85,6 +89,10 @@ fn is_session_admin_control_command(input: &str) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_session_mention_control_command(input: &str) -> bool {
+    parse_session_mention_command(input).is_some()
 }
 
 fn is_session_injection_control_command(input: &str) -> bool {

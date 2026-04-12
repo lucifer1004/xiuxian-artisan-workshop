@@ -20,6 +20,22 @@ The answer is not "leave parsers under Wendao forever," and it is also not
 independent parser crate, tentatively `xiuxian-wendao-parsers`, achieved
 through contract refactoring rather than a directory lift.
 
+As of 2026-04-12, twenty-one bounded implementation slices are already landed:
+frontmatter parsing, cross-format block-core extraction, cross-format
+addressed-target extraction, cross-format literal-addressed-target
+extraction, cross-format reference-core extraction, cross-format document core
+extraction, cross-format document-envelope extraction, Markdown document
+wrapping, Markdown note aggregation, cross-format note-core extraction,
+cross-format note-aggregate extraction, Markdown target occurrences,
+cross-format target-occurrence core extraction, Markdown link syntax,
+parser-owned Markdown section structure, cross-format section-scope
+extraction, cross-format section-core extraction, cross-format
+section-metadata extraction, target-occurrence range cutover, and the parser
+crate consumption cutovers that follow those contracts now live in
+`xiuxian-wendao-parsers`, while
+`xiuxian-wendao` keeps Wendao-owned adapters, domain-side Markdown note
+adaptation, and enrichments without re-owning parser-only syntax surfaces.
+
 ## One-Sentence Rule
 
 - parser-owned parsing belongs in an independent crate tentatively named
@@ -31,7 +47,8 @@ through contract refactoring rather than a directory lift.
 
 Three forces now meet in one place:
 
-1. `xiuxian-qianji` already imports `xiuxian_wendao::parse_frontmatter`
+1. `xiuxian-qianji` already imports
+   `xiuxian_wendao_parsers::frontmatter::parse_frontmatter`
 2. future consumers such as `xiuxian-qianhuan` persona and template flows will
    benefit from shared document parsing
 3. the parser lane is expected to grow beyond Markdown into Org document
@@ -69,10 +86,11 @@ These families are good extraction candidates because their outputs can become
 parser-owned and reusable:
 
 1. Markdown frontmatter parsing
-2. Markdown heading and section structure
-3. Markdown references and wiki-link structure
-4. shared source spans and format-agnostic document coordinates
-5. future Org structural parsing
+2. Markdown document-content metadata
+3. Markdown heading and section structure
+4. Markdown references and wiki-link structure
+5. shared source spans and format-agnostic document coordinates
+6. future Org structural parsing
 
 ### Wendao-owned adapters
 
@@ -111,8 +129,7 @@ the following are true:
    query language
 2. the output can be represented as parser-owned contracts without
    `LinkGraphDocument`,
-   `LinkGraphSearchOptions`, `Entity`, `Relation`, `WendaoResourceUri`, or
-   other Wendao-owned types
+   `LinkGraphSearchOptions`, `Entity`, `Relation`, or other Wendao-owned types
 3. at least one non-Wendao consumer can use the result directly
 4. parser-owned tests can express the contract without booting Wendao domain
    services
@@ -120,20 +137,258 @@ the following are true:
 If any of those conditions are false, keep the parser in `xiuxian-wendao`
 temporarily and extract a smaller parser-owned contract first.
 
-## First Three Slices
+## Current Slice Sequence
 
 1. Planning and audit
    - classify current parser families by owner
    - record the direct parser-layer direction and non-goals
+   - status: landed
 2. Frontmatter extraction
    - create `xiuxian-wendao-parsers`
    - move shared Markdown frontmatter parsing and its parser-owned record there
    - retarget `xiuxian-qianji` so it no longer depends on `xiuxian-wendao`
      only for frontmatter
-3. Document-structure extraction
-   - move shared Markdown structural parsing there
-   - define parser-owned document models for future Org support
-   - keep Wendao note parsing as an adapter over those parser-owned outputs
+   - status: landed
+3. Markdown link syntax extraction
+   - move shared Markdown references, wikilinks, and source-position helpers
+     there
+   - keep Wendao link-graph and manifest authority logic as parser consumers
+   - status: landed
+4. Markdown section-contract extraction
+   - move shared Markdown section structure, property-drawer parsing, and
+     logbook parsing there
+   - keep `ParsedSection` in Wendao as an enriched adapter that adds
+     `entities` and `observations`
+   - retarget property-relation parsing to consume the parser-owned section
+     contract
+   - status: landed
+5. Markdown document-metadata extraction
+   - move shared title, tags, doc type, lead, and body word-count extraction
+     into the parser crate
+   - keep note-to-`LinkGraphDocument` assembly in Wendao
+   - status: landed
+6. Markdown note-aggregate extraction
+   - move parser-owned note orchestration into the parser crate
+   - keep workspace-aware link normalization and note-to-`LinkGraphDocument`
+     assembly in Wendao
+   - status: landed
+7. Markdown target-occurrence extraction
+   - move note-level inline-link and image target capture into the parser
+     crate
+   - keep workspace-aware normalization, attachment classification, and final
+     note-link reduction in Wendao
+   - status: landed
+8. Cross-format document-model evaluation
+   - introduce one parser-owned `DocumentCore` so future Org support can reuse
+     normalized document metadata and body without inheriting Markdown-only raw
+     frontmatter representation
+   - keep `MarkdownDocument` as the Markdown-specific wrapper that retains raw
+     YAML frontmatter
+   - status: landed
+9. Cross-format note-model evaluation
+   - introduce one parser-owned `NoteCore<Reference, Target, Section>` so
+     future Org support can reuse the note-body aggregation shape without
+     inheriting Markdown-only wrapper structure
+   - keep `MarkdownNote` as the Markdown-specific wrapper that retains
+     `MarkdownDocument` plus Markdown-owned item contracts
+   - status: landed
+10. Cross-format addressed-target evaluation
+
+- introduce one parser-owned `AddressedTarget` so future Org support can
+  reuse one neutral `target + target_address` item contract
+- keep `MarkdownReference` and `MarkdownWikiLink` as Markdown-specific
+  wrappers that retain syntax-kind and original-literal fields
+- status: landed
+
+11. Cross-format section-scope evaluation
+
+- introduce one parser-owned `SectionScope` so future Org support can reuse
+  one neutral heading-ancestry and source-range contract
+- keep `MarkdownSection` as the Markdown-specific wrapper that retains
+  normalized section text, property drawers, and logbook payload
+- status: landed
+
+12. Cross-format section-core evaluation
+
+- introduce one parser-owned `SectionCore` so future Org support can reuse
+  one neutral section payload contract above `SectionScope`
+- keep `MarkdownSection` as the Markdown-local naming surface over that
+  shared section core
+- status: landed
+
+13. Cross-format target-occurrence-core evaluation
+
+- introduce one parser-owned `TargetOccurrenceCore<Kind>` so future Org
+  support can reuse one neutral ordered `kind + target` occurrence contract
+- keep `MarkdownTargetOccurrence` as the Markdown-local naming surface over
+  that shared core
+- status: landed
+
+14. Cross-format literal-addressed-target evaluation
+
+- introduce one parser-owned `LiteralAddressedTarget` so future Org
+  support can reuse one neutral `AddressedTarget + original literal`
+  contract
+- keep `MarkdownWikiLink` as the Markdown-local naming surface over that
+  shared source-preserved core
+- status: landed
+
+15. Cross-format reference-core evaluation
+
+- introduce one parser-owned `ReferenceCore<Kind>` so future Org support
+  can reuse one neutral `kind + LiteralAddressedTarget` contract
+- keep `MarkdownReference` as the Markdown-local naming surface over that
+  shared core
+- status: landed
+
+16. Cross-format note-aggregate evaluation
+
+- introduce one parser-owned
+  `NoteAggregate<Document, Reference, Target, Section>` so future Org
+  support can reuse one neutral top-level `document + note-core` contract
+- keep `MarkdownNote` as the Markdown-local naming surface over that
+  shared aggregate
+- status: landed
+
+17. Cross-format document-envelope evaluation
+
+- introduce one parser-owned `DocumentEnvelope<RawMetadata>` so future Org
+  support can reuse one neutral top-level `raw metadata + document core`
+  contract
+- keep `MarkdownDocument` as the Markdown-local naming surface over
+  `DocumentEnvelope<serde_yaml::Value>`
+- status: landed
+
+18. Cross-format section-metadata evaluation
+
+- introduce one parser-owned `SectionMetadata` so future Org support can
+  reuse one neutral `attributes + logbook` payload contract above
+  `SectionScope`
+- keep `MarkdownSection` as the Markdown-local naming surface over the
+  updated shared `SectionCore`
+- status: landed
+
+19. Cross-format block-core evaluation
+
+- introduce one parser-owned `BlockCore<Kind>` so future Org support can
+  reuse one neutral block payload contract for ranges, content, and
+  structural path without inheriting Markdown-only ownership
+- keep `MarkdownBlockKind` and `MarkdownBlock` as the Markdown-local kind
+  and naming surface over that shared core
+- keep `BlockAddress` and `BlockKindSpecifier` in Wendao because they are
+  semantic addressing grammar, not parser grammar
+- status: landed
+
+20. Target-occurrence range cutover
+
+- extend `TargetOccurrenceCore<Kind>` with parser-visible source ranges
+- cut Wendao section enrichment over to note-level parser occurrences filtered
+  by section byte range instead of re-running section-local comrak scans
+- retire the old Wendao section re-scan path used only for section entity
+  extraction
+- status: landed
+
+21. Compatibility re-export retirement and Org placeholder boundary
+
+- retarget remaining Wendao internal frontmatter consumers to
+  `xiuxian-wendao-parsers`
+- retire Wendao compatibility exports for parser-owned frontmatter, blocks,
+  references, and wikilinks now that parser-crate ownership is proven
+- record Org as a deferred placeholder boundary rather than the active next
+  implementation slice
+- status: landed
+
+22. Cross-format item-contract continuation
+
+- defer richer shared item-contract work until a concrete non-Wendao consumer
+  or explicit Org implementation slice needs it
+- status: deferred
+
+## Current Implementation Snapshot
+
+After the frontmatter, cross-format block-core, cross-format addressed-target,
+cross-format literal-addressed-target, cross-format reference-core,
+document-core, cross-format document-envelope, cross-format note-core,
+cross-format note-aggregate, Markdown target-occurrence, cross-format
+target-occurrence core, Markdown link syntax, section-contract,
+section-scope, section-core, section-metadata, and target-occurrence range
+cutover slices:
+
+1. `xiuxian-wendao-parsers` owns `parse_frontmatter`,
+   `split_frontmatter`, `NoteFrontmatter`, `BlockCore`, `MarkdownBlockKind`,
+   `MarkdownBlock`, `extract_blocks`, `extract_references`,
+   `parse_reference_literal`, `AddressedTarget`, `LiteralAddressedTarget`,
+   `ReferenceCore`, `MarkdownReference`, `extract_wikilinks`,
+   `parse_wikilink_literal`, `MarkdownWikiLink`, the shared `sourcepos`
+   helper, `DocumentCore`, `DocumentEnvelope`, `DocumentFormat`,
+   `MarkdownDocument`, `NoteCore`, `NoteAggregate`, `MarkdownNoteCore`,
+   `parse_markdown_document`, `MarkdownNote`, `parse_markdown_note`,
+   `TargetOccurrenceCore`, `MarkdownTargetOccurrence`, `extract_targets`,
+   `SectionCore`, `SectionMetadata`, `SectionScope`, `MarkdownSection`,
+   `extract_sections`, property-drawer parsing, and logbook parsing
+2. `xiuxian-wendao` now imports parser-owned frontmatter and Markdown link
+   syntax directly where it needs them and no longer re-exports
+   `parse_frontmatter`, blocks, references, or wikilinks from Wendao-owned
+   parser namespaces
+3. `parse_note` now consumes parser-owned Markdown note aggregation for
+   content interpretation, consumes `DocumentCore` for reusable document
+   fields, consumes `DocumentEnvelope::raw_metadata` for current
+   Markdown-specific metadata adapters, consumes `MarkdownNoteCore` for
+   reusable note-body aggregation, consumes parser-owned target occurrences
+   for note-level target capture, and still owns workspace-aware link
+   normalization plus final
+   `LinkGraphDocument` assembly
+4. `SectionCore` now keeps one parser-owned `SectionScope`, one parser-owned
+   `SectionMetadata`, plus normalized section text, while
+   `MarkdownSection` remains the Markdown-local naming surface and
+   `ParsedSection` remains Wendao-owned as the enriched adapter that adds
+   note-link `entities` and `CodeObservation` rows
+5. property-relation parsing now consumes parser-owned section scope and
+   section metadata attributes rather than depending on the enriched Wendao
+   adapter
+6. `xiuxian-qianji` imports `xiuxian_wendao_parsers::frontmatter::parse_frontmatter`
+   directly for persona annotation parsing
+7. Wendao adapters such as `link_graph_refs`, docs-governance parsing, and
+   internal-skill authority now consume parser-owned Markdown link syntax
+   directly
+8. `MarkdownTargetOccurrence` is now the Markdown-local naming surface over
+   `TargetOccurrenceCore<MarkdownTargetOccurrenceKind>`, so future Org support
+   can add its own occurrence-kind enum without inheriting Markdown-only type
+   ownership
+9. `TargetOccurrenceCore<Kind>` now preserves parser-visible occurrence byte
+   and line ranges, so Wendao can partition note-level occurrences without a
+   second syntax pass
+10. `MarkdownWikiLink` is now the Markdown-local naming surface over
+    `LiteralAddressedTarget`, so future Org support can reuse one
+    source-preserved addressed-target contract without inheriting Markdown-only
+    wrapper ownership
+11. `MarkdownReference` is now the Markdown-local naming surface over
+    `ReferenceCore<MarkdownReferenceKind>`, so future Org support can add its
+    own reference-kind enum without inheriting Markdown-only wrapper ownership
+12. `MarkdownNote` is now the Markdown-local naming surface over
+    `NoteAggregate<MarkdownDocument, MarkdownReference, MarkdownTargetOccurrence, MarkdownSection>`,
+    so future Org support can reuse one neutral top-level note aggregate
+    without inheriting Markdown-only wrapper ownership
+13. `MarkdownDocument` is now the Markdown-local naming surface over
+    `DocumentEnvelope<serde_yaml::Value>`, so future Org support can reuse one
+    neutral top-level document wrapper without inheriting Markdown-only
+    wrapper ownership
+14. `ParsedSection` entity enrichment now filters parser-owned note-level
+    target occurrences by section byte range before workspace-aware
+    normalization, so Wendao no longer re-parses section bodies to find note
+    links
+15. embedded wikilinks remain ignored on the current parser-owned target
+    path, matching the old Wendao note-level behavior
+16. note-to-`LinkGraphDocument` assembly, workspace-aware link reduction,
+    link-graph query, and persistence decoding remain Wendao-owned adapters
+    and have not moved
+17. `MarkdownBlock` is now the Markdown-local naming surface over
+    `BlockCore<MarkdownBlockKind>`, so future Org support can add its own
+    block-kind enum without inheriting Markdown-only payload ownership, while
+    Wendao keeps block-address matching and page-index addressing grammar
+18. Org remains a documented placeholder boundary only; no Org parser
+    implementation slice is active until a direct consumer or explicit parser
+    requirement appears
 
 ## Migration Bias
 
@@ -154,5 +409,5 @@ Optimize for these outcomes:
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-10
+:LAST_SYNC: 2026-04-12
 :END:

@@ -45,7 +45,7 @@ id = "High_Rigor_Formal_Audit"
 task_type = "formal_audit"
 label = "High-Rigor Formal Validator"
 weight = 1.0
-params = { max_retries = 10 }
+params = {}
 
 [[nodes]]
 id = "Recursive_Feedback_Loop"

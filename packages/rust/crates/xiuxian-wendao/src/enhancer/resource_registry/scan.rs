@@ -1,8 +1,8 @@
 use include_dir::{Dir, File};
 use std::path::Path;
+use xiuxian_wendao_core::WendaoResourceUri;
 
-use crate::WendaoResourceUri;
-use crate::parsers::markdown::parse_frontmatter;
+use xiuxian_wendao_parsers::parse_frontmatter;
 
 pub(crate) fn is_markdown_file(path: &str) -> bool {
     matches!(

@@ -27,6 +27,7 @@ mod task_type;
 mod topology_validation;
 mod wendao_ingester;
 mod wendao_refresh;
+mod wendao_sql;
 
 /// Orchestrates the conversion of TOML manifests into executable engines.
 pub struct QianjiCompiler {

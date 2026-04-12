@@ -5,6 +5,8 @@ use xiuxian_llm::llm::backend::{LlmBackendKind, parse_llm_backend_kind};
 
 pub(super) struct LlmMechanismConfig {
     pub(super) model: String,
+    pub(super) context_keys: Vec<String>,
+    pub(super) prompt_template: String,
     pub(super) output_key: String,
     pub(super) parse_json_output: bool,
     pub(super) fallback_repo_tree_on_parse_failure: bool,
@@ -13,6 +15,8 @@ pub(super) struct LlmMechanismConfig {
 pub(super) fn mechanism_config(node_def: &NodeDefinition) -> LlmMechanismConfig {
     LlmMechanismConfig {
         model: model(node_def),
+        context_keys: string_list_param(node_def, "context_keys"),
+        prompt_template: string_param(node_def, "prompt").unwrap_or_default(),
         output_key: node_def
             .params
             .get("output_key")
@@ -30,6 +34,33 @@ pub(super) fn mechanism_config(node_def: &NodeDefinition) -> LlmMechanismConfig 
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false),
     }
+}
+
+fn string_param(node_def: &NodeDefinition, key: &str) -> Option<String> {
+    node_def
+        .params
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn string_list_param(node_def: &NodeDefinition, key: &str) -> Vec<String> {
+    node_def
+        .params
+        .get(key)
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub(super) fn resolve_node_llm_endpoint(

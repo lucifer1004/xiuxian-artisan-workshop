@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use xiuxian_wendao::LinkGraphIndex;
-use xiuxian_wendao::link_graph::LinkGraphRefreshMode;
+use xiuxian_wendao_core::LinkGraphRefreshMode;
 
 pub(super) struct RefreshExecution {
     pub(super) mode: LinkGraphRefreshMode,

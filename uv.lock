@@ -4623,6 +4623,7 @@ source = { editable = "." }
 dependencies = [
     { name = "docling" },
     { name = "pdfminer-six" },
+    { name = "pyarrow" },
     { name = "pymupdf" },
     { name = "raganything" },
     { name = "structlog" },
@@ -4654,6 +4655,7 @@ dev = [
 requires-dist = [
     { name = "docling", specifier = ">=2.72.0" },
     { name = "pdfminer-six", specifier = ">=20260107" },
+    { name = "pyarrow", specifier = ">=23.0.0" },
     { name = "pymupdf", specifier = ">=1.25.0" },
     { name = "raganything", git = "https://github.com/HKUDS/RAG-Anything.git" },
     { name = "structlog", specifier = ">=25.5.0" },

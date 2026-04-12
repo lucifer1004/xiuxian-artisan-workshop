@@ -21,6 +21,7 @@ transport = [
 ]
 
 [dependencies]
+anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -29,6 +30,7 @@ base64 = { workspace = true }
 arrow-flight = { workspace = true, features = ["flight-sql"] }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
+include_dir = { workspace = true }
 async-trait = { workspace = true, optional = true }
 datafusion = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
@@ -38,11 +40,16 @@ tonic = { version = "0.14.5", default-features = false, features = ["transport"]
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 xiuxian-testing = { path = "../xiuxian-testing" }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
+xiuxian-wendao-parsers = { path = "../xiuxian-wendao-parsers" }
 xiuxian-vector = { path = "../xiuxian-vector", optional = true }
 xiuxian-vector-store = { path = "../xiuxian-vector-store", optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[[example]]
+name = "mock_flight_exchange_server"
+required-features = ["transport"]
 
 [lints]
 workspace = true

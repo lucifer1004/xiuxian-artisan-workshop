@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
-use crate::link_graph::models::{BlockAddress, MarkdownBlock, PageIndexNode};
+use crate::link_graph::models::{
+    BlockAddress, MarkdownBlock, PageIndexNode, markdown_block_matches_kind,
+};
 
 use super::address::{Address, ResolvedNode};
 
@@ -178,7 +180,7 @@ fn find_block_in_node<'a>(
     let matching_blocks: Vec<_> = node
         .blocks
         .iter()
-        .filter(|block| block.matches_kind(&block_addr.kind))
+        .filter(|block| markdown_block_matches_kind(block, &block_addr.kind))
         .collect();
 
     matching_blocks.get(block_addr.index).copied()

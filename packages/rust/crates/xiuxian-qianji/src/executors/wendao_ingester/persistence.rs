@@ -1,5 +1,5 @@
-use xiuxian_wendao::entity::{Entity, Relation};
 use xiuxian_wendao::graph::KnowledgeGraph;
+use xiuxian_wendao_core::{Entity, Relation};
 
 pub(super) fn persist_promotion_graph(
     graph_scope: &str,

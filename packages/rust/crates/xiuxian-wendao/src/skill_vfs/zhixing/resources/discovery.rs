@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use xiuxian_wendao_core::WendaoResourceUri;
 
-use crate::parsers::markdown::parse_frontmatter;
+use crate::KnowledgeGraph;
 use crate::skill_vfs::zhixing::{Error, Result};
-use crate::{KnowledgeGraph, WendaoResourceUri};
+use xiuxian_wendao_parsers::parse_frontmatter;
 
 use super::registry::{
     embedded_skill_links_for_id, embedded_skill_links_for_reference_type,

@@ -7,8 +7,8 @@ use futures::stream;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use xiuxian_llm::llm::client::ChatStream;
-use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmError, LlmResult};
+use xiuxian_llm::llm::client::{ChatStream, MessageRole};
+use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmError, LlmResult, MessageContent};
 use xiuxian_qianhuan::{
     orchestrator::ThousandFacesOrchestrator,
     persona::{PersonaProfile, PersonaRegistry},
@@ -59,6 +59,34 @@ impl LlmClient for SequencedMockLlmClient {
         let chunks: Vec<Result<String, LlmError>> =
             responses.iter().map(|s| Ok(s.clone())).collect();
         Ok(Box::pin(stream::iter(chunks)))
+    }
+}
+
+struct RequestCaptureLlmClient {
+    requests: Arc<Mutex<Vec<ChatRequest>>>,
+    response: String,
+}
+
+#[async_trait]
+impl LlmClient for RequestCaptureLlmClient {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
+        self.requests
+            .lock()
+            .map_err(|_| LlmError::Internal {
+                message: "failed to lock llm request capture".to_string(),
+            })?
+            .push(request);
+        Ok(self.response.clone())
+    }
+
+    async fn chat_stream(&self, request: ChatRequest) -> LlmResult<ChatStream> {
+        self.requests
+            .lock()
+            .map_err(|_| LlmError::Internal {
+                message: "failed to lock llm request capture".to_string(),
+            })?
+            .push(request);
+        Ok(Box::pin(stream::iter(vec![Ok(self.response.clone())])))
     }
 }
 
@@ -167,6 +195,75 @@ async fn llm_augmented_audit_retries_when_score_is_below_threshold() {
         panic!("expected RetryNodes instruction for score below threshold");
     };
     assert_eq!(nodes, vec!["Agenda_Steward_Proposer".to_string()]);
+}
+
+#[tokio::test]
+async fn llm_augmented_audit_adds_strict_xml_score_contract() {
+    let orchestrator = Arc::new(ThousandFacesOrchestrator::new(
+        "Safety Rules".to_string(),
+        None,
+    ));
+    let registry = make_registry();
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let llm = Arc::new(RequestCaptureLlmClient {
+        requests: Arc::clone(&requests),
+        response: "<professor_audit><score>0.91</score><reason>clear</reason></professor_audit>"
+            .to_string(),
+    });
+
+    let mechanism = LlmAugmentedAuditMechanism {
+        annotator: ContextAnnotator {
+            orchestrator,
+            registry,
+            persona_id: "strict_teacher".to_string(),
+            template_target: Some("critique_agenda.j2".to_string()),
+            execution_mode: NodeQianhuanExecutionMode::Isolated,
+            input_keys: vec!["raw_facts".to_string()],
+            history_key: "audit_history".to_string(),
+            output_key: "annotated_prompt".to_string(),
+        },
+        client: llm,
+        model: "audit-model".to_string(),
+        threshold_score: 0.8,
+        max_retries: 3,
+        retry_target_ids: vec!["Agenda_Steward_Proposer".to_string()],
+        retry_counter_key: "audit_retry_count".to_string(),
+        output_key: "audit_critique".to_string(),
+        score_key: "audit_score".to_string(),
+        cognitive_early_halt_threshold: 0.3,
+        enable_cognitive_supervision: false,
+    };
+
+    let output = mechanism
+        .execute(&json!({
+            "raw_facts": "Draft agenda has a realistic workload.",
+            "request": "Critique this agenda."
+        }))
+        .await
+        .unwrap_or_else(|error| panic!("llm augmented audit should execute: {error}"));
+
+    assert_eq!(output.data["audit_status"], "passed");
+
+    let requests = requests
+        .lock()
+        .unwrap_or_else(|_| panic!("captured request queue should be accessible"));
+    let request = requests
+        .first()
+        .unwrap_or_else(|| panic!("one llm request should be captured"));
+    let system_messages = request
+        .messages
+        .iter()
+        .filter(|message| message.role == MessageRole::System)
+        .collect::<Vec<_>>();
+    assert_eq!(system_messages.len(), 2);
+    let Some(MessageContent::Text(contract)) = system_messages
+        .get(1)
+        .and_then(|message| message.content.as_ref())
+    else {
+        panic!("formal audit contract system message should carry plain text");
+    };
+    assert!(contract.contains("<score> tag"));
+    assert!(contract.contains("Do not emit Markdown"));
 }
 
 #[tokio::test]

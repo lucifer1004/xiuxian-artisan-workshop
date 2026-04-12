@@ -5,7 +5,6 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use crate::analyzers::analyze_registered_repository_with_registry;
 use crate::analyzers::cache::{
     build_repository_analysis_cache_key, store_cached_repository_analysis,
 };
@@ -430,7 +429,7 @@ end
             plugins: vec!["julia".to_string()],
         }],
     });
-    prime_import_analysis_cache(&studio, registry.as_ref());
+    prime_import_analysis_cache(&studio);
 
     ImportGatewayFixture {
         _temp_dir: temp_dir,
@@ -443,15 +442,9 @@ end
     }
 }
 
-fn prime_import_analysis_cache(studio: &StudioState, registry: &crate::analyzers::PluginRegistry) {
+fn prime_import_analysis_cache(studio: &StudioState) {
     let repository = configured_repository(studio, "sciml/imports")
         .unwrap_or_else(|error| panic!("resolve configured repository: {error:?}"));
-    let analysis = analyze_registered_repository_with_registry(
-        &repository,
-        studio.project_root.as_path(),
-        registry,
-    )
-    .unwrap_or_else(|error| panic!("analyze import fixture repository: {error:?}"));
     let repository_source = resolve_registered_repository_source(
         &repository,
         studio.project_root.as_path(),
@@ -464,8 +457,46 @@ fn prime_import_analysis_cache(studio: &StudioState, registry: &crate::analyzers
         &repository_source,
         checkout_metadata.as_ref(),
     );
-    store_cached_repository_analysis(cache_key, &analysis)
+    store_cached_repository_analysis(cache_key, &sample_import_analysis("sciml/imports"))
         .unwrap_or_else(|error| panic!("store repository analysis cache: {error:?}"));
+}
+
+fn sample_import_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
+    RepositoryAnalysisOutput {
+        modules: vec![ModuleRecord {
+            repo_id: repo_id.to_string(),
+            module_id: "module:ProjectionPkg".to_string(),
+            qualified_name: "ProjectionPkg".to_string(),
+            path: "src/ProjectionPkg.jl".to_string(),
+        }],
+        symbols: vec![SymbolRecord {
+            repo_id: repo_id.to_string(),
+            symbol_id: "symbol:solve".to_string(),
+            module_id: Some("module:ProjectionPkg".to_string()),
+            name: "solve".to_string(),
+            qualified_name: "ProjectionPkg.solve".to_string(),
+            kind: RepoSymbolKind::Function,
+            path: "src/ProjectionPkg.jl".to_string(),
+            line_start: Some(7),
+            line_end: Some(7),
+            signature: Some("solve(problem)".to_string()),
+            audit_status: None,
+            verification_state: None,
+            attributes: BTreeMap::new(),
+        }],
+        imports: vec![ImportRecord {
+            repo_id: repo_id.to_string(),
+            module_id: "module:ProjectionPkg".to_string(),
+            import_name: "SciMLBase".to_string(),
+            target_package: "SciMLBase".to_string(),
+            source_module: "SciMLBase".to_string(),
+            kind: ImportKind::Reexport,
+            line_start: Some(4),
+            resolved_id: None,
+            attributes: BTreeMap::new(),
+        }],
+        ..RepositoryAnalysisOutput::default()
+    }
 }
 
 fn initialize_git_repository(repo_root: &std::path::Path) {

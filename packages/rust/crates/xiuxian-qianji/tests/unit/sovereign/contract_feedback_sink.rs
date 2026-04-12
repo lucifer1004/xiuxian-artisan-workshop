@@ -2,7 +2,7 @@ use super::{
     ContractFeedbackKnowledgeSink, InMemoryContractFeedbackSink,
     KnowledgeStorageContractFeedbackSink,
 };
-use xiuxian_wendao::types::{KnowledgeCategory, KnowledgeEntry};
+use xiuxian_wendao_core::{KnowledgeCategory, KnowledgeEntry};
 
 fn test_entry(id: &str) -> KnowledgeEntry {
     KnowledgeEntry::new(

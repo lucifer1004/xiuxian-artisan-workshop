@@ -1,3 +1,9 @@
+/// Runtime-owned bundled `OpenAPI` artifact helpers.
+pub mod openapi;
+
+/// Runtime-owned embedded zhixing artifact helpers.
+pub mod zhixing;
+
 mod render;
 mod resolve;
 

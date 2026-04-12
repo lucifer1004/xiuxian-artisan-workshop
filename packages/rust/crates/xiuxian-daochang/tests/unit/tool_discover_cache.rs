@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use crate::unit::live_gates::resolve_enabled_live_valkey_url;
 use anyhow::Result;
 use axum::Router;
 use rmcp::ServerHandler;
@@ -173,13 +174,8 @@ async fn reserve_local_addr() -> std::net::SocketAddr {
 }
 
 #[tokio::test]
-#[ignore = "requires live valkey server; set VALKEY_URL"]
 async fn discover_calls_use_valkey_read_through_cache_when_configured() -> Result<()> {
-    let has_valkey_url = std::env::var("VALKEY_URL")
-        .ok()
-        .is_some_and(|value| !value.trim().is_empty());
-    if !has_valkey_url {
-        eprintln!("skip: set VALKEY_URL for live cache test");
+    if resolve_enabled_live_valkey_url("live cache test").is_none() {
         return Ok(());
     }
 

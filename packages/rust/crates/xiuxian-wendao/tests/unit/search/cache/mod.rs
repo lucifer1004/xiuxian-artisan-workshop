@@ -10,6 +10,7 @@ use crate::search::{
 #[cfg(test)]
 #[derive(Debug, Default)]
 pub(crate) struct TestCacheShadow {
+    pub(crate) generic_json_payloads: BTreeMap<String, String>,
     pub(crate) repo_corpus_records: BTreeMap<(SearchCorpusKind, String), SearchRepoCorpusRecord>,
     pub(crate) repo_corpus_snapshot: Option<SearchRepoCorpusSnapshotRecord>,
     pub(crate) repo_publications_by_revision:
@@ -272,6 +273,32 @@ async fn delete_repo_publication_revision_cache_clears_retained_revision_entries
             .await
             .is_empty()
     );
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn generic_json_cache_uses_test_shadow_without_live_client() {
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    struct ProbePayload {
+        value: String,
+    }
+
+    let cache = cache_for_tests();
+    let key = "xiuxian:test:search_plane:hot_query:probe";
+    let payload = ProbePayload {
+        value: "cached".to_string(),
+    };
+
+    cache
+        .set_json(
+            key,
+            crate::search::cache::SearchPlaneCacheTtl::HotQuery,
+            &payload,
+        )
+        .await;
+
+    let cached: Option<ProbePayload> = cache.get_json(key).await;
+    assert_eq!(cached, Some(payload));
 }
 
 #[cfg(test)]

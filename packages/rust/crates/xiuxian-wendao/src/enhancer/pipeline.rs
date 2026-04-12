@@ -1,8 +1,8 @@
 use crate::link_graph_refs::{extract_entity_refs, get_ref_stats};
-use crate::parsers::markdown::parse_frontmatter;
 
 use super::relations::infer_relations;
 use super::types::{EnhancedNote, EntityRefData, NoteInput, RefStatsData};
+use xiuxian_wendao_parsers::parse_frontmatter;
 
 /// Enhance a single note with full secondary analysis.
 #[must_use]

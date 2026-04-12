@@ -197,6 +197,39 @@ Implementation details here.
     );
 }
 
+#[test]
+fn test_extract_sections_filters_entities_by_section_byte_range() {
+    let body = r#"# Alpha
+Section alpha links to [One](one.md).
+
+# Beta
+Section beta links to [Two](two.md).
+"#;
+    let sections = extract_sections(
+        body,
+        std::path::Path::new("/workspace/docs/note.md"),
+        std::path::Path::new("/workspace"),
+    );
+
+    let alpha = sections
+        .iter()
+        .find(|section| section.heading_title == "Alpha");
+    assert!(alpha.is_some());
+    let Some(alpha) = alpha else {
+        panic!("expected Alpha section");
+    };
+    assert_eq!(alpha.entities, vec!["docs/one".to_string()]);
+
+    let beta = sections
+        .iter()
+        .find(|section| section.heading_title == "Beta");
+    assert!(beta.is_some());
+    let Some(beta) = beta else {
+        panic!("expected Beta section");
+    };
+    assert_eq!(beta.entities, vec!["docs/two".to_string()]);
+}
+
 // =========================================================================
 // LOGBOOK Execution Drawer Tests (Blueprint v2.4)
 // =========================================================================

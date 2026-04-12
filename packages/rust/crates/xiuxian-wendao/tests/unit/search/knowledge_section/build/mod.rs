@@ -184,6 +184,55 @@ async fn knowledge_section_incremental_refresh_reuses_unchanged_rows() {
     assert_no_knowledge_section_lance_tables(&service);
 }
 
+#[tokio::test]
+async fn knowledge_section_build_with_no_supported_notes_publishes_empty_epoch() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+    let project_root = temp_dir.path().join("workspace");
+    let storage_root = temp_dir.path().join("search_plane");
+    std::fs::create_dir_all(&project_root)
+        .unwrap_or_else(|error| panic!("create workspace root: {error}"));
+    let projects = vec![UiProjectConfig {
+        name: "notes".to_string(),
+        root: ".".to_string(),
+        dirs: vec![".".to_string()],
+    }];
+    let keyspace =
+        SearchManifestKeyspace::new("xiuxian:test:search_plane:knowledge-section-empty-epoch");
+    let cache = SearchPlaneCache::for_tests(keyspace.clone());
+    let service = SearchPlaneService::with_runtime(
+        project_root.clone(),
+        storage_root,
+        keyspace,
+        SearchMaintenancePolicy::default(),
+        cache,
+    );
+
+    ensure_knowledge_section_index_started(
+        &service,
+        project_root.as_path(),
+        project_root.as_path(),
+        &projects,
+    );
+    wait_for_knowledge_section_ready(&service, None).await;
+
+    let active_epoch = service
+        .coordinator()
+        .status_for(SearchCorpusKind::KnowledgeSection)
+        .active_epoch
+        .unwrap_or_else(|| panic!("knowledge section active epoch"));
+    assert!(
+        service
+            .local_epoch_parquet_path(SearchCorpusKind::KnowledgeSection, active_epoch)
+            .exists(),
+        "missing empty knowledge section parquet export"
+    );
+
+    let results = search_knowledge_sections(&service, "alpha", 10)
+        .await
+        .unwrap_or_else(|error| panic!("query empty knowledge section epoch: {error}"));
+    assert!(results.is_empty());
+}
+
 async fn wait_for_knowledge_section_ready(
     service: &SearchPlaneService,
     previous_epoch: Option<u64>,

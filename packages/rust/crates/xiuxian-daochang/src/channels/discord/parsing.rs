@@ -72,6 +72,7 @@ impl DiscordChannel {
     pub fn parse_gateway_message(&self, event: &serde_json::Value) -> Option<ChannelMessage> {
         let payload = parse_discord_ingress_payload(event)?;
         let message_id = payload.event_id;
+        let is_interaction = payload.is_interaction;
         let mut text = payload.content;
         let attachments = map_discord_attachments(payload.attachments);
         if text.trim().is_empty() {
@@ -86,6 +87,12 @@ impl DiscordChannel {
         let author_id = payload.author_id.to_string();
         let username = payload.author_username.as_deref();
         let author_role_ids = payload.author_role_ids;
+        let message_mentions_bot = payload
+            .mentioned_user_ids
+            .iter()
+            .any(|mentioned_id| self.is_bot_user_id(Some(mentioned_id.as_str())));
+        let reply_mentions_bot =
+            self.is_bot_user_id(payload.referenced_message_author_id.as_deref());
         let acl_identities = Self::build_acl_identities(&author_id, username, &author_role_ids);
 
         let allowed_by_guild = guild_id
@@ -101,6 +108,29 @@ impl DiscordChannel {
                 username.unwrap_or("(not set)"),
                 guild_id.as_deref().unwrap_or("(dm)"),
                 channel_id
+            );
+            return None;
+        }
+
+        if guild_id.is_some()
+            && !is_interaction
+            && !self.guild_message_passes_mention_policy(
+                &channel_id,
+                message_mentions_bot,
+                reply_mentions_bot,
+                is_command_like_trigger(&text),
+            )
+        {
+            tracing::debug!(
+                event = "discord.gateway.message.ignored.require_mention",
+                message_id = %message_id,
+                channel_id = %channel_id,
+                guild_id = %guild_id.as_deref().unwrap_or_default(),
+                author_id = %author_id,
+                mention_trigger = message_mentions_bot,
+                reply_trigger = reply_mentions_bot,
+                command_trigger = is_command_like_trigger(&text),
+                "discord guild message ignored: require_mention enabled and no trigger detected"
             );
             return None;
         }
@@ -124,6 +154,10 @@ impl DiscordChannel {
                 .as_secs(),
         })
     }
+}
+
+fn is_command_like_trigger(text: &str) -> bool {
+    text.trim_start().starts_with('/')
 }
 
 fn map_discord_attachments(

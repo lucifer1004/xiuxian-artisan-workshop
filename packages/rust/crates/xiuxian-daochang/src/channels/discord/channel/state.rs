@@ -17,6 +17,10 @@ pub struct DiscordChannel {
     pub(super) session_partition: RwLock<DiscordSessionPartition>,
     pub(super) recipient_admin_users: RwLock<HashMap<String, Vec<String>>>,
     pub(super) sender_acl_identities: RwLock<HashMap<String, Vec<String>>>,
+    pub(super) bot_user_id: RwLock<Option<String>>,
+    pub(super) default_require_mention: RwLock<bool>,
+    pub(super) require_mention_persist: RwLock<bool>,
+    pub(super) recipient_require_mention: RwLock<HashMap<String, bool>>,
     pub(in super::super) client: reqwest::Client,
 }
 
@@ -54,6 +58,24 @@ impl Clone for DiscordChannel {
             .read()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
+        let bot_user_id = self
+            .bot_user_id
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let default_require_mention = *self
+            .default_require_mention
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        let require_mention_persist = *self
+            .require_mention_persist
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        let recipient_require_mention = self
+            .recipient_require_mention
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
         Self {
             bot_token: self.bot_token.clone(),
             api_base_url: self.api_base_url.clone(),
@@ -64,6 +86,10 @@ impl Clone for DiscordChannel {
             session_partition: RwLock::new(session_partition),
             recipient_admin_users: RwLock::new(recipient_admin_users),
             sender_acl_identities: RwLock::new(sender_acl_identities),
+            bot_user_id: RwLock::new(bot_user_id),
+            default_require_mention: RwLock::new(default_require_mention),
+            require_mention_persist: RwLock::new(require_mention_persist),
+            recipient_require_mention: RwLock::new(recipient_require_mention),
             client: self.client.clone(),
         }
     }

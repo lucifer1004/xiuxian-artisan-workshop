@@ -1,3 +1,1 @@
-mod knowledge_entry;
-
-pub use knowledge_entry::WendaoContractFeedbackAdapter;
+pub use xiuxian_wendao_core::WendaoContractFeedbackAdapter;

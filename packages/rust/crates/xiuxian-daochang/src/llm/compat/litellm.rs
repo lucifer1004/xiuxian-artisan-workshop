@@ -14,7 +14,8 @@ mod anthropic_custom;
 mod responses;
 
 use crate::llm::converters::{
-    chat_message_to_litellm_message, content_from_litellm, tool_call_from_litellm,
+    chat_message_to_litellm_message, chat_message_to_litellm_message_for_openai_chat,
+    content_from_litellm, tool_call_from_litellm,
 };
 use crate::llm::providers::{
     DEFAULT_ANTHROPIC_KEY_ENV, DEFAULT_MINIMAX_KEY_ENV, DEFAULT_OPENAI_KEY_ENV,
@@ -35,7 +36,6 @@ use xiuxian_llm::llm::providers::{
     should_bypass_anthropic_model_validation, should_use_openai_like_for_base,
     summarize_anthropic_custom_base_failures,
 };
-
 /// Dispatch settings for a single `litellm-rs` chat request.
 #[derive(Clone, Copy)]
 pub(in crate::llm) struct LiteLlmDispatchConfig<'a> {
@@ -75,7 +75,8 @@ impl LiteLlmRuntime {
         messages: Vec<ChatMessage>,
         tools: Vec<PreparedTool>,
     ) -> Result<AssistantMessage> {
-        let request = Self::build_request(config.model, config.max_tokens, messages, &tools)?;
+        let request =
+            Self::build_request(config, config.model, config.max_tokens, messages, &tools)?;
         match config.provider_mode {
             LiteLlmProviderMode::OpenAi => self.chat_openai(config, request).await,
             LiteLlmProviderMode::Minimax => self.chat_minimax(config, request, None).await,
@@ -84,6 +85,7 @@ impl LiteLlmRuntime {
     }
 
     fn build_request(
+        config: LiteLlmDispatchConfig<'_>,
         model: &str,
         max_tokens: Option<u32>,
         messages: Vec<ChatMessage>,
@@ -98,7 +100,13 @@ impl LiteLlmRuntime {
             model: model.to_string(),
             messages: messages
                 .into_iter()
-                .map(chat_message_to_litellm_message)
+                .map(|message| {
+                    if should_encode_tool_result_parts(config) {
+                        chat_message_to_litellm_message(message)
+                    } else {
+                        chat_message_to_litellm_message_for_openai_chat(message)
+                    }
+                })
                 .collect::<Result<Vec<_>>>()?,
             tools: tools.clone(),
             tool_choice: tools
@@ -393,6 +401,11 @@ impl LiteLlmRuntime {
             .map_err(map_official_anthropic_error)?;
         chat_response_to_assistant(response)
     }
+}
+
+fn should_encode_tool_result_parts(config: LiteLlmDispatchConfig<'_>) -> bool {
+    matches!(config.provider_mode, LiteLlmProviderMode::Anthropic)
+        || matches!(config.wire_api, LiteLlmWireApi::Responses)
 }
 
 fn build_custom_base_image_client(timeout_secs: u64) -> Result<reqwest::Client> {

@@ -9,9 +9,11 @@
 
 ## Objective
 
-Wendao keeps ordinary Markdown reference parsing under
-`src/parsers/markdown/references/` so `SKILL.md` and ordinary Markdown
-documents do not diverge into different link grammars.
+Wendao now treats ordinary Markdown reference parsing as a parser-owned shared
+surface in `xiuxian-wendao-parsers` so `SKILL.md` and ordinary Markdown
+documents do not diverge into different link grammars, and so ordinary
+Markdown links can reuse one parser-owned `ReferenceCore<Kind>` above the
+shared addressed-target cores.
 
 ## Syntax Contract
 
@@ -26,6 +28,16 @@ The canonical parser preserves ordinary Markdown references in these shapes:
 
 The parser separates an optional cross-document target from an optional
 structural address for both syntaxes.
+
+That split now lives across these parser-owned contracts:
+
+1. `AddressedTarget` keeps one shared `target + target_address` payload
+2. `LiteralAddressedTarget` keeps one shared `AddressedTarget + original
+literal` payload
+3. `ReferenceCore<Kind>` keeps one shared `kind + LiteralAddressedTarget`
+   payload
+4. `MarkdownReference` is the Markdown-local alias over
+   `ReferenceCore<MarkdownReferenceKind>`
 
 ## Extraction Rules
 
@@ -44,9 +56,11 @@ The implementation is comrak-backed and parser-owned:
 
 1. `SKILL.md` manifest intents now use the same parser-owned Markdown
    reference contract as ordinary Markdown documents
-2. the authority consumer reduces parser output into local manifest-path
+2. `extract_references` returns the Markdown-local naming surface over the
+   shared `ReferenceCore<MarkdownReferenceKind>`
+3. the authority consumer reduces parser output into local manifest-path
    normalization and URI authority checks
-3. `SKILL.md` no longer owns a local split between Markdown-link scanning and
+4. `SKILL.md` no longer owns a local split between Markdown-link scanning and
    wikilink parsing
 
 The narrower `wikilinks.md` surface documents the Obsidian-only subset used by
@@ -56,16 +70,17 @@ consumers that only care about ordinary `[[...]]` topology links.
 
 Coverage for this contract lives in:
 
-1. `tests/unit/parsers/markdown/references.rs`
-2. `tests/snapshots/parser/markdown/references.json`
-3. `src/skill_vfs/internal_manifest/tests.rs`
+1. `packages/rust/crates/xiuxian-wendao-parsers/tests/unit/references.rs`
+2. `tests/unit/parsers/markdown/references.rs`
+3. `tests/snapshots/parser/markdown/references.json`
+4. `src/skill_vfs/internal_manifest/tests.rs`
 
 :RELATIONS:
-:LINKS: [[02_parser/index]], [[02_parser/architecture]], [[02_parser/wikilinks]], [[01_core/103_package_layering]]
+:LINKS: [[02_parser/index]], [[02_parser/architecture]], [[02_parser/addressed_target]], [[02_parser/wikilinks]], [[01_core/103_package_layering]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-05
+:LAST_SYNC: 2026-04-11
 :END:

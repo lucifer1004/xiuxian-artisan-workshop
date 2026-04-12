@@ -115,6 +115,10 @@ impl DiscordChannel {
             session_partition: RwLock::new(session_partition),
             recipient_admin_users: RwLock::new(HashMap::new()),
             sender_acl_identities: RwLock::new(HashMap::new()),
+            bot_user_id: RwLock::new(None),
+            default_require_mention: RwLock::new(false),
+            require_mention_persist: RwLock::new(false),
+            recipient_require_mention: RwLock::new(HashMap::new()),
             client: crate::channels::discord::client::build_discord_http_client(),
         }
     }

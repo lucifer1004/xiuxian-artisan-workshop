@@ -4,11 +4,11 @@ use crate::channels::telegram::commands;
 
 use super::types::{
     JobStatusCommand, OutputFormat, ResumeContextCommand, SessionAdminCommand,
-    SessionFeedbackCommand, SessionInjectionCommand, SessionPartitionCommand,
-    job_status_command_from_internal, output_format_from_internal,
+    SessionFeedbackCommand, SessionInjectionCommand, SessionMentionCommand,
+    SessionPartitionCommand, job_status_command_from_internal, output_format_from_internal,
     resume_context_command_from_internal, session_admin_command_from_internal,
     session_feedback_command_from_internal, session_injection_command_from_internal,
-    session_partition_command_from_internal,
+    session_mention_command_from_internal, session_partition_command_from_internal,
 };
 
 #[must_use]
@@ -64,6 +64,11 @@ pub fn parse_session_feedback_command(input: &str) -> Option<SessionFeedbackComm
 
 pub fn parse_session_partition_command(input: &str) -> Option<SessionPartitionCommand> {
     commands::parse_session_partition_command(input).map(session_partition_command_from_internal)
+}
+
+pub fn parse_session_mention_command(input: &str) -> Option<SessionMentionCommand> {
+    crate::channels::managed_runtime::parsing::parse_session_mention_command(input)
+        .map(session_mention_command_from_internal)
 }
 
 pub fn parse_session_admin_command(input: &str) -> Option<SessionAdminCommand> {

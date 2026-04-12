@@ -6,3 +6,6 @@ mod helpers;
 mod llm_tools;
 mod soft_fail;
 mod tool_types;
+
+#[cfg(test)]
+mod tests;

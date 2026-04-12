@@ -282,6 +282,18 @@ pub fn chat_message_to_litellm_message(message: ChatMessage) -> Result<LiteChatM
     super::converters::chat_message_to_litellm_message(message)
 }
 
+#[cfg(feature = "agent-provider-litellm")]
+/// Convert one chat message into an OpenAI-compatible `litellm-rs` chat payload.
+///
+/// # Errors
+///
+/// Returns an error when role/content conversion fails.
+pub fn chat_message_to_litellm_message_for_openai_chat(
+    message: ChatMessage,
+) -> Result<LiteChatMessage> {
+    super::converters::chat_message_to_litellm_message_for_openai_chat(message)
+}
+
 /// Build an `OpenAI` `/responses` payload from test-facing chat inputs.
 ///
 /// # Errors

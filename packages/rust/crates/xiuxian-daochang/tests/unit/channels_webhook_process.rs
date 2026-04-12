@@ -4,6 +4,7 @@ use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::unit::live_gates::resolve_enabled_live_valkey_url;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
@@ -103,14 +104,9 @@ async fn wait_total_enqueued(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires live valkey server and process spawning support"]
 async fn webhook_live_valkey_duplicate_update_id_across_two_processes_enqueues_once() -> Result<()>
 {
-    let Some(valkey_url) = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        eprintln!("skip: set VALKEY_URL for live multi-process dedup test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live multi-process dedup test") else {
         return Ok(());
     };
     let key_prefix = format!(

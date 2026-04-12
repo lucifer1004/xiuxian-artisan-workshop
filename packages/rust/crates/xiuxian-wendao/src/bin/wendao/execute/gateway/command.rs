@@ -121,10 +121,11 @@ async fn handle_start(
     // depended on them. Since it doesn't (to avoid circular dependency),
     // they are currently empty. A separate aggregator crate would be needed
     // to provide a pre-populated registry.
-    let app_state = Arc::new(AppState::new_with_webhook_url(
+    let app_state = Arc::new(AppState::new_with_webhook_url_and_config_path(
         index.map(|i| Arc::new(i.clone())),
         Some(signal_tx),
         effective_webhook_url,
+        config_path.as_deref(),
         plugin_registry,
     ));
 

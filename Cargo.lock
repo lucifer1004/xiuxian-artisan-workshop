@@ -13942,6 +13942,7 @@ dependencies = [
  "xiuxian-io",
  "xiuxian-testing",
  "xiuxian-wendao",
+ "xiuxian-wendao-core",
  "xiuxian-zhenfa",
 ]
 
@@ -13951,6 +13952,7 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "futures",
  "globset",
  "include_dir",
@@ -13959,6 +13961,7 @@ dependencies = [
  "md5",
  "merman-core",
  "petgraph 0.7.1",
+ "quick-xml",
  "rand 0.8.5",
  "redis",
  "regex",
@@ -13980,6 +13983,9 @@ dependencies = [
  "xiuxian-qianhuan",
  "xiuxian-testing",
  "xiuxian-wendao",
+ "xiuxian-wendao-core",
+ "xiuxian-wendao-parsers",
+ "xiuxian-wendao-runtime",
  "xiuxian-window",
  "xiuxian-zhenfa",
  "xiuxian-zhixing",
@@ -14236,6 +14242,7 @@ dependencies = [
  "xiuxian-wendao-builtin",
  "xiuxian-wendao-core",
  "xiuxian-wendao-julia",
+ "xiuxian-wendao-parsers",
  "xiuxian-wendao-runtime",
  "xiuxian-zhenfa",
  "xxhash-rust",
@@ -14259,13 +14266,16 @@ name = "xiuxian-wendao-core"
 version = "0.1.1"
 dependencies = [
  "arrow 58.1.0",
+ "chrono",
  "inventory",
  "schemars",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",
  "xiuxian-testing",
+ "xiuxian-types",
 ]
 
 [[package]]
@@ -14297,9 +14307,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "xiuxian-wendao-parsers"
+version = "0.1.1"
+dependencies = [
+ "blake3",
+ "comrak",
+ "regex",
+ "serde",
+ "serde_yaml",
+ "xiuxian-testing",
+]
+
+[[package]]
 name = "xiuxian-wendao-runtime"
 version = "0.1.1"
 dependencies = [
+ "anyhow",
  "arrow-array 58.1.0",
  "arrow-flight",
  "arrow-schema 58.1.0",
@@ -14307,6 +14330,7 @@ dependencies = [
  "base64 0.22.1",
  "datafusion 53.0.0",
  "futures",
+ "include_dir",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -14320,6 +14344,7 @@ dependencies = [
  "xiuxian-vector",
  "xiuxian-vector-store",
  "xiuxian-wendao-core",
+ "xiuxian-wendao-parsers",
 ]
 
 [[package]]

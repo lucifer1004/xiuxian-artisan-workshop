@@ -2,8 +2,8 @@ use crate::enhancer::classify_skill_reference;
 use crate::entity::{Entity, Relation};
 use serde_json::json;
 use std::path::Path;
+use xiuxian_wendao_core::WendaoResourceUri;
 
-use crate::WendaoResourceUri;
 use crate::skill_vfs::zhixing::indexer::resource_graph::helpers::normalize_token;
 
 pub(crate) struct ReferenceRelationInput<'a> {

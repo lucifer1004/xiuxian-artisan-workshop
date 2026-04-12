@@ -26,6 +26,12 @@ pub(crate) fn configured_parquet_query_engine(
 pub(crate) fn configured_parquet_query_engine(
     service: &SearchPlaneService,
 ) -> Result<ParquetQueryEngine, String> {
+    if !service.project_root().exists() {
+        return Err(format!(
+            "shared published parquet query-engine configuration failed: project root `{}` does not exist",
+            service.project_root().display()
+        ));
+    }
     Ok(ParquetQueryEngine::configured(
         service.datafusion_query_engine().clone(),
     ))
@@ -41,8 +47,7 @@ pub(crate) async fn try_execute_published_parquet_query(
     };
     let query_engine = query_engine
         .cloned()
-        .map(Ok)
-        .unwrap_or_else(|| configured_parquet_query_engine(service))?;
+        .map_or_else(|| configured_parquet_query_engine(service), Ok)?;
     let engine_kind = query_engine.kind();
     query_engine
         .ensure_parquet_table_registered(target.table_name.as_str(), target.parquet_path.as_path())

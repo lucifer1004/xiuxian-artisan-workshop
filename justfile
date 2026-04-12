@@ -1713,6 +1713,10 @@ update:
     @echo "Updated"
 
 [group('dev')]
+sync-wendao-julia-locks:
+    @bash scripts/sync_wendao_julia_locks.sh
+
+[group('dev')]
 info:
     @echo "Environment Information"
     @echo "======================"
@@ -2663,7 +2667,7 @@ test-qianji-evolution:
 # Launch the high-performance React + Rspack laboratory for visual evolution.
 studio:
     @echo "🚀 Launching Qianji Sovereign Studio (Rspack + React + TS)..."
-    @cd .data/wendao-frontend && npm run dev
+    @bash scripts/channel/wendao-frontend-launch.sh
 
 # Run REAL LLM evolution test for Qianji JS (requires OPENAI_API_KEY).
 # Usage: just test-evolution "Your visual intent"

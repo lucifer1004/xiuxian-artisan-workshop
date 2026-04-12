@@ -18,6 +18,7 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 PIDFILE="${WENDAO_GATEWAY_PIDFILE:-$PROJECT_ROOT/.run/wendao-gateway/wendao.pid}"
+LOGFILE="${WENDAO_GATEWAY_STDERR_LOG:-$PROJECT_ROOT/.run/logs/wendao-gateway.stderr.log}"
 CONFIG_PATH="${WENDAO_GATEWAY_CONFIG:-$PROJECT_ROOT/wendao.toml}"
 HOST="${WENDAO_GATEWAY_HOST:-127.0.0.1}"
 TIMEOUT_SECS="${WENDAO_GATEWAY_HEALTH_TIMEOUT_SECS:-2}"
@@ -28,4 +29,5 @@ PORT="$("$PYTHON_BIN" "$PROJECT_ROOT/scripts/channel/resolve_wendao_gateway_port
   --host "$HOST" \
   --port "$PORT" \
   --pidfile "$PIDFILE" \
+  --logfile "$LOGFILE" \
   --timeout-secs "$TIMEOUT_SECS"

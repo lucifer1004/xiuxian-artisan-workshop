@@ -5,11 +5,29 @@ use crate::scheduler::preflight::{
     resolve_semantic_reference, resolve_wendao_uri_with_zhenfa,
 };
 use async_trait::async_trait;
+use quick_xml::de::from_str;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator;
 use xiuxian_qianhuan::persona::{PersonaProfile, PersonaRegistry};
-use xiuxian_wendao::skill_vfs::WendaoResourceUri;
+use xiuxian_wendao_core::WendaoResourceUri;
+
+const MAX_SNAPSHOT_COMPACTION_DEPTH: usize = 4;
+
+#[derive(Debug, Default, Deserialize)]
+struct PromptInjectionSnapshot {
+    #[serde(default)]
+    narrative_context: PromptInjectionNarrativeContext,
+    #[serde(default)]
+    working_history: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct PromptInjectionNarrativeContext {
+    #[serde(rename = "entry", default)]
+    entries: Vec<String>,
+}
 
 /// Mechanism responsible for transmuting raw facts into persona-aligned context snapshots.
 pub struct ContextAnnotator {
@@ -32,20 +50,72 @@ pub struct ContextAnnotator {
 }
 
 impl ContextAnnotator {
+    fn normalize_narrative_block(raw: &str) -> String {
+        Self::normalize_narrative_block_with_depth(raw.trim(), 0)
+    }
+
+    fn normalize_narrative_block_with_depth(raw: &str, depth: usize) -> String {
+        let trimmed = raw.trim();
+        if trimmed.is_empty()
+            || depth >= MAX_SNAPSHOT_COMPACTION_DEPTH
+            || !trimmed.contains("<system_prompt_injection")
+        {
+            return trimmed.to_string();
+        }
+
+        Self::compact_prompt_snapshot(trimmed, depth).unwrap_or_else(|| trimmed.to_string())
+    }
+
+    fn compact_prompt_snapshot(raw: &str, depth: usize) -> Option<String> {
+        let snapshot: PromptInjectionSnapshot = from_str(raw).ok()?;
+        let mut segments = Vec::new();
+
+        for entry in snapshot.narrative_context.entries {
+            Self::push_compacted_segment(
+                &mut segments,
+                Self::normalize_narrative_block_with_depth(entry.as_str(), depth + 1),
+            );
+        }
+
+        Self::push_compacted_segment(
+            &mut segments,
+            Self::normalize_narrative_block_with_depth(
+                snapshot.working_history.as_str(),
+                depth + 1,
+            ),
+        );
+
+        (!segments.is_empty()).then(|| segments.join("\n\n"))
+    }
+
+    fn push_compacted_segment(segments: &mut Vec<String>, segment: String) {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() || segments.iter().any(|existing| existing == trimmed) {
+            return;
+        }
+        segments.push(trimmed.to_string());
+    }
+
     fn collect_narrative_blocks(&self, context: &Value) -> Result<Vec<String>, String> {
         let mut blocks = Vec::new();
         for key in &self.input_keys {
             if key.trim_start().starts_with('$') {
                 let text = resolve_semantic_content(key, context)?;
                 if !text.trim().is_empty() {
-                    blocks.push(text);
+                    Self::push_compacted_segment(
+                        &mut blocks,
+                        Self::normalize_narrative_block(text.as_str()),
+                    );
                 }
                 continue;
             }
             if let Some(value) = lookup_context_path(context, key)
                 && let Some(text) = context_value_to_text(value)
             {
-                blocks.push(text);
+                Self::push_compacted_segment(
+                    &mut blocks,
+                    Self::normalize_narrative_block(text.as_str()),
+                );
             }
         }
 
@@ -53,7 +123,10 @@ impl ContextAnnotator {
             match context.get("raw_facts") {
                 Some(value) => {
                     if let Some(text) = context_value_to_text(value) {
-                        blocks.push(text);
+                        Self::push_compacted_segment(
+                            &mut blocks,
+                            Self::normalize_narrative_block(text.as_str()),
+                        );
                     }
                 }
                 None => blocks.push(String::new()),

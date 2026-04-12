@@ -5,7 +5,8 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use crate::gateway::studio::router::{
-    GatewayState, StudioApiError, persist_ui_config_to_wendao_toml, studio_wendao_overlay_toml_path,
+    GatewayState, StudioApiError, persist_ui_config_to_wendao_toml,
+    persist_ui_config_to_wendao_toml_path, studio_wendao_toml_path,
 };
 use crate::gateway::studio::types::UiConfig;
 
@@ -22,24 +23,27 @@ pub async fn get(State(state): State<Arc<GatewayState>>) -> Result<Json<UiConfig
 ///
 /// # Errors
 ///
-/// Returns [`StudioApiError`] when the overlay TOML cannot be persisted.
+/// Returns [`StudioApiError`] when the Wendao TOML cannot be persisted.
 pub async fn set(
     State(state): State<Arc<GatewayState>>,
     Json(config_value): Json<UiConfig>,
 ) -> Result<Json<UiConfig>, StudioApiError> {
-    persist_ui_config_to_wendao_toml(state.studio.config_root.as_path(), &config_value).map_err(
-        |details| {
-            let overlay_path = studio_wendao_overlay_toml_path(state.studio.config_root.as_path());
-            StudioApiError::internal(
-                "UI_CONFIG_PERSIST_FAILED",
-                format!(
-                    "failed to persist Studio UI config to `{}`",
-                    overlay_path.display()
-                ),
-                Some(details),
-            )
-        },
-    )?;
+    let persist_result = if let Some(config_path) = state.studio.bootstrap_config_path.as_deref() {
+        persist_ui_config_to_wendao_toml_path(config_path, &config_value)
+    } else {
+        persist_ui_config_to_wendao_toml(state.studio.config_root.as_path(), &config_value)
+    };
+    persist_result.map_err(|details| {
+        let config_path = studio_wendao_toml_path(state.studio.config_root.as_path());
+        StudioApiError::internal(
+            "UI_CONFIG_PERSIST_FAILED",
+            format!(
+                "failed to persist Studio UI config to `{}`",
+                config_path.display()
+            ),
+            Some(details),
+        )
+    })?;
     state.studio.set_ui_config(config_value);
     Ok(Json(state.studio.ui_config()))
 }

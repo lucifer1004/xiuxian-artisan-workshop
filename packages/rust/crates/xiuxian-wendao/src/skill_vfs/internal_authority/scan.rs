@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use xiuxian_wendao_core::WendaoResourceUri;
 
 use xiuxian_skills::{
     InternalSkillManifest, InternalSkillManifestScan, InternalSkillNativeAliasMountReport,
@@ -19,7 +20,7 @@ impl From<AuthorizedInternalSkillManifestScan> for InternalSkillManifestScan {
     }
 }
 
-use super::super::{SkillVfsResolver, WendaoResourceUri};
+use super::super::SkillVfsResolver;
 use super::catalog::InternalSkillIntentCatalog;
 use super::report::{InternalSkillAuthorityReport, build_authority_report};
 

@@ -63,6 +63,16 @@ persona_id = "agenda_steward"
 # watch_patterns is omitted. Patterns will be auto-derived as `**/*.<ext>`.
 watch_extensions = ["md", "markdown", "org", "orgm", "j2", "toml"]
 
+[wendao_gateway]
+# Direct Wendao query endpoint used by the bounded native `wendao.search` tool.
+# query_endpoint = "http://127.0.0.1:18093/query"
+# Optional default project root injected into the search workflow.
+# default_project_root = "/path/to/project"
+
+[wendao_gateway.session_project_roots]
+# Optional exact session overrides for multi-channel deployments.
+# "discord:123456789012345678" = "/path/to/project"
+
 [qianhuan.persona]
 persona_dir = "~/.config/xiuxian-artisan-workshop/personas"
 
@@ -89,6 +99,13 @@ webhook_bind = "127.0.0.1:18081"
 # Channel runtime mode consumed by webhook launcher and omni-agent node resolver.
 # Values: "gateway" | "ingress"
 runtime_mode = "gateway"
+# Require explicit mention/reply trigger for guild text messages.
+# require_mention = true
+# Persist runtime `/session mention ...` updates into user config.
+# require_mention_persist = true
+#
+# [discord.channels."123456789012345678"]
+# require_mention = false
 
 [gateway]
 # Native Rust gateway bind used by webhook launcher when env is not provided.

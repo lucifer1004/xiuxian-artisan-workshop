@@ -5,8 +5,6 @@ use std::sync::Arc;
 use serde_json::Value;
 use xiuxian_memory_engine::EpisodeStore;
 use xiuxian_qianhuan::ManifestationManager;
-use xiuxian_wendao::LinkGraphIndex;
-use xiuxian_wendao::skill_vfs::SkillVfsResolver;
 use xiuxian_zhenfa::{ZhenfaOrchestratorHooks, ZhenfaSignalSink};
 
 use crate::agent::zhenfa as internal;
@@ -15,10 +13,7 @@ use crate::config::XiuxianConfig;
 /// Runtime dependencies used to build the zhenfa native tool bridge.
 #[derive(Clone, Default)]
 pub struct ZhenfaRuntimeDeps {
-    pub embedding_client: Option<Arc<crate::EmbeddingClient>>,
     pub manifestation_manager: Option<Arc<ManifestationManager>>,
-    pub link_graph_index: Option<Arc<LinkGraphIndex>>,
-    pub skill_vfs_resolver: Option<Arc<SkillVfsResolver>>,
     pub memory_store: Option<Arc<EpisodeStore>>,
 }
 
@@ -33,8 +28,6 @@ impl ZhenfaToolBridge {
     pub fn from_xiuxian_config(config: &XiuxianConfig, deps: &ZhenfaRuntimeDeps) -> Option<Self> {
         let internal_deps = internal::test_runtime_deps(
             deps.manifestation_manager.as_ref().map(Arc::clone),
-            deps.link_graph_index.as_ref().map(Arc::clone),
-            deps.skill_vfs_resolver.as_ref().map(Arc::clone),
             deps.memory_store.as_ref().map(Arc::clone),
         );
         internal::ZhenfaToolBridge::from_xiuxian_config(config, &internal_deps)

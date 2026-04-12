@@ -23,7 +23,7 @@ use crate::repo_index::{RepoIndexPhase, RepoIndexStatusResponse};
 use crate::{duckdb::DuckDbLocalRelationEngine, duckdb::resolve_search_duckdb_runtime};
 
 const REPO_INDEX_STATUS_DIAGNOSTICS_TABLE: &str = "repo_index_status_rows";
-const REPO_INDEX_STATUS_SUMMARY_SQL: &str = r#"
+const REPO_INDEX_STATUS_SUMMARY_SQL: &str = r"
 SELECT
   CAST(COUNT(*) AS BIGINT) AS total,
   CAST(COALESCE(SUM(CASE WHEN is_active THEN 1 ELSE 0 END), 0) AS BIGINT) AS active,
@@ -35,13 +35,13 @@ SELECT
   CAST(COALESCE(SUM(CASE WHEN phase = 'unsupported' THEN 1 ELSE 0 END), 0) AS BIGINT) AS unsupported,
   CAST(COALESCE(SUM(CASE WHEN phase = 'failed' THEN 1 ELSE 0 END), 0) AS BIGINT) AS failed
 FROM repo_index_status_rows
-"#;
-const REPO_INDEX_STATUS_ACTIVE_IDS_SQL: &str = r#"
+";
+const REPO_INDEX_STATUS_ACTIVE_IDS_SQL: &str = r"
 SELECT repo_id
 FROM repo_index_status_rows
 WHERE is_active
 ORDER BY active_order ASC, repo_id ASC
-"#;
+";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RepoIndexStatusDiagnosticsSummary {
@@ -95,15 +95,14 @@ impl RepoIndexStatusFlightRouteProvider for StudioRepoIndexStatusFlightRouteProv
 #[cfg(all(test, feature = "duckdb"))]
 pub(crate) fn configured_repo_index_status_diagnostics_engine_kind()
 -> Result<LocalRelationEngineKind, String> {
-    configured_repo_index_status_diagnostics_engine().map(|engine| engine.kind())
+    Ok(configured_repo_index_status_diagnostics_engine()?.kind())
 }
 
 pub(crate) async fn repo_index_status_response_with_diagnostics(
     response: &RepoIndexStatusResponse,
 ) -> RepoIndexStatusResponse {
-    let summary = match summarize_repo_index_status_diagnostics(response).await {
-        Ok(summary) => summary,
-        Err(_) => return response.clone(),
+    let Ok(summary) = summarize_repo_index_status_diagnostics(response).await else {
+        return response.clone();
     };
     RepoIndexStatusResponse {
         total: summary.total,
@@ -124,6 +123,7 @@ pub(crate) async fn repo_index_status_response_with_diagnostics(
     }
 }
 
+#[cfg(feature = "duckdb")]
 fn configured_repo_index_status_diagnostics_engine() -> Result<Box<dyn LocalRelationEngine>, String>
 {
     #[cfg(feature = "duckdb")]
@@ -140,11 +140,19 @@ fn configured_repo_index_status_diagnostics_engine() -> Result<Box<dyn LocalRela
     ))
 }
 
+#[cfg(not(feature = "duckdb"))]
+fn configured_repo_index_status_diagnostics_engine() -> Box<dyn LocalRelationEngine> {
+    Box::new(DataFusionLocalRelationEngine::new_with_information_schema())
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn summarize_repo_index_status_diagnostics(
     response: &RepoIndexStatusResponse,
 ) -> Result<RepoIndexStatusDiagnosticsSummary, String> {
+    #[cfg(feature = "duckdb")]
     let engine = configured_repo_index_status_diagnostics_engine()?;
+    #[cfg(not(feature = "duckdb"))]
+    let engine = configured_repo_index_status_diagnostics_engine();
     let (schema, batches) = repo_index_status_relation(response)?;
     engine.register_record_batches_with_hint(
         REPO_INDEX_STATUS_DIAGNOSTICS_TABLE,

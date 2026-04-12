@@ -4,7 +4,9 @@ use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
 use crate::search::reference_occurrence::build::{
     ReferenceOccurrenceBuildPlan, ReferenceOccurrenceWriteResult,
 };
-use crate::search::reference_occurrence::schema::{path_column, reference_occurrence_batches};
+use crate::search::reference_occurrence::schema::{
+    path_column, reference_occurrence_batches, reference_occurrence_schema,
+};
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
 
 pub(crate) async fn write_reference_occurrence_epoch(
@@ -33,6 +35,7 @@ pub(crate) async fn write_reference_occurrence_epoch(
         path_column(),
         &plan.replaced_paths,
         &changed_batches,
+        Some(reference_occurrence_schema()),
     )
     .await?;
     Ok(ReferenceOccurrenceWriteResult {

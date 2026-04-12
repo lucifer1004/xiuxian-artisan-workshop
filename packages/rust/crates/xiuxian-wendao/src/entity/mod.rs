@@ -10,7 +10,3 @@ pub mod types;
 pub use query::{EntitySearchQuery, MultiHopOptions};
 pub use records::{Entity, GraphStats, Relation};
 pub use types::*;
-
-#[cfg(test)]
-#[path = "../../tests/unit/entity/mod.rs"]
-mod tests;

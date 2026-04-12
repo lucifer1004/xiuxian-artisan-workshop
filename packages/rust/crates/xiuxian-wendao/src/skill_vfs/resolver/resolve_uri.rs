@@ -1,6 +1,7 @@
 use std::path::PathBuf;
+use xiuxian_wendao_core::WendaoResourceUri;
 
-use super::super::{SkillVfsError, WendaoResourceUri};
+use super::super::SkillVfsError;
 use super::core::SkillVfsResolver;
 
 impl SkillVfsResolver {

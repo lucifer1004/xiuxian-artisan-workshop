@@ -5,5 +5,30 @@ expression: value
 ---
 {
   "repo_id": "sciml/imports",
-  "imports": []
+  "imports": [
+    {
+      "repo_id": "sciml/imports",
+      "module_id": "module:ProjectionPkg",
+      "import_name": "SciMLBase",
+      "target_package": "SciMLBase",
+      "source_module": "SciMLBase",
+      "kind": "reexport",
+      "line_start": 4
+    }
+  ],
+  "import_hits": [
+    {
+      "import": {
+        "repo_id": "sciml/imports",
+        "module_id": "module:ProjectionPkg",
+        "import_name": "SciMLBase",
+        "target_package": "SciMLBase",
+        "source_module": "SciMLBase",
+        "kind": "reexport",
+        "line_start": 4
+      },
+      "score": 1.0,
+      "rank": 1
+    }
+  ]
 }

@@ -26,6 +26,10 @@ pub(super) const EVENT_DISCORD_COMMAND_SESSION_PARTITION_REPLIED: &str =
     "discord.command.session_partition.replied";
 pub(super) const EVENT_DISCORD_COMMAND_SESSION_PARTITION_JSON_REPLIED: &str =
     "discord.command.session_partition_json.replied";
+pub(super) const EVENT_DISCORD_COMMAND_SESSION_MENTION_REPLIED: &str =
+    "discord.command.session_mention.replied";
+pub(super) const EVENT_DISCORD_COMMAND_SESSION_MENTION_JSON_REPLIED: &str =
+    "discord.command.session_mention_json.replied";
 pub(super) const EVENT_DISCORD_COMMAND_JOB_STATUS_REPLIED: &str =
     "discord.command.job_status.replied";
 pub(super) const EVENT_DISCORD_COMMAND_JOB_STATUS_JSON_REPLIED: &str =

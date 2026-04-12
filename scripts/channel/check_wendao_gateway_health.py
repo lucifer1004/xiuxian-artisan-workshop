@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Check Wendao gateway readiness with PID ownership and the health endpoint contract."""
+"""Check Wendao gateway readiness with health and Flight business-plane signals."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -16,6 +18,8 @@ EXPECTED_HEALTH_STATUS = 200
 EXPECTED_HEALTH_SERVICE = "wendao-gateway"
 
 Opener = Callable[[Any, float], Any]
+ProcessExists = Callable[[int], bool]
+ProcessCommand = Callable[[int], str]
 
 
 def read_expected_pid(pidfile: Path) -> int:
@@ -32,26 +36,74 @@ def _normalize_process_id(raw_value: str | None) -> str:
     return (raw_value or "").strip()
 
 
-def _parse_health_payload(raw_payload: bytes) -> tuple[bool, str]:
+def process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def process_command(pid: int) -> str:
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return ""
+    return result.stdout.strip()
+
+
+def is_wendao_gateway_command(command: str) -> bool:
+    return "target/debug/wendao" in command and " gateway start" in command
+
+
+def line_reports_flight_business_plane_ready(line: str) -> bool:
+    return (
+        "arrow.flight.protocol.FlightService" in line
+        and "Arrow Flight business plane" in line
+        and "POST " in line
+    )
+
+
+def log_reports_flight_business_plane_ready(logfile: Path) -> bool:
+    try:
+        with logfile.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line_reports_flight_business_plane_ready(line):
+                    return True
+    except OSError:
+        return False
+    return False
+
+
+def _parse_health_payload(raw_payload: bytes) -> tuple[bool, str, str]:
     try:
         payload = json.loads(raw_payload.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        return False, f"health endpoint returned invalid json: {error}"
+        return False, f"health endpoint returned invalid json: {error}", ""
 
     if not isinstance(payload, dict):
-        return False, "health endpoint returned a non-object payload"
+        return False, "health endpoint returned a non-object payload", ""
 
     if payload.get("service") != EXPECTED_HEALTH_SERVICE:
         return (
             False,
             "health endpoint reported an unexpected service "
             f"({payload.get('service')!r} != {EXPECTED_HEALTH_SERVICE!r})",
+            "",
         )
 
     if payload.get("ready") is not True:
-        return False, f"health endpoint did not report ready=true: {payload!r}"
+        return False, f"health endpoint did not report ready=true: {payload!r}", ""
 
-    return True, "ok"
+    process_id = _normalize_process_id(str(payload.get("processId", "")))
+    return True, "ok", process_id
 
 
 def is_gateway_healthy(
@@ -59,21 +111,22 @@ def is_gateway_healthy(
     host: str,
     port: int,
     pidfile: Path,
+    logfile: Path,
     timeout_secs: float,
     opener: Opener = urllib.request.urlopen,
+    pid_exists: ProcessExists = process_exists,
+    process_command_for_pid: ProcessCommand = process_command,
 ) -> tuple[bool, str]:
     try:
         expected_pid = read_expected_pid(pidfile)
-    except OSError as error:
-        return False, f"failed to read pidfile {pidfile}: {error}"
-    except ValueError as error:
-        return False, str(error)
+    except (OSError, ValueError):
+        expected_pid = None
 
     health_url = f"http://{host}:{port}/api/health"
     try:
         with opener(health_url, timeout=timeout_secs) as response:
             health_status = getattr(response, "status", None)
-            actual_pid = _normalize_process_id(response.headers.get(GATEWAY_PROCESS_ID_HEADER))
+            reported_pid = _normalize_process_id(response.headers.get(GATEWAY_PROCESS_ID_HEADER))
             raw_payload = response.read()
     except urllib.error.HTTPError as error:
         return False, f"health endpoint returned HTTP {error.code}: {health_url}"
@@ -83,16 +136,31 @@ def is_gateway_healthy(
     if health_status != EXPECTED_HEALTH_STATUS:
         return False, f"health endpoint returned HTTP {health_status}: {health_url}"
 
-    if actual_pid != str(expected_pid):
-        return (
-            False,
-            "health endpoint process id does not match pidfile "
-            f"({actual_pid or 'missing'} != {expected_pid})",
-        )
-
-    payload_ok, payload_message = _parse_health_payload(raw_payload)
+    payload_ok, payload_message, payload_process_id = _parse_health_payload(raw_payload)
     if not payload_ok:
         return False, payload_message
+
+    actual_pid = reported_pid or payload_process_id
+
+    if actual_pid:
+        try:
+            candidate_pid = int(actual_pid)
+        except ValueError:
+            return False, f"health endpoint reported an invalid process id: {actual_pid!r}"
+    elif expected_pid is not None:
+        candidate_pid = expected_pid
+    else:
+        return False, "health endpoint did not report a process id and pidfile is unavailable"
+
+    if not pid_exists(candidate_pid):
+        return False, f"wendao-gateway process is not alive: {candidate_pid}"
+
+    command = process_command_for_pid(candidate_pid)
+    if command and not is_wendao_gateway_command(command):
+        return False, f"wendao-gateway process {candidate_pid} is unexpected: {command}"
+
+    if not log_reports_flight_business_plane_ready(logfile):
+        return False, f"gateway log has not reported the Flight business plane yet: {logfile}"
 
     return True, "healthy"
 
@@ -110,6 +178,12 @@ def main() -> int:
         help="Pidfile written by the Wendao gateway launcher",
     )
     parser.add_argument(
+        "--logfile",
+        type=Path,
+        required=True,
+        help="Gateway stderr log file written by the process launcher",
+    )
+    parser.add_argument(
         "--timeout-secs",
         type=float,
         default=2.0,
@@ -121,6 +195,7 @@ def main() -> int:
         host=args.host,
         port=args.port,
         pidfile=args.pidfile,
+        logfile=args.logfile,
         timeout_secs=args.timeout_secs,
     )
     if healthy:

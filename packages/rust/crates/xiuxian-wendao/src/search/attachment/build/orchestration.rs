@@ -64,18 +64,7 @@ pub(crate) fn ensure_attachment_index_started(
                         return;
                     }
                     let write = write.unwrap_or_else(|_| unreachable!());
-                    let prewarm_columns = projected_columns_with_hit_json();
-                    if let Err(error) = service
-                        .prewarm_epoch_table(lease.corpus, lease.epoch, &prewarm_columns)
-                        .await
-                    {
-                        service.coordinator().fail_build(
-                            &lease,
-                            format!("attachment epoch prewarm failed: {error}"),
-                        );
-                        return;
-                    }
-                    service.coordinator().update_progress(&lease, 0.9);
+                    service.coordinator().update_progress(&lease, 0.8);
                     if service.publish_ready_and_maintain(
                         &lease,
                         write.row_count,
@@ -87,6 +76,18 @@ pub(crate) fn ensure_attachment_index_started(
                                 &plan.file_fingerprints,
                             )
                             .await;
+                    }
+                    service.coordinator().update_progress(&lease, 0.9);
+                    let prewarm_columns = projected_columns_with_hit_json();
+                    if let Err(error) = service
+                        .prewarm_epoch_table(lease.corpus, lease.epoch, &prewarm_columns)
+                        .await
+                    {
+                        log::warn!(
+                            "attachment epoch prewarm failed after publish for epoch {}: {}",
+                            lease.epoch,
+                            error
+                        );
                     }
                     service.coordinator().update_progress(&lease, 1.0);
                 }

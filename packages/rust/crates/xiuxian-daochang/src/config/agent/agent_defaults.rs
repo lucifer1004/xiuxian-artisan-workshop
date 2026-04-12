@@ -52,6 +52,8 @@ pub(super) fn default_summary_max_chars() -> usize {
     480
 }
 
+use crate::config::{RuntimeSettings, load_runtime_settings};
+
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
@@ -121,7 +123,10 @@ impl AgentConfig {
     /// so we do not send a key — the local service holds the key and forwards to the real LLM.
     #[must_use]
     pub fn resolve_api_key(&self) -> Option<String> {
-        self.resolve_api_key_with_env_reader(|key| std::env::var(key).ok())
+        let runtime_settings = load_runtime_settings();
+        self.resolve_api_key_with_runtime_settings_and_env_reader(&runtime_settings, |key| {
+            std::env::var(key).ok()
+        })
     }
 
     /// Resolve API key using a pluggable environment reader.
@@ -133,11 +138,34 @@ impl AgentConfig {
     where
         F: FnMut(&str) -> Option<String>,
     {
+        let runtime_settings = load_runtime_settings();
+        self.resolve_api_key_with_runtime_settings_and_env_reader(&runtime_settings, |key| {
+            read_env(key)
+        })
+    }
+
+    fn resolve_api_key_with_runtime_settings_and_env_reader<F>(
+        &self,
+        runtime_settings: &RuntimeSettings,
+        mut read_env: F,
+    ) -> Option<String>
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
         if let Some(ref key) = self.api_key {
             return Some(key.clone());
         }
         if self.inference_url.contains("127.0.0.1") || self.inference_url.contains("localhost") {
             return None;
+        }
+        if inference_url_matches_runtime_settings_base(&self.inference_url, runtime_settings) {
+            return runtime_settings
+                .inference
+                .api_key
+                .as_deref()
+                .and_then(|configured| {
+                    resolve_runtime_settings_api_key(configured, &mut read_env)
+                });
         }
         if self.inference_url.contains("anthropic")
             || self.inference_url.contains("claude")
@@ -147,4 +175,75 @@ impl AgentConfig {
         }
         read_env("OPENAI_API_KEY")
     }
+}
+
+fn inference_url_matches_runtime_settings_base(
+    inference_url: &str,
+    runtime_settings: &RuntimeSettings,
+) -> bool {
+    let Some(configured_base) = runtime_settings
+        .inference
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+
+    canonicalize_runtime_api_base(inference_url) == canonicalize_runtime_api_base(configured_base)
+}
+
+fn canonicalize_runtime_api_base(raw: &str) -> String {
+    let trimmed = raw.trim().trim_end_matches('/');
+    let without_suffix = trimmed
+        .strip_suffix("/v1/chat/completions")
+        .or_else(|| trimmed.strip_suffix("/chat/completions"))
+        .or_else(|| trimmed.strip_suffix("/v1/messages"))
+        .or_else(|| trimmed.strip_suffix("/messages"))
+        .unwrap_or(trimmed)
+        .trim_end_matches('/');
+
+    without_suffix
+        .strip_suffix("/v1")
+        .unwrap_or(without_suffix)
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn is_env_var_name(raw: &str) -> bool {
+    let mut chars = raw.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first == '_' || first.is_ascii_uppercase()) {
+        return false;
+    }
+    chars.all(|ch| ch == '_' || ch.is_ascii_uppercase() || ch.is_ascii_digit())
+}
+
+fn resolve_runtime_settings_api_key(
+    configured: &str,
+    read_env: &mut impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    let raw = configured.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    if let Some(env_name) = raw.strip_prefix("env:")
+        && is_env_var_name(env_name)
+    {
+        return read_env(env_name);
+    }
+    if raw.starts_with("${")
+        && raw.ends_with('}')
+        && raw.len() > 3
+        && is_env_var_name(&raw[2..raw.len() - 1])
+    {
+        return read_env(&raw[2..raw.len() - 1]);
+    }
+    if is_env_var_name(raw) {
+        return read_env(raw);
+    }
+    Some(raw.to_string())
 }

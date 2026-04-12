@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use xiuxian_qianhuan::{ManifestationManager, MemoryTemplateRecord};
-use xiuxian_wendao::skill_vfs::{WendaoResourceUri, embedded_resource_text_from_wendao_uri};
+use xiuxian_wendao::{WendaoResourceUri, embedded_resource_text_from_wendao_uri};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct ZhixingSkillTemplateLoadSummary {
@@ -198,17 +198,17 @@ pub(crate) fn load_skill_templates_from_embedded_registry(
     })?;
     let mut links_by_template_id: HashMap<String, Vec<String>> = HashMap::new();
     for file in registry.files() {
-        for (id, links) in file.links_by_id() {
-            let Some(block) = registry.get(id) else {
-                continue;
-            };
-            if !block.config_type.eq_ignore_ascii_case(TEMPLATE_CONFIG_TYPE) {
-                continue;
-            }
+        for (id, targets) in file.link_targets_by_id() {
             let entry = links_by_template_id.entry(id.clone()).or_default();
-            for link in links {
-                if !entry.iter().any(|existing| existing == link) {
-                    entry.push(link.clone());
+            for target in targets {
+                if target.reference_type.as_deref() != Some(TEMPLATE_CONFIG_TYPE) {
+                    continue;
+                }
+                if !entry
+                    .iter()
+                    .any(|existing| existing == target.target_path.as_str())
+                {
+                    entry.push(target.target_path.clone());
                 }
             }
         }

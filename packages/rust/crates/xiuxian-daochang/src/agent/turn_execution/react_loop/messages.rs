@@ -171,10 +171,6 @@ impl Agent {
     }
 
     pub(super) async fn load_tools_json_for_react(&self) -> Result<Option<Vec<serde_json::Value>>> {
-        if self.tool_runtime.is_some() {
-            self.tool_definitions_for_llm().await
-        } else {
-            Ok(None)
-        }
+        self.tool_definitions_for_llm().await
     }
 }

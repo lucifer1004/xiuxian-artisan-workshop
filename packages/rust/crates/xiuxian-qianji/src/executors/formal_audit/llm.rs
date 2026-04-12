@@ -7,6 +7,8 @@ use std::sync::Arc;
 use xiuxian_llm::llm::{ChatRequest, LlmClient};
 use xiuxian_zhenfa::{StreamProvider, ZhenfaPipeline, ZhenfaTransmuter};
 
+const FORMAL_AUDIT_XML_SCORE_CONTRACT: &str = "Return XML only. Include exactly one numeric <score> tag with a value in [0.0, 1.0]. Include a <reason> tag that explains the score. Do not emit Markdown or prose outside XML.";
+
 fn context_non_empty_string(context: &Value, key: &str) -> Option<String> {
     context
         .get(key)
@@ -165,6 +167,7 @@ impl LlmAugmentedAuditMechanism {
     ) -> Result<(String, Option<CognitiveMetrics>), String> {
         let request = ChatRequest::new(resolve_model_for_request(context, &self.model))
             .add_system_message(prompt)
+            .add_system_message(FORMAL_AUDIT_XML_SCORE_CONTRACT)
             .add_user_message(user_query)
             .with_temperature(0.1);
 

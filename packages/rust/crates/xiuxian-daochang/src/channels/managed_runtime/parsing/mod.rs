@@ -8,11 +8,11 @@ pub(crate) use commands::{
     parse_job_status_command, parse_jobs_summary_command, parse_resume_context_command,
     parse_session_context_budget_command, parse_session_context_memory_command,
     parse_session_context_status_command, parse_session_feedback_command,
-    parse_session_partition_command,
+    parse_session_mention_command, parse_session_partition_command,
 };
 pub(crate) use normalize::{normalize_command_input, slice_original_command_suffix};
 pub(crate) use types::{
     FeedbackDirection, JobStatusCommand, OutputFormat, ResumeCommand, SessionFeedbackCommand,
-    SessionPartitionCommand, SessionPartitionModeToken, parse_session_partition_mode_token,
-    session_partition_mode_name,
+    SessionMentionCommand, SessionMentionMode, SessionPartitionCommand, SessionPartitionModeToken,
+    parse_session_partition_mode_token, session_partition_mode_name,
 };

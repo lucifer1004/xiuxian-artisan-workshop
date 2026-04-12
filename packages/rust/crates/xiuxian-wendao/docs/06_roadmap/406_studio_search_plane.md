@@ -741,10 +741,11 @@ Replace Studio request-path search hot spots with a background-built search plan
   indexing on first access instead of remaining stuck at `total = 0` with a
   populated repo-project config
 - Studio UI config persistence now also has a stable on-disk contract. The
-  handler persists `UiConfig` into `wendao.studio.overlay.toml`, that wrapper
-  imports the base `wendao.toml`, and gateway bootstrap plus Studio bootstrap
-  both prefer the effective overlay path when it exists. This keeps live UI
-  updates restart-stable without mutating unrelated base gateway settings.
+  handler persists `UiConfig` back into the base `wendao.toml`, while still
+  reading any legacy `wendao.studio.overlay.toml` during migration and
+  removing it on the next successful write. Gateway bootstrap plus Studio
+  bootstrap therefore keep old overlay-backed state bootable without
+  continuing to generate overlay files.
 - gateway boot now also enforces a fail-fast startup dependency gate before it
   spawns background workers or binds the listener. `wendao gateway start`
   probes the built-in plugin registry plus the TOML-owned search-cache and

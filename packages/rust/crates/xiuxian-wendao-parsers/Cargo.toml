@@ -1,0 +1,19 @@
+[package]
+name = "xiuxian-wendao-parsers"
+version.workspace = true
+edition.workspace = true
+description = "Independent parser surfaces and parser-owned contracts for Wendao-adjacent consumers"
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+comrak = { workspace = true }
+blake3 = "1"
+regex = "1"
+xiuxian-testing = { path = "../xiuxian-testing" }
+
+[lints]
+workspace = true

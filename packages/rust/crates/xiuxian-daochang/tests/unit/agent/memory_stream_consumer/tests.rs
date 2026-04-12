@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::unit::live_gates::{live_valkey_enabled, resolve_live_valkey_url};
 use anyhow::Result;
 use redis::Value;
 use tokio::time::{Duration, sleep};
@@ -23,14 +24,10 @@ fn unique_id(prefix: &str) -> String {
 }
 
 fn live_redis_url() -> Option<String> {
-    for key in ["VALKEY_URL"] {
-        if let Ok(url) = std::env::var(key)
-            && !url.trim().is_empty()
-        {
-            return Some(url);
-        }
+    if !live_valkey_enabled() {
+        return None;
     }
-    None
+    resolve_live_valkey_url()
 }
 
 #[test]
@@ -198,7 +195,6 @@ fn should_surface_repeated_failure_throttles_noise() {
 }
 
 #[tokio::test]
-#[ignore = "requires running Valkey/Redis on VALKEY_URL"]
 async fn memory_stream_consumer_acks_and_tracks_metrics() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
         return Ok(());
@@ -313,7 +309,6 @@ async fn memory_stream_consumer_acks_and_tracks_metrics() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "requires running Valkey/Redis on VALKEY_URL"]
 async fn memory_stream_consumer_read_empty_stream_returns_empty() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
         return Ok(());
@@ -358,7 +353,6 @@ async fn memory_stream_consumer_read_empty_stream_returns_empty() -> Result<()> 
 }
 
 #[tokio::test]
-#[ignore = "requires running Valkey/Redis on VALKEY_URL"]
 async fn memory_stream_consumer_recovers_after_stream_key_expired() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
         return Ok(());
@@ -563,7 +557,6 @@ async fn cleanup_promoted_queue_test_keys(
 }
 
 #[tokio::test]
-#[ignore = "requires running Valkey/Redis on VALKEY_URL"]
 async fn memory_promoted_events_are_queued_once_for_knowledge_ingest() -> Result<()> {
     let Some(redis_url) = live_redis_url() else {
         return Ok(());

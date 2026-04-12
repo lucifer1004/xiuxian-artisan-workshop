@@ -56,6 +56,19 @@ fn parse_litellm_provider_mode(raw: Option<&str>) -> LiteLlmProviderMode {
     match raw.map(str::trim).map(str::to_ascii_lowercase) {
         Some(value) if value == "minimax" => LiteLlmProviderMode::Minimax,
         Some(value) if value == "anthropic" => LiteLlmProviderMode::Anthropic,
+        Some(value)
+            if matches!(
+                value.as_str(),
+                "openai"
+                    | "openai_like"
+                    | "openai-like"
+                    | "openai_compatible"
+                    | "openai-compatible"
+                    | "deepseek"
+            ) =>
+        {
+            LiteLlmProviderMode::OpenAi
+        }
         Some(value) if value.is_empty() => LiteLlmProviderMode::OpenAi,
         None => LiteLlmProviderMode::OpenAi,
         Some(value) => {

@@ -16,9 +16,10 @@ pub use loader::{
 };
 pub use types::{
     DiscordAclAllowSettings, DiscordAclControlSettings, DiscordAclPrincipalSettings,
-    DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings, EmbeddingSettings,
-    InferenceSettings, MemorySettings, MistralSettings, RuntimeSettings, SessionSettings,
-    TelegramAclAllowSettings, TelegramAclControlSettings, TelegramAclPrincipalSettings,
-    TelegramAclRuleSettings, TelegramAclSettings, TelegramAclSlashSettings, TelegramGroupSettings,
-    TelegramSettings, TelegramTopicSettings, ToolRuntimeSettings,
+    DiscordAclSettings, DiscordAclSlashSettings, DiscordChannelSettings, DiscordSettings,
+    EmbeddingSettings, InferenceSettings, MemorySettings, MistralSettings, RuntimeSettings,
+    SessionSettings, TelegramAclAllowSettings, TelegramAclControlSettings,
+    TelegramAclPrincipalSettings, TelegramAclRuleSettings, TelegramAclSettings,
+    TelegramAclSlashSettings, TelegramGroupSettings, TelegramSettings, TelegramTopicSettings,
+    ToolRuntimeSettings,
 };

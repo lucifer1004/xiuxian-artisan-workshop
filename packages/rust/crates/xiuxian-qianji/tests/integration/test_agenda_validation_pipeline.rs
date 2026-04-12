@@ -23,7 +23,7 @@ use xiuxian_qianji::{
     QianjiScheduler, manifest_declares_qianhuan_bindings, manifest_requires_llm,
 };
 use xiuxian_wendao::link_graph::LinkGraphIndex;
-use xiuxian_wendao::skill_vfs::embedded_resource_text_from_wendao_uri;
+use xiuxian_wendao_runtime::artifacts::zhixing::embedded_resource_text_from_wendao_uri;
 
 const AGENDA_VALIDATION_WORKFLOW_URI: &str =
     "wendao://skills/agenda-management/references/agenda_flow.toml";
@@ -93,7 +93,9 @@ fn agenda_validation_manifest_contains_required_nodes_and_bindings() {
     let professor_binding = qianhuan_binding(professor);
     assert_eq!(
         professor_binding.persona_id.as_deref(),
-        Some("$wendao://skills/agenda-management/references/teacher.md")
+        Some(
+            "$wendao://skills/agenda-management/references/teacher.md#[Heading:Architecture, Paragraph:3]"
+        )
     );
     assert_eq!(professor_binding.template_target.as_deref(), None);
     assert_eq!(
@@ -124,6 +126,15 @@ fn agenda_validation_manifest_contains_required_nodes_and_bindings() {
             .get("score_key")
             .and_then(serde_json::Value::as_str),
         Some("governance_score")
+    );
+    assert_eq!(
+        professor
+            .params
+            .get("retry_targets")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(serde_json::Value::as_str),
+        Some("Professor_Audit")
     );
 
     let reflection = node_by_id(&manifest, "Final_Reflection");
@@ -265,6 +276,90 @@ async fn agenda_validation_pipeline_compiles_and_runs_happy_path() {
         .map(|guard| guard.clone())
         .unwrap_or_default();
     assert_eq!(models, vec![String::new()]);
+}
+
+#[cfg(feature = "llm")]
+#[tokio::test]
+async fn agenda_validation_pipeline_professor_prompt_stays_flattened() {
+    const DEDUP_MARKER: &str = "agenda-dedup-marker-8cf1";
+
+    let temp_dir = tempfile::tempdir()
+        .unwrap_or_else(|error| panic!("temp dir should be created successfully: {error}"));
+    let index = Arc::new(
+        LinkGraphIndex::build(temp_dir.path())
+            .unwrap_or_else(|error| panic!("index should build on temp dir: {error}")),
+    );
+    let orchestrator = Arc::new(ThousandFacesOrchestrator::new(
+        "Safety rules".to_string(),
+        None,
+    ));
+    let mut registry = PersonaRegistry::with_builtins();
+    registry.register(PersonaProfile {
+        id: "agenda_steward".to_string(),
+        name: "Agenda Steward".to_string(),
+        background: None,
+        voice_tone: "Direct and structured.".to_string(),
+        guidelines: Vec::new(),
+        style_anchors: vec!["timeboxing".to_string()],
+        cot_template: "1. Parse intent -> 2. Produce agenda.".to_string(),
+        forbidden_words: vec![],
+        metadata: HashMap::new(),
+    });
+    registry.register(PersonaProfile {
+        id: "strict_teacher".to_string(),
+        name: "Strict Teacher".to_string(),
+        background: None,
+        voice_tone: "Critical and precise.".to_string(),
+        guidelines: vec!["Evaluate agenda rigor.".to_string()],
+        style_anchors: Vec::new(),
+        cot_template: "1. Critique -> 2. Score -> 3. Decide".to_string(),
+        forbidden_words: vec![],
+        metadata: HashMap::new(),
+    });
+    let registry = Arc::new(registry);
+    let llm_client: Arc<xiuxian_qianji::QianjiLlmClient> = Arc::new(StaticScoreLlmClient {
+        response: "<score>0.95</score><reason>acceptable</reason>".to_string(),
+        seen_models: Arc::new(Mutex::new(Vec::new())),
+    });
+    let manifest_toml = agenda_validation_manifest_toml();
+
+    let scheduler = QianjiApp::create_pipeline_from_manifest(
+        manifest_toml,
+        index,
+        orchestrator,
+        registry,
+        Some(llm_client),
+    )
+    .unwrap_or_else(|error| {
+        panic!("agenda validation pipeline should compile successfully: {error}")
+    });
+    let output = scheduler
+        .run(json!({
+            "raw_facts": format!(
+                "timeboxing; execution order; deadline awareness; review loop; tool output fidelity; single message clarity; language alignment; cognitive load; historical carryover; execution realism; risk-first review; carryover=1; milimeter-level alignment; audit trail; traceability; architectural consistency; {DEDUP_MARKER}"
+            ),
+            "request": "Generate today agenda and critique it with explicit risk-first review.",
+        }))
+        .await
+        .unwrap_or_else(|error| panic!("agenda validation pipeline should execute: {error}"));
+
+    let professor_prompt = output["professor_annotated_prompt"]
+        .as_str()
+        .unwrap_or_else(|| panic!("professor_annotated_prompt should be a string"));
+    assert!(
+        !professor_prompt.contains("&lt;system_prompt_injection&gt;"),
+        "professor prompt should not contain escaped nested snapshots"
+    );
+    assert!(
+        professor_prompt.len() <= 4096,
+        "professor prompt should stay within a bounded transport budget, got {} bytes",
+        professor_prompt.len()
+    );
+    assert_eq!(
+        professor_prompt.matches(DEDUP_MARKER).count(),
+        1,
+        "professor prompt should not carry duplicate flattened narrative segments: {professor_prompt}"
+    );
 }
 
 #[cfg(not(feature = "llm"))]

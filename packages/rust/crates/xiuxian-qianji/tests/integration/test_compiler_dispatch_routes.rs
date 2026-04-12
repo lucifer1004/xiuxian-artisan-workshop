@@ -128,6 +128,16 @@ weight = 1.0
 params = { retry_targets = ["Steward"] }
 "#;
 
+const FORMAL_AUDIT_NATIVE_WITH_MAX_RETRIES_MANIFEST: &str = r#"
+name = "FormalAuditNativeWithMaxRetriesDispatch"
+
+[[nodes]]
+id = "Teacher"
+task_type = "formal_audit"
+weight = 1.0
+params = { retry_targets = ["Steward"], max_retries = 2 }
+"#;
+
 #[cfg(not(feature = "llm"))]
 const LLM_TASK_MANIFEST: &str = r#"
 name = "LlmDispatch"
@@ -157,6 +167,36 @@ id = "WendaoRefresh"
 task_type = "wendao_refresh"
 weight = 1.0
 params = {}
+"#;
+
+const WENDAO_SQL_DISCOVER_MANIFEST: &str = r#"
+name = "WendaoSqlDiscoverDispatch"
+
+[[nodes]]
+id = "WendaoSqlDiscover"
+task_type = "wendao_sql_discover"
+weight = 1.0
+params = { endpoint = "http://127.0.0.1:39001/query" }
+"#;
+
+const WENDAO_SQL_VALIDATE_MANIFEST: &str = r#"
+name = "WendaoSqlValidateDispatch"
+
+[[nodes]]
+id = "WendaoSqlValidate"
+task_type = "wendao_sql_validate"
+weight = 1.0
+params = {}
+"#;
+
+const WENDAO_SQL_EXECUTE_MANIFEST: &str = r#"
+name = "WendaoSqlExecuteDispatch"
+
+[[nodes]]
+id = "WendaoSqlExecute"
+task_type = "wendao_sql_execute"
+weight = 1.0
+params = { endpoint = "http://127.0.0.1:39001/query" }
 "#;
 
 #[cfg(not(feature = "llm"))]
@@ -273,6 +313,36 @@ fn compiler_dispatches_wendao_refresh_via_leaf_lane() -> Result<(), Box<dyn std:
 }
 
 #[test]
+fn compiler_dispatches_wendao_sql_discover_via_leaf_lane() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let engine = compiler.compile(WENDAO_SQL_DISCOVER_MANIFEST)?;
+    assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_dispatches_wendao_sql_validate_via_leaf_lane() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let engine = compiler.compile(WENDAO_SQL_VALIDATE_MANIFEST)?;
+    assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_dispatches_wendao_sql_execute_via_leaf_lane() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let engine = compiler.compile(WENDAO_SQL_EXECUTE_MANIFEST)?;
+    assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
 fn compiler_dispatches_calibration_task_via_leaf_lane() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let compiler = build_compiler(temp.path())?;
@@ -353,6 +423,21 @@ fn compiler_dispatches_formal_audit_native_path() -> Result<(), Box<dyn std::err
     let compiler = build_compiler(temp.path())?;
     let engine = compiler.compile(FORMAL_AUDIT_NATIVE_MANIFEST)?;
     assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_rejects_native_formal_audit_with_max_retries_without_llm_controller()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let error = compiler
+        .compile(FORMAL_AUDIT_NATIVE_WITH_MAX_RETRIES_MANIFEST)
+        .err()
+        .unwrap_or_else(|| panic!("native formal_audit with max_retries should fail"));
+    let message = error.to_string();
+    assert!(message.contains("formal_audit.max_retries"));
+    assert!(message.contains("native formal_audit"));
     Ok(())
 }
 

@@ -8,6 +8,7 @@ use xiuxian_wendao::graph::KnowledgeGraph;
 use xiuxian_zhixing::storage::MarkdownStorage;
 
 use super::*;
+use crate::config::{WendaoGatewayConfig, XiuxianConfig};
 
 const AGENDA_ADD_MANIFEST: &str = r#"id = "xiuxian.zhixing.agenda.add"
 
@@ -128,7 +129,13 @@ fn blocks_alias_mount_on_ghost_links() -> Result<()> {
 
     let mut registry = NativeToolRegistry::new();
     let mut mounts = ServiceMountCatalog::new();
-    mount_native_tool_cauldron(Some(&heyi), Some(&resolver), &mut registry, &mut mounts);
+    mount_native_tool_cauldron(
+        None,
+        Some(&heyi),
+        Some(&resolver),
+        &mut registry,
+        &mut mounts,
+    );
 
     assert!(registry.get("agenda.add").is_none());
     let records = mounts.finish();
@@ -152,7 +159,13 @@ fn mounts_authorized_aliases_and_skips_unauthorized() -> Result<()> {
 
     let mut registry = NativeToolRegistry::new();
     let mut mounts = ServiceMountCatalog::new();
-    mount_native_tool_cauldron(Some(&heyi), Some(&resolver), &mut registry, &mut mounts);
+    mount_native_tool_cauldron(
+        None,
+        Some(&heyi),
+        Some(&resolver),
+        &mut registry,
+        &mut mounts,
+    );
 
     assert!(registry.get("agenda.add").is_some());
     assert!(registry.get("agenda.view").is_some());
@@ -178,5 +191,69 @@ fn mounts_authorized_aliases_and_skips_unauthorized() -> Result<()> {
             .unwrap_or_default()
             .contains("unauthorized=1")
     );
+    Ok(())
+}
+
+#[test]
+fn mounts_wendao_search_when_gateway_configured() -> Result<()> {
+    let mut registry = NativeToolRegistry::new();
+    let mut mounts = ServiceMountCatalog::new();
+    let mut config = XiuxianConfig::default();
+    config.wendao_gateway = WendaoGatewayConfig {
+        query_endpoint: Some("http://127.0.0.1:18093/query".to_string()),
+        default_project_root: Some("/repo/default".to_string()),
+        session_project_roots: std::collections::HashMap::new(),
+    };
+
+    mount_native_tool_cauldron(Some(&config), None, None, &mut registry, &mut mounts);
+
+    assert!(registry.get("wendao.search").is_some());
+    let records = mounts.finish();
+    let record = records
+        .iter()
+        .find(|record| record.service == "native.wendao_search")
+        .ok_or_else(|| anyhow!("wendao search mount record should exist"))?;
+    assert_eq!(
+        serde_json::to_value(record.status)?,
+        serde_json::Value::String("mounted".to_string())
+    );
+    assert_eq!(
+        record.endpoint.as_deref(),
+        Some("http://127.0.0.1:18093/query")
+    );
+    Ok(())
+}
+
+#[test]
+fn mounts_wendao_search_even_when_gateway_endpoint_is_not_preconfigured() -> Result<()> {
+    let mut registry = NativeToolRegistry::new();
+    let mut mounts = ServiceMountCatalog::new();
+
+    mount_native_tool_cauldron(
+        Some(&XiuxianConfig::default()),
+        None,
+        None,
+        &mut registry,
+        &mut mounts,
+    );
+
+    assert!(registry.get("wendao.search").is_some());
+    let records = mounts.finish();
+    let record = records
+        .iter()
+        .find(|record| record.service == "native.wendao_search")
+        .ok_or_else(|| anyhow!("wendao search mount record should exist"))?;
+    assert_eq!(
+        serde_json::to_value(record.status)?,
+        serde_json::Value::String("mounted".to_string())
+    );
+    assert!(
+        record
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("config=runtime_dynamic")
+    );
+    assert!(record.endpoint.is_none());
     Ok(())
 }

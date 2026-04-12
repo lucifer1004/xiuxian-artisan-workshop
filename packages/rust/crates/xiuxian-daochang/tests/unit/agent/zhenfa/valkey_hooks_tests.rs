@@ -1,3 +1,4 @@
+use crate::unit::live_gates::resolve_enabled_live_valkey_url;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -116,17 +117,6 @@ impl ZhenfaTool for LiveMutationTool {
     }
 }
 
-fn resolve_live_valkey_url() -> Option<String> {
-    for key in ["VALKEY_URL", "XIUXIAN_WENDAO_VALKEY_URL"] {
-        let value = std::env::var(key).ok().unwrap_or_default();
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
-        }
-    }
-    None
-}
-
 fn purge_valkey_prefix(url: &str, key_prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
     let client = redis::Client::open(url)?;
     let mut connection = client.get_connection()?;
@@ -237,10 +227,8 @@ async fn assert_mutation_lock_contention(
 }
 
 #[tokio::test]
-#[ignore = "requires live valkey server and socket access"]
 async fn live_valkey_hooks_cover_cache_lock_and_audit_stream() {
-    let Some(valkey_url) = resolve_live_valkey_url() else {
-        eprintln!("skip: set VALKEY_URL or XIUXIAN_WENDAO_VALKEY_URL for live zhenfa hook test");
+    let Some(valkey_url) = resolve_enabled_live_valkey_url("live zhenfa hook test") else {
         return;
     };
 

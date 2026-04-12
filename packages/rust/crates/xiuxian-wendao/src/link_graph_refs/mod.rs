@@ -1,7 +1,7 @@
 //! `LinkGraph` reference extraction primitives.
 //!
 //! Provides `LinkGraph`-oriented consumers over the canonical Markdown
-//! wikilink parser in `crate::parsers::markdown::wikilinks`.
+//! wikilink parser in `xiuxian_wendao_parsers::wikilinks`.
 //!
 //! Cross-note patterns include `[[EntityName]]`, `[[EntityName#Heading]]`,
 //! and `[[EntityName#^block-id]]`.

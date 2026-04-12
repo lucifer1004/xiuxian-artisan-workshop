@@ -3,7 +3,9 @@ use litellm_rs::core::types::message::MessageContent as LiteMessageContent;
 use litellm_rs::core::types::message::MessageRole as LiteMessageRole;
 
 use xiuxian_daochang::ChatMessage;
-use xiuxian_daochang::test_support::chat_message_to_litellm_message;
+use xiuxian_daochang::test_support::{
+    chat_message_to_litellm_message, chat_message_to_litellm_message_for_openai_chat,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -125,6 +127,25 @@ fn litellm_converter_maps_tool_message_to_tool_result_part() -> TestResult {
             panic!("expected multipart content, got text: {text:?}")
         }
     }
+    Ok(())
+}
+
+#[test]
+fn openai_chat_converter_keeps_tool_message_as_text_content() -> TestResult {
+    let message = ChatMessage {
+        role: "tool".to_string(),
+        content: Some("{\"ok\":true}".to_string()),
+        tool_calls: None,
+        tool_call_id: Some("call_123".to_string()),
+        name: Some("web.crawl".to_string()),
+    };
+    let converted = chat_message_to_litellm_message_for_openai_chat(message)?;
+    assert!(matches!(converted.role, LiteMessageRole::Tool));
+    match converted.content {
+        Some(LiteMessageContent::Text(text)) => assert_eq!(text, "{\"ok\":true}"),
+        other => panic!("expected plain text content for openai chat tool message, got {other:?}"),
+    }
+    assert_eq!(converted.tool_call_id.as_deref(), Some("call_123"));
     Ok(())
 }
 

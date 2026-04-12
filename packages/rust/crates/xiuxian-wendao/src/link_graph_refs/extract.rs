@@ -1,6 +1,6 @@
 use super::model::LinkGraphEntityRef;
-use crate::parsers::markdown::{extract_wikilinks, parse_wikilink_literal};
 use std::collections::HashSet;
+use xiuxian_wendao_parsers::{extract_wikilinks, parse_wikilink_literal};
 
 /// Extract all entity references from note content.
 ///
@@ -23,10 +23,10 @@ pub fn extract_entity_refs(content: &str) -> Vec<LinkGraphEntityRef> {
     let mut refs: Vec<LinkGraphEntityRef> = Vec::new();
 
     for wikilink in extract_wikilinks(content) {
-        let Some(name) = wikilink.target else {
+        let Some(name) = wikilink.addressed_target.target else {
             continue;
         };
-        let dedupe_key = match &wikilink.target_address {
+        let dedupe_key = match &wikilink.addressed_target.target_address {
             Some(address) => format!("{name}{address}"),
             None => name.clone(),
         };
@@ -35,7 +35,7 @@ pub fn extract_entity_refs(content: &str) -> Vec<LinkGraphEntityRef> {
             seen.insert(dedupe_key);
             refs.push(LinkGraphEntityRef::new(
                 name,
-                wikilink.target_address,
+                wikilink.addressed_target.target_address,
                 wikilink.original,
             ));
         }
@@ -110,10 +110,10 @@ pub fn is_valid_entity_ref(text: &str) -> bool {
 #[must_use]
 pub fn parse_entity_ref(text: &str) -> Option<LinkGraphEntityRef> {
     let parsed = parse_wikilink_literal(text)?;
-    let name = parsed.target?;
+    let name = parsed.addressed_target.target?;
     Some(LinkGraphEntityRef::new(
         name,
-        parsed.target_address,
+        parsed.addressed_target.target_address,
         text.to_string(),
     ))
 }

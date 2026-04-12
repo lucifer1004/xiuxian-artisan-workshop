@@ -65,8 +65,8 @@ pub use llm::{
 #[cfg(feature = "agent-provider-litellm")]
 pub use llm::{
     CustomBaseFallbackTransport, build_responses_payload_from_chat_completion_request,
-    chat_message_to_litellm_message, parse_responses_stream_tool_names,
-    resolve_custom_base_transport_api_key_from_values,
+    chat_message_to_litellm_message, chat_message_to_litellm_message_for_openai_chat,
+    parse_responses_stream_tool_names, resolve_custom_base_transport_api_key_from_values,
 };
 pub use managed_parser::{detect_managed_control_command, detect_managed_slash_command};
 pub use managed_runtime::{
@@ -126,7 +126,8 @@ pub use telegram_parser::{
     parse_resume_context_command, parse_session_admin_command,
     parse_session_context_budget_command, parse_session_context_memory_command,
     parse_session_context_status_command, parse_session_feedback_command,
-    parse_session_injection_command, parse_session_partition_command,
+    parse_session_injection_command, parse_session_mention_command,
+    parse_session_partition_command,
 };
 pub use telegram_runtime::{
     TelegramForegroundInterruptController, handle_telegram_inbound_message_with_interrupt,
@@ -138,7 +139,7 @@ pub use types::{
     JobStatusCommand, ManagedControlCommand, ManagedSlashCommand, OutputFormat,
     ResumeContextCommand, SessionAdminAction, SessionAdminCommand, SessionFeedbackCommand,
     SessionFeedbackDirection, SessionInjectionAction, SessionInjectionCommand,
-    SessionPartitionCommand, SessionPartitionMode,
+    SessionMentionCommand, SessionMentionMode, SessionPartitionCommand, SessionPartitionMode,
 };
 pub use warmup::{WarmupEnvOverrides, WarmupOptions, resolve_warmup_options};
 pub use zhenfa::{

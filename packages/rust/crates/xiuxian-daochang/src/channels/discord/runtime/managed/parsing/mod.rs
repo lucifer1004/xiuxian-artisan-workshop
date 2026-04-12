@@ -1,12 +1,13 @@
 pub(super) use crate::channels::managed_runtime::parsing::{
-    FeedbackDirection, ResumeCommand, SessionFeedbackCommand,
-    SessionPartitionCommand as SharedSessionPartitionCommand,
+    FeedbackDirection, ResumeCommand, SessionFeedbackCommand, SessionMentionCommand,
+    SessionMentionMode, SessionPartitionCommand as SharedSessionPartitionCommand,
 };
 use crate::channels::managed_runtime::parsing::{
     OutputFormat, SessionPartitionModeToken, parse_background_prompt, parse_help_command,
     parse_job_status_command, parse_jobs_summary_command, parse_resume_context_command,
     parse_session_context_budget_command, parse_session_context_memory_command,
     parse_session_context_status_command, parse_session_feedback_command,
+    parse_session_mention_command,
     parse_session_partition_command as parse_session_partition_shared,
     parse_session_partition_mode_token as parse_partition_mode_token,
 };
@@ -26,6 +27,7 @@ pub(super) enum ManagedCommand {
     SessionBudget(CommandOutputFormat),
     SessionMemory(CommandOutputFormat),
     SessionFeedback(SessionFeedbackCommand),
+    SessionMention(SessionMentionCommand),
     SessionPartition(SessionPartitionCommand),
     JobStatus {
         job_id: String,
@@ -47,6 +49,9 @@ pub(super) fn parse_managed_command(input: &str) -> Option<ManagedCommand> {
     }
     if let Some(command) = parse_session_partition_command(input) {
         return Some(ManagedCommand::SessionPartition(command));
+    }
+    if let Some(command) = parse_session_mention_command(input) {
+        return Some(ManagedCommand::SessionMention(command));
     }
     if let Some(format) = parse_session_context_status_command(input) {
         return Some(ManagedCommand::SessionStatus(format));

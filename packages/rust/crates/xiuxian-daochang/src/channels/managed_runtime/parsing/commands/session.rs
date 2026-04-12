@@ -1,7 +1,8 @@
 use super::super::helpers::eq_any_ignore_ascii;
 use super::super::normalize::normalize_command_input;
 use super::super::types::{
-    FeedbackDirection, OutputFormat, SessionFeedbackCommand, SessionPartitionCommand,
+    FeedbackDirection, OutputFormat, SessionFeedbackCommand, SessionMentionCommand,
+    SessionMentionMode, SessionPartitionCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +122,62 @@ where
     }
 }
 
+pub(crate) fn parse_session_mention_command(input: &str) -> Option<SessionMentionCommand> {
+    let normalized = normalize_command_input(input);
+    let mut parts = normalized.split_whitespace();
+    let command = parts.next()?;
+    if !is_session_family_command(command) {
+        return None;
+    }
+    let sub = parts.next()?;
+    if !eq_any_ignore_ascii(sub, &["mention"]) {
+        return None;
+    }
+
+    let arg = parts.next();
+    let maybe_json = parts.next();
+    if parts.next().is_some() {
+        return None;
+    }
+
+    match (arg, maybe_json) {
+        (None, None) => Some(SessionMentionCommand {
+            mode: None,
+            format: OutputFormat::Dashboard,
+        }),
+        (Some(value), None) if eq_any_ignore_ascii(value, &["json", "status", "info", "stats"]) => {
+            Some(SessionMentionCommand {
+                mode: None,
+                format: if eq_any_ignore_ascii(value, &["json"]) {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Dashboard
+                },
+            })
+        }
+        (Some(value), Some(fmt))
+            if eq_any_ignore_ascii(value, &["status", "info", "stats"])
+                && eq_any_ignore_ascii(fmt, &["json"]) =>
+        {
+            Some(SessionMentionCommand {
+                mode: None,
+                format: OutputFormat::Json,
+            })
+        }
+        (Some(value), None) => Some(SessionMentionCommand {
+            mode: Some(parse_session_mention_mode(value)?),
+            format: OutputFormat::Dashboard,
+        }),
+        (Some(value), Some(fmt)) if eq_any_ignore_ascii(fmt, &["json"]) => {
+            Some(SessionMentionCommand {
+                mode: Some(parse_session_mention_mode(value)?),
+                format: OutputFormat::Json,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn is_partition_scope_alias(token: &str) -> bool {
     eq_any_ignore_ascii(token, &["partition", "scope"])
 }
@@ -207,6 +264,19 @@ fn parse_feedback_direction(raw: &str) -> Option<FeedbackDirection> {
     }
     if eq_any_ignore_ascii(raw, &["down", "failure", "negative", "bad", "fail"]) || raw == "-" {
         return Some(FeedbackDirection::Down);
+    }
+    None
+}
+
+fn parse_session_mention_mode(raw: &str) -> Option<SessionMentionMode> {
+    if eq_any_ignore_ascii(raw, &["on", "enable", "enabled", "require", "required"]) {
+        return Some(SessionMentionMode::Require);
+    }
+    if eq_any_ignore_ascii(raw, &["off", "disable", "disabled", "open"]) {
+        return Some(SessionMentionMode::Open);
+    }
+    if eq_any_ignore_ascii(raw, &["inherit", "default", "unset", "clear"]) {
+        return Some(SessionMentionMode::Inherit);
     }
     None
 }

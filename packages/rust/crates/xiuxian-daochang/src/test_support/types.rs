@@ -8,6 +8,7 @@ pub enum ManagedControlCommand {
     ResumeDrop,
     SessionAdmin,
     SessionInjection,
+    SessionMention,
     SessionPartition,
 }
 
@@ -86,6 +87,19 @@ pub struct SessionPartitionCommand {
     pub format: OutputFormat,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionMentionMode {
+    Require,
+    Open,
+    Inherit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionMentionCommand {
+    pub mode: Option<SessionMentionMode>,
+    pub format: OutputFormat,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionAdminAction {
     List,
@@ -135,6 +149,9 @@ pub(super) const fn managed_control_command_from_internal(
         }
         crate::channels::managed_commands::ManagedControlCommand::SessionInjection => {
             ManagedControlCommand::SessionInjection
+        }
+        crate::channels::managed_commands::ManagedControlCommand::SessionMention => {
+            ManagedControlCommand::SessionMention
         }
         crate::channels::managed_commands::ManagedControlCommand::SessionPartition => {
             ManagedControlCommand::SessionPartition
@@ -252,6 +269,31 @@ pub(super) fn session_partition_command_from_internal(
 ) -> SessionPartitionCommand {
     SessionPartitionCommand {
         mode: command.mode.map(session_partition_mode_from_internal),
+        format: output_format_from_internal(command.format),
+    }
+}
+
+pub(super) const fn session_mention_mode_from_internal(
+    mode: crate::channels::managed_runtime::parsing::SessionMentionMode,
+) -> SessionMentionMode {
+    match mode {
+        crate::channels::managed_runtime::parsing::SessionMentionMode::Require => {
+            SessionMentionMode::Require
+        }
+        crate::channels::managed_runtime::parsing::SessionMentionMode::Open => {
+            SessionMentionMode::Open
+        }
+        crate::channels::managed_runtime::parsing::SessionMentionMode::Inherit => {
+            SessionMentionMode::Inherit
+        }
+    }
+}
+
+pub(super) fn session_mention_command_from_internal(
+    command: crate::channels::managed_runtime::parsing::SessionMentionCommand,
+) -> SessionMentionCommand {
+    SessionMentionCommand {
+        mode: command.mode.map(session_mention_mode_from_internal),
         format: output_format_from_internal(command.format),
     }
 }

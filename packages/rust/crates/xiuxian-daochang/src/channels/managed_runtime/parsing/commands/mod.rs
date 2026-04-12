@@ -8,5 +8,5 @@ pub(crate) use general::{
 pub(crate) use session::{
     parse_session_context_budget_command, parse_session_context_memory_command,
     parse_session_context_status_command, parse_session_feedback_command,
-    parse_session_partition_command,
+    parse_session_mention_command, parse_session_partition_command,
 };

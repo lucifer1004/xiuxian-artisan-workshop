@@ -38,7 +38,7 @@ params = {}
 id = "Professor_Audit_Audit"
 task_type = "formal_audit"
 weight = 1.0
-params = { max_retries = 10 }
+params = {}
 
 [[nodes]]
 id = "Strategic_End"

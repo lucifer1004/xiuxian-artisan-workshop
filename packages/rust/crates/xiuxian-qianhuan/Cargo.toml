@@ -9,7 +9,7 @@ publish = false
 
 [features]
 default = []
-zhenfa-router = ["dep:axum", "dep:xiuxian-zhenfa", "dep:xiuxian-wendao"]
+zhenfa-router = ["dep:axum", "dep:xiuxian-zhenfa", "dep:xiuxian-wendao", "dep:xiuxian-wendao-core"]
 
 [dependencies]
 async-trait = "0.1"
@@ -31,6 +31,7 @@ xiuxian-io = { path = "../xiuxian-io", features = ["notify"] }
 redis = { workspace = true }
 xiuxian-zhenfa = { path = "../xiuxian-zhenfa", optional = true }
 xiuxian-wendao = { path = "../xiuxian-wendao", optional = true }
+xiuxian-wendao-core = { path = "../xiuxian-wendao-core", optional = true }
 xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]

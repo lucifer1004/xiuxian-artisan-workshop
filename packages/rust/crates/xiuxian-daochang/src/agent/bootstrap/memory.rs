@@ -4,7 +4,7 @@ use crate::agent::bootstrap::native_tools::mount_native_tool_cauldron;
 use crate::agent::bootstrap::service_mount::ServiceMountCatalog;
 use crate::agent::memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
 use crate::config::AgentConfig;
-use crate::config::load_runtime_settings;
+use crate::config::{load_runtime_settings, load_xiuxian_config};
 use crate::embedding::EmbeddingClient;
 use crate::llm::LlmClient;
 use crate::observability::SessionEvent;
@@ -49,6 +49,23 @@ impl Agent {
         let api_key = config.resolve_api_key();
         let llm = LlmClient::new(config.inference_url.clone(), config.model.clone(), api_key);
         Self::build_with_backends(config, llm, session, bounded_session).await
+    }
+
+    #[doc(hidden)]
+    /// # Errors
+    /// Returns an error if session, external tool, or memory backends fail to initialize.
+    pub async fn from_config_with_session_backends_and_native_tools_for_test(
+        config: AgentConfig,
+        session: SessionStore,
+        bounded_session: Option<BoundedSessionStore>,
+        native_tools: crate::agent::native_tools::registry::NativeToolRegistry,
+    ) -> Result<Self> {
+        let api_key = config.resolve_api_key();
+        let llm = LlmClient::new(config.inference_url.clone(), config.model.clone(), api_key);
+        let mut agent = Self::build_with_backends(config, llm, session, bounded_session).await?;
+        agent.native_tools = Arc::new(native_tools);
+        agent.service_mount_records = Arc::new(RwLock::new(Vec::new()));
+        Ok(agent)
     }
 
     #[doc(hidden)]
@@ -117,7 +134,14 @@ impl Agent {
         });
         let mut native_tools = crate::agent::native_tools::registry::NativeToolRegistry::new();
         let mut service_mounts = ServiceMountCatalog::new();
-        mount_native_tool_cauldron(None, None, &mut native_tools, &mut service_mounts);
+        let xiuxian_cfg = load_xiuxian_config();
+        mount_native_tool_cauldron(
+            Some(&xiuxian_cfg),
+            None,
+            None,
+            &mut native_tools,
+            &mut service_mounts,
+        );
 
         Ok(Self {
             config,

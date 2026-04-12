@@ -1,7 +1,9 @@
 use crate::search::knowledge_section::build::types::{
     KnowledgeSectionBuildPlan, KnowledgeSectionWriteResult,
 };
-use crate::search::knowledge_section::schema::{knowledge_section_batches, path_column};
+use crate::search::knowledge_section::schema::{
+    knowledge_section_batches, knowledge_section_schema, path_column,
+};
 use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
 use xiuxian_vector_store::VectorStoreError;
@@ -44,6 +46,7 @@ pub(super) async fn write_knowledge_section_epoch(
         path_column(),
         &plan.replaced_paths,
         &changed_batches,
+        Some(knowledge_section_schema()),
     )
     .await?;
     Ok(KnowledgeSectionWriteResult {

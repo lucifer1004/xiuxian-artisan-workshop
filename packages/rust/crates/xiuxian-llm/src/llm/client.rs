@@ -305,6 +305,16 @@ fn parse_litellm_chat_response_text(
 }
 
 #[cfg(feature = "provider-litellm")]
+fn extract_litellm_chat_stream_chunk_text(chunk: &LiteChatChunk) -> String {
+    chunk
+        .choices
+        .iter()
+        .filter_map(|choice| choice.delta.content.as_deref())
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+#[cfg(feature = "provider-litellm")]
 fn litellm_message_content_to_text(content: Option<&LiteMessageContent>) -> Option<String> {
     let content = content?;
     match content {
@@ -419,14 +429,7 @@ impl LlmClient for OpenAICompatibleClient {
             let mapped = stream.map(|result| {
                 result
                     .map_err(|e| map_litellm_openai_like_error("stream chunk", e))
-                    .and_then(|chunk| {
-                        // Extract text content from the chunk
-                        chunk
-                            .choices
-                            .first()
-                            .and_then(|choice| choice.delta.content.clone())
-                            .ok_or(LlmError::EmptyTextChoice)
-                    })
+                    .map(|chunk| extract_litellm_chat_stream_chunk_text(&chunk))
             });
 
             Ok(Box::pin(mapped))
@@ -453,5 +456,54 @@ fn build_openai_like_base_candidates(base_url: &str) -> (String, Option<String>)
         (primary, None)
     } else {
         (primary, Some(fallback))
+    }
+}
+
+#[cfg(all(test, feature = "provider-litellm"))]
+mod tests {
+    use super::extract_litellm_chat_stream_chunk_text;
+    use litellm_rs::core::types::responses::{ChatChunk, ChatDelta, ChatStreamChoice};
+
+    #[test]
+    fn stream_chunk_text_ignores_reasoning_only_deltas() {
+        let chunk = ChatChunk {
+            id: "chunk_1".to_string(),
+            object: "chat.completion.chunk".to_string(),
+            created: 1,
+            model: "mimo-v2-pro".to_string(),
+            choices: vec![
+                ChatStreamChoice {
+                    index: 0,
+                    delta: ChatDelta {
+                        role: None,
+                        content: None,
+                        thinking: None,
+                        tool_calls: None,
+                        function_call: None,
+                    },
+                    finish_reason: None,
+                    logprobs: None,
+                },
+                ChatStreamChoice {
+                    index: 0,
+                    delta: ChatDelta {
+                        role: None,
+                        content: Some("<score>0.95</score>".to_string()),
+                        thinking: None,
+                        tool_calls: None,
+                        function_call: None,
+                    },
+                    finish_reason: None,
+                    logprobs: None,
+                },
+            ],
+            usage: None,
+            system_fingerprint: None,
+        };
+
+        assert_eq!(
+            extract_litellm_chat_stream_chunk_text(&chunk),
+            "<score>0.95</score>"
+        );
     }
 }

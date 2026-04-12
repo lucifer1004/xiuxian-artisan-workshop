@@ -71,8 +71,29 @@ impl StudioState {
         let configured_projects = self.configured_projects();
         if !configured_projects.is_empty() {
             self.record_deferred_bootstrap_background_indexing_activation(source);
+            let search_projects = configured_projects.clone();
             self.symbol_index_coordinator
                 .sync_projects(configured_projects, Arc::clone(&self.symbol_index));
+            self.search_plane.ensure_knowledge_section_index_started(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                search_projects.as_slice(),
+            );
+            self.search_plane.ensure_local_symbol_index_started(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                search_projects.as_slice(),
+            );
+            self.search_plane.ensure_attachment_index_started(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                search_projects.as_slice(),
+            );
+            self.search_plane.ensure_reference_occurrence_index_started(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                search_projects.as_slice(),
+            );
         }
         self.ensure_repo_background_indexing_started(source);
     }

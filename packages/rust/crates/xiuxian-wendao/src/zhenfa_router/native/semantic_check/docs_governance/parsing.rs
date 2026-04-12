@@ -4,8 +4,7 @@ use std::path::{Component, Path};
 use std::sync::OnceLock;
 
 use sha1::{Digest, Sha1};
-
-use crate::parsers::markdown::extract_wikilinks as extract_markdown_wikilinks;
+use xiuxian_wendao_parsers::extract_wikilinks as extract_markdown_wikilinks;
 
 use super::types::{FooterBlock, IdLine, LineSlice, LinksLine, TopPropertiesDrawer};
 

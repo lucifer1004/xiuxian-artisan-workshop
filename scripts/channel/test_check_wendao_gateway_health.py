@@ -4,7 +4,6 @@ import importlib.util
 import os
 import subprocess
 import sys
-import urllib.error
 from email.message import Message
 from pathlib import Path
 
@@ -44,10 +43,23 @@ def _load_module():
     return module
 
 
+def _write_flight_ready_log(logfile: Path) -> None:
+    logfile.write_text(
+        (
+            "INFO wendao::execute::gateway::command: "
+            "  - POST /arrow.flight.protocol.FlightService/{*grpc_method}  - "
+            "Arrow Flight business plane\n"
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_is_gateway_healthy_accepts_matching_health_payload(tmp_path) -> None:
     module = _load_module()
     pidfile = tmp_path / "wendao.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
     pidfile.write_text("4321\n", encoding="utf-8")
+    _write_flight_ready_log(logfile)
 
     def _fake_open(request_or_url, timeout: float):
         assert request_or_url == "http://127.0.0.1:9517/api/health"
@@ -58,18 +70,25 @@ def test_is_gateway_healthy_accepts_matching_health_payload(tmp_path) -> None:
         host="127.0.0.1",
         port=9517,
         pidfile=pidfile,
+        logfile=logfile,
         timeout_secs=2.0,
         opener=_fake_open,
+        pid_exists=lambda pid: pid == 4321,
+        process_command_for_pid=(
+            lambda pid: "target/debug/wendao --conf /tmp/wendao.toml gateway start"
+        ),
     )
 
     assert healthy is True
     assert message == "healthy"
 
 
-def test_is_gateway_healthy_rejects_mismatched_process_id(tmp_path) -> None:
+def test_is_gateway_healthy_accepts_reported_process_id_when_pidfile_is_stale(tmp_path) -> None:
     module = _load_module()
     pidfile = tmp_path / "wendao.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
     pidfile.write_text("4321\n", encoding="utf-8")
+    _write_flight_ready_log(logfile)
 
     def _fake_open(request_or_url, timeout: float):
         assert request_or_url == "http://127.0.0.1:9517/api/health"
@@ -80,18 +99,25 @@ def test_is_gateway_healthy_rejects_mismatched_process_id(tmp_path) -> None:
         host="127.0.0.1",
         port=9517,
         pidfile=pidfile,
+        logfile=logfile,
         timeout_secs=2.0,
         opener=_fake_open,
+        pid_exists=lambda pid: True,
+        process_command_for_pid=(
+            lambda pid: "target/debug/wendao --conf /tmp/wendao.toml gateway start"
+        ),
     )
 
-    assert healthy is False
-    assert "does not match pidfile" in message
+    assert healthy is True
+    assert message == "healthy"
 
 
 def test_is_gateway_healthy_rejects_not_ready_payload(tmp_path) -> None:
     module = _load_module()
     pidfile = tmp_path / "wendao.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
     pidfile.write_text("4321\n", encoding="utf-8")
+    _write_flight_ready_log(logfile)
 
     def _fake_open(request_or_url, timeout: float):
         assert request_or_url == "http://127.0.0.1:9517/api/health"
@@ -106,8 +132,13 @@ def test_is_gateway_healthy_rejects_not_ready_payload(tmp_path) -> None:
         host="127.0.0.1",
         port=9517,
         pidfile=pidfile,
+        logfile=logfile,
         timeout_secs=2.0,
         opener=_fake_open,
+        pid_exists=lambda pid: True,
+        process_command_for_pid=(
+            lambda pid: "target/debug/wendao --conf /tmp/wendao.toml gateway start"
+        ),
     )
 
     assert healthy is False
@@ -117,7 +148,9 @@ def test_is_gateway_healthy_rejects_not_ready_payload(tmp_path) -> None:
 def test_is_gateway_healthy_rejects_invalid_payload(tmp_path) -> None:
     module = _load_module()
     pidfile = tmp_path / "wendao.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
     pidfile.write_text("4321\n", encoding="utf-8")
+    _write_flight_ready_log(logfile)
 
     def _fake_open(request_or_url, timeout: float):
         assert request_or_url == "http://127.0.0.1:9517/api/health"
@@ -132,12 +165,100 @@ def test_is_gateway_healthy_rejects_invalid_payload(tmp_path) -> None:
         host="127.0.0.1",
         port=9517,
         pidfile=pidfile,
+        logfile=logfile,
         timeout_secs=2.0,
         opener=_fake_open,
+        pid_exists=lambda pid: True,
+        process_command_for_pid=(
+            lambda pid: "target/debug/wendao --conf /tmp/wendao.toml gateway start"
+        ),
     )
 
     assert healthy is False
     assert "invalid json" in message
+
+
+def test_is_gateway_healthy_accepts_live_health_when_pidfile_missing(tmp_path) -> None:
+    module = _load_module()
+    pidfile = tmp_path / "missing.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
+    _write_flight_ready_log(logfile)
+
+    def _fake_open(request_or_url, timeout: float):
+        assert request_or_url == "http://127.0.0.1:9517/api/health"
+        assert timeout == 2.0
+        return _FakeResponse(200, {"x-wendao-process-id": "4805"})
+
+    healthy, message = module.is_gateway_healthy(
+        host="127.0.0.1",
+        port=9517,
+        pidfile=pidfile,
+        logfile=logfile,
+        timeout_secs=2.0,
+        opener=_fake_open,
+        pid_exists=lambda pid: pid == 4805,
+        process_command_for_pid=(
+            lambda pid: "target/debug/wendao --conf /tmp/wendao.toml gateway start"
+        ),
+    )
+
+    assert healthy is True
+    assert message == "healthy"
+
+
+def test_is_gateway_healthy_rejects_unexpected_process_when_pidfile_missing(tmp_path) -> None:
+    module = _load_module()
+    pidfile = tmp_path / "missing.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
+    _write_flight_ready_log(logfile)
+
+    def _fake_open(request_or_url, timeout: float):
+        assert request_or_url == "http://127.0.0.1:9517/api/health"
+        assert timeout == 2.0
+        return _FakeResponse(200, {"x-wendao-process-id": "4805"})
+
+    healthy, message = module.is_gateway_healthy(
+        host="127.0.0.1",
+        port=9517,
+        pidfile=pidfile,
+        logfile=logfile,
+        timeout_secs=2.0,
+        opener=_fake_open,
+        pid_exists=lambda pid: pid == 4805,
+        process_command_for_pid=lambda pid: "python -m http.server 9517",
+    )
+
+    assert healthy is False
+    assert "unexpected" in message
+
+
+def test_is_gateway_healthy_rejects_missing_flight_ready_marker(tmp_path) -> None:
+    module = _load_module()
+    pidfile = tmp_path / "wendao.pid"
+    logfile = tmp_path / "wendao-gateway.stderr.log"
+    pidfile.write_text("4321\n", encoding="utf-8")
+    logfile.write_text("no flight marker yet\n", encoding="utf-8")
+
+    def _fake_open(request_or_url, timeout: float):
+        assert request_or_url == "http://127.0.0.1:9517/api/health"
+        assert timeout == 2.0
+        return _FakeResponse(200, {"x-wendao-process-id": "4321"})
+
+    healthy, message = module.is_gateway_healthy(
+        host="127.0.0.1",
+        port=9517,
+        pidfile=pidfile,
+        logfile=logfile,
+        timeout_secs=2.0,
+        opener=_fake_open,
+        pid_exists=lambda pid: pid == 4321,
+        process_command_for_pid=(
+            lambda pid: "target/debug/wendao --conf /tmp/wendao.toml gateway start"
+        ),
+    )
+
+    assert healthy is False
+    assert "Flight business plane" in message
 
 
 def test_gateway_healthcheck_shell_prefers_pyo3_python(tmp_path) -> None:
@@ -175,6 +296,7 @@ def test_gateway_healthcheck_shell_prefers_pyo3_python(tmp_path) -> None:
     env["FAKE_PYTHON_LOG"] = str(fake_log)
     env["WENDAO_GATEWAY_CONFIG"] = "wendao.toml"
     env["WENDAO_GATEWAY_PIDFILE"] = str(tmp_path / "wendao.pid")
+    env["WENDAO_GATEWAY_STDERR_LOG"] = str(tmp_path / "wendao-gateway.stderr.log")
 
     result = subprocess.run(
         ["bash", str(script_path)],
@@ -189,3 +311,4 @@ def test_gateway_healthcheck_shell_prefers_pyo3_python(tmp_path) -> None:
     calls = fake_log.read_text(encoding="utf-8").splitlines()
     assert any("resolve_wendao_gateway_port.py" in line for line in calls)
     assert any("check_wendao_gateway_health.py" in line for line in calls)
+    assert any("--logfile" in line for line in calls)

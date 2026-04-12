@@ -1,5 +1,4 @@
 use crate::entity::{Entity, EntityType, Relation, RelationType};
-use crate::parsers::markdown::parse_frontmatter;
 use crate::skill_vfs::zhixing::indexer::resource_graph::helpers::{
     dedup_targets, is_skill_descriptor_path, normalize_token,
 };
@@ -8,8 +7,11 @@ use crate::skill_vfs::zhixing::indexer::resource_graph::references::{
 };
 use crate::skill_vfs::zhixing::indexer::types::ZhixingWendaoIndexer;
 use crate::skill_vfs::zhixing::{Error, Result};
-use crate::{WendaoResourceUri, build_embedded_wendao_registry, embedded_resource_text};
 use serde_json::json;
+use xiuxian_wendao_core::WendaoResourceUri;
+use xiuxian_wendao_parsers::parse_frontmatter;
+
+use crate::{build_embedded_wendao_registry, embedded_resource_text};
 
 impl ZhixingWendaoIndexer {
     pub(in crate::skill_vfs::zhixing::indexer) fn index_embedded_skill_references(

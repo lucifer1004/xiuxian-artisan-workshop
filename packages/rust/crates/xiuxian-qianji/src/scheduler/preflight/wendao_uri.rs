@@ -2,9 +2,9 @@ use super::mounts::runtime_wendao_mounts;
 use crate::runtime_config::{resolve_process_env_path, resolve_process_project_root};
 use std::fs;
 use std::path::{Path, PathBuf};
-use xiuxian_wendao::skill_vfs::{
-    SkillVfsResolver, WendaoResourceUri, embedded_resource_text_from_wendao_uri,
-};
+use xiuxian_wendao::skill_vfs::SkillVfsResolver;
+use xiuxian_wendao_core::WendaoResourceUri;
+use xiuxian_wendao_runtime::artifacts::zhixing::embedded_resource_text_from_wendao_uri;
 use xiuxian_zhenfa::ZhenfaTransmuter;
 
 /// Resolve one `wendao://` URI and delegate validation/refinement to Zhenfa.

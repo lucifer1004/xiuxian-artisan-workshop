@@ -1,6 +1,7 @@
 mod budget;
 mod jobs;
 mod memory;
+mod mention;
 mod partition;
 mod session_context;
 mod shared;
@@ -16,6 +17,11 @@ pub(super) use jobs::{
 pub(super) use memory::{
     format_memory_recall_not_found, format_memory_recall_not_found_json,
     format_memory_recall_snapshot, format_memory_recall_snapshot_json,
+};
+pub(super) use mention::{
+    format_session_mention_admin_required, format_session_mention_admin_required_json,
+    format_session_mention_status, format_session_mention_status_json,
+    format_session_mention_updated, format_session_mention_updated_json,
 };
 pub(super) use partition::{
     format_session_partition_admin_required, format_session_partition_admin_required_json,

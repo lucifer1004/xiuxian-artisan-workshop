@@ -45,6 +45,10 @@ pub struct XiuxianConfig {
     /// Zhenfa (HTTP matrix gateway) tool bridge settings.
     #[serde(default)]
     pub zhenfa: ZhenfaConfig,
+
+    /// Direct Wendao gateway settings for bounded native search workflows.
+    #[serde(default)]
+    pub wendao_gateway: WendaoGatewayConfig,
 }
 
 /// LLM routing defaults and provider map for runtime model selection.
@@ -162,7 +166,7 @@ pub struct QianhuanTemplateConfig {
 pub struct ZhenfaConfig {
     /// Base URL for zhenfa gateway, for example `http://127.0.0.1:18093`.
     pub base_url: Option<String>,
-    /// Explicit enabled RPC tools exposed to LLM (for example `wendao.search`).
+    /// Explicit enabled RPC tools exposed to LLM (for example `qianhuan.reload`).
     pub enabled_tools: Option<Vec<String>>,
     /// Optional Valkey runtime hooks for zhenfa native orchestrator.
     #[serde(default)]
@@ -183,6 +187,19 @@ pub struct ZhenfaValkeyConfig {
     pub lock_ttl_seconds: Option<u64>,
     /// Audit stream suffix name used for `XADD` events.
     pub audit_stream: Option<String>,
+}
+
+/// Direct Wendao gateway settings for host-owned native workflows.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct WendaoGatewayConfig {
+    /// SQL/REST query endpoint, for example `http://127.0.0.1:18093/query`.
+    pub query_endpoint: Option<String>,
+    /// Optional default project root injected into bounded search workflows.
+    pub default_project_root: Option<String>,
+    /// Optional exact session-id to project-root overrides.
+    #[serde(default)]
+    pub session_project_roots: HashMap<String, String>,
 }
 
 /// Link graph indexing and watch settings for knowledge traversal.

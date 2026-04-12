@@ -81,6 +81,40 @@ async fn process_discord_message_handles_partition_command_and_updates_mode() ->
 }
 
 #[tokio::test]
+async fn process_discord_message_handles_session_mention_update_and_status_json() -> Result<()> {
+    let agent = build_agent().await?;
+    let job_manager = start_job_manager(&agent);
+    let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
+    let channel_dyn: Arc<dyn Channel> = channel.clone();
+
+    process_discord_message(
+        agent.clone(),
+        channel_dyn.clone(),
+        inbound("/session mention on"),
+        &job_manager,
+        10,
+    )
+    .await;
+    process_discord_message(
+        agent,
+        channel_dyn,
+        inbound("/session mention json"),
+        &job_manager,
+        10,
+    )
+    .await;
+
+    let sent = channel.sent_messages().await;
+    assert_eq!(sent.len(), 2);
+    assert!(sent[0].0.contains("Session mention policy updated."));
+    let payload: serde_json::Value = serde_json::from_str(&sent[1].0)?;
+    assert_eq!(payload["kind"], "session_mention");
+    assert_eq!(payload["effective_require_mention"], true);
+    assert_eq!(payload["recipient_override"], true);
+    Ok(())
+}
+
+#[tokio::test]
 async fn process_discord_message_partition_toggle_aliases_use_expected_modes() -> Result<()> {
     let agent = build_agent().await?;
     let job_manager = start_job_manager(&agent);

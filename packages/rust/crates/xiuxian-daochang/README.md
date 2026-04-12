@@ -8,6 +8,7 @@ Minimal Rust agent loop (Phase B): one user turn with LLM and optional external 
 - **Session**: in-memory `SessionStore` per `session_id`; or when `window_max_turns` is set, **omni-window** (ring buffer) for bounded history and scalable context (1k–10k turns).
 - **LLM** (`LlmClient`): OpenAI-compatible chat completions with optional tool definitions and `tool_calls` parsing.
 - **Agent** (`Agent`): `run_turn(session_id, user_message)` — builds messages, optionally fetches external tools, calls LLM, handles tool calls, repeats until no tool_calls or `max_tool_rounds`.
+- **Bounded native search** (`wendao.search`): a Daochang-owned native tool that invokes the bundled Qianji Wendao SQL authoring workflow against a configured gateway endpoint.
 
 ## Usage
 
@@ -30,6 +31,54 @@ let config = AgentConfig {
 let agent = Agent::from_config(config).await?;
 let reply = agent.run_turn("my-session", "What's the weather?").await?;
 ```
+
+## Bounded Wendao Search
+
+`wendao.search` is mounted only when `xiuxian.toml` configures a direct gateway
+endpoint under `[wendao_gateway]`. Daochang resolves the effective project root
+from explicit tool arguments, session-id overrides, or a configured default,
+then passes that scope into the bundled Qianji workflow.
+
+```toml
+[wendao_gateway]
+query_endpoint = "http://127.0.0.1:18093/query"
+default_project_root = "/path/to/project"
+
+[wendao_gateway.session_project_roots]
+"discord:search-thread" = "/path/to/project"
+```
+
+The native tool calls the bounded workflow preset that lives in
+`xiuxian-qianji`; Daochang owns configuration, session scope resolution, and
+result formatting. The legacy zhenfa bridge intentionally does not register
+`wendao.search`; direct gateway native-tool dispatch is the only supported
+ownership path. Native-only agents also advertise `wendao.search` to the LLM
+even when no external tool runtime is configured, so real tool-calling does
+not depend on MCP/external-tool startup.
+
+## Discord Mention Policy
+
+Discord can require explicit bot triggers for guild text while leaving selected
+channels open.
+
+```toml
+[discord]
+require_mention = true
+require_mention_persist = true
+
+[discord.channels."123456789012345678"]
+require_mention = false
+```
+
+Runtime control uses the current recipient channel:
+
+- `/session mention`
+- `/session mention on`
+- `/session mention off`
+- `/session mention inherit`
+
+Slash interactions and slash-style managed commands remain usable even when
+mention gating is enabled.
 
 ## Reusing LiteLLM (no extra bridge)
 
@@ -57,7 +106,9 @@ cargo run -p xiuxian-daochang --example one_turn -- "Say hello in one sentence."
 ## Tests
 
 - Unit: `cargo test -p xiuxian-daochang --test config_and_session`
-- Integration (real LLM + optional external tools): `cargo test -p xiuxian-daochang --test agent_integration -- --ignored`
+- Integration (runtime-default live LLM + optional external tools): `XIUXIAN_DAOCHANG_LIVE_AGENT_INTEGRATION=1 direnv exec . cargo test -p xiuxian-daochang unit::agent_integration::test_agent_one_turn_with_llm_and_tools -- --exact --nocapture`
+- Focused live native-tool proof (runtime-default provider): `XIUXIAN_DAOCHANG_LIVE_LLM=1 direnv exec . cargo test -p xiuxian-daochang unit::agent_suite::agent::native_tools_wendao_search_live::runtime_default_llm_performs_native_wendao_search_tool_call -- --exact --nocapture`
+- Valkey-backed live tests (env-gated): `XIUXIAN_DAOCHANG_LIVE_VALKEY=1 VALKEY_URL=redis://127.0.0.1:6379/0 direnv exec . cargo test -p xiuxian-daochang unit::telegram_session_gate::distributed_same_session_is_serialized_across_gate_instances -- --exact --nocapture`
 
 ## Plan
 

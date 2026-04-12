@@ -9,6 +9,6 @@ pub use crate::llm::test_api::{
 #[cfg(feature = "agent-provider-litellm")]
 pub use crate::llm::test_api::{
     CustomBaseFallbackTransport, build_responses_payload_from_chat_completion_request,
-    chat_message_to_litellm_message, parse_responses_stream_tool_names,
-    resolve_custom_base_transport_api_key_from_values,
+    chat_message_to_litellm_message, chat_message_to_litellm_message_for_openai_chat,
+    parse_responses_stream_tool_names, resolve_custom_base_transport_api_key_from_values,
 };
