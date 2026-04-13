@@ -29,8 +29,8 @@ impl VectorStore {
                 DatasetCache::new(DatasetCacheConfig::default()),
             )),
             dimension: dimension.unwrap_or(DEFAULT_DIMENSION),
-            keyword_index: None,
-            keyword_backend: KeywordSearchBackend::Tantivy,
+            keyword_backend: KeywordSearchBackend::LanceFts,
+            keyword_search_enabled: false,
             index_cache_size_bytes: None,
             query_metrics: Arc::new(DashMap::new()),
             index_progress_callback: None,
@@ -69,7 +69,7 @@ impl VectorStore {
             path,
             dimension,
             enable_keyword_index,
-            KeywordSearchBackend::Tantivy,
+            KeywordSearchBackend::LanceFts,
             index_cache_size_bytes,
             cache_config,
         )
@@ -94,10 +94,8 @@ impl VectorStore {
             store.datasets = Arc::new(RwLock::new(DatasetCache::new(c)));
         }
         store.keyword_backend = keyword_backend;
+        store.keyword_search_enabled = enable_keyword_index;
         store.index_cache_size_bytes = index_cache_size_bytes;
-        if enable_keyword_index && path != ":memory:" {
-            store.enable_keyword_index()?;
-        }
         Ok(store)
     }
 
@@ -253,21 +251,15 @@ impl VectorStore {
     ///
     /// # Errors
     ///
-    /// Returns an error in `:memory:` mode or when keyword index initialization fails.
+    /// Returns an error when called in `:memory:` mode because Lance FTS needs a
+    /// filesystem-backed table to materialize its inverted index.
     pub fn enable_keyword_index(&mut self) -> Result<(), VectorStoreError> {
-        if self.keyword_backend == KeywordSearchBackend::LanceFts {
-            // Lance FTS path does not require in-memory Tantivy index object.
-            return Ok(());
-        }
-        if self.keyword_index.is_some() {
-            return Ok(());
-        }
         if self.base_path.as_os_str() == ":memory:" {
             return Err(VectorStoreError::General(
                 "Cannot enable keyword index in memory mode".to_string(),
             ));
         }
-        self.keyword_index = Some(Arc::new(KeywordIndex::new(&self.base_path)?));
+        self.keyword_search_enabled = true;
         Ok(())
     }
 
@@ -275,15 +267,13 @@ impl VectorStore {
     ///
     /// # Errors
     ///
-    /// Returns an error when switching to Tantivy and index initialization fails.
+    /// Returns no errors; the remaining runtime path is Lance FTS only.
     pub fn set_keyword_backend(
         &mut self,
         backend: KeywordSearchBackend,
     ) -> Result<(), VectorStoreError> {
         self.keyword_backend = backend;
-        if backend == KeywordSearchBackend::Tantivy {
-            self.enable_keyword_index()?;
-        }
+        self.keyword_search_enabled = true;
         Ok(())
     }
 }

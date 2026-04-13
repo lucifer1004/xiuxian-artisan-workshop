@@ -1,16 +1,10 @@
-//! keyword.rs - Tantivy-based Keyword Index for BM25/Sparse Retrieval
+//! keyword.rs - keyword fusion helpers for `xiuxian-vector`.
 //!
-//! This module provides high-performance keyword search using Tantivy (Rust Lucene).
-//! Features:
-//! - BM25 scoring
-//! - Simple tokenization with code-specific filtering (`snake_case`, camelCase)
-//! - RRF fusion with vector search results
-//! - Entity-aware search enhancement
-//! - Robust initialization (avoids destructive recreation)
+//! This module keeps the ranking/fusion helpers used by hybrid search. The
+//! runtime keyword retrieval path now converges on Lance FTS only.
 
 pub mod entity_aware;
 pub mod fusion;
-pub mod index;
 
 pub use entity_aware::{
     ENTITY_CONFIDENCE_THRESHOLD, ENTITY_WEIGHT, EntityAwareSearchResult, EntityMatch,
@@ -20,16 +14,16 @@ pub use fusion::{
     HybridSearchResult, apply_adaptive_rrf, apply_rrf, apply_weighted_rrf, distance_to_score,
     rrf_term, rrf_term_batch,
 };
-pub use index::KeywordIndex;
 use serde::{Deserialize, Serialize};
 
 /// Configurable keyword backend for hybrid retrieval.
+///
+/// Only Lance FTS remains supported; the enum stays to preserve the explicit
+/// runtime configuration surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum KeywordSearchBackend {
-    /// Tantivy BM25 index (current default).
-    #[default]
-    Tantivy,
     /// Lance native inverted index / FTS path.
+    #[default]
     LanceFts,
 }
 

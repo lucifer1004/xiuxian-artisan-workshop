@@ -18,8 +18,8 @@ use crate::gateway::studio::router::handlers::docs::types::{
     DocsPlannerSearchApiQuery, DocsPlannerWorksetApiQuery,
 };
 use crate::gateway::studio::router::handlers::repo::{
-    parse_projected_gap_kind, parse_projection_page_kind, required_gap_id, required_repo_id,
-    required_search_query,
+    parse_projected_gap_kind, parse_projection_page_kind, required_gap_id,
+    required_registered_repo_id, required_search_query,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -33,7 +33,7 @@ pub async fn planner_item(
     Query(query): Query<DocsPlannerItemApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsPlannerItemResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let gap_id = required_gap_id(query.gap_id.as_deref())?;
     let family_kind = parse_projection_page_kind(query.family_kind.as_deref())?;
     let related_limit = query.related_limit.unwrap_or(5);
@@ -62,7 +62,7 @@ pub async fn planner_search(
     Query(query): Query<DocsPlannerSearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsPlannerSearchResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let gap_kind = parse_projected_gap_kind(query.gap_kind.as_deref())?;
     let page_kind = parse_projection_page_kind(query.page_kind.as_deref())?;
@@ -91,7 +91,7 @@ pub async fn planner_queue(
     Query(query): Query<DocsPlannerQueueApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsPlannerQueueResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let gap_kind = parse_projected_gap_kind(query.gap_kind.as_deref())?;
     let page_kind = parse_projection_page_kind(query.page_kind.as_deref())?;
     let per_kind_limit = query.per_kind_limit.unwrap_or(3).max(1);
@@ -118,7 +118,7 @@ pub async fn planner_rank(
     Query(query): Query<DocsPlannerRankApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsPlannerRankResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let gap_kind = parse_projected_gap_kind(query.gap_kind.as_deref())?;
     let page_kind = parse_projection_page_kind(query.page_kind.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
@@ -145,7 +145,7 @@ pub async fn planner_workset(
     Query(query): Query<DocsPlannerWorksetApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsPlannerWorksetResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let gap_kind = parse_projected_gap_kind(query.gap_kind.as_deref())?;
     let page_kind = parse_projection_page_kind(query.page_kind.as_deref())?;
     let per_kind_limit = query.per_kind_limit.unwrap_or(3).max(1);

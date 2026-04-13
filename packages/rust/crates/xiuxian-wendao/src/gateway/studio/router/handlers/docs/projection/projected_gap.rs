@@ -8,7 +8,7 @@ use axum::{
 use crate::analyzers::DocsProjectedGapReportQuery;
 use crate::gateway::studio::router::handlers::docs::service::run_docs_projected_gap_report;
 use crate::gateway::studio::router::handlers::docs::types::DocsProjectedGapReportApiQuery;
-use crate::gateway::studio::router::handlers::repo::required_repo_id;
+use crate::gateway::studio::router::handlers::repo::required_registered_repo_id;
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
 /// Docs projected gap report endpoint.
@@ -21,7 +21,7 @@ pub async fn projected_gap_report(
     Query(query): Query<DocsProjectedGapReportApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsProjectedGapReportResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let result =
         run_docs_projected_gap_report(Arc::clone(&state), DocsProjectedGapReportQuery { repo_id })
             .await?;

@@ -50,7 +50,7 @@
     },
     "input_schema_digest": {
       "type": "string",
-      "pattern": "^sha256:[A-Za-z0-9_-]{4,}$"
+      "pattern": "^fnv1a64:(empty|[A-Fa-f0-9]{4,})$"
     },
     "skill_name": {
       "type": "string"

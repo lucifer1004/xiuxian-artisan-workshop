@@ -3,8 +3,6 @@
 use anyhow::Result;
 use xiuxian_vector::VectorStore;
 
-type KeywordDoc = (String, String, String, Vec<String>, Vec<String>);
-
 /// Setup a vector store with keyword index enabled for testing.
 async fn setup_store(path: &std::path::Path, dim: usize) -> Result<VectorStore> {
     let db_path = path.to_string_lossy().into_owned();
@@ -54,30 +52,11 @@ async fn test_hybrid_search_with_enabled_index() -> Result<()> {
                 "Show working tree status".to_string(),
             ],
             vec![
-                r#"{"category": "git", "keywords": ["commit", "save"]}"#.to_string(),
-                r#"{"category": "git", "keywords": ["status", "dirty"]}"#.to_string(),
+                r#"{"category": "git", "routing_keywords": ["commit", "save"]}"#.to_string(),
+                r#"{"category": "git", "routing_keywords": ["status", "dirty"]}"#.to_string(),
             ],
         )
         .await?;
-
-    // Index keywords
-    let docs: Vec<KeywordDoc> = vec![
-        (
-            "git_commit".to_string(),
-            "Commit changes to repository".to_string(),
-            "git".to_string(),
-            vec!["commit".to_string(), "save".to_string()],
-            vec![],
-        ),
-        (
-            "git_status".to_string(),
-            "Show working tree status".to_string(),
-            "git".to_string(),
-            vec!["status".to_string(), "dirty".to_string()],
-            vec![],
-        ),
-    ];
-    store.bulk_index_keywords(docs)?;
 
     // Perform hybrid search
     let results = store
@@ -102,29 +81,15 @@ async fn test_hybrid_search_field_boosting_name_vs_desc() -> Result<()> {
             vec!["search_files".to_string(), "file_scanner".to_string()],
             vec![vec![0.0; 10], vec![0.0; 10]],
             vec![
-                "Scan directory".to_string(),
+                "Search directory entries quickly".to_string(),
                 "Search for files in a path".to_string(),
             ],
-            vec!["{}".to_string(), "{}".to_string()],
+            vec![
+                r#"{"routing_keywords": ["search", "files"]}"#.to_string(),
+                r#"{"routing_keywords": ["search", "scanner"]}"#.to_string(),
+            ],
         )
         .await?;
-
-    store.bulk_index_keywords(vec![
-        (
-            "search_files".to_string(),
-            "Scan directory".to_string(),
-            "fs".to_string(),
-            vec![],
-            vec![],
-        ),
-        (
-            "file_scanner".to_string(),
-            "Search for files in a path".to_string(),
-            "fs".to_string(),
-            vec![],
-            vec![],
-        ),
-    ])?;
 
     let results = store
         .hybrid_search("boost_test", "search", vec![0.0; 10], 10)
@@ -147,23 +112,21 @@ async fn test_hybrid_search_intent_match() -> Result<()> {
     store
         .add_documents(
             "intent_test",
-            vec!["writer.polish".to_string()],
-            vec![vec![0.0; 10]],
-            vec!["Improve text quality".to_string()],
-            vec!["{}".to_string()],
+            vec!["writer.polish".to_string(), "writer.review".to_string()],
+            vec![vec![0.0; 10], vec![0.0; 10]],
+            vec![
+                "Readability guidance for documentation".to_string(),
+                "Readability guidance for documentation".to_string(),
+            ],
+            vec![
+                r#"{"intents": ["polish readability"]}"#.to_string(),
+                r#"{"intents": ["review readability"]}"#.to_string(),
+            ],
         )
         .await?;
 
-    store.bulk_index_keywords(vec![(
-        "writer.polish".to_string(),
-        "Improve text quality".to_string(),
-        "writer".to_string(),
-        vec![],
-        vec!["refactor documentation".to_string()],
-    )])?;
-
     let results = store
-        .hybrid_search("intent_test", "refactor documentation", vec![0.0; 10], 10)
+        .hybrid_search("intent_test", "polish readability", vec![0.0; 10], 10)
         .await?;
 
     assert!(!results.is_empty());
@@ -186,13 +149,6 @@ async fn test_hybrid_search_empty_engines() -> Result<()> {
             vec!["{}".to_string()],
         )
         .await?;
-    store.bulk_index_keywords(vec![(
-        "unrelated".to_string(),
-        "content".to_string(),
-        "cat".to_string(),
-        vec![],
-        vec![],
-    )])?;
 
     // Search for something that won't match either engine
     // Vector search for zeros against a vec of ones will have huge distance
@@ -216,7 +172,6 @@ async fn test_hybrid_search_limit() -> Result<()> {
     let mut vectors = Vec::new();
     let mut contents = Vec::new();
     let mut metadatas = Vec::new();
-    let mut kw_docs: Vec<KeywordDoc> = Vec::new();
 
     for i in 0_u16..20 {
         let name = format!("tool_{i}");
@@ -224,19 +179,11 @@ async fn test_hybrid_search_limit() -> Result<()> {
         vectors.push(vec![0.1 * f32::from(i); 10]);
         contents.push(format!("Description for tool {i}"));
         metadatas.push("{}".to_string());
-        kw_docs.push((
-            name,
-            format!("Description for tool {i}"),
-            "test".to_string(),
-            vec![],
-            vec![],
-        ));
     }
 
     store
         .add_documents("limit_test", ids, vectors, contents, metadatas)
         .await?;
-    store.bulk_index_keywords(kw_docs)?;
 
     let limit = 5;
     let results = store
@@ -263,26 +210,12 @@ async fn test_hybrid_search_semantic_rescue() -> Result<()> {
                 "Execute commit".to_string(),
                 "Save all changes to disk".to_string(),
             ],
-            vec!["{}".to_string(), "{}".to_string()],
+            vec![
+                r#"{"routing_keywords": ["commit"]}"#.to_string(),
+                r#"{"routing_keywords": ["persist"]}"#.to_string(),
+            ],
         )
         .await?;
-
-    store.bulk_index_keywords(vec![
-        (
-            "vcs.commit".to_string(),
-            "Execute commit".to_string(),
-            "vcs".to_string(),
-            vec!["commit".to_string()],
-            vec![],
-        ),
-        (
-            "vcs.persist".to_string(),
-            "Save all changes to disk".to_string(),
-            "vcs".to_string(),
-            vec!["persist".to_string()],
-            vec![],
-        ),
-    ])?;
 
     // Query has keyword "commit" but vector is closer to "persist"
     let query_vector = vec![1.0; 10];
@@ -304,17 +237,19 @@ async fn test_enable_keyword_index_on_existing_store() -> Result<()> {
     let db_path = temp_dir.path().to_string_lossy().into_owned();
     let mut store = VectorStore::new(&db_path, None).await?;
 
-    // Enable keyword index
     store.enable_keyword_index()?;
 
-    // Verify it's enabled
-    store.index_keyword(
-        "test_tool",
-        "A test tool",
-        "test",
-        &["test".to_string(), "example".to_string()],
-        &[],
-    )?;
+    store
+        .add_documents(
+            "test",
+            vec!["test_tool".to_string()],
+            vec![vec![0.1; 1536]],
+            vec!["A test tool with searchable content".to_string()],
+            vec![r#"{"routing_keywords": ["test", "example"]}"#.to_string()],
+        )
+        .await?;
+
+    assert!(store.has_fts_index("test").await?);
     Ok(())
 }
 
@@ -330,18 +265,9 @@ async fn test_hybrid_search_fallback_on_keyword_error() -> Result<()> {
             vec!["git_commit".to_string()],
             vec![vec![0.1; 1024]],
             vec!["Commit changes".to_string()],
-            vec![r#"{"category": "git"}"#.to_string()],
+            vec![r#"{"category": "git", "routing_keywords": ["commit"]}"#.to_string()],
         )
         .await?;
-
-    // Index keywords
-    store.bulk_index_keywords(vec![(
-        "git_commit".to_string(),
-        "Commit changes".to_string(),
-        "git".to_string(),
-        vec!["commit".to_string()],
-        vec![],
-    )])?;
 
     // Search with code snippet (should fallback to vector-only gracefully if parser fails)
     let results = store

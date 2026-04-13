@@ -20,43 +20,6 @@ impl VectorStore {
         out
     }
 
-    fn canonical_tool_name_from_metadata(meta: &serde_json::Value) -> Option<String> {
-        let skill_name = meta
-            .get("skill_name")
-            .and_then(|s| s.as_str())
-            .map_or("", str::trim);
-        let tool_name = meta
-            .get("tool_name")
-            .and_then(|s| s.as_str())
-            .map_or("", str::trim);
-        if crate::skill::is_routable_tool_name(tool_name) && tool_name.contains('.') {
-            return Some(tool_name.to_string());
-        }
-        if !skill_name.is_empty() && crate::skill::is_routable_tool_name(tool_name) {
-            let candidate = format!("{skill_name}.{tool_name}");
-            if crate::skill::is_routable_tool_name(&candidate) {
-                return Some(candidate);
-            }
-        }
-
-        let command = meta
-            .get("command")
-            .and_then(|s| s.as_str())
-            .map_or("", str::trim);
-
-        if !skill_name.is_empty() && !command.is_empty() {
-            let candidate = format!("{skill_name}.{command}");
-            if crate::skill::is_routable_tool_name(&candidate) {
-                return Some(candidate);
-            }
-        }
-
-        if crate::skill::is_routable_tool_name(command) {
-            return Some(command.to_string());
-        }
-        None
-    }
-
     fn build_document_batch(
         &self,
         ids: Vec<String>,

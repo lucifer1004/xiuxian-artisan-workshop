@@ -34,6 +34,7 @@ pub use handlers::{
     vfs_root_entries, vfs_scan,
 };
 pub use repository::{configured_repositories, configured_repository};
+pub(crate) use repository::{registered_repository_search_seeds, resolve_registered_repository_id};
 pub use routes::{studio_router, studio_routes};
 pub use sanitization::{
     sanitize_path_like, sanitize_path_list, sanitize_projects, sanitize_repo_projects,

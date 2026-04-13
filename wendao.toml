@@ -1,4 +1,7 @@
-imports = ["assets/github-repo-list.toml", ".data/wendao-frontend/wendao.toml"]
+imports = [
+    "assets/github-repo-list.toml",
+    ".data/wendao-frontend/wendao.toml",
+]
 
 [gateway]
 port = 9517

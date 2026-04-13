@@ -43,6 +43,9 @@ validated:
 5. An extra `search-runtime`-only test pass exposed a separate feature-coherence
    cleanup between standalone `search-runtime` and studio-owned search DTOs.
    That follow-up is explicitly outside this bounded slice.
+6. `xiuxian-vector` is being reduced to a single Lance FTS-oriented keyword
+   path so the crate no longer needs to carry a second sparse-retrieval engine
+   inside the vector boundary.
 
 ## Target Boundary
 
@@ -51,7 +54,7 @@ The target package boundary is:
 1. a lightweight substrate crate owns generic Arrow `RecordBatch` aliases,
    request-scoped DataFusion helpers, and other non-Lance compute primitives
 2. `xiuxian-vector` owns Lance-backed vector retrieval and vector-store
-   persistence
+   persistence, including the remaining Lance FTS keyword retrieval path
 3. `xiuxian-wendao` exposes non-vector product surfaces without a mandatory
    vector-store dependency and gates vector-only behavior explicitly
 

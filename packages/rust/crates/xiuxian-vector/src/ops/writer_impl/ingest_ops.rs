@@ -1,4 +1,10 @@
 impl VectorStore {
+    async fn rebuild_keyword_search_index(&self, table_name: &str) {
+        if let Err(error) = self.create_fts_index(table_name).await {
+            log::debug!("keyword search index rebuild skipped for `{table_name}`: {error}");
+        }
+    }
+
     /// Add tool records to the vector store.
     ///
     /// # Errors
@@ -26,39 +32,7 @@ impl VectorStore {
             prepared_tools.push((tool, full_name, routing_keywords, command_name));
         }
 
-        // 1. Write to Keyword Index if enabled
-        if let Some(kw_index) = &self.keyword_index {
-            let search_results: Vec<skill::ToolSearchResult> = prepared_tools
-                .iter()
-                .map(|(tool, full_name, _routing_keywords, _command_name)| {
-                    skill::ToolSearchResult {
-                        name: full_name.clone(),
-                        description: tool.description.clone(),
-                        input_schema: serde_json::json!({}),
-                        score: 1.0,
-                        vector_score: None,
-                        keyword_score: Some(1.0),
-                        skill_name: tool.skill_name.clone(),
-                        tool_name: tool.tool_name.clone(),
-                        file_path: tool.file_path.clone(),
-                        routing_keywords: tool.keywords.clone(),
-                        intents: tool.intents.clone(),
-                        category: tool.category.clone(),
-                        parameters: tool.parameters.clone(),
-                    }
-                })
-                .collect();
-            if let Err(e) = kw_index.index_batch(&search_results) {
-                log::error!(
-                    "Keyword index batch failed for {} tools: {e}",
-                    search_results.len()
-                );
-            } else {
-                log::info!("Keyword index: indexed {} tools", search_results.len());
-            }
-        }
-
-        // 2. Prepare metadata and IDs for `LanceDB`
+        // Prepare metadata and IDs for `LanceDB`
         let mut ids = Vec::with_capacity(prepared_tools.len());
         let mut contents = Vec::with_capacity(prepared_tools.len());
         let mut metadatas = Vec::with_capacity(prepared_tools.len());
@@ -108,8 +82,6 @@ impl VectorStore {
             return Ok(());
         }
 
-        let contents_for_keyword = contents.clone();
-        let metadatas_for_keyword = metadatas.clone();
         let (schema, batch) = self.build_document_batch(ids, vectors, contents, metadatas)?;
 
         let (mut dataset, created) = self
@@ -124,39 +96,10 @@ impl VectorStore {
                 .await?;
         }
 
-        // DUAL WRITE: Also write to Keyword Index if enabled
-        if let Some(ref kw_index) = self.keyword_index {
-            let mut keyword_docs = Vec::new();
-            for (i, meta_str) in metadatas_for_keyword.iter().enumerate() {
-                if let Some(meta) = parse_metadata_value(meta_str) {
-                    if meta.get("type").and_then(|s| s.as_str()) != Some("command") {
-                        continue;
-                    }
-                    let Some(name) = Self::canonical_tool_name_from_metadata(&meta) else {
-                        continue;
-                    };
-                    let category = meta
-                        .get("category")
-                        .and_then(|s| s.as_str())
-                        .or_else(|| meta.get("skill_name").and_then(|s| s.as_str()))
-                        .unwrap_or("unknown")
-                        .to_string();
-                    let kws = crate::skill::resolve_routing_keywords(&meta);
-                    let intents = crate::skill::resolve_intents(&meta);
-                    keyword_docs.push((
-                        name,
-                        contents_for_keyword[i].clone(),
-                        category,
-                        kws,
-                        intents,
-                    ));
-                }
-            }
-            if !keyword_docs.is_empty() {
-                let _ = kw_index.bulk_upsert(keyword_docs);
-            }
-        }
         self.invalidate_cached_table(table_name).await;
+        if self.keyword_search_enabled {
+            self.rebuild_keyword_search_index(table_name).await;
+        }
         Ok(())
     }
 
@@ -207,9 +150,6 @@ impl VectorStore {
             groups.entry(pv).or_default().push(i);
         }
 
-        let contents_for_keyword = contents.clone();
-        let metadatas_for_keyword = metadatas.clone();
-
         let (mut dataset, _) = self.get_or_create_dataset(table_name, false, None).await?;
         let schema = self.create_schema();
 
@@ -231,38 +171,10 @@ impl VectorStore {
                 .await?;
         }
 
-        if let Some(ref kw_index) = self.keyword_index {
-            let mut keyword_docs = Vec::new();
-            for (i, meta_str) in metadatas_for_keyword.iter().enumerate() {
-                if let Some(meta) = parse_metadata_value(meta_str) {
-                    if meta.get("type").and_then(|s| s.as_str()) != Some("command") {
-                        continue;
-                    }
-                    let Some(name) = Self::canonical_tool_name_from_metadata(&meta) else {
-                        continue;
-                    };
-                    let category = meta
-                        .get("category")
-                        .and_then(|s| s.as_str())
-                        .or_else(|| meta.get("skill_name").and_then(|s| s.as_str()))
-                        .unwrap_or("unknown")
-                        .to_string();
-                    let kws = crate::skill::resolve_routing_keywords(&meta);
-                    let intents = crate::skill::resolve_intents(&meta);
-                    keyword_docs.push((
-                        name,
-                        contents_for_keyword[i].clone(),
-                        category,
-                        kws,
-                        intents,
-                    ));
-                }
-            }
-            if !keyword_docs.is_empty() {
-                let _ = kw_index.bulk_upsert(keyword_docs);
-            }
-        }
         self.invalidate_cached_table(table_name).await;
+        if self.keyword_search_enabled {
+            self.rebuild_keyword_search_index(table_name).await;
+        }
         Ok(())
     }
 }

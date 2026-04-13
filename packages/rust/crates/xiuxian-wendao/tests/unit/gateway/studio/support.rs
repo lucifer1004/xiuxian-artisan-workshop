@@ -2,6 +2,7 @@ use std::path::Path;
 use std::process::Command;
 
 use serde::Serialize;
+use serde_json::{Value, json};
 
 const TEST_GIT_AUTHOR_NAME: &str = "Xiuxian Test";
 const TEST_GIT_AUTHOR_EMAIL: &str = "test@example.com";
@@ -29,6 +30,53 @@ pub(crate) fn assert_wendao_json_snapshot(name: &str, value: impl Serialize) {
 
 pub(crate) fn round_f64(value: f64) -> f64 {
     (value * 10_000.0).round() / 10_000.0
+}
+
+pub(crate) fn search_response_snapshot(
+    response: &crate::gateway::studio::types::SearchResponse,
+) -> Value {
+    json!({
+        "query": response.query,
+        "hitCount": response.hit_count,
+        "selectedMode": response.selected_mode,
+        "searchMode": response.search_mode,
+        "intent": response.intent,
+        "intentConfidence": response.intent_confidence.map(round_f64),
+        "graphConfidenceScore": response.graph_confidence_score.map(round_f64),
+        "partial": response.partial,
+        "indexingState": response.indexing_state,
+        "pendingRepos": response.pending_repos,
+        "skippedRepos": response.skipped_repos,
+        "hits": response.hits.iter().map(|hit| {
+            json!({
+                "stem": hit.stem,
+                "title": hit.title,
+                "path": hit.path,
+                "docType": hit.doc_type,
+                "tags": hit.tags,
+                "score": round_f64(hit.score),
+                "bestSection": hit.best_section,
+                "matchReason": hit.match_reason,
+                "hierarchicalUri": hit.hierarchical_uri,
+                "hierarchy": hit.hierarchy,
+                "saliencyScore": hit.saliency_score.map(round_f64),
+                "auditStatus": hit.audit_status,
+                "verificationState": hit.verification_state,
+                "implicitBacklinks": hit.implicit_backlinks,
+                "navigationTarget": hit.navigation_target.as_ref().map(|target| {
+                    json!({
+                        "path": target.path,
+                        "category": target.category,
+                        "projectName": target.project_name,
+                        "rootLabel": target.root_label,
+                        "line": target.line,
+                        "lineEnd": target.line_end,
+                        "column": target.column,
+                    })
+                }),
+            })
+        }).collect::<Vec<_>>(),
+    })
 }
 
 pub(crate) fn init_git_repository(path: impl AsRef<Path>) {

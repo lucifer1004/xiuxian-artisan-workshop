@@ -2,10 +2,11 @@ use std::fs;
 
 use crate::gateway::studio::router::config::types::{WendaoTomlConfig, WendaoTomlPluginEntry};
 use crate::gateway::studio::router::config::{
-    load_ui_config_from_wendao_toml, persist_ui_config_to_wendao_toml,
+    load_ui_config_from_wendao_toml, load_ui_config_from_wendao_toml_path,
+    persist_ui_config_to_wendao_toml, persist_ui_config_to_wendao_toml_path,
     studio_wendao_overlay_toml_path, studio_wendao_toml_path,
 };
-use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
+use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -169,5 +170,72 @@ plugins = ["julia"]
     assert!(config.projects.is_empty());
     assert_eq!(config.repo_projects.len(), 1);
     assert_eq!(config.repo_projects[0].id, "main");
+    Ok(())
+}
+
+#[test]
+fn persist_ui_config_to_wendao_toml_path_preserves_imported_repo_projects() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let frontend_root = temp.path().join(".data").join("wendao-frontend");
+    fs::create_dir_all(frontend_root.as_path())?;
+    fs::write(
+        temp.path().join("github-repo-list.toml"),
+        r#"[link_graph.projects.lance]
+dirs = []
+url = "https://github.com/lance-format/lance"
+refresh = "fetch"
+plugins = ["ast-grep"]
+"#,
+    )?;
+    let config_path = studio_wendao_toml_path(temp.path());
+    fs::write(
+        &config_path,
+        r#"imports = ["github-repo-list.toml", ".data/wendao-frontend/wendao.toml"]
+
+[gateway]
+bind = "127.0.0.1:9517"
+
+[link_graph.projects.main]
+root = "."
+dirs = ["docs"]
+"#,
+    )?;
+    fs::write(
+        frontend_root.join("wendao.toml"),
+        r#"[link_graph.projects.frontend]
+root = "."
+dirs = ["src"]
+"#,
+    )?;
+
+    persist_ui_config_to_wendao_toml_path(
+        config_path.as_path(),
+        &UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "frontend".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["src".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        },
+    )?;
+
+    let persisted = fs::read_to_string(&config_path)?;
+    assert!(
+        !persisted.contains("[link_graph.projects.lance]"),
+        "imported repo projects should not be materialized into the base config"
+    );
+
+    let Some(config) = load_ui_config_from_wendao_toml_path(config_path.as_path()) else {
+        panic!("ui config should load from the persisted root config");
+    };
+    assert_eq!(config.projects.len(), 1);
+    assert_eq!(config.projects[0].name, "frontend");
+    assert_eq!(config.repo_projects.len(), 1);
+    assert_eq!(config.repo_projects[0].id, "lance");
+    assert_eq!(
+        config.repo_projects[0].plugins,
+        vec!["ast-grep".to_string()]
+    );
     Ok(())
 }

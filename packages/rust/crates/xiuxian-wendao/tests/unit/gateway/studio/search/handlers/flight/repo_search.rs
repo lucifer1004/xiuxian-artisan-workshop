@@ -16,12 +16,15 @@ use super::{
     build_studio_flight_service_for_roots,
 };
 use crate::analyzers::bootstrap_builtin_registry;
-use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::analyzers::resolve_registered_repository_source;
+use crate::gateway::studio::router::{GatewayState, StudioState, configured_repositories};
 use crate::gateway::studio::search::build_symbol_index;
 use crate::gateway::studio::search::handlers::tests::linked_parser_summary::ensure_linked_julia_parser_summary_service;
-use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
+use crate::gateway::studio::test_support::commit_all;
+use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
 use crate::repo_index::RepoCodeDocument;
 use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
+use xiuxian_git_repo::SyncMode;
 use xiuxian_wendao_runtime::transport::{
     ANALYSIS_CODE_AST_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
 };
@@ -97,6 +100,20 @@ fn init_git_repo_or_panic(path: impl AsRef<Path>, context: &str) {
         (true, true) => "unknown git error".to_string(),
     };
     panic!("{context}: git init failed: {detail}");
+}
+
+fn commit_all_or_panic(path: impl AsRef<Path>, message: &str, context: &str) {
+    commit_all(path.as_ref(), message);
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(path.as_ref())
+        .args(["status", "--short"])
+        .output()
+        .unwrap_or_else(|error| panic!("{context}: {error}"));
+    if status.status.success() {
+        return;
+    }
+    panic!("{context}: git status failed after commit");
 }
 
 fn repo_document(path: &str, language: &str, contents: &str) -> RepoCodeDocument {
@@ -279,6 +296,77 @@ async fn studio_repo_search_flight_provider_reads_repo_content_hits() {
     assert_eq!(doc_ids.value(0), "lib.rs");
     assert_eq!(paths.value(0), "src/lib.rs");
     assert_eq!(languages.value(0), "rust");
+}
+
+#[tokio::test]
+async fn studio_repo_search_flight_provider_falls_back_to_search_only_checkout_content() {
+    let temp_dir = tempdir_or_panic("temp dir should build");
+    let project_root = temp_dir.path().join("project");
+    let storage_root = temp_dir.path().join("storage");
+    let source_root = temp_dir.path().join("lance-source");
+    create_dir_all_or_panic(&project_root, "project root should build");
+    create_dir_all_or_panic(&source_root, "source root should build");
+    init_git_repo_or_panic(&source_root, "source repo should initialize");
+    create_dir_all_or_panic(source_root.join("src"), "source src should build");
+    write_file_or_panic(
+        source_root.join("src/lib.rs"),
+        "pub fn lance_kernel() -> &'static str { \"lance source fallback\" }\n",
+        "source file should be written",
+    );
+    commit_all_or_panic(&source_root, "init", "source repo should commit");
+
+    let service = Arc::new(SearchPlaneService::with_paths(
+        PathBuf::from(&project_root),
+        PathBuf::from(&storage_root),
+        SearchManifestKeyspace::new("xiuxian:test:flight-repo-search-source-fallback"),
+        SearchMaintenancePolicy::default(),
+    ));
+    let studio = Arc::new(StudioState::new());
+    studio.set_ui_config(UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![UiRepoProjectConfig {
+            id: "lance".to_string(),
+            root: None,
+            url: Some(source_root.display().to_string()),
+            git_ref: None,
+            refresh: Some("manual".to_string()),
+            plugins: vec!["ast-grep".to_string()],
+        }],
+    });
+
+    let provider =
+        StudioRepoSearchFlightRouteProvider::with_studio(Arc::clone(&service), Arc::clone(&studio));
+    let batch = repo_search_batch_or_panic(
+        &provider,
+        &repo_search_request("lance", "lance", 5, RepoSearchRequestFilters::default()),
+        "provider should fall back to checkout-backed repo search",
+    )
+    .await;
+
+    let paths = string_column(&batch, "path");
+    let languages = string_column(&batch, "language");
+    let match_reasons = string_column(&batch, "match_reason");
+
+    assert_eq!(batch.num_rows(), 1);
+    assert_eq!(paths.value(0), "src/lib.rs");
+    assert_eq!(languages.value(0), "rust");
+    assert_eq!(match_reasons.value(0), "repo_content_search");
+
+    let repository = configured_repositories(studio.as_ref())
+        .into_iter()
+        .find(|repository| repository.id == "lance")
+        .unwrap_or_else(|| panic!("configured repository should exist"));
+    let materialized = resolve_registered_repository_source(
+        &repository,
+        studio.config_root.as_path(),
+        SyncMode::Status,
+    )
+    .unwrap_or_else(|error| panic!("materialized checkout should resolve: {error}"));
+    std::fs::remove_dir_all(materialized.checkout_root)
+        .unwrap_or_else(|error| panic!("cleanup managed checkout: {error}"));
+    if let Some(mirror_root) = materialized.mirror_root {
+        std::fs::remove_dir_all(mirror_root).ok();
+    }
 }
 
 #[tokio::test]

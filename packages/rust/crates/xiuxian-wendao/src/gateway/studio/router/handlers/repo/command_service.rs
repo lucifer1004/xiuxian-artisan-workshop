@@ -7,13 +7,22 @@ use crate::analyzers::{
 use crate::gateway::studio::router::handlers::repo::shared::{
     repo_index_repositories, with_repo_analysis, with_repository,
 };
-use crate::gateway::studio::router::{GatewayState, StudioApiError};
+use crate::gateway::studio::router::{
+    GatewayState, StudioApiError, configured_repositories, resolve_registered_repository_id,
+};
 use crate::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 
 pub(crate) async fn run_repo_index(
     state: Arc<GatewayState>,
-    payload: RepoIndexRequest,
+    mut payload: RepoIndexRequest,
 ) -> Result<RepoIndexStatusResponse, StudioApiError> {
+    payload.repo = payload.repo.and_then(|repo_id| {
+        resolve_registered_repository_id(
+            configured_repositories(&state.studio).as_slice(),
+            repo_id.as_str(),
+        )
+        .or(Some(repo_id))
+    });
     let repositories = repo_index_repositories(&state, payload.repo.as_deref())?;
     if repositories.is_empty() {
         return Err(StudioApiError::bad_request(
@@ -35,7 +44,10 @@ pub(crate) fn run_repo_index_status(
     state: &Arc<GatewayState>,
     repo: Option<&str>,
 ) -> RepoIndexStatusResponse {
-    state.studio.repo_index_status(repo)
+    let repo = repo.and_then(|repo_id| {
+        resolve_registered_repository_id(configured_repositories(&state.studio).as_slice(), repo_id)
+    });
+    state.studio.repo_index_status(repo.as_deref())
 }
 
 pub(crate) async fn run_repo_sync(
@@ -43,15 +55,23 @@ pub(crate) async fn run_repo_sync(
     repo_id: String,
     mode: RepoSyncMode,
 ) -> Result<RepoSyncResult, StudioApiError> {
+    let canonical_repo_id = resolve_registered_repository_id(
+        configured_repositories(&state.studio).as_slice(),
+        repo_id.as_str(),
+    )
+    .unwrap_or(repo_id);
     with_repository(
         Arc::clone(&state),
-        repo_id.clone(),
+        canonical_repo_id,
         "REPO_SYNC_PANIC",
         "Repo sync task failed unexpectedly",
         !matches!(mode, RepoSyncMode::Status),
         move |repository, cwd| {
             repo_sync_for_registered_repository(
-                &RepoSyncQuery { repo_id, mode },
+                &RepoSyncQuery {
+                    repo_id: repository.id.clone(),
+                    mode,
+                },
                 &repository,
                 cwd.as_path(),
             )
@@ -64,9 +84,10 @@ pub(crate) async fn run_refine_entity_doc(
     state: Arc<GatewayState>,
     payload: RefineEntityDocRequest,
 ) -> Result<RefineEntityDocResponse, StudioApiError> {
-    let repo_id = crate::gateway::studio::router::handlers::repo::required_repo_id(Some(
-        payload.repo_id.as_str(),
-    ))?;
+    let repo_id = crate::gateway::studio::router::handlers::repo::required_registered_repo_id(
+        state.studio.as_ref(),
+        Some(payload.repo_id.as_str()),
+    )?;
     with_repo_analysis(
         Arc::clone(&state),
         repo_id,
@@ -93,7 +114,7 @@ pub(crate) async fn run_refine_entity_doc(
             );
 
             Ok::<_, crate::RepoIntelligenceError>(RefineEntityDocResponse {
-                repo_id: payload.repo_id,
+                repo_id: payload.repo_id.clone(),
                 entity_id: payload.entity_id,
                 refined_content,
                 verification_state: "verified".to_string(),

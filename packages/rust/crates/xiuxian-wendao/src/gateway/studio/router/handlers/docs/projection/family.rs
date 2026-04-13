@@ -12,7 +12,7 @@ use crate::gateway::studio::router::handlers::docs::service::{
 use crate::gateway::studio::router::handlers::repo::{
     RepoProjectedPageFamilyClusterApiQuery, RepoProjectedPageFamilyContextApiQuery,
     RepoProjectedPageFamilySearchApiQuery, parse_projection_page_kind, required_page_id,
-    required_projection_page_kind, required_repo_id, required_search_query,
+    required_projection_page_kind, required_registered_repo_id, required_search_query,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -26,7 +26,7 @@ pub async fn family_context(
     Query(query): Query<RepoProjectedPageFamilyContextApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsFamilyContextResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let per_kind_limit = query.per_kind_limit.unwrap_or(3);
     let result = run_docs_family_context(
@@ -51,7 +51,7 @@ pub async fn family_search(
     Query(query): Query<RepoProjectedPageFamilySearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsFamilySearchResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
@@ -81,7 +81,7 @@ pub async fn family_cluster(
     Query(query): Query<RepoProjectedPageFamilyClusterApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsFamilyClusterResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let kind = required_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(3).max(1);

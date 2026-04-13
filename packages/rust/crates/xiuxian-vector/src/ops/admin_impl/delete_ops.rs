@@ -178,68 +178,7 @@ impl VectorStore {
         Ok(count)
     }
 
-    /// Clear the keyword index (useful when re-indexing tools).
-    /// This removes the old index directory and recreates a fresh empty index.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`VectorStoreError`] if index directory cleanup or keyword index initialization fails.
-    pub fn clear_keyword_index(&mut self) -> Result<(), VectorStoreError> {
-        // Remove the old keyword index directory if it exists
-        let keyword_path = self.base_path.join("keyword_index");
-        if keyword_path.exists() {
-            std::fs::remove_dir_all(&keyword_path).map_err(|e| {
-                VectorStoreError::General(format!("Failed to clear keyword index: {e}"))
-            })?;
-        }
-        // Clear our reference so enable_keyword_index will recreate
-        self.keyword_index = None;
-        // Recreate the keyword index
-        self.enable_keyword_index()?;
-        Ok(())
-    }
-
-    /// Check if keyword index contains a given tool name (for testing).
-    /// Returns true if the tool exists in the keyword index.
-    #[must_use]
-    pub fn keyword_index_contains(&self, tool_name: &str) -> bool {
-        if self.keyword_backend != KeywordSearchBackend::Tantivy {
-            return false;
-        }
-        if let Some(ref kw_index) = self.keyword_index {
-            let results = kw_index.search(tool_name, 10);
-            if let Ok(hits) = results {
-                return !hits.is_empty();
-            }
-        }
-        false
-    }
-
-    /// Check if keyword index is empty (for testing).
-    /// Returns true if keyword index is empty or not available.
-    #[must_use]
-    pub fn keyword_index_is_empty(&self) -> bool {
-        if self.keyword_backend != KeywordSearchBackend::Tantivy {
-            return true;
-        }
-        if let Some(ref kw_index) = self.keyword_index {
-            // Search for a unique character that won't match anything
-            let results = kw_index.search("___UNIQUE_NONEXISTENT___", 10);
-            if let Ok(hits) = results {
-                return hits.is_empty();
-            }
-        }
-        true // If no keyword index, consider it empty
-    }
-
     /// Drop a table and remove its data from disk.
-    /// Also clears the keyword index when dropping skills/router tables.
-    ///
-    /// When `table_path` equals `base_path` (i.e. `base_path` ends with `.lance`),
-    /// we selectively remove only `LanceDB` artifacts (`_versions`, `data`, `_indices`,
-    /// `_transactions`, `_deletions`) so that the `keyword_index/` subdirectory
-    /// is preserved.  This prevents the Tantivy keyword index from being destroyed
-    /// every time the skills table is rebuilt.
     ///
     /// # Errors
     ///
@@ -265,30 +204,16 @@ impl VectorStore {
             cache.remove(table_name);
         }
         if drop_path.exists() {
-            // When table_path == base_path (base_path ends with .lance),
-            // selectively remove only LanceDB directories to preserve keyword_index.
             if drop_path == self.base_path {
                 Self::remove_lance_artifacts(&drop_path)?;
             } else {
                 std::fs::remove_dir_all(&drop_path)?;
             }
         }
-        // Clear the keyword index when dropping skills/router tables
-        // This ensures stale data doesn't persist across reindex operations
-        if table_name == "skills" || table_name == "router" {
-            // Delete the keyword index directory to clear stale data
-            let keyword_index_path = self.base_path.join("keyword_index");
-            if keyword_index_path.exists() {
-                std::fs::remove_dir_all(&keyword_index_path)?;
-            }
-            // Clear our reference so enable_keyword_index will recreate on next use
-            self.keyword_index = None;
-        }
         Ok(())
     }
 
-    /// Remove only LanceDB-specific artifacts from a directory, preserving other
-    /// subdirectories such as `keyword_index/`.
+    /// Remove only LanceDB-specific artifacts from a directory.
     fn remove_lance_artifacts(dir: &std::path::Path) -> Result<(), VectorStoreError> {
         static LANCE_DIRS: &[&str] = &[
             "_versions",
@@ -309,7 +234,6 @@ impl VectorStore {
             else if entry.file_type()?.is_file() {
                 std::fs::remove_file(entry.path())?;
             }
-            // Preserve keyword_index/ and other non-lance directories
         }
         Ok(())
     }

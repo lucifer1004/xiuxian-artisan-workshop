@@ -143,6 +143,6 @@ fn test_tool_search_results_to_ipc_one_row() -> Result<()> {
     assert!(final_scores.value(0) > 0.0);
     assert!(matches!(confidences.value(0), "high" | "medium" | "low"));
     assert!(ranking_reasons.value(0).contains("final="));
-    assert!(digests.value(0).starts_with("sha256:"));
+    assert!(digests.value(0).starts_with("fnv1a64:"));
     Ok(())
 }

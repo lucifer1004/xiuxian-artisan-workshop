@@ -72,8 +72,8 @@ pub use xiuxian_skills::skills::{
 pub use error::VectorStoreError;
 #[cfg(feature = "vector-store")]
 pub use keyword::{
-    HybridSearchResult, KEYWORD_WEIGHT, KeywordIndex, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT,
-    apply_rrf, apply_weighted_rrf, distance_to_score, rrf_term, rrf_term_batch,
+    HybridSearchResult, KEYWORD_WEIGHT, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT, apply_rrf,
+    apply_weighted_rrf, distance_to_score, rrf_term, rrf_term_batch,
 };
 #[cfg(feature = "vector-store")]
 pub use ops::{
@@ -156,10 +156,10 @@ pub struct VectorStore {
     base_path: PathBuf,
     datasets: Arc<RwLock<DatasetCache>>,
     dimension: usize,
-    /// Optional keyword index used for hybrid dense+keyword retrieval.
-    pub keyword_index: Option<Arc<KeywordIndex>>,
     /// Active keyword backend strategy.
     pub keyword_backend: KeywordSearchBackend,
+    /// Whether keyword search is enabled for hybrid retrieval.
+    pub keyword_search_enabled: bool,
     /// Optional index cache size in bytes. When set, datasets are opened via `DatasetBuilder`.
     pub index_cache_size_bytes: Option<usize>,
     /// In-process per-table query metrics (`query_count`, `last_query_ms`). Wired when `agentic_search` runs.

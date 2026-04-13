@@ -35,8 +35,8 @@ pub fn persist_ui_config_to_wendao_toml_path(
 ) -> Result<(), String> {
     let paths = resolve_persist_paths(config_path)?;
     let mut effective = load_or_default_wendao_config(paths.effective.as_path())?;
-    let projects = merge_ui_projects(&mut effective, config);
     let mut base = load_raw_or_default_wendao_config(paths.base.as_path())?;
+    let projects = merge_ui_projects(&mut effective, &base, config);
     base.link_graph.projects = projects;
     write_base_config(paths.base.as_path(), &base)?;
     remove_legacy_overlay(paths.legacy_overlay.as_path(), paths.base.as_path())
@@ -110,6 +110,7 @@ fn load_raw_or_default_wendao_config(config_path: &Path) -> Result<WendaoTomlCon
 
 fn merge_ui_projects(
     parsed: &mut WendaoTomlConfig,
+    base: &WendaoTomlConfig,
     config: &UiConfig,
 ) -> BTreeMap<String, WendaoTomlProjectConfig> {
     let local_project_ids = config
@@ -128,6 +129,12 @@ fn merge_ui_projects(
         .collect::<BTreeSet<_>>();
 
     let mut existing_projects = std::mem::take(&mut parsed.link_graph.projects);
+    let base_project_ids = base
+        .link_graph
+        .projects
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>();
     let mut projects = BTreeMap::<String, WendaoTomlProjectConfig>::new();
     for project in &config.projects {
         let mut entry = existing_projects.remove(&project.name).unwrap_or_default();
@@ -158,6 +165,9 @@ fn merge_ui_projects(
 
     for (id, mut entry) in existing_projects {
         if local_and_repo_ids.contains(&id) {
+            continue;
+        }
+        if !base_project_ids.contains(&id) {
             continue;
         }
         entry.dirs.clear();

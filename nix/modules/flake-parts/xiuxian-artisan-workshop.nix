@@ -28,7 +28,7 @@
     {
       _module.args.apple-metal-toolchain = apple-metal-toolchain;
 
-      nci.projects."xiuxian-core-rs" = {
+      nci.projects."cyber-xiuxian-workshop" = {
         path = workspaceRoot;
         export = true;
         depsDrvConfig = {
@@ -36,10 +36,15 @@
             buildInputs = [
               pkgs.pkg-config
               pkgs.openssl
+              pkgs.cacert
+              pkgs.protobuf
             ];
           };
           env = {
+            PYO3_PYTHON = "${pkgs.python3}/bin/python";
             PROTOC = "${pkgs.protobuf}/bin/protoc";
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           };
         };
       };

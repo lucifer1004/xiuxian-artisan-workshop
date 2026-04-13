@@ -7,7 +7,7 @@ use axum::{
 
 use crate::gateway::studio::router::handlers::repo::analysis::search::service::run_repo_import_search;
 use crate::gateway::studio::router::handlers::repo::{
-    RepoImportSearchApiQuery, required_import_search_filters, required_repo_id,
+    RepoImportSearchApiQuery, required_import_search_filters, required_registered_repo_id,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -21,7 +21,7 @@ pub async fn import_search(
     Query(query): Query<RepoImportSearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::ImportSearchResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let (package, module) =
         required_import_search_filters(query.package.as_deref(), query.module.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);

@@ -2,8 +2,8 @@
 //!
 //! These tests ensure that:
 //! 1. Dataset creation works correctly even with pre-existing empty directories
-//! 2. `drop_table` properly cleans up both `LanceDB` and keyword index data
-//! 3. Reindex workflows work correctly after dropping tables
+//! 2. `drop_table` properly cleans up Lance-backed table data
+//! 3. Reindex workflows rebuild the Lance FTS surface after dropping tables
 
 use anyhow::Result;
 use xiuxian_vector::VectorStore;
@@ -211,15 +211,12 @@ async fn test_recreate_after_empty_directory() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_reindex_after_drop_with_keyword_index() -> Result<()> {
-    // Regression test: ensure drop_table properly removes keyword index directory
-    // This was the bug: drop_table only cleared the Arc reference but didn't delete the directory,
-    // causing stale keyword index data to persist across reindex operations
+async fn test_reindex_after_drop_rebuilds_fts_index() -> Result<()> {
+    // Regression test: ensure drop_table removes the table and a later write
+    // rebuilds the Lance FTS surface from table data.
     let temp_dir = tempfile::tempdir()?;
-    // Use a directory path (not .lance) so keyword index is at base_path/keyword_index
     let db_path = temp_dir.path().join("test_reindex_kw");
 
-    // Create store with keyword index enabled
     let db_path_str = db_path.to_string_lossy();
     let mut store =
         VectorStore::new_with_keyword_index(db_path_str.as_ref(), Some(1536), true, None, None)
@@ -242,41 +239,22 @@ async fn test_reindex_after_drop_with_keyword_index() -> Result<()> {
         has_lance_data(&lance_path),
         "LanceDB directory should have data after add_documents"
     );
-
-    // Verify keyword index directory exists at base_path/keyword_index
-    let kw_path = db_path.join("keyword_index");
     assert!(
-        kw_path.exists(),
-        "Keyword index directory should exist after add_documents"
+        store.has_fts_index("skills").await?,
+        "FTS index should exist after add_documents when keyword search is enabled"
     );
 
-    // Drop the table
     store.drop_table("skills").await?;
 
-    // Verify keyword index reference is cleared
-    assert!(
-        store.keyword_index.is_none(),
-        "Keyword index reference should be None after drop"
-    );
-
-    // Verify keyword index DIRECTORY was removed (this is the key fix!)
-    assert!(
-        !kw_path.exists(),
-        "Keyword index directory should be REMOVED after drop (not just reference cleared)"
-    );
-
-    // Verify LanceDB table directory was also removed
     assert!(
         !lance_path.exists(),
         "LanceDB directory should be removed after drop"
     );
 
-    // Recreate store (simulating what Python code does with new PyVectorStore)
     let store2 =
         VectorStore::new_with_keyword_index(db_path_str.as_ref(), Some(1536), true, None, None)
             .await?;
 
-    // Add new documents with new store instance
     store2
         .add_documents(
             "skills",
@@ -292,15 +270,11 @@ async fn test_reindex_after_drop_with_keyword_index() -> Result<()> {
         has_lance_data(&lance_path),
         "LanceDB directory should have data after reindex"
     );
-
-    // Verify keyword index was recreated
-    let kw_path_new = db_path.join("keyword_index");
     assert!(
-        kw_path_new.exists(),
-        "Keyword index directory should be recreated after reindex with new store"
+        store2.has_fts_index("skills").await?,
+        "FTS index should be rebuilt after reindex with a new store"
     );
 
-    // Verify data was added to LanceDB
     let count = store2.count("skills").await?;
     assert_eq!(count, 1, "Should have added one document after reindex");
 

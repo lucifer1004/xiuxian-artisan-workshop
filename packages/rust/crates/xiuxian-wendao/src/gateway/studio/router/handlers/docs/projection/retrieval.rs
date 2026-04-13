@@ -12,7 +12,7 @@ use crate::gateway::studio::router::handlers::docs::service::{
 use crate::gateway::studio::router::handlers::repo::{
     RepoProjectedPageSearchApiQuery, RepoProjectedRetrievalContextApiQuery,
     RepoProjectedRetrievalHitApiQuery, parse_projection_page_kind, required_page_id,
-    required_repo_id, required_search_query,
+    required_registered_repo_id, required_search_query,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -27,7 +27,7 @@ pub async fn retrieval(
     Query(query): Query<RepoProjectedPageSearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsRetrievalResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
@@ -55,7 +55,7 @@ pub async fn retrieval_context(
     Query(query): Query<RepoProjectedRetrievalContextApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsRetrievalContextResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let node_id = query.node_id;
     let related_limit = query.related_limit.unwrap_or(5);
@@ -82,7 +82,7 @@ pub async fn retrieval_hit(
     Query(query): Query<RepoProjectedRetrievalHitApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsRetrievalHitResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let node_id = query.node_id;
     let result = run_docs_retrieval_hit(

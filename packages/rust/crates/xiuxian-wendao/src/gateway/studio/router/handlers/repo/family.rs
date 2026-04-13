@@ -18,8 +18,8 @@ use crate::gateway::studio::router::handlers::repo::projected_service::{
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
 use super::parse::{
-    parse_projection_page_kind, required_page_id, required_projection_page_kind, required_repo_id,
-    required_search_query,
+    parse_projection_page_kind, required_page_id, required_projection_page_kind,
+    required_registered_repo_id, required_search_query,
 };
 use super::query::{
     RepoProjectedPageFamilyClusterApiQuery, RepoProjectedPageFamilyContextApiQuery,
@@ -37,7 +37,7 @@ pub async fn projected_page_family_context(
     Query(query): Query<RepoProjectedPageFamilyContextApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageFamilyContextResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let per_kind_limit = query.per_kind_limit.unwrap_or(3);
     let result = run_repo_projected_page_family_context(
@@ -63,7 +63,7 @@ pub async fn projected_page_family_search(
     Query(query): Query<RepoProjectedPageFamilySearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageFamilySearchResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
@@ -93,7 +93,7 @@ pub async fn projected_page_family_cluster(
     Query(query): Query<RepoProjectedPageFamilyClusterApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageFamilyClusterResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let kind = required_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(3).max(1);
@@ -121,7 +121,7 @@ pub async fn projected_page_navigation(
     Query(query): Query<RepoProjectedPageNavigationApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageNavigationResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let node_id = query.node_id;
     let family_kind = parse_projection_page_kind(query.family_kind.as_deref())?;
@@ -154,7 +154,7 @@ pub async fn projected_page_navigation_search(
     Query(query): Query<RepoProjectedPageNavigationSearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageNavigationSearchResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let family_kind = parse_projection_page_kind(query.family_kind.as_deref())?;

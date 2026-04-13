@@ -6,7 +6,6 @@ mod helpers;
 mod route;
 mod scan;
 
-#[cfg(test)]
 pub(crate) use candidates::RepoContentChunkCandidate;
 pub(crate) use error::RepoContentChunkSearchError;
 pub(crate) use filters::RepoContentChunkSearchFilters;

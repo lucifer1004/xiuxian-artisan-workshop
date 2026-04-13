@@ -145,9 +145,7 @@ pub(crate) async fn search_repo_code_outcome_for_query(
     }
 
     if let Some(repository) = selected_repository
-        && repository_supports_generic_ast_analysis(repository)
-        && has_generic_ast_language_filters(repository, &parsed_query.language_filters)
-        && parsed_query.kind_filters.is_empty()
+        && should_use_generic_ast_analysis(repository, parsed_query)
     {
         let language_filters = parsed_query
             .language_filters
@@ -180,6 +178,16 @@ pub(crate) async fn search_repo_code_outcome_for_query(
     )
     .await
     .map_err(RepoCodeSearchExecutionError::Search)
+}
+
+fn should_use_generic_ast_analysis(
+    repository: &RegisteredRepository,
+    parsed_query: &ParsedRepoCodeSearchQuery,
+) -> bool {
+    repository_supports_generic_ast_analysis(repository)
+        && parsed_query.kind_filters.is_empty()
+        && (!repository.has_repo_intelligence_plugins()
+            || has_generic_ast_language_filters(repository, &parsed_query.language_filters))
 }
 
 async fn prepare_repo_search_dispatch(

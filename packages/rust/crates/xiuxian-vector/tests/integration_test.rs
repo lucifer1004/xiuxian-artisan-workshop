@@ -6,18 +6,12 @@ xiuxian_testing::crate_test_policy_harness!();
 mod columnar_tables;
 #[path = "integration/data_layer_snapshots.rs"]
 mod data_layer_snapshots;
-#[path = "integration/drop_table.rs"]
-mod drop_table;
 #[path = "integration/fusion.rs"]
 mod fusion;
 #[path = "integration/fusion_snapshots.rs"]
 mod fusion_snapshots;
 #[path = "integration/hybrid_search.rs"]
 mod hybrid_search;
-#[path = "integration/keyword_backend_quality.rs"]
-mod keyword_backend_quality;
-#[path = "integration/keyword_index.rs"]
-mod keyword_index;
 #[path = "integration/lance_fts.rs"]
 mod lance_fts;
 #[path = "integration/list_all_tools.rs"]

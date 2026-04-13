@@ -1,7 +1,9 @@
-use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::analyzers::RegisteredRepository;
+use crate::gateway::studio::router::{
+    registered_repository_search_seeds, resolve_registered_repository_id,
+};
 use crate::parsers::search::repo_code_query::ParsedRepoCodeSearchQuery;
 pub(crate) use crate::search::repo_search::RepoSearchResultLimits;
 
@@ -32,6 +34,7 @@ pub(crate) fn repo_search_result_limits(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn infer_repo_hint_from_query<'a, I>(
     parsed: &ParsedRepoCodeSearchQuery,
     repo_ids: I,
@@ -63,26 +66,7 @@ pub(crate) fn infer_repo_hint_from_repositories(
     parsed: &ParsedRepoCodeSearchQuery,
     repositories: &[RegisteredRepository],
 ) -> Option<String> {
-    if let Some(repo_id) = infer_repo_hint_from_query(
-        parsed,
-        repositories.iter().map(|repository| repository.id.as_str()),
-    ) {
-        return Some(repo_id);
-    }
-
-    let normalized_query = normalize_repo_search_seed(parsed.search_term().unwrap_or_default());
-    if normalized_query.is_empty() {
-        return None;
-    }
-    let mut matches = repositories.iter().filter(|repository| {
-        repository_search_seeds(repository).contains(normalized_query.as_str())
-    });
-    let first = matches.next()?;
-    if matches.next().is_some() {
-        return None;
-    }
-
-    Some(first.id.clone())
+    resolve_registered_repository_id(repositories, parsed.search_term().unwrap_or_default())
 }
 
 pub(crate) fn query_uses_redundant_repo_seed(
@@ -101,7 +85,7 @@ pub(crate) fn query_uses_redundant_repo_seed(
         return false;
     }
 
-    repository_search_seeds(repository).contains(normalized_query.as_str())
+    registered_repository_search_seeds(repository).contains(normalized_query.as_str())
 }
 
 fn normalize_repo_search_seed(value: &str) -> String {
@@ -130,37 +114,4 @@ fn normalize_repo_search_seed(value: &str) -> String {
     }
 
     collapsed.trim().to_string()
-}
-
-fn repository_search_seeds(repository: &RegisteredRepository) -> HashSet<String> {
-    let mut seeds = HashSet::new();
-    push_repo_search_seed(&mut seeds, repository.id.as_str());
-
-    if let Some(path) = repository.path.as_deref()
-        && let Some(file_name) = path.file_name().and_then(|value| value.to_str())
-    {
-        push_repo_search_seed(&mut seeds, file_name);
-    }
-
-    if let Some(url) = repository.url.as_deref() {
-        push_repo_search_seed(&mut seeds, url);
-        if let Some(last_segment) = repository_url_last_segment(url) {
-            push_repo_search_seed(&mut seeds, last_segment);
-        }
-    }
-
-    seeds
-}
-
-fn push_repo_search_seed(seeds: &mut HashSet<String>, value: &str) {
-    let normalized = normalize_repo_search_seed(value);
-    if !normalized.is_empty() {
-        seeds.insert(normalized);
-    }
-}
-
-fn repository_url_last_segment(url: &str) -> Option<&str> {
-    let trimmed = url.trim().trim_end_matches('/');
-    let last_segment = trimmed.rsplit('/').next()?;
-    Some(last_segment.strip_suffix(".git").unwrap_or(last_segment))
 }

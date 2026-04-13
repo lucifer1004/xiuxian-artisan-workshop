@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("results={}", results.len());
 
-    // Optional: switch keyword backend for hybrid search.
+    // Optional: enable the Lance FTS keyword path for hybrid search.
     store.set_keyword_backend(KeywordSearchBackend::LanceFts)?;
     store.create_fts_index("skills").await?;
 
@@ -71,9 +71,16 @@ xiuxian-vector/
 ├── src/arrow_codec.rs        # Generic Arrow IPC codec + metadata helpers
 ├── src/ops/                  # Core CRUD + admin + writer operations
 ├── src/search/               # search_optimized + hybrid fusion + search_fts
-├── src/keyword/              # keyword backend abstraction (Tantivy / Lance FTS)
+├── src/keyword/              # keyword fusion and Lance FTS-facing helpers
 └── tests/                    # snapshots + data-layer + perf guard
 ```
+
+## Keyword Search Boundary
+
+`xiuxian-vector` now keeps a single keyword-search path backed by Lance FTS.
+The crate no longer carries a standalone Tantivy index implementation or its
+dependency surface. Hybrid search still uses the crate-local fusion helpers,
+but sparse keyword retrieval is sourced from the Lance-backed table state only.
 
 ## Arrow Ownership Boundary
 

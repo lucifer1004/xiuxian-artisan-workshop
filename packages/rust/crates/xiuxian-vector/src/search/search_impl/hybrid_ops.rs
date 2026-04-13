@@ -1,28 +1,35 @@
 use super::{
-    HybridSearchResult, KEYWORD_WEIGHT, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT,
-    SearchOptions, VectorStore, VectorStoreError, apply_weighted_rrf, f64_to_f32_saturating,
+    HybridSearchResult, KEYWORD_WEIGHT, RRF_K, SEMANTIC_WEIGHT, SearchOptions, VectorStore,
+    VectorStoreError, apply_weighted_rrf, f64_to_f32_saturating,
 };
 
 impl VectorStore {
-    /// Unified keyword search entrypoint for configured backend.
+    /// Unified keyword search entrypoint for the Lance FTS path.
     ///
     /// # Errors
     ///
-    /// Returns an error if keyword backend is unavailable or backend query fails.
+    /// Returns an error if keyword search is disabled or FTS query execution
+    /// fails after one best-effort index bootstrap attempt.
     pub async fn keyword_search(
         &self,
         table_name: &str,
         query: &str,
         limit: usize,
     ) -> Result<Vec<crate::skill::ToolSearchResult>, VectorStoreError> {
-        match self.keyword_backend {
-            KeywordSearchBackend::Tantivy => {
-                let index = self.keyword_index.as_ref().ok_or_else(|| {
-                    VectorStoreError::General("Keyword index not enabled.".to_string())
-                })?;
-                index.search(query, limit)
+        if !self.keyword_search_enabled {
+            return Err(VectorStoreError::General(
+                "Keyword search is not enabled.".to_string(),
+            ));
+        }
+        match self.search_fts(table_name, query, limit, None).await {
+            Ok(results) => Ok(results),
+            Err(error) => {
+                log::debug!(
+                    "keyword_search: Lance FTS query failed for `{table_name}`, retrying after index build: {error}"
+                );
+                self.create_fts_index(table_name).await?;
+                self.search_fts(table_name, query, limit, None).await
             }
-            KeywordSearchBackend::LanceFts => self.search_fts(table_name, query, limit, None).await,
         }
     }
 
@@ -79,43 +86,32 @@ impl VectorStore {
         Ok(fused_results.into_iter().take(limit).collect())
     }
 
-    /// Index a document in the keyword index.
+    /// Legacy keyword indexing hook kept for compatibility.
     ///
     /// # Errors
     ///
-    /// Returns an error if keyword backend upsert fails.
+    /// Returns no errors; Lance FTS derives its searchable state from table data.
     pub fn index_keyword(
         &self,
-        name: &str,
-        description: &str,
-        category: &str,
-        keywords: &[String],
-        intents: &[String],
+        _name: &str,
+        _description: &str,
+        _category: &str,
+        _keywords: &[String],
+        _intents: &[String],
     ) -> Result<(), VectorStoreError> {
-        if self.keyword_backend != KeywordSearchBackend::Tantivy {
-            return Ok(());
-        }
-        if let Some(index) = &self.keyword_index {
-            index.upsert_document(name, description, category, keywords, intents)?;
-        }
         Ok(())
     }
 
-    /// Bulk index documents in the keyword index.
+    /// Legacy bulk keyword indexing hook kept for compatibility.
     ///
     /// # Errors
     ///
-    /// Returns an error if bulk keyword indexing fails.
+    /// Returns no errors; Lance FTS derives its searchable state from table data.
     pub fn bulk_index_keywords<I>(&self, docs: I) -> Result<(), VectorStoreError>
     where
         I: IntoIterator<Item = (String, String, String, Vec<String>, Vec<String>)>,
     {
-        if self.keyword_backend != KeywordSearchBackend::Tantivy {
-            return Ok(());
-        }
-        if let Some(index) = &self.keyword_index {
-            index.bulk_upsert(docs)?;
-        }
+        let _ = docs.into_iter().count();
         Ok(())
     }
 }

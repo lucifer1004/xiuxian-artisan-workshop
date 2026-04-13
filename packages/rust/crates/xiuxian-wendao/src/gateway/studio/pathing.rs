@@ -1,7 +1,9 @@
-use crate::gateway::studio::router::StudioState;
+use crate::analyzers::{RegisteredRepository, resolve_registered_repository_source};
+use crate::gateway::studio::router::{StudioState, configured_repositories};
 use crate::gateway::studio::types::UiProjectConfig;
 use std::env;
 use std::path::{Path, PathBuf};
+use xiuxian_git_repo::SyncMode;
 
 pub fn resolve_path_like(base: &Path, input: &str) -> Option<PathBuf> {
     let trimmed = input.trim();
@@ -52,12 +54,14 @@ pub fn studio_display_path(state: &StudioState, internal_path: &str) -> String {
         .unwrap_or_else(|| internal_path.trim().trim_start_matches('/').to_string());
 
     let projects = state.configured_projects();
-    if projects.is_empty() {
-        return fallback;
-    }
-
     if projects.iter().any(|project| {
         fallback == project.name || fallback.starts_with(format!("{}/", project.name).as_str())
+    }) {
+        return fallback;
+    }
+    let repositories = configured_repositories(state);
+    if repositories.iter().any(|repository| {
+        fallback == repository.id || fallback.starts_with(format!("{}/", repository.id).as_str())
     }) {
         return fallback;
     }
@@ -68,7 +72,32 @@ pub fn studio_display_path(state: &StudioState, internal_path: &str) -> String {
         }
     }
 
+    for repository in &repositories {
+        if let Some(scoped_path) =
+            repository_scoped_display_path(state, repository, fallback.as_str())
+        {
+            return scoped_path;
+        }
+    }
+
     fallback
+}
+
+pub(crate) fn studio_project_name(state: &StudioState, path: &str) -> Option<String> {
+    let normalized = normalize_path_like(path)?;
+    if let Some(project) = state.configured_projects().into_iter().find(|project| {
+        normalized == project.name || normalized.starts_with(format!("{}/", project.name).as_str())
+    }) {
+        return Some(project.name);
+    }
+
+    configured_repositories(state)
+        .into_iter()
+        .find(|repository| {
+            normalized == repository.id
+                || normalized.starts_with(format!("{}/", repository.id).as_str())
+        })
+        .map(|repository| repository.id)
 }
 
 fn project_scoped_display_path(
@@ -108,6 +137,49 @@ fn project_scoped_display_path(
     }
 
     Some(format!("{}/{}", project.name, relative_path))
+}
+
+fn repository_scoped_display_path(
+    state: &StudioState,
+    repository: &RegisteredRepository,
+    normalized_path: &str,
+) -> Option<String> {
+    let source = resolve_registered_repository_source(
+        repository,
+        state.config_root.as_path(),
+        SyncMode::Status,
+    )
+    .ok()?;
+    let checkout_root = source.checkout_root;
+    let checkout_root_relative = checkout_root
+        .strip_prefix(state.project_root.as_path())
+        .ok()
+        .and_then(|relative| {
+            normalize_path_like(relative.to_string_lossy().as_ref())
+                .filter(|value| !value.is_empty() && value != ".")
+        });
+    let relative_path = if Path::new(normalized_path).is_absolute() {
+        let stripped = Path::new(normalized_path)
+            .strip_prefix(checkout_root.as_path())
+            .ok()?;
+        normalize_path_like(stripped.to_string_lossy().as_ref())?
+    } else if let Some(relative_root) = checkout_root_relative.as_deref() {
+        if normalized_path == relative_root {
+            normalized_path.to_string()
+        } else if normalized_path.starts_with(format!("{relative_root}/").as_str()) {
+            let prefix = format!("{relative_root}/");
+            normalized_path.strip_prefix(prefix.as_str()).map_or_else(
+                || normalized_path.to_string(),
+                std::string::ToString::to_string,
+            )
+        } else {
+            return None;
+        }
+    } else {
+        return None;
+    };
+
+    Some(format!("{}/{}", repository.id, relative_path))
 }
 
 fn project_allows_relative_path(project: &UiProjectConfig, relative_path: &str) -> bool {

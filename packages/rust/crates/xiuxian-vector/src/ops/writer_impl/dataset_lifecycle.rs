@@ -23,7 +23,7 @@ impl VectorStore {
             return Ok(());
         }
         self.drop_table(table_name).await?;
-        // Re-enable keyword index after drop_table cleared it
+        // Re-enable keyword search after drop_table removed the table.
         if let Err(e) = self.enable_keyword_index() {
             log::warn!("Could not re-enable keyword index after drop: {e}");
         }
@@ -140,7 +140,7 @@ impl VectorStore {
         } else {
             if write_path.exists() {
                 // When write_path == base_path (base_path ends with `.lance`),
-                // selectively remove only `LanceDB` artifacts to preserve `keyword_index/`.
+                // selectively remove only `LanceDB` artifacts.
                 if write_path == self.base_path.as_path() {
                     Self::remove_lance_artifacts(write_path)?;
                 } else {

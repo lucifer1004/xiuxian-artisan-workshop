@@ -8,6 +8,21 @@ use std::collections::{HashMap, HashSet};
 use crate::lang::Lang;
 use crate::re_exports::{LanguageExt, MatcherExt, MetaVariable, Pattern, SupportLang};
 
+enum TomlPattern {
+    Table {
+        name: TomlPatternToken,
+    },
+    Assignment {
+        name: TomlPatternToken,
+        value: TomlPatternToken,
+    },
+}
+
+enum TomlPatternToken {
+    Meta(String),
+    Literal(String),
+}
+
 /// Result of extracting a single code element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtractResult {
@@ -84,6 +99,13 @@ pub fn extract_items(
     lang: Lang,
     capture_names: Option<Vec<&str>>,
 ) -> Vec<ExtractResult> {
+    let capture_names: Option<HashSet<String>> =
+        capture_names.map(|v| v.into_iter().map(str::to_string).collect());
+
+    if lang == Lang::Toml {
+        return extract_toml_items(content, pattern, capture_names.as_ref());
+    }
+
     let lang_str = lang.as_str();
     let support_lang: SupportLang = match lang_str.parse() {
         Ok(l) => l,
@@ -104,9 +126,6 @@ pub fn extract_items(
         .map(|(i, _)| i)
         .chain(std::iter::once(content.len()))
         .collect();
-
-    let capture_names: Option<HashSet<String>> =
-        capture_names.map(|v| v.into_iter().map(str::to_string).collect());
 
     let mut results = Vec::new();
 
@@ -155,6 +174,122 @@ pub fn extract_items(
     results
 }
 
+fn extract_toml_items(
+    content: &str,
+    pattern: &str,
+    capture_names: Option<&HashSet<String>>,
+) -> Vec<ExtractResult> {
+    let Some(pattern) = parse_toml_pattern(pattern) else {
+        return Vec::new();
+    };
+
+    let mut results = Vec::new();
+    let mut byte_offset = 0;
+
+    for (line_index, raw_line) in content.split_inclusive('\n').enumerate() {
+        let trimmed_line = raw_line.trim();
+        if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
+            byte_offset += raw_line.len();
+            continue;
+        }
+
+        let Some(mut captures) = match_toml_pattern(&pattern, trimmed_line) else {
+            byte_offset += raw_line.len();
+            continue;
+        };
+        if let Some(filter) = capture_names {
+            captures.retain(|name, _| filter.contains(name));
+        }
+
+        let leading_offset = raw_line.find(trimmed_line).unwrap_or(0);
+        let start = byte_offset + leading_offset;
+        let end = start + trimmed_line.len();
+        let line_number = line_index + 1;
+
+        results.push(ExtractResult::new(
+            trimmed_line.to_string(),
+            start,
+            end,
+            line_number,
+            line_number,
+            captures,
+        ));
+        byte_offset += raw_line.len();
+    }
+
+    results
+}
+
+fn parse_toml_pattern(pattern: &str) -> Option<TomlPattern> {
+    let pattern = pattern.trim();
+    if pattern.is_empty() {
+        return None;
+    }
+
+    if let Some(table_name) = pattern.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+        return Some(TomlPattern::Table {
+            name: parse_toml_pattern_token(table_name)?,
+        });
+    }
+
+    let (name, value) = pattern.split_once('=')?;
+    Some(TomlPattern::Assignment {
+        name: parse_toml_pattern_token(name)?,
+        value: parse_toml_pattern_token(value)?,
+    })
+}
+
+fn parse_toml_pattern_token(token: &str) -> Option<TomlPatternToken> {
+    let token = token.trim();
+    if token.is_empty() {
+        return None;
+    }
+
+    Some(if let Some(name) = token.strip_prefix('$') {
+        TomlPatternToken::Meta(name.to_string())
+    } else {
+        TomlPatternToken::Literal(token.to_string())
+    })
+}
+
+fn match_toml_pattern(pattern: &TomlPattern, line: &str) -> Option<HashMap<String, String>> {
+    match pattern {
+        TomlPattern::Table { name } => {
+            let table_name = line
+                .strip_prefix('[')
+                .and_then(|value| value.strip_suffix(']'))
+                .filter(|value| !value.starts_with('[') && !value.ends_with(']'))?;
+            let mut captures = HashMap::new();
+            match_toml_token(name, table_name.trim(), &mut captures).then_some(captures)
+        }
+        TomlPattern::Assignment { name, value } => {
+            let (line_name, line_value) = line.split_once('=')?;
+            let mut captures = HashMap::new();
+            if !match_toml_token(name, line_name.trim(), &mut captures) {
+                return None;
+            }
+            if !match_toml_token(value, line_value.trim(), &mut captures) {
+                return None;
+            }
+            Some(captures)
+        }
+    }
+}
+
+fn match_toml_token(
+    token: &TomlPatternToken,
+    value: &str,
+    captures: &mut HashMap<String, String>,
+) -> bool {
+    match token {
+        TomlPatternToken::Meta(name) => {
+            captures.insert(name.clone(), value.to_string());
+            true
+        }
+        TomlPatternToken::Literal(expected) => expected == value,
+    }
+}
+
 /// Convert byte offsets to line numbers (1-indexed).
 fn byte_to_line(byte_start: usize, byte_end: usize, line_offsets: &[usize]) -> (usize, usize) {
     let line_start = line_offsets
@@ -201,6 +336,7 @@ pub fn get_skeleton_patterns(lang: Lang) -> &'static [&'static str] {
         Lang::Lua => &["function $NAME", "local $NAME = function"],
         Lang::Php => &["function $NAME", "class $NAME", "public function $NAME"],
         Lang::Bash => &["$NAME()", "function $NAME"],
+        Lang::Toml => &["$NAME = $VALUE", "[$NAME]"],
         _ => &["$NAME"],
     }
 }

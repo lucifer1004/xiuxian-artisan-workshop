@@ -124,6 +124,32 @@ name = "hello"
 }
 
 #[test]
+fn test_extract_toml_items() {
+    let content = r#"
+[package]
+name = "searchrust"
+version = "0.1.0"
+"#;
+
+    let table_results = extract_items(content, "[$NAME]", Lang::Toml, Some(vec!["NAME"]));
+    assert_eq!(table_results.len(), 1);
+    assert_eq!(table_results[0].captures["NAME"], "package");
+    assert!(table_results[0].text.contains("[package]"));
+
+    let field_results = extract_items(
+        content,
+        "$NAME = $VALUE",
+        Lang::Toml,
+        Some(vec!["NAME", "VALUE"]),
+    );
+    assert_eq!(field_results.len(), 2);
+    assert_eq!(field_results[0].captures["NAME"], "name");
+    assert_eq!(field_results[0].captures["VALUE"], "\"searchrust\"");
+    assert_eq!(field_results[1].captures["NAME"], "version");
+    assert_eq!(field_results[1].captures["VALUE"], "\"0.1.0\"");
+}
+
+#[test]
 fn test_extract_skeleton_python() {
     let content = r#"
 def hello(name: str) -> str:
@@ -216,4 +242,33 @@ fn test_get_skeleton_patterns() {
     let rs_patterns = get_skeleton_patterns(Lang::Rust);
     assert!(rs_patterns.contains(&"fn $NAME"));
     assert!(rs_patterns.contains(&"pub fn $NAME"));
+
+    let toml_patterns = get_skeleton_patterns(Lang::Toml);
+    assert!(toml_patterns.contains(&"$NAME = $VALUE"));
+    assert!(toml_patterns.contains(&"[$NAME]"));
+}
+
+#[test]
+fn test_extract_skeleton_toml() {
+    let content = r#"
+[package]
+name = "searchrust"
+version = "0.1.0"
+edition = "2021"
+"#;
+
+    let skeleton = extract_skeleton(content, Lang::Toml);
+
+    assert!(
+        skeleton.contains("[package]"),
+        "Should contain package table"
+    );
+    assert!(
+        skeleton.contains("name = \"searchrust\""),
+        "Should contain name key"
+    );
+    assert!(
+        skeleton.contains("version = \"0.1.0\""),
+        "Should contain version key"
+    );
 }

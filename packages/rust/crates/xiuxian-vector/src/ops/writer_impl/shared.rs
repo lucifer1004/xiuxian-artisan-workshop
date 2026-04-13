@@ -113,21 +113,16 @@ fn build_string_dictionary(
         .map_err(VectorStoreError::Arrow)
 }
 
-/// Parse JSON with `simd-json` when possible; fallback to `serde_json` to preserve behavior.
+/// Parse JSON for metadata extraction.
 #[inline]
 fn parse_metadata_extract(s: &str) -> MetadataExtract {
-    let mut bytes = s.as_bytes().to_vec();
-    simd_json::serde::from_slice(&mut bytes)
-        .unwrap_or_else(|_| serde_json::from_str(s).unwrap_or_default())
+    serde_json::from_str(s).unwrap_or_default()
 }
 
-/// Parse JSON to Value with `simd-json` when possible; fallback to `serde_json`.
+/// Parse JSON to `Value`.
 #[inline]
 fn parse_metadata_value(s: &str) -> Option<serde_json::Value> {
-    let mut bytes = s.as_bytes().to_vec();
-    simd_json::serde::from_slice(&mut bytes)
-        .ok()
-        .or_else(|| serde_json::from_str(s).ok())
+    serde_json::from_str(s).ok()
 }
 
 /// Single-pass metadata extraction for Arrow-native columns (avoids full Value tree).

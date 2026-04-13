@@ -77,10 +77,7 @@ pub(crate) async fn search_repo_ast_analysis_hits(
     let project_root = search_plane.project_root().to_path_buf();
     let language_filters = language_filters.to_vec();
     let mode = RepoAstSearchMode::Analysis {
-        search_term: search_term
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
+        search_term: normalize_analysis_search_term(repository.id.as_str(), search_term),
     };
 
     tokio::task::spawn_blocking(move || {
@@ -96,11 +93,34 @@ pub(crate) async fn search_repo_ast_analysis_hits(
     .map_err(|error| format!("ast-grep repo search task failed: {error}"))?
 }
 
+fn normalize_analysis_search_term(repo_id: &str, search_term: Option<&str>) -> Option<String> {
+    let normalized = search_term
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    if normalized.eq_ignore_ascii_case(repo_id) {
+        return None;
+    }
+
+    Some(normalized.to_string())
+}
+
 pub(crate) fn repository_supports_generic_ast_analysis(repository: &RegisteredRepository) -> bool {
     repository
         .plugins
         .iter()
         .any(|plugin| plugin.id().eq_ignore_ascii_case("ast-grep"))
+}
+
+pub(crate) fn repository_generic_ast_lang_for_path(
+    repository: &RegisteredRepository,
+    path: &Path,
+) -> Option<Lang> {
+    if !repository_supports_generic_ast_analysis(repository) {
+        return None;
+    }
+
+    let excluded_languages = excluded_ast_languages_for_repository(repository);
+    supported_ast_lang(path, &excluded_languages)
 }
 
 pub(crate) fn ast_pattern_requests_generic_analysis(pattern: &str) -> bool {

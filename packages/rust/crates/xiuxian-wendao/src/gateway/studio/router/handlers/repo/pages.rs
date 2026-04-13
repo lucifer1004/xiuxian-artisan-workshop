@@ -16,7 +16,7 @@ use crate::gateway::studio::router::handlers::repo::projected_service::{
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
-use super::parse::{required_node_id, required_page_id, required_repo_id};
+use super::parse::{required_node_id, required_page_id, required_registered_repo_id};
 use super::query::{RepoApiQuery, RepoProjectedPageApiQuery, RepoProjectedPageIndexNodeApiQuery};
 
 /// Projected pages endpoint.
@@ -29,7 +29,7 @@ pub async fn projected_pages(
     Query(query): Query<RepoApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPagesResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let result =
         run_repo_projected_pages(Arc::clone(&state), RepoProjectedPagesQuery { repo_id }).await?;
     Ok(Json(result))
@@ -45,7 +45,7 @@ pub async fn projected_gap_report(
     Query(query): Query<RepoApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedGapReportResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let result =
         run_repo_projected_gap_report(Arc::clone(&state), RepoProjectedGapReportQuery { repo_id })
             .await?;
@@ -62,7 +62,7 @@ pub async fn projected_page(
     Query(query): Query<RepoProjectedPageApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let result = run_repo_projected_page(
         Arc::clone(&state),
@@ -83,7 +83,7 @@ pub async fn projected_page_index_tree(
     Query(query): Query<RepoProjectedPageApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageIndexTreeResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let result = run_repo_projected_page_index_tree(
         Arc::clone(&state),
@@ -104,7 +104,7 @@ pub async fn projected_page_index_node(
     Query(query): Query<RepoProjectedPageIndexNodeApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageIndexNodeResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let node_id = required_node_id(query.node_id.as_deref())?;
     let result = run_repo_projected_page_index_node(
@@ -129,7 +129,7 @@ pub async fn projected_page_index_trees(
     Query(query): Query<RepoApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageIndexTreesResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let result = run_repo_projected_page_index_trees(
         Arc::clone(&state),
         RepoProjectedPageIndexTreesQuery { repo_id },

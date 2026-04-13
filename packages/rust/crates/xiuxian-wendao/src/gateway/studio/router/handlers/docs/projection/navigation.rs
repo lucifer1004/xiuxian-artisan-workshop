@@ -11,7 +11,8 @@ use crate::gateway::studio::router::handlers::docs::service::{
 };
 use crate::gateway::studio::router::handlers::repo::{
     RepoProjectedPageNavigationApiQuery, RepoProjectedPageNavigationSearchApiQuery,
-    parse_projection_page_kind, required_page_id, required_repo_id, required_search_query,
+    parse_projection_page_kind, required_page_id, required_registered_repo_id,
+    required_search_query,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -26,7 +27,7 @@ pub async fn navigation(
     Query(query): Query<RepoProjectedPageNavigationApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsNavigationResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let node_id = query.node_id;
     let family_kind = parse_projection_page_kind(query.family_kind.as_deref())?;
@@ -58,7 +59,7 @@ pub async fn navigation_search(
     Query(query): Query<RepoProjectedPageNavigationSearchApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::DocsNavigationSearchResult>, StudioApiError> {
-    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let repo_id = required_registered_repo_id(state.studio.as_ref(), query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let family_kind = parse_projection_page_kind(query.family_kind.as_deref())?;

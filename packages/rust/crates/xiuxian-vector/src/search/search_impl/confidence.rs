@@ -1,5 +1,4 @@
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 use crate::skill;
 
@@ -113,13 +112,15 @@ fn canonicalize_json_value(value: &Value) -> Value {
 pub(super) fn input_schema_digest(input_schema: &Value) -> String {
     let normalized = skill::normalize_input_schema_value(input_schema);
     if normalized.as_object().is_none_or(serde_json::Map::is_empty) {
-        return "sha256:empty".to_string();
+        return "fnv1a64:empty".to_string();
     }
     let canonical = canonicalize_json_value(&normalized);
-    let mut hasher = Sha256::new();
-    hasher.update(canonical.to_string().as_bytes());
-    let digest = hasher.finalize();
-    format!("sha256:{}", hex::encode(digest))
+    let mut digest = 0xcbf29ce484222325_u64;
+    for byte in canonical.to_string().bytes() {
+        digest ^= u64::from(byte);
+        digest = digest.wrapping_mul(0x100000001b3);
+    }
+    format!("fnv1a64:{digest:016x}")
 }
 
 pub(super) fn build_ranking_reason(

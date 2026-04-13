@@ -1,14 +1,20 @@
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 
+use xiuxian_git_repo::SyncMode;
+
+use crate::analyzers::resolve_registered_repository_source;
 use crate::analyzers::service::analyze_registered_repository_target_file_with_registry;
 use crate::gateway::studio::router::code_ast::{
-    build_code_ast_analysis_response, resolve_code_ast_repository_and_path,
+    build_code_ast_analysis_response, build_generic_code_ast_analysis_response,
+    resolve_code_ast_repository_and_path,
 };
 use crate::gateway::studio::router::{
     GatewayState, StudioApiError, configured_repositories, map_repo_intelligence_error,
 };
 use crate::gateway::studio::types::CodeAstAnalysisResponse;
+use crate::search::repo_search::repository_generic_ast_lang_for_path;
 
 pub(crate) async fn load_code_ast_analysis_response(
     state: &GatewayState,
@@ -27,32 +33,53 @@ pub(crate) async fn load_code_ast_analysis_response(
     let repo_path = repo_relative_path;
     let repository = repository.clone();
 
-    tokio::task::spawn_blocking(
-        move || -> Result<CodeAstAnalysisResponse, crate::analyzers::RepoIntelligenceError> {
-            let analysis = analyze_registered_repository_target_file_with_registry(
-                &repository,
-                cwd.as_path(),
-                &plugin_registry,
-                repo_path.as_str(),
-            )?;
-            let source_content = repository.path.as_ref().and_then(|root| {
-                let source_path = root.join(&repo_path);
-                source_path
-                    .is_file()
-                    .then(|| fs::read_to_string(source_path).ok())
-                    .flatten()
-            });
-            let mut response = build_code_ast_analysis_response(
-                repo_id,
-                repo_path,
+    tokio::task::spawn_blocking(move || -> Result<CodeAstAnalysisResponse, StudioApiError> {
+        let materialized =
+            resolve_registered_repository_source(&repository, cwd.as_path(), SyncMode::Ensure)
+                .map_err(|error| {
+                    StudioApiError::internal(
+                        "REPOSITORY_SOURCE_RESOLUTION_FAILED",
+                        "Failed to resolve repository source for code AST analysis",
+                        Some(error.to_string()),
+                    )
+                })?;
+        let source_path = materialized.checkout_root.join(&repo_path);
+        let source_content = source_path
+            .is_file()
+            .then(|| fs::read_to_string(source_path).ok())
+            .flatten();
+
+        if let Some(lang) = repository_generic_ast_lang_for_path(&repository, Path::new(&repo_path))
+            && let Some(source_content) = source_content.as_deref()
+        {
+            let mut response = build_generic_code_ast_analysis_response(
+                repo_id.clone(),
+                repo_path.clone(),
                 line_hint,
-                source_content.as_deref(),
-                &analysis,
+                source_content,
+                lang,
             );
-            response.path = request_path;
-            Ok(response)
-        },
-    )
+            response.path = request_path.clone();
+            return Ok(response);
+        }
+
+        let analysis = analyze_registered_repository_target_file_with_registry(
+            &repository,
+            cwd.as_path(),
+            &plugin_registry,
+            repo_path.as_str(),
+        )
+        .map_err(|error| map_repo_intelligence_error(error))?;
+        let mut response = build_code_ast_analysis_response(
+            repo_id,
+            repo_path,
+            line_hint,
+            source_content.as_deref(),
+            &analysis,
+        );
+        response.path = request_path;
+        Ok(response)
+    })
     .await
     .map_err(|error: tokio::task::JoinError| {
         StudioApiError::internal(
@@ -61,5 +88,4 @@ pub(crate) async fn load_code_ast_analysis_response(
             Some(error.to_string()),
         )
     })?
-    .map_err(map_repo_intelligence_error)
 }

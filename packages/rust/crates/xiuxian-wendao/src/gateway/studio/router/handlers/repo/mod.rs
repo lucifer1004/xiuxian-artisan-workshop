@@ -34,7 +34,7 @@ pub use pages::{
 pub(crate) use parse::{
     parse_projected_gap_kind, parse_projection_page_kind, required_gap_id,
     required_import_search_filters, required_page_id, required_projection_page_kind,
-    required_repo_id, required_search_query,
+    required_registered_repo_id, required_search_query,
 };
 pub use query::{
     RepoApiQuery, RepoDocCoverageApiQuery, RepoImportSearchApiQuery, RepoIndexStatusApiQuery,

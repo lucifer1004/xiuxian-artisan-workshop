@@ -26,11 +26,6 @@ lance-file = { workspace = true, optional = true }
 lance-index = { workspace = true, optional = true }
 lance-linalg = { workspace = true, optional = true }
 
-# Tantivy - Rust Lucene for BM25/Sparse Retrieval
-tantivy = "0.25"
-ordered-float = "4.2"
-num-traits = "0.2"
-
 # RecordBatch utilities (extracted to xiuxian-lance)
 xiuxian-lance = { path = "../xiuxian-lance", optional = true }
 
@@ -61,10 +56,6 @@ anyhow = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-# SIMD-accelerated JSON for hot-path metadata parsing (writer_impl)
-simd-json = "0.13"
-sha2 = { workspace = true }
-hex = { workspace = true }
 
 # Reuse our common types
 xiuxian-types = { path = "../xiuxian-types" }

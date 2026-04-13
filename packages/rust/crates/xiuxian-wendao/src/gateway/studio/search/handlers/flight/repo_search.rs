@@ -10,12 +10,15 @@ use super::service::build_studio_search_flight_service_with_repo_provider;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::repo_index::RepoCodeDocument;
 use crate::search::SearchPlaneService;
-use crate::search::repo_search::search_repo_content_batch;
+use crate::search::repo_search::{
+    search_repo_content_batch, search_repo_content_batch_with_studio,
+};
 
 /// Runtime-backed repo-search Flight provider that reads from the Wendao search plane.
 #[derive(Clone)]
 pub struct StudioRepoSearchFlightRouteProvider {
     search_plane: Arc<SearchPlaneService>,
+    studio: Option<Arc<StudioState>>,
 }
 
 impl std::fmt::Debug for StudioRepoSearchFlightRouteProvider {
@@ -31,7 +34,20 @@ impl StudioRepoSearchFlightRouteProvider {
     /// search plane.
     #[must_use]
     pub fn new(search_plane: Arc<SearchPlaneService>) -> Self {
-        Self { search_plane }
+        Self {
+            search_plane,
+            studio: None,
+        }
+    }
+
+    /// Create one Studio repo-search Flight provider with access to the
+    /// Studio repository configuration for search-only checkout fallback.
+    #[must_use]
+    pub fn with_studio(search_plane: Arc<SearchPlaneService>, studio: Arc<StudioState>) -> Self {
+        Self {
+            search_plane,
+            studio: Some(studio),
+        }
     }
 }
 
@@ -44,9 +60,17 @@ impl RepoSearchFlightRouteProvider for StudioRepoSearchFlightRouteProvider {
         if request.repo_id.trim().is_empty() {
             return Err("repo-search Flight request repo_id must not be blank".to_string());
         }
-        search_repo_content_batch(self.search_plane.as_ref(), request)
+        let result = if let Some(studio) = self.studio.as_ref() {
+            search_repo_content_batch_with_studio(
+                self.search_plane.as_ref(),
+                studio.as_ref(),
+                request,
+            )
             .await
-            .map_err(|error| format!("repo-search Flight provider failed: {error}"))
+        } else {
+            search_repo_content_batch(self.search_plane.as_ref(), request).await
+        };
+        result.map_err(|error| format!("repo-search Flight provider failed: {error}"))
     }
 }
 
@@ -127,7 +151,10 @@ pub fn build_studio_flight_service_with_weights(
     rerank_dimension: usize,
     rerank_weights: RerankScoreWeights,
 ) -> Result<WendaoFlightService, String> {
-    let provider = Arc::new(StudioRepoSearchFlightRouteProvider::new(search_plane));
+    let provider = Arc::new(StudioRepoSearchFlightRouteProvider::with_studio(
+        search_plane,
+        Arc::clone(&gateway_state.studio),
+    ));
     build_studio_search_flight_service_with_repo_provider(
         expected_schema_version,
         provider,

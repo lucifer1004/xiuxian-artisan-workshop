@@ -1,17 +1,10 @@
-use crate::gateway::studio::pathing::studio_display_path;
+use crate::gateway::studio::pathing::{studio_display_path, studio_project_name};
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::StudioNavigationTarget;
 
 pub(crate) fn resolve_navigation_target(state: &StudioState, path: &str) -> StudioNavigationTarget {
     let normalized = studio_display_path(state, path);
-    let project_name = state
-        .configured_projects()
-        .into_iter()
-        .find(|project| {
-            normalized == project.name
-                || normalized.starts_with(format!("{}/", project.name).as_str())
-        })
-        .map(|project| project.name);
+    let project_name = studio_project_name(state, normalized.as_str());
 
     StudioNavigationTarget {
         path: normalized,

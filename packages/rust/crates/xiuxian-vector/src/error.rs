@@ -44,10 +44,6 @@ pub enum VectorStoreError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
-    /// Tantivy error (keyword search)
-    #[error("Tantivy error: {0}")]
-    Tantivy(#[from] tantivy::TantivyError),
-
     /// Table not found
     #[error("Table not found: {0}")]
     TableNotFound(String),

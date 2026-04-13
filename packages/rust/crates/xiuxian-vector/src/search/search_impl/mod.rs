@@ -5,9 +5,8 @@ use xiuxian_types::VectorSearchResult;
 
 use crate::search::SearchOptions;
 use crate::{
-    CONTENT_COLUMN, HybridSearchResult, ID_COLUMN, KEYWORD_WEIGHT, KeywordSearchBackend,
-    METADATA_COLUMN, RRF_K, SEMANTIC_WEIGHT, VECTOR_COLUMN, VectorStore, VectorStoreError,
-    apply_weighted_rrf,
+    CONTENT_COLUMN, HybridSearchResult, ID_COLUMN, KEYWORD_WEIGHT, METADATA_COLUMN, RRF_K,
+    SEMANTIC_WEIGHT, VECTOR_COLUMN, VectorStore, VectorStoreError, apply_weighted_rrf,
 };
 
 mod boost_ops;
@@ -29,17 +28,16 @@ use rows::{
 pub use filter::json_to_lance_where;
 
 fn f64_to_f32_saturating(value: f64) -> f32 {
-    use num_traits::ToPrimitive;
-
     if !value.is_finite() {
         return 0.0;
     }
-
-    match value.to_f32() {
-        Some(v) => v,
-        None if value.is_sign_negative() => f32::MIN,
-        None => f32::MAX,
+    if value > f64::from(f32::MAX) {
+        return f32::MAX;
     }
+    if value < f64::from(f32::MIN) {
+        return f32::MIN;
+    }
+    value as f32
 }
 
 pub(crate) fn search_results_to_ipc_for_test(

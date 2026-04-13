@@ -13,7 +13,9 @@ use crate::gateway::studio::router::{
 };
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
 use crate::gateway::studio::types::UiPluginArtifact;
-use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
+use crate::gateway::studio::types::{
+    UiConfig, UiProjectConfig, UiRepoProjectConfig, VfsScanResult,
+};
 use crate::repo_index::RepoIndexPhase;
 use crate::search::SearchPlaneService;
 use crate::set_link_graph_wendao_config_override;
@@ -319,6 +321,71 @@ dirs = ["src"]
             ],
             repo_projects: Vec::new(),
         }
+    );
+}
+
+#[test]
+fn studio_bootstrap_preserves_imported_search_only_repo_projects_from_explicit_root_config() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let project_root = temp.path().join("project");
+    fs::create_dir_all(project_root.as_path())
+        .unwrap_or_else(|error| panic!("create project root: {error}"));
+    let frontend_root = project_root.join(".data").join("wendao-frontend");
+    fs::create_dir_all(frontend_root.as_path())
+        .unwrap_or_else(|error| panic!("create frontend root: {error}"));
+
+    fs::write(
+        project_root.join("github-repo-list.toml"),
+        r#"[link_graph.projects.lance]
+dirs = []
+url = "https://github.com/lance-format/lance"
+refresh = "fetch"
+plugins = ["ast-grep"]
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write repo list: {error}"));
+
+    let gateway_config_path = project_root.join("wendao.toml");
+    fs::write(
+        &gateway_config_path,
+        r#"imports = ["github-repo-list.toml", ".data/wendao-frontend/wendao.toml"]
+
+[link_graph.projects.main]
+root = "."
+dirs = ["docs"]
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write gateway config: {error}"));
+    fs::write(
+        frontend_root.join("wendao.toml"),
+        r#"[link_graph.projects.frontend]
+root = "."
+dirs = ["src"]
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write frontend config: {error}"));
+
+    let studio = StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path(
+        Arc::new(PluginRegistry::new()),
+        project_root.clone(),
+        gateway_config_path
+            .parent()
+            .unwrap_or_else(|| panic!("gateway config should have parent"))
+            .to_path_buf(),
+        Some(gateway_config_path.as_path()),
+        SearchPlaneService::new(project_root),
+    );
+
+    assert_eq!(
+        studio.ui_config().repo_projects,
+        vec![UiRepoProjectConfig {
+            id: "lance".to_string(),
+            root: None,
+            url: Some("https://github.com/lance-format/lance".to_string()),
+            git_ref: None,
+            refresh: Some("fetch".to_string()),
+            plugins: vec!["ast-grep".to_string()],
+        }],
     );
 }
 
