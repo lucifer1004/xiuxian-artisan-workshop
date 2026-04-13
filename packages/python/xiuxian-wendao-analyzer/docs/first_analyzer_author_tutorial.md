@@ -1,108 +1,93 @@
----
-type: knowledge
-metadata:
-  title: "First Analyzer Author Tutorial"
----
-
 # First Analyzer Author Tutorial
 
-This tutorial is the shortest honest path for a new Python analyzer author.
+`xiuxian-wendao-analyzer` sits above the Rust-owned Wendao transport stack:
 
-`xiuxian-wendao-analyzer` sits above `xiuxian-wendao-py`:
+1. `wendao-core-lib` owns Flight transport and typed contracts
+2. `wendao-arrow-interface` owns downstream session ergonomics
+3. `xiuxian-wendao-analyzer` owns analysis over rows and tables that already
+   came back from Rust
 
-1. `xiuxian-wendao-py` owns Arrow Flight transport and typed Wendao contracts
-2. `xiuxian-wendao-analyzer` owns Python-side analyzer workflows and ranking logic
+The important boundary is simple: this package does not own rerank workflows.
+If Rust returns a table, this package can analyze that table. It does not
+define a separate Python-side rerank runtime.
 
-Use this tutorial by workflow.
+## Workflow 1: Offline Repo Search Authoring With Scripted Results
 
-## Workflow 1: Local Rerank Experiment
-
-Use this when you already have rerank-shaped rows in Python and want to test
-local ranking logic without a live host.
-
-Run:
+Start here when you want the fastest local loop and do not need a live Flight
+host.
 
 ```bash
-uv run python examples/local_rerank_workflow.py
+uv run python examples/scripted_repo_search_workflow.py
 ```
 
-This path exercises:
+That workflow uses:
 
-1. `run_rerank_analysis(...)`
-2. `summarize_rerank_analysis(...)`
-3. the default `linear_blend` analyzer
-
-This is the fastest path for scoring experiments.
+1. `WendaoArrowSession.for_repo_search_testing(...)`
+2. `run_repo_analysis(...)`
+3. `summarize_repo_analysis(...)`
 
 ## Workflow 2: Host-Backed Repo Search With Built-In Ranking
 
 Use this when you want real Wendao repo-search data and the built-in
-`score_rank` strategy is sufficient.
-
-Run:
+`score_rank` analyzer is enough.
 
 ```bash
-uv run python examples/repo_search_workflow.py --host 127.0.0.1 --port 8815 --query-text alpha --path-prefix src/
+uv run python examples/repo_search_workflow.py --help
 ```
 
-This path exercises:
+The built-in path is:
 
 1. `run_repo_analysis(...)`
 2. `summarize_repo_analysis(...)`
-3. a real `wendao_search_flight_server`
-4. built-in `AnalyzerConfig(strategy="score_rank")`
-
-Choose this path first if you need real search data but do not yet need custom
-Python ranking logic.
+3. `AnalyzerConfig(strategy="score_rank")`
 
 ## Workflow 3: Host-Backed Repo Search With A Custom Python Analyzer
 
-Use this when you want real Wendao repo-search data but also need your own
-Python ranking behavior.
-
-Start from:
+Use this when Rust should fetch the rows but your ranking logic is custom.
 
 ```bash
 uv run python examples/custom_repo_analyzer_workflow.py --help
 ```
 
-The example shows the intended boundary:
+That workflow keeps ownership clean:
 
-1. `xiuxian-wendao-py` still owns transport
-2. your analyzer object owns Python ranking logic
-3. `run_repo_analysis(...)` remains the high-level pipeline entrypoint
+1. Rust fetches the data
+2. your analyzer object implements `analyze_rows(...)`
+3. `run_repo_analysis(...)` applies it to the returned rows
 
-The custom analyzer contract is intentionally small:
+## Workflow 4: PDF Attachment Search Then Analyze The Returned Table
 
-1. accept `list[dict[str, object]]`
-2. return ranked `list[dict[str, object]]`
-3. include a stable `rank` field in the returned rows
+Use this when Rust should query `/search/attachments` and your Python analyzer
+should only work over the returned PDF rows.
 
-## When To Drop Lower
+```bash
+uv run python examples/attachment_pdf_analyzer_workflow.py
+```
 
-Use lower-level helpers only when the high-level workflow objects are too much:
+That workflow keeps the boundary explicit:
 
-1. choose `analyze_*` helpers when you want analyzed rows only
-2. choose `run_*` helpers when you want both the input artifact and typed output
-3. choose `summarize_*` helpers when you only need the top-hit snapshot
+1. `attachment_search_request(...)` builds the Rust-owned query contract
+2. `WendaoArrowSession.attachment_search(...)` fetches the Arrow table
+3. `run_table_analysis(...)` analyzes the returned table in Python
 
-For most new users, start with:
+If you already have a live Flight endpoint that serves `/search/attachments`,
+switch the same example to endpoint mode with `--mode endpoint --port <port>`.
 
-1. `run_repo_analysis(...)` for host-backed repo workflows
-2. `run_rerank_analysis(...)` for local rerank workflows
+## Workflow 5: Analyze An Already Materialized Rust Query Result
 
-## Current Boundary
+If another package already fetched the data, analyze it directly.
 
-This tutorial intentionally does not claim more than the package currently
-proves:
+```python
+from wendao_arrow_interface import WendaoArrowSession
+from xiuxian_wendao_analyzer import analyze_table
 
-1. repo-search is the real-host workflow
-2. local rerank is the analyzer-owned local workflow
-3. there is not yet a live host claim for analyzer-shaped rerank input rows
+session = WendaoArrowSession.for_repo_search_testing(
+    [{"path": "src/lib.rs", "score": 0.9}]
+)
+result = session.repo_search("alpha", limit=1)
+ranked = analyze_table(result.table)
+```
 
-## Related Artifacts
-
-1. package overview: [README.md](../README.md)
-2. local rerank example: [local_rerank_workflow.py](../examples/local_rerank_workflow.py)
-3. host-backed repo example: [repo_search_workflow.py](../examples/repo_search_workflow.py)
-4. custom analyzer example: [custom_repo_analyzer_workflow.py](../examples/custom_repo_analyzer_workflow.py)
+The same pattern applies to any Rust-owned route. For example, if you later
+fetch `/rerank/flight` through `wendao-arrow-interface`, hand the returned table
+to `analyze_table(...)` instead of looking for a rerank-specific analyzer API.

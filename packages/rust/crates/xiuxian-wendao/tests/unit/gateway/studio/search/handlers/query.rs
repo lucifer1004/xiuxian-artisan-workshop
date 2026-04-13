@@ -1,23 +1,12 @@
 use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind, SymbolSearchHit};
 use crate::gateway::studio::search::handlers::code_search::{
     helpers::symbol_search_hit_to_search_hit,
-    query::{
-        infer_repo_hint_from_query, parse_code_search_query, repo_search_result_limits,
-        repo_wide_code_search_timeout,
-    },
+    query::{infer_repo_hint_from_query, repo_search_result_limits, repo_wide_code_search_timeout},
 };
 use crate::gateway::studio::search::handlers::test_prelude::SearchQuery;
+use crate::parsers::search::repo_code_query::parse_repo_code_search_query;
 use crate::search::repo_search::{collect_repo_search_targets, repo_search_parallelism};
 use crate::search::{RepoSearchAvailability, RepoSearchPublicationState};
-
-#[test]
-fn parse_code_search_query_extracts_repo_lang_and_kind_filters() {
-    let parsed = parse_code_search_query("repo:sciml lang:julia kind:function reexport", None);
-    assert_eq!(parsed.query, "reexport");
-    assert_eq!(parsed.repo.as_deref(), Some("sciml"));
-    assert_eq!(parsed.languages, vec!["julia".to_string()]);
-    assert_eq!(parsed.kinds, vec!["function".to_string()]);
-}
 
 #[test]
 fn repo_wide_code_search_timeout_applies_only_without_repo_hint() {
@@ -54,19 +43,8 @@ fn repo_wide_code_search_scopes_per_repo_limits() {
 }
 
 #[test]
-fn parse_code_search_query_preserves_repo_identifier_case() {
-    let parsed = parse_code_search_query(
-        "repo:DifferentialEquations.jl using ModelingToolkit",
-        Some("SciMLBase.jl"),
-    );
-
-    assert_eq!(parsed.query, "using ModelingToolkit");
-    assert_eq!(parsed.repo.as_deref(), Some("DifferentialEquations.jl"));
-}
-
-#[test]
 fn infer_repo_hint_from_query_matches_unique_normalized_repo_seed() {
-    let parsed = parse_code_search_query("SciMLBase", None);
+    let parsed = parse_repo_code_search_query("SciMLBase");
     let inferred = infer_repo_hint_from_query(
         &parsed,
         [
@@ -81,7 +59,7 @@ fn infer_repo_hint_from_query_matches_unique_normalized_repo_seed() {
 
 #[test]
 fn infer_repo_hint_from_query_ignores_ambiguous_normalized_repo_seed() {
-    let parsed = parse_code_search_query("SciMLBase", None);
+    let parsed = parse_repo_code_search_query("SciMLBase");
     let inferred = infer_repo_hint_from_query(&parsed, ["SciMLBase.jl", "scimlbase"]);
 
     assert_eq!(inferred, None);

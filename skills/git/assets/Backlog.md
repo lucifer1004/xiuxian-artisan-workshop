@@ -6,7 +6,8 @@ metadata:
 
 # Git Skill Backlog
 
-This backlog tracks the evolution of the Git Skill from basic wrapper to full-fledged Version Control Agent.
+Historical backlog for the retired local git skill runtime.
+No Python runtime remains under `skills/git`.
 
 ## Priority 1: Context Management (The "Stash" Gap)
 

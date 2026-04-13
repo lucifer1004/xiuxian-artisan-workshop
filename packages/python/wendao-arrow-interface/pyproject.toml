@@ -1,0 +1,34 @@
+[project]
+name = "wendao-arrow-interface"
+version = "0.2.0"
+description = "Downstream-facing Arrow Flight facade for Wendao Python consumers"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pyarrow>=14.0.0",
+    "wendao-core-lib",
+]
+
+[project.optional-dependencies]
+polars = [
+    "polars>=1.0.0",
+]
+
+[dependency-groups]
+test = [
+    "polars>=1.0.0",
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wendao_arrow_interface"]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+wendao-core-lib = { path = "../wendao-core-lib" }

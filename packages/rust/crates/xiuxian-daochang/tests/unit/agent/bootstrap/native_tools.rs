@@ -247,6 +247,27 @@ fn mounts_wendao_search_when_gateway_configured() -> Result<()> {
             .unwrap_or_default()
             .contains("aliases=knowledge.search")
     );
+    let advertised_names = registry
+        .list_for_llm()
+        .into_iter()
+        .filter_map(|tool| {
+            tool.get("name")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .collect::<Vec<_>>();
+    let knowledge_index = advertised_names
+        .iter()
+        .position(|name| name == "knowledge.search")
+        .ok_or_else(|| anyhow!("knowledge.search should be advertised to the llm"))?;
+    let wendao_index = advertised_names
+        .iter()
+        .position(|name| name == "wendao.search")
+        .ok_or_else(|| anyhow!("wendao.search should remain advertised for compatibility"))?;
+    assert!(
+        knowledge_index < wendao_index,
+        "knowledge.search should sort ahead of wendao.search for llm exposure: {advertised_names:?}"
+    );
     Ok(())
 }
 

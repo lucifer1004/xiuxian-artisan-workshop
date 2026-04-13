@@ -229,7 +229,7 @@ fn mount_wendao_search_tool(
     let tool = Arc::new(WendaoSearchTool::new_runtime_default());
     let alias = Arc::new(NativeAliasTool::new(
         "knowledge.search".to_string(),
-        "Search indexed project knowledge, code, docs, schema catalogs, and entities. Preferred knowledge-facing alias of `wendao.search`.".to_string(),
+        "Search indexed project knowledge, code, docs, schema catalogs, and entities through a bounded workflow. Preferred knowledge-facing entrypoint for repo-specific questions instead of answering from memory.".to_string(),
         tool.parameters(),
         tool.clone(),
     ));

@@ -46,14 +46,17 @@ pub(crate) struct IntentMergedResults {
     pub(crate) skipped_repos: Vec<String>,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "duckdb"))]
 pub(crate) fn configured_parquet_query_engine_label(
-    service: &SearchPlaneService,
+    _service: &SearchPlaneService,
 ) -> Result<&'static str, String> {
-    let _ = service;
-    #[cfg(feature = "duckdb")]
     let query_engine = ParquetQueryEngine::configured().map_err(|error| error.to_string())?;
-    #[cfg(not(feature = "duckdb"))]
-    let query_engine = ParquetQueryEngine::configured(service.datafusion_query_engine().clone());
     Ok(query_engine.kind().as_str())
+}
+
+#[cfg(all(test, not(feature = "duckdb")))]
+pub(crate) fn configured_parquet_query_engine_label(service: &SearchPlaneService) -> &'static str {
+    ParquetQueryEngine::configured(service.datafusion_query_engine().clone())
+        .kind()
+        .as_str()
 }

@@ -20,7 +20,7 @@ _PROJECT_ROOT = _SCRIPT_DIR.parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
+from scripts._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 DEFAULT_LOCAL_HOST = os.environ.get("XIUXIAN_WENDAO_LOCAL_HOST", "localhost").strip() or "localhost"
 DEFAULT_VALKEY_URL = f"redis://{DEFAULT_LOCAL_HOST}:6379/0"

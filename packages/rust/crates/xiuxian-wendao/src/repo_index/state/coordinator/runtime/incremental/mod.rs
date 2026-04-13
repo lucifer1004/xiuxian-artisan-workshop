@@ -255,14 +255,7 @@ fn materialized_repo_from_sync_result(sync_result: &RepoSyncResult) -> Materiali
 }
 
 fn sorted_plugin_ids(repository: &RegisteredRepository) -> Vec<String> {
-    let mut plugin_ids = repository
-        .plugins
-        .iter()
-        .map(|plugin| plugin.id().to_string())
-        .collect::<Vec<_>>();
-    plugin_ids.sort_unstable();
-    plugin_ids.dedup();
-    plugin_ids
+    repository.repo_intelligence_plugin_ids()
 }
 
 fn change_affects_analysis(change: &RevisionPathChange, plugin_ids: &[String]) -> bool {

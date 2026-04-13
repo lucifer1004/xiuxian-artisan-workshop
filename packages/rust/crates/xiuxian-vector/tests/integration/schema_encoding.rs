@@ -115,7 +115,7 @@ async fn test_dictionary_roundtrip_skill_name_category() -> Result<()> {
             "skill_name": "git",
             "category": "vcs",
             "tool_name": "commit",
-            "file_path": "scripts/commit.py",
+            "file_path": "skills/git/SKILL.md",
         })
         .to_string(),
         serde_json::json!({

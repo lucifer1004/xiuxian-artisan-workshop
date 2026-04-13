@@ -116,6 +116,28 @@ fn hydrate_repository_record_backfills_checkout_metadata() {
     assert_eq!(record.revision.as_deref(), Some("abc123"));
 }
 
+#[test]
+fn analyze_registered_repository_bundle_requires_repo_intelligence_plugins() {
+    let repository = RegisteredRepository {
+        id: "sample".to_string(),
+        plugins: vec![RepositoryPluginConfig::Id("ast-grep".to_string())],
+        ..RegisteredRepository::default()
+    };
+    let registry = PluginRegistry::new();
+
+    let Err(error) =
+        analyze_registered_repository_bundle_with_registry(&repository, Path::new("."), &registry)
+    else {
+        panic!("search-only repositories should require a repo intelligence plugin");
+    };
+
+    assert!(matches!(
+        error,
+        RepoIntelligenceError::MissingRepoIntelligencePlugins { repo_id }
+            if repo_id == "sample"
+    ));
+}
+
 #[derive(Clone)]
 struct CountingJuliaPlugin {
     calls: Arc<AtomicUsize>,

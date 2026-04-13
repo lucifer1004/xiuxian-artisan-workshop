@@ -10,7 +10,6 @@ use crate::search::repo_search::{
     search_repo_entity_hits_for_query as shared_search_repo_entity_hits_for_query,
 };
 
-#[cfg(test)]
 /// Search repo entity rows for a repo-scoped code query.
 ///
 /// # Errors
@@ -34,7 +33,6 @@ pub(crate) async fn search_repo_entity_hits(
         })
 }
 
-#[cfg(test)]
 /// Search repo content rows for a repo-scoped code query.
 ///
 /// # Errors
@@ -61,7 +59,6 @@ pub(crate) async fn search_repo_content_hits(
 #[cfg(test)]
 use crate::gateway::studio::router::StudioState;
 
-#[cfg(test)]
 /// Build repo entity search hits through the Studio state wrapper.
 #[cfg(test)]
 pub(crate) async fn build_repo_entity_search_hits(
@@ -73,7 +70,6 @@ pub(crate) async fn build_repo_entity_search_hits(
     search_repo_entity_hits(&studio.search_plane, repo_id, raw_query, limit).await
 }
 
-#[cfg(test)]
 /// Build repo content search hits through the Studio state wrapper.
 #[cfg(test)]
 pub(crate) async fn build_repo_content_search_hits(

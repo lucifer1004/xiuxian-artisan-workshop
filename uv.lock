@@ -12,10 +12,10 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "wendao-core-lib",
     "xiuxian-artisan-workshop-py",
     "xiuxian-core",
     "xiuxian-foundation",
-    "xiuxian-wendao-py",
 ]
 
 [[package]]
@@ -4609,6 +4609,25 @@ wheels = [
 ]
 
 [[package]]
+name = "wendao-core-lib"
+version = "0.1.1"
+source = { editable = "packages/python/wendao-core-lib" }
+dependencies = [
+    { name = "pyarrow" },
+]
+
+[package.dev-dependencies]
+test = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pyarrow", specifier = ">=14.0.0" }]
+
+[package.metadata.requires-dev]
+test = [{ name = "pytest", specifier = ">=8.0" }]
+
+[[package]]
 name = "win32-setctime"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4646,9 +4665,9 @@ dev = [
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "vulture" },
+    { name = "wendao-core-lib" },
     { name = "xiuxian-core" },
     { name = "xiuxian-foundation" },
-    { name = "xiuxian-wendao-py" },
 ]
 
 [package.metadata]
@@ -4678,9 +4697,9 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.6.1" },
     { name = "ruff", specifier = ">=0.14.10" },
     { name = "vulture", specifier = ">=2.14" },
+    { name = "wendao-core-lib", editable = "packages/python/wendao-core-lib" },
     { name = "xiuxian-core", editable = "packages/python/core" },
     { name = "xiuxian-foundation", editable = "packages/python/foundation" },
-    { name = "xiuxian-wendao-py", editable = "packages/python/xiuxian-wendao-py" },
 ]
 
 [[package]]
@@ -4729,7 +4748,7 @@ dependencies = [
     { name = "psutil" },
     { name = "pydantic" },
     { name = "structlog" },
-    { name = "xiuxian-wendao-py" },
+    { name = "wendao-core-lib" },
 ]
 
 [package.metadata]
@@ -4740,27 +4759,8 @@ requires-dist = [
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pydantic", specifier = ">=2.7.0" },
     { name = "structlog", specifier = ">=24.0.0" },
-    { name = "xiuxian-wendao-py", editable = "packages/python/xiuxian-wendao-py" },
+    { name = "wendao-core-lib", editable = "packages/python/wendao-core-lib" },
 ]
-
-[[package]]
-name = "xiuxian-wendao-py"
-version = "0.1.0"
-source = { editable = "packages/python/xiuxian-wendao-py" }
-dependencies = [
-    { name = "pyarrow" },
-]
-
-[package.dev-dependencies]
-test = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pyarrow", specifier = ">=14.0.0" }]
-
-[package.metadata.requires-dev]
-test = [{ name = "pytest", specifier = ">=8.0" }]
 
 [[package]]
 name = "xlsxwriter"

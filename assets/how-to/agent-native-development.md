@@ -150,7 +150,7 @@ def register(runtime: ToolRuntime):
 ### Example: Adding New Commit Type
 
 ```markdown
-# In assets/skills/git/SKILL.md
+# In skills/git/SKILL.md
 
 ## Valid Types
 
@@ -272,18 +272,8 @@ skills:
 
 ### Git Skill (Simplified)
 
-The git skill is now **minimal** - only critical operations go through the tool runtime:
-
-| Operation    | How                | Why                     |
-| ------------ | ------------------ | ----------------------- |
-| `git_commit` | Tool runtime call  | Needs user confirmation |
-| `git_push`   | Tool runtime call  | Destructive operation   |
-| `git status` | Claude-native bash | Read-only, safe         |
-| `git diff`   | Claude-native bash | Read-only, safe         |
-| `git log`    | Claude-native bash | Read-only, safe         |
-| `git add`    | Claude-native bash | Safe staging            |
-
-**Principle: Read = bash. Write = tool runtime.**
+The repository-local Python git skill runtime has been retired. Git operations
+should use native CLI flows or other app-owned integrations outside `skills/`.
 
 ### Knowledge Skill (Project Cortex)
 
@@ -334,10 +324,7 @@ When migrating a skill to Agent Native:
 
 ## References
 
-- `assets/skills/knowledge/scripts/commands.py` - Knowledge skill (no execution)
-- `assets/skills/knowledge/SKILL.md` - Knowledge router logic
-- `assets/skills/git/SKILL.md` - Git router logic example
-- `assets/skills/git/scripts/commands.py` - Git atomic execution example
+- `skills/git/SKILL.md` - Git metadata-only skill example
 - `packages/conf/settings.yaml` - Skill loading configuration
 - `packages/python/agent/src/agent/core/skill_registry.py` - Config-driven skill loading
 - `CLAUDE.md` - Quick reference for LLM
@@ -543,8 +530,7 @@ assets/skills/{skill}/
 ### References
 
 - `packages/python/agent/src/agent/core/skill_registry.py` - Dynamic loading implementation
-- `assets/skills/git/SKILL.md` - Router logic example
-- `assets/skills/git/scripts/commands.py` - Atomic execution example
+- `skills/git/SKILL.md` - Metadata-only git skill example
 - `assets/how-to/gitops.md` - Git workflow documentation
 
 ---

@@ -35,7 +35,7 @@ _PROJECT_ROOT = _SCRIPT_DIR.parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
+from scripts._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_REPORT = _ROOT / ".run" / "reports" / "xiuxian-daochang-embedding-role-perf-smoke.json"

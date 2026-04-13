@@ -15,7 +15,7 @@ Microkernel core for xiuxian-artisan-workshop.
 ## Dependencies
 
 - `xiuxian-foundation`: Foundation layer (logging, config, thin helpers)
-- `xiuxian-wendao-py`: Arrow Flight transport/client surface
+- `wendao-core-lib`: Arrow Flight transport/client surface
 
 ## Usage
 

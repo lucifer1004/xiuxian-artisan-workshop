@@ -4,7 +4,7 @@
 //! ensuring type safety between the Rust backend and TypeScript frontend.
 //!
 //! Usage:
-//!   cargo run --bin export_types --features studio
+//!   `cargo run --bin export_types --features studio`
 
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use xiuxian_wendao::gateway::studio::types::studio_type_collection;

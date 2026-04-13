@@ -142,3 +142,34 @@ refresh = "manual"
     assert_eq!(config.repos[0].path.as_deref(), Some(repo_dir.as_path()));
     Ok(())
 }
+
+#[test]
+fn load_repo_intelligence_config_filters_search_only_plugins_and_repositories() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let mixed_repo_dir = temp.path().join("repos").join("mixed");
+    let search_only_repo_dir = temp.path().join("repos").join("search-only");
+    fs::create_dir_all(&mixed_repo_dir)?;
+    fs::create_dir_all(&search_only_repo_dir)?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.projects.mixed]
+root = "repos/mixed"
+plugins = ["ast-grep", "julia"]
+
+[link_graph.projects.search-only]
+root = "repos/search-only"
+plugins = ["ast-grep"]
+"#,
+    )?;
+
+    let config = load_repo_intelligence_config(Some(&config_path), temp.path())?;
+
+    assert_eq!(config.repos.len(), 1);
+    assert_eq!(config.repos[0].id, "mixed");
+    assert_eq!(
+        config.repos[0].plugins,
+        vec![RepositoryPluginConfig::Id("julia".to_string())]
+    );
+    Ok(())
+}

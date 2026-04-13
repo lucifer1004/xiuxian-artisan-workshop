@@ -53,7 +53,7 @@ impl NativeTool for WendaoSearchTool {
     }
 
     fn description(&self) -> &str {
-        "Search indexed project knowledge, code, docs, schema catalogs, and entities through a bounded workflow. Use this for repo-specific questions instead of answering from memory."
+        "Compatibility alias for `knowledge.search`. Use `knowledge.search` for new repo-specific knowledge questions; this name remains available for callers that still reference `wendao.search`."
     }
 
     fn parameters(&self) -> Value {

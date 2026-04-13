@@ -101,7 +101,7 @@ fn test_tool_search_results_to_ipc_one_row() -> Result<()> {
         keyword_score: Some(0.5),
         skill_name: "git".to_string(),
         tool_name: "commit".to_string(),
-        file_path: "git/scripts/commit.py".to_string(),
+        file_path: "skills/git/SKILL.md".to_string(),
         routing_keywords: vec!["git".to_string(), "commit".to_string()],
         intents: vec!["Save changes".to_string()],
         category: "vcs".to_string(),

@@ -17,6 +17,12 @@ pub enum RepoIntelligenceError {
         /// The missing plugin identifier.
         plugin_id: String,
     },
+    /// The requested repository does not participate in repo-intelligence analysis.
+    #[error("repo `{repo_id}` does not configure any repo-intelligence plugins")]
+    MissingRepoIntelligencePlugins {
+        /// The repository identifier.
+        repo_id: String,
+    },
     /// A required plugin was not configured for the requested repository.
     #[error("repo `{repo_id}` requires plugin `{plugin_id}`")]
     MissingRequiredPlugin {

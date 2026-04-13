@@ -126,13 +126,7 @@ pub(crate) fn build_repository_analysis_cache_key(
     source: &MaterializedRepo,
     metadata: Option<&LocalCheckoutMetadata>,
 ) -> RepositoryAnalysisCacheKey {
-    let mut plugin_ids = repository
-        .plugins
-        .iter()
-        .map(|plugin| plugin.id().to_string())
-        .collect::<Vec<_>>();
-    plugin_ids.sort_unstable();
-    plugin_ids.dedup();
+    let plugin_ids = repository.repo_intelligence_plugin_ids();
     let analysis_identity =
         collect_repository_analysis_identity(source.checkout_root.as_path(), plugin_ids.as_slice())
             .unwrap_or_else(|| fallback_analysis_identity(source, metadata, plugin_ids.as_slice()));

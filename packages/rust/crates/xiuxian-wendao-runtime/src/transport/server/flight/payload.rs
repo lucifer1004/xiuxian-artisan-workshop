@@ -4,7 +4,7 @@ use arrow_flight::FlightData;
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use futures::TryStreamExt;
 use futures::stream;
-use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 use tonic::Status;
 use xiuxian_vector_store::{EngineRecordBatch, LanceRecordBatch, lance_batches_to_engine_batches};
 
@@ -12,7 +12,7 @@ use xiuxian_vector_store::{EngineRecordBatch, LanceRecordBatch, lance_batches_to
 pub(super) struct FlightRoutePayload {
     pub(super) batches: Vec<EngineRecordBatch>,
     pub(super) app_metadata: Vec<u8>,
-    encoded_do_get_frames: Mutex<Option<Arc<Vec<FlightData>>>>,
+    encoded_do_get_frames: OnceCell<Arc<Vec<FlightData>>>,
 }
 
 impl FlightRoutePayload {
@@ -43,7 +43,7 @@ impl FlightRoutePayload {
         Ok(Self {
             batches: engine_batches,
             app_metadata,
-            encoded_do_get_frames: Mutex::new(None),
+            encoded_do_get_frames: OnceCell::new(),
         })
     }
 
@@ -62,17 +62,14 @@ impl FlightRoutePayload {
     }
 
     pub(super) async fn do_get_frames(&self) -> Result<Arc<Vec<FlightData>>, Status> {
-        if let Some(cached) = self.encoded_do_get_frames.lock().await.as_ref().cloned() {
-            return Ok(cached);
-        }
-
-        let encoded = Arc::new(encode_do_get_frames(self.batches.clone()).await?);
-        let mut cached_frames = self.encoded_do_get_frames.lock().await;
-        if let Some(cached) = cached_frames.as_ref().cloned() {
-            return Ok(cached);
-        }
-        *cached_frames = Some(Arc::clone(&encoded));
-        Ok(encoded)
+        self.encoded_do_get_frames
+            .get_or_try_init(|| async {
+                encode_do_get_frames(self.batches.clone())
+                    .await
+                    .map(Arc::new)
+            })
+            .await
+            .map(Arc::clone)
     }
 }
 

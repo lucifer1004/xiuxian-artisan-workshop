@@ -7,10 +7,12 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-REMOVED_IMPORT = "xiuxian_wendao_py.compat.runtime"
+REMOVED_COMPAT_IMPORT = "wendao_core_lib.compat.runtime"
+REMOVED_SKILL_IMPORT = "skills._shared.cargo_subprocess_env"
 TARGETS = [
     "scripts/benchmark_wendao_related.py",
     "scripts/benchmark_wendao_search.py",
+    "scripts/channel/test_xiuxian_daochang_valkey_suite.py",
     "scripts/evaluate_wendao_retrieval.py",
     "scripts/rust/cargo_check_with_timeout.py",
     "scripts/rust/xiuxian_daochang_embedding_role_perf_smoke.py",
@@ -25,7 +27,8 @@ def test_active_script_imports_do_not_depend_on_removed_compat_runtime(
 ) -> None:
     script_path = PROJECT_ROOT / relative_path
     source = script_path.read_text(encoding="utf-8")
-    assert REMOVED_IMPORT not in source
+    assert REMOVED_COMPAT_IMPORT not in source
+    assert REMOVED_SKILL_IMPORT not in source
 
     module_name = relative_path.replace("/", "_").removesuffix(".py")
     spec = importlib.util.spec_from_file_location(module_name, script_path)

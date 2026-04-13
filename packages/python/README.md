@@ -39,24 +39,41 @@ Retained runtime contract prefixes:
 
 ```text
 packages/python/
-  xiuxian-wendao-py/   Arrow Flight transport client
-  foundation/          thin config/schema/logging/RAG helpers
-  core/                minimal retained helper surface
+  wendao-core-lib/           Arrow Flight transport client
+  wendao-arrow-interface/    downstream-facing Arrow facade with optional dataframe examples
+  xiuxian-wendao-analyzer/   analyzer workflows on top of the same substrate
+  foundation/                thin config/schema/logging/RAG helpers
+  core/                      minimal retained helper surface
 ```
 
-The root workspace is explicitly limited to those three packages.
+The root workspace is explicitly limited to the retained substrate packages
+`wendao-core-lib`, `foundation`, and `core`. Consumer-facing facade packages
+may still live beside them when they compose, rather than replace, the
+retained transport boundary. `wendao-arrow-interface` and
+`xiuxian-wendao-analyzer` are active consumer packages in that adjacent layer.
+
 Retained Python code now ships under direct top-level packages:
 
 - `xiuxian_core`
 - `xiuxian_foundation`
 - `xiuxian_rag`
 - `xiuxian_tracer`
-- `xiuxian_wendao_py`
+- `wendao_core_lib`
+- `wendao_arrow_interface`
+- `xiuxian_wendao_analyzer`
 
-An analyzer-layer sibling package is now scaffolded under
-`packages/python/xiuxian-wendao-analyzer/`, but it is still intentionally
-outside the retained transport-substrate set until analyzer implementation
-actually lands there.
+The recommended downstream Arrow-consumer facade now lives under
+`packages/python/wendao-arrow-interface/` as `wendao_arrow_interface`.
+It is intentionally a composition layer over `wendao-core-lib`, not a new
+transport owner.
+
+The analyzer-layer package at
+`packages/python/xiuxian-wendao-analyzer/` is now an active consumer package.
+It stays outside the transport-substrate set, but it is no longer a mere
+scaffold; it is the analyzer workflow layer above `wendao-core-lib`, focused
+on analyzing rows and tables that Rust-owned query surfaces already returned.
+Rerank transport remains owned by the transport and facade packages, not by
+the analyzer package.
 
 ## Removed Surface
 
@@ -77,6 +94,8 @@ The old `src/omni/...` namespace layout is gone as well.
    compatibility label.
 6. Delete stale local-runtime surfaces rather than preserving them as legacy
    architecture.
+7. Downstream ergonomics facades must compose retained transport helpers
+   instead of taking transport ownership themselves.
 
 ## Documentation Notes
 

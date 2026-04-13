@@ -31,10 +31,10 @@ The decision is:
    contracts instead of ad hoc helper growth
 4. real-host validation against `xiuxian-wendao` is required before semantics
    are treated as landed
-5. `xiuxian-wendao-py` remains a typed Python access layer for Rust-owned
+5. `wendao-core-lib` remains a typed Python access layer for Rust-owned
    Flight contracts, not a Python-local search or rerank runtime
 6. any future Python-local analyzer implementation should live in a sibling
-   package layered on top of `xiuxian-wendao-py`, not inside it
+   package layered on top of `wendao-core-lib`, not inside it
 
 ## 2. Alignment
 
@@ -120,8 +120,8 @@ All future query-contract work must follow these rules:
 3. Python support for `repo-search` or `rerank` means typed access to
    Rust-owned Wendao routes, not Python-local execution ownership
 4. if Python-local analyzer logic is introduced later, it must live in a
-   sibling package that depends on `xiuxian-wendao-py` rather than expanding
-   `xiuxian-wendao-py` into an analyzer runtime
+   sibling package that depends on `wendao-core-lib` rather than expanding
+   `wendao-core-lib` into an analyzer runtime
 5. every new request knob must have a backend-owned rationale
 6. every new response field must have a stable producer on the Rust side
 7. semantic claims must be proved on the real `xiuxian-wendao` host, not only
@@ -233,7 +233,7 @@ analyzer-facing rationale rather than simple symmetry with broader
 
 ## 9.1 Current Implementation Baseline
 
-As of 2026-03-31, the current `xiuxian-wendao-py` Arrow Flight baseline is:
+As of 2026-03-31, the current `wendao-core-lib` Arrow Flight baseline is:
 
 1. `repo-search` is operationally supported through typed request helpers and
    typed response rows, with real-host validation on the current
@@ -245,7 +245,7 @@ As of 2026-03-31, the current `xiuxian-wendao-py` Arrow Flight baseline is:
    typed access to a Rust-owned route rather than claiming ownership of rerank
    semantics
 4. the intended Python ecosystem split is:
-   - `xiuxian-wendao-py` for Arrow/Flight transport and typed contract access
+   - `wendao-core-lib` for Arrow/Flight transport and typed contract access
    - a future sibling package such as `xiuxian-wendao-analyzer` for
      Python-local analyzer logic built on top of that transport substrate
 5. `top_k` is treated as a closed request-contract slice:

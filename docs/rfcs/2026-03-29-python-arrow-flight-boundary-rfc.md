@@ -105,7 +105,7 @@ Python may retain only these categories:
 
 Examples of retained scope:
 
-1. `xiuxian_wendao_py.transport`
+1. `wendao_core_lib.transport`
 2. narrow `xiuxian_foundation.config.*` helpers
 3. narrow schema locator and serialization helpers used by retained clients
 4. narrow test-local helpers under owning slices such as
@@ -132,13 +132,13 @@ Examples already inside the delete-first boundary:
 3. the retired standalone Python test-helper package and its helper facades
 4. the retired local RAG/knowledge fixture slices
 5. package-root forwarding in `xiuxian_foundation`, `xiuxian_rag`, and
-   `xiuxian_wendao_py`
+   `wendao_core_lib`
 
 ## 8. Package Classification
 
 ### 8.1 Retained Packages
 
-1. `packages/python/xiuxian-wendao-py`
+1. `packages/python/wendao-core-lib`
    Purpose: Flight and Arrow IPC transport client
 2. `packages/python/foundation`
    Purpose: narrow config/schema/serialization helpers and limited adapters
@@ -241,7 +241,7 @@ the point where:
 1. broad Python runtime, bridge, knowledge, and test-helper surfaces have been
    retired
 2. the standalone Python test-helper platform has been removed
-3. retained Python scope is centered on `xiuxian-wendao-py` plus narrow
+3. retained Python scope is centered on `wendao-core-lib` plus narrow
    transport-adjacent helpers
 4. active work has moved from boundary closure into Flight query-contract
    evolution

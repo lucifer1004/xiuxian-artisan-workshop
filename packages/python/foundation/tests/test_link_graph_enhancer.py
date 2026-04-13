@@ -152,7 +152,7 @@ class TestLinkGraphEnhancer:
         note = _make_note(
             title="Git Skill",
             content=content,
-            path="assets/skills/git/SKILL.md",
+            path="skills/git/SKILL.md",
         )
         result = enhancer.enhance_note(note)
 

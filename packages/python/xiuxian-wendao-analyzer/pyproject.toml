@@ -1,12 +1,13 @@
 [project]
 name = "xiuxian-wendao-analyzer"
-version = "0.1.1"
-description = "Analyzer-layer Python package built on top of xiuxian-wendao-py"
+version = "0.2.1"
+description = "Analyzer-layer Python package built on top of wendao-core-lib"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pyarrow>=14.0.0",
-    "xiuxian-wendao-py",
+    "wendao-arrow-interface",
+    "wendao-core-lib",
 ]
 
 [dependency-groups]
@@ -25,4 +26,5 @@ packages = ["src/xiuxian_wendao_analyzer"]
 package = true
 
 [tool.uv.sources]
-xiuxian-wendao-py = { path = "../xiuxian-wendao-py" }
+wendao-core-lib = { path = "../wendao-core-lib" }
+wendao-arrow-interface = { path = "../wendao-arrow-interface" }

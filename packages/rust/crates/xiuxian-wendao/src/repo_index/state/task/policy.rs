@@ -60,6 +60,7 @@ pub(crate) fn should_penalize_adaptive_concurrency(error: &RepoIntelligenceError
         error,
         RepoIntelligenceError::DuplicatePlugin { .. }
             | RepoIntelligenceError::MissingPlugin { .. }
+            | RepoIntelligenceError::MissingRepoIntelligencePlugins { .. }
             | RepoIntelligenceError::MissingRequiredPlugin { .. }
             | RepoIntelligenceError::UnknownRepository { .. }
             | RepoIntelligenceError::MissingRepositoryPath { .. }

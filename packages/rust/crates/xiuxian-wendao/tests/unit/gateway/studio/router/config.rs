@@ -190,11 +190,7 @@ dirs = ["legacy"]
         !overlay_path.exists(),
         "legacy overlay should be removed after persisting base config"
     );
-    let persisted: toml::Value = toml::from_str(
-        &fs::read_to_string(&config_path)
-            .unwrap_or_else(|error| panic!("read persisted config: {error}")),
-    )
-    .unwrap_or_else(|error| panic!("parse persisted config: {error}"));
+    let persisted = load_toml_value(config_path.as_path());
     assert_eq!(
         persisted
             .get("gateway")
@@ -203,40 +199,17 @@ dirs = ["legacy"]
         Some(&toml::Value::String("keep-me".to_string())),
         "base gateway settings should remain intact"
     );
-    let Some(project) = persisted
-        .get("link_graph")
-        .and_then(toml::Value::as_table)
-        .and_then(|link_graph| link_graph.get("projects"))
-        .and_then(toml::Value::as_table)
-        .and_then(|projects| projects.get("main"))
-        .and_then(toml::Value::as_table)
-    else {
+    let Some(project) = persisted_project_table(&persisted, "main") else {
         panic!("persisted config should contain the new UI project");
     };
     assert_eq!(
-        project
-            .get("dirs")
-            .and_then(toml::Value::as_array)
-            .map(|dirs| {
-                dirs.iter()
-                    .filter_map(toml::Value::as_str)
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            }),
+        persisted_project_dirs(project),
         Some(vec!["docs".to_string(), "src".to_string()]),
         "persisted config should contain the new UI dirs"
     );
-    let kernel_dirs = persisted
-        .get("link_graph")
-        .and_then(toml::Value::as_table)
-        .and_then(|link_graph| link_graph.get("projects"))
-        .and_then(toml::Value::as_table)
-        .and_then(|projects| projects.get("kernel"))
-        .and_then(toml::Value::as_table)
-        .and_then(|project| project.get("dirs"))
-        .and_then(toml::Value::as_array)
-        .map(|dirs| dirs.len())
-        .unwrap_or(0);
+    let kernel_dirs = persisted_project_table(&persisted, "kernel")
+        .and_then(persisted_project_dirs)
+        .map_or(0, |dirs| dirs.len());
     assert_eq!(
         kernel_dirs, 0,
         "stale UI-owned base projects should be tombstoned in the rewritten base config"
@@ -246,6 +219,39 @@ dirs = ["legacy"]
         panic!("effective UI config should reload from the persisted base config");
     };
     assert_eq!(effective_config, pushed_config);
+}
+
+fn load_toml_value(path: &std::path::Path) -> toml::Value {
+    toml::from_str(
+        &fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("read `{}`: {error}", path.display())),
+    )
+    .unwrap_or_else(|error| panic!("parse `{}`: {error}", path.display()))
+}
+
+fn persisted_project_table<'a>(
+    persisted: &'a toml::Value,
+    project_name: &str,
+) -> Option<&'a toml::Table> {
+    persisted
+        .get("link_graph")
+        .and_then(toml::Value::as_table)
+        .and_then(|link_graph| link_graph.get("projects"))
+        .and_then(toml::Value::as_table)
+        .and_then(|projects| projects.get(project_name))
+        .and_then(toml::Value::as_table)
+}
+
+fn persisted_project_dirs(project: &toml::Table) -> Option<Vec<String>> {
+    project
+        .get("dirs")
+        .and_then(toml::Value::as_array)
+        .map(|dirs| {
+            dirs.iter()
+                .filter_map(toml::Value::as_str)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
 }
 
 #[test]
@@ -353,11 +359,19 @@ async fn repo_index_status_bootstraps_deferred_repo_indexing() {
 async fn ui_capabilities_reports_builtin_plugin_languages() {
     let registry = bootstrap_builtin_registry()
         .unwrap_or_else(|error| panic!("builtin registry should bootstrap: {error:?}"));
-    let expected = registry
+    let registry_languages = registry
         .plugin_ids()
         .into_iter()
         .map(std::string::ToString::to_string)
         .collect::<Vec<_>>();
+    let mut expected = xiuxian_ast::Lang::all()
+        .iter()
+        .copied()
+        .map(xiuxian_ast::Lang::as_str)
+        .map(std::string::ToString::to_string)
+        .collect::<std::collections::BTreeSet<_>>();
+    expected.extend(registry_languages);
+    let expected = expected.into_iter().collect::<Vec<_>>();
     let studio = StudioState::new_with_bootstrap_ui_config(Arc::new(registry));
     studio.apply_ui_config(
         UiConfig {

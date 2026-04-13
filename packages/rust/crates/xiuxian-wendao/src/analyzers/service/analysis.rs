@@ -93,6 +93,12 @@ pub(crate) fn analyze_registered_repository_target_file_with_registry(
     registry: &PluginRegistry,
     repo_relative_path: &str,
 ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+    if !repository.has_repo_intelligence_plugins() {
+        return Err(RepoIntelligenceError::MissingRepoIntelligencePlugins {
+            repo_id: repository.id.clone(),
+        });
+    }
+
     let repository_source = resolve_target_file_analysis_source(repository, cwd)?;
     let repository_root = repository_source.checkout_root.clone();
     let checkout_metadata = discover_checkout_metadata(repository_root.as_path());
@@ -187,6 +193,12 @@ pub fn analyze_registered_repository_bundle_with_registry(
     cwd: &Path,
     registry: &PluginRegistry,
 ) -> Result<CachedRepositoryAnalysis, RepoIntelligenceError> {
+    if !repository.has_repo_intelligence_plugins() {
+        return Err(RepoIntelligenceError::MissingRepoIntelligencePlugins {
+            repo_id: repository.id.clone(),
+        });
+    }
+
     let repository_source = resolve_analysis_source(repository, cwd)?;
     let repository_root = repository_source.checkout_root.clone();
     let checkout_metadata = discover_checkout_metadata(repository_root.as_path());
@@ -216,13 +228,6 @@ pub fn analyze_registered_repository_bundle_with_registry(
             #[cfg(feature = "studio")]
             cache_key,
             analysis: cached,
-        });
-    }
-
-    if repository.plugins.is_empty() {
-        return Err(RepoIntelligenceError::MissingRequiredPlugin {
-            repo_id: repository.id.clone(),
-            plugin_id: "any".to_string(),
         });
     }
 

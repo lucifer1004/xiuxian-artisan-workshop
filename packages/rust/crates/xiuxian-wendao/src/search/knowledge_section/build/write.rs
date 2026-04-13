@@ -4,7 +4,9 @@ use crate::search::knowledge_section::build::types::{
 use crate::search::knowledge_section::schema::{
     knowledge_section_batches, knowledge_section_schema, path_column,
 };
-use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
+use crate::search::local_publication_parquet::{
+    LocalParquetRewriteRequest, rewrite_local_publication_parquet,
+};
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
 use xiuxian_vector_store::VectorStoreError;
 
@@ -40,13 +42,15 @@ pub(super) async fn write_knowledge_section_epoch(
     });
     let parquet_stats = rewrite_local_publication_parquet(
         service,
-        SearchCorpusKind::KnowledgeSection,
-        base_table_name.as_deref(),
-        table_name.as_str(),
-        path_column(),
-        &plan.replaced_paths,
-        &changed_batches,
-        Some(knowledge_section_schema()),
+        LocalParquetRewriteRequest {
+            corpus: SearchCorpusKind::KnowledgeSection,
+            base_table_name: base_table_name.as_deref(),
+            target_table_name: table_name.as_str(),
+            path_column: path_column(),
+            replaced_paths: &plan.replaced_paths,
+            changed_batches: &changed_batches,
+            empty_schema: Some(knowledge_section_schema()),
+        },
     )
     .await?;
     Ok(KnowledgeSectionWriteResult {

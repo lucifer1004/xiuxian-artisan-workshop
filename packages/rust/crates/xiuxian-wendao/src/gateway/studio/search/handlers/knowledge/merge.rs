@@ -48,15 +48,7 @@ pub(super) async fn build_repo_intent_merge(
         })?;
     #[cfg(all(test, feature = "duckdb"))]
     let repo_query_engine = if has_repo_ids {
-        Some(
-            configured_parquet_query_engine_label(&studio.search_plane).map_err(|error| {
-                StudioApiError::internal(
-                    "REPO_INTENT_QUERY_ENGINE_FAILED",
-                    "Failed to resolve repo-intent query-engine metadata",
-                    Some(error),
-                )
-            })?,
-        )
+        Some(resolve_repo_intent_query_engine_label(studio)?)
     } else {
         None
     };
@@ -74,5 +66,18 @@ pub(super) async fn build_repo_intent_merge(
         hits: outcome.hits,
         pending_repos: outcome.pending_repos,
         skipped_repos: outcome.skipped_repos,
+    })
+}
+
+#[cfg(all(test, feature = "duckdb"))]
+fn resolve_repo_intent_query_engine_label(
+    studio: &StudioState,
+) -> Result<&'static str, StudioApiError> {
+    configured_parquet_query_engine_label(&studio.search_plane).map_err(|error| {
+        StudioApiError::internal(
+            "REPO_INTENT_QUERY_ENGINE_FAILED",
+            "Failed to resolve repo-intent query-engine metadata",
+            Some(error),
+        )
     })
 }

@@ -12,7 +12,9 @@ use crate::channels::managed_commands::{
 };
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::channels::managed_runtime::parsing::is_stop_command;
-use crate::channels::managed_runtime::turn::{build_session_id, compose_turn_content};
+use crate::channels::managed_runtime::turn::{
+    ForegroundTurnOutcome, build_session_id, compose_turn_content,
+};
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::JobManager;
 
@@ -103,8 +105,65 @@ pub(in crate::channels::discord::runtime) async fn process_discord_message_with_
         interrupt_generation,
     };
     let result = run_foreground_turn_with_typing(channel.as_ref(), agent.clone(), turn_input).await;
-    if let Some(reply) = render_foreground_turn_reply(result, &msg, turn_timeout_secs) {
+    let reply = match result {
+        ForegroundTurnOutcome::TimedOut { .. } => Some(
+            queue_timed_out_foreground_turn(
+                job_manager,
+                &msg,
+                &session_id,
+                &turn_content,
+                turn_timeout_secs,
+            )
+            .await,
+        ),
+        other => render_foreground_turn_reply(other, &msg, turn_timeout_secs),
+    };
+    if let Some(reply) = reply {
         turn::send_discord_reply(channel.as_ref(), &msg, &reply).await;
+    }
+}
+
+async fn queue_timed_out_foreground_turn(
+    job_manager: &Arc<JobManager>,
+    msg: &ChannelMessage,
+    session_id: &str,
+    prompt: &str,
+    timeout_secs: u64,
+) -> String {
+    match job_manager
+        .submit(session_id, msg.recipient.clone(), prompt.to_string())
+        .await
+    {
+        Ok(job_id) => {
+            tracing::warn!(
+                event = "discord.foreground.turn.timeout_background_submit",
+                session_key = %msg.session_key,
+                channel = %msg.channel,
+                recipient = %msg.recipient,
+                sender = %msg.sender,
+                timeout_secs,
+                job_id = %job_id,
+                "discord foreground turn timed out and was requeued as a background job"
+            );
+            format!(
+                "Still working on that. Moved it to background job `{job_id}` and will post the result here when it's ready.\nUse `/job {job_id}` for status."
+            )
+        }
+        Err(error) => {
+            tracing::warn!(
+                event = "discord.foreground.turn.timeout_background_submit_failed",
+                session_key = %msg.session_key,
+                channel = %msg.channel,
+                recipient = %msg.recipient,
+                sender = %msg.sender,
+                timeout_secs,
+                error = %error,
+                "discord foreground turn timed out and background submission failed"
+            );
+            format!(
+                "Request timed out after {timeout_secs}s.\nBackground queue submission failed: {error}"
+            )
+        }
     }
 }
 

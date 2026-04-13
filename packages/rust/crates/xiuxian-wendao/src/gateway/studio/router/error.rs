@@ -99,6 +99,12 @@ pub fn map_repo_intelligence_error(error: RepoIntelligenceError) -> StudioApiErr
             "UNKNOWN_REPOSITORY",
             format!("Repo Intelligence repository `{repo_id}` is not registered"),
         ),
+        RepoIntelligenceError::MissingRepoIntelligencePlugins { repo_id } => {
+            StudioApiError::bad_request(
+                "MISSING_REQUIRED_PLUGIN",
+                format!("repo `{repo_id}` does not configure any repo-intelligence plugins"),
+            )
+        }
         RepoIntelligenceError::MissingRequiredPlugin { repo_id, plugin_id } => {
             StudioApiError::bad_request(
                 "MISSING_REQUIRED_PLUGIN",

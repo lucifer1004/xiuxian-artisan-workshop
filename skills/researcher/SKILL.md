@@ -84,9 +84,8 @@ The command returns structured JSON. Typical fields:
 ## Implementation Notes
 
 - Runtime backend is `xiuxian-qianji` (Rust).
-- Python entrypoint is `scripts/research_entry.py`.
-- Utility functions for clone/map/compress/save are in `scripts/research.py`.
 - Workflow definition is `workflows/repo_analyzer.toml`.
+- No Python local runtime is maintained under this skill.
 
 ## Files
 
@@ -94,10 +93,8 @@ The command returns structured JSON. Typical fields:
 researcher/
 ├── SKILL.md
 ├── README.md
-├── scripts/
-│   ├── research.py
-│   └── research_entry.py
+├── references/
+│   └── run_research_graph.md
 ├── workflows/
 │   └── repo_analyzer.toml
-└── tests/
 ```

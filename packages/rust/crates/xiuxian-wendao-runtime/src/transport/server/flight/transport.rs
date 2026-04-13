@@ -25,6 +25,8 @@ use super::super::types::{
 };
 use super::core::WendaoFlightService;
 
+const ANALYSIS_ROUTE_PREFIX: &str = "/analysis/";
+
 #[async_trait]
 impl FlightService for WendaoFlightService {
     type HandshakeStream = HandshakeStream;
@@ -65,6 +67,12 @@ impl FlightService for WendaoFlightService {
         let route_payload = self
             .cached_route_payload(route.as_str(), &metadata, &cache_key)
             .await?;
+        if route.starts_with(ANALYSIS_ROUTE_PREFIX) {
+            let route_payload = route_payload.clone();
+            drop(tokio::spawn(async move {
+                let _ = route_payload.do_get_frames().await;
+            }));
+        }
         let endpoint = FlightEndpoint::new().with_ticket(Ticket::new(route.clone()));
         let schema = route_payload.schema();
         let flight_info = FlightInfo::new()

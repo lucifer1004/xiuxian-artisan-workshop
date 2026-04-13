@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use super::types::ParsedCodeSearchQuery;
+use crate::parsers::search::repo_code_query::ParsedRepoCodeSearchQuery;
 pub(crate) use crate::search::repo_search::RepoSearchResultLimits;
 
 const DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -30,50 +30,8 @@ pub(crate) fn repo_search_result_limits(
     }
 }
 
-pub(crate) fn parse_code_search_query(
-    query: &str,
-    repo_hint: Option<&str>,
-) -> ParsedCodeSearchQuery {
-    let mut parsed = ParsedCodeSearchQuery {
-        repo: repo_hint
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        ..ParsedCodeSearchQuery::default()
-    };
-    let mut terms = Vec::new();
-
-    for token in query.split_whitespace() {
-        if let Some(value) = token.strip_prefix("lang:") {
-            let normalized = value.trim().to_ascii_lowercase();
-            if !normalized.is_empty() && !parsed.languages.contains(&normalized) {
-                parsed.languages.push(normalized);
-            }
-            continue;
-        }
-        if let Some(value) = token.strip_prefix("kind:") {
-            let normalized = value.trim().to_ascii_lowercase();
-            if !normalized.is_empty() && !parsed.kinds.contains(&normalized) {
-                parsed.kinds.push(normalized);
-            }
-            continue;
-        }
-        if let Some(value) = token.strip_prefix("repo:") {
-            let repo_id = value.trim();
-            if !repo_id.is_empty() {
-                parsed.repo = Some(repo_id.to_string());
-            }
-            continue;
-        }
-        terms.push(token);
-    }
-
-    parsed.query = terms.join(" ").trim().to_string();
-    parsed
-}
-
 pub(crate) fn infer_repo_hint_from_query<'a, I>(
-    parsed: &ParsedCodeSearchQuery,
+    parsed: &ParsedRepoCodeSearchQuery,
     repo_ids: I,
 ) -> Option<String>
 where
@@ -83,7 +41,7 @@ where
         return None;
     }
 
-    let normalized_query = normalize_repo_search_seed(parsed.query.as_str());
+    let normalized_query = normalize_repo_search_seed(parsed.search_term().unwrap_or_default());
     if normalized_query.is_empty() {
         return None;
     }

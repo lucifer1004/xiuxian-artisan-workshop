@@ -41,10 +41,6 @@ pub fn load_repo_intelligence_config(
         .into_iter()
         .map(|(id, project)| {
             let plugins = parse_repository_plugins(project.plugins, &id, &config_path)?;
-            if plugins.is_empty() {
-                return Ok(None);
-            }
-
             let path = project
                 .root
                 .as_deref()
@@ -68,14 +64,20 @@ pub fn load_repo_intelligence_config(
                 return Ok(None);
             }
 
-            Ok(Some(RegisteredRepository {
+            let mut repository = RegisteredRepository {
                 id,
                 path,
                 url,
                 git_ref: project.git_ref.as_deref().and_then(parse_repository_ref),
                 refresh: parse_refresh_policy(project.refresh.as_deref()),
                 plugins,
-            }))
+            };
+            if !repository.has_repo_intelligence_plugins() {
+                return Ok(None);
+            }
+            repository.plugins = repository.repo_intelligence_plugins().cloned().collect();
+
+            Ok(Some(repository))
         })
         .collect::<Result<Vec<_>, RepoIntelligenceError>>()?
         .into_iter()

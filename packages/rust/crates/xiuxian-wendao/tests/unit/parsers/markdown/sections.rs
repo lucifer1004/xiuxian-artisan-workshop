@@ -199,12 +199,12 @@ Implementation details here.
 
 #[test]
 fn test_extract_sections_filters_entities_by_section_byte_range() {
-    let body = r#"# Alpha
+    let body = r"# Alpha
 Section alpha links to [One](one.md).
 
 # Beta
 Section beta links to [Two](two.md).
-"#;
+";
     let sections = extract_sections(
         body,
         std::path::Path::new("/workspace/docs/note.md"),

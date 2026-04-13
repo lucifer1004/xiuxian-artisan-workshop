@@ -62,7 +62,8 @@ impl NativeToolRegistry {
     /// Returns a list of tool definitions for the LLM.
     #[must_use]
     pub fn list_for_llm(&self) -> Vec<Value> {
-        self.tools
+        let mut tools = self
+            .tools
             .values()
             .map(|t| {
                 serde_json::json!({
@@ -71,7 +72,9 @@ impl NativeToolRegistry {
                     "parameters": t.parameters(),
                 })
             })
-            .collect()
+            .collect::<Vec<_>>();
+        tools.sort_by(|left, right| extract_tool_name(left).cmp(&extract_tool_name(right)));
+        tools
     }
 
     /// Provides a textual summary of registered native tools for system prompt injection.
@@ -88,6 +91,14 @@ impl NativeToolRegistry {
             summaries.join("\n- ")
         )
     }
+}
+
+fn extract_tool_name(tool: &Value) -> &str {
+    tool.get("name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("")
 }
 
 impl Default for NativeToolRegistry {

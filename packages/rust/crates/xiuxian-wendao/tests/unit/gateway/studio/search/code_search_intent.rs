@@ -235,7 +235,7 @@ fn create_sample_julia_repo(
     fs::write(
         repo_dir.join("src").join(format!("{package_name}.jl")),
         format!(
-            r#"module {package_name}
+            r"module {package_name}
 
 export solve, Problem
 
@@ -246,10 +246,10 @@ end
 solve(problem::Problem) = problem.x
 
 end
-"#
+"
         ),
     )?;
-    initialize_git_fixture(repo_dir.as_path())?;
+    initialize_git_fixture(repo_dir.as_path());
     Ok(repo_dir)
 }
 
@@ -262,29 +262,28 @@ fn create_sample_modelica_repo(
     fs::write(
         repo_dir.join("package.mo"),
         format!(
-            r#"within ;
+            r"within ;
 package {package_name}
 end {package_name};
-"#
+"
         ),
     )?;
     fs::write(
         repo_dir.join("Controllers/PI.mo"),
         format!(
-            r#"within {package_name}.Controllers;
+            r"within {package_name}.Controllers;
 model PI
   parameter Real k = 1;
   parameter Real Ti = 0.1;
 end PI;
-"#
+"
         ),
     )?;
-    initialize_git_fixture(repo_dir.as_path())?;
+    initialize_git_fixture(repo_dir.as_path());
     Ok(repo_dir)
 }
 
-fn initialize_git_fixture(repo_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn initialize_git_fixture(repo_dir: &Path) {
     init_git_repository(repo_dir);
     commit_all(repo_dir, "seed fixture");
-    Ok(())
 }

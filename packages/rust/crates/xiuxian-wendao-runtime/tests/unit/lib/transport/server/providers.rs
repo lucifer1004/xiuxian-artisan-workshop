@@ -606,6 +606,7 @@ impl AstSearchFlightRouteProvider for RecordingAstSearchProvider {
 #[derive(Debug, Default)]
 pub(super) struct RecordingMarkdownAnalysisProvider {
     request: Mutex<Option<String>>,
+    call_count: Mutex<usize>,
 }
 
 impl RecordingMarkdownAnalysisProvider {
@@ -616,6 +617,13 @@ impl RecordingMarkdownAnalysisProvider {
         )
         .clone()
     }
+
+    pub(super) fn call_count(&self) -> usize {
+        *lock_or_panic(
+            &self.call_count,
+            "markdown analysis provider call-count should lock",
+        )
+    }
 }
 
 #[async_trait]
@@ -624,6 +632,10 @@ impl MarkdownAnalysisFlightRouteProvider for RecordingMarkdownAnalysisProvider {
         &self,
         path: &str,
     ) -> Result<AnalysisFlightRouteResponse, String> {
+        *lock_or_panic(
+            &self.call_count,
+            "markdown analysis provider call-count should lock",
+        ) += 1;
         *lock_or_panic(
             &self.request,
             "markdown analysis provider record should lock",

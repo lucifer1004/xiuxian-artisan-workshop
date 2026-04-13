@@ -1,6 +1,8 @@
 use xiuxian_vector_store::VectorStoreError;
 
-use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
+use crate::search::local_publication_parquet::{
+    LocalParquetRewriteRequest, rewrite_local_publication_parquet,
+};
 use crate::search::reference_occurrence::build::{
     ReferenceOccurrenceBuildPlan, ReferenceOccurrenceWriteResult,
 };
@@ -29,13 +31,15 @@ pub(crate) async fn write_reference_occurrence_epoch(
     });
     let parquet_stats = rewrite_local_publication_parquet(
         service,
-        SearchCorpusKind::ReferenceOccurrence,
-        base_table_name.as_deref(),
-        table_name.as_str(),
-        path_column(),
-        &plan.replaced_paths,
-        &changed_batches,
-        Some(reference_occurrence_schema()),
+        LocalParquetRewriteRequest {
+            corpus: SearchCorpusKind::ReferenceOccurrence,
+            base_table_name: base_table_name.as_deref(),
+            target_table_name: table_name.as_str(),
+            path_column: path_column(),
+            replaced_paths: &plan.replaced_paths,
+            changed_batches: &changed_batches,
+            empty_schema: Some(reference_occurrence_schema()),
+        },
     )
     .await?;
     Ok(ReferenceOccurrenceWriteResult {

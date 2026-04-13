@@ -541,15 +541,15 @@ mod tests {
     fn common_schema_accepts_canonical_payload() {
         let payload = serde_json::json!({
             "schema": "xiuxian.vector.tool_search.v1",
-            "name": "git.commit",
-            "tool_name": "git.commit",
-            "description": "Commit changes",
+            "name": "demo.execute",
+            "tool_name": "demo.execute",
+            "description": "Execute a demo command",
             "input_schema": {"type": "object"},
             "score": 0.9,
             "final_score": 0.95,
             "confidence": "high",
-            "skill_name": "git",
-            "file_path": "assets/skills/git/scripts/commit.py",
+            "skill_name": "demo",
+            "file_path": "skills/demo/SKILL.md",
             "routing_keywords": ["git", "commit"],
             "intents": [],
             "category": "write"
@@ -562,8 +562,8 @@ mod tests {
     fn common_schema_rejects_legacy_keywords_field() {
         let payload = serde_json::json!({
             "schema": "xiuxian.vector.tool_search.v1",
-            "name": "git.commit",
-            "tool_name": "git.commit",
+            "name": "demo.execute",
+            "tool_name": "demo.execute",
             "keywords": ["git", "commit"]
         });
         let map = payload.as_object().expect("payload object");

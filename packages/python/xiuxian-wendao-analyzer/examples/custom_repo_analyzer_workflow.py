@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from xiuxian_wendao_analyzer import run_repo_analysis, summarize_repo_analysis
-from xiuxian_wendao_py import (
+from wendao_core_lib import (
     WendaoTransportClient,
     WendaoTransportConfig,
     WendaoTransportEndpoint,

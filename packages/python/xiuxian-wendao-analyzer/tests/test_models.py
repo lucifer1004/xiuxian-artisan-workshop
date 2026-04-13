@@ -5,15 +5,14 @@ from xiuxian_wendao_analyzer import (
     AnalyzerResultRow,
     QueryAnalysisRun,
     RepoAnalysisRun,
-    RerankAnalysisRun,
     RowsAnalysisRun,
     TableAnalysisRun,
     parse_analyzer_result_rows,
 )
-from xiuxian_wendao_py import WendaoFlightRouteQuery, WendaoRerankRequestRow, repo_search_request
+from wendao_core_lib import WendaoFlightRouteQuery, repo_search_request
 
 
-def test_analyzer_result_row_parses_linear_blend_payload() -> None:
+def test_analyzer_result_row_preserves_optional_score_fields() -> None:
     row = AnalyzerResultRow.from_mapping(
         {
             "doc_id": "doc-a",
@@ -117,36 +116,6 @@ def test_table_analysis_run_preserves_input_and_rows() -> None:
 
     assert run.table_in == "placeholder-table"
     assert [row.path for row in run.rows_out] == ["src/lib.rs", "src/main.rs"]
-
-
-def test_rerank_analysis_run_preserves_input_and_rows() -> None:
-    run = RerankAnalysisRun(
-        rows_in=(
-            WendaoRerankRequestRow(
-                doc_id="doc-a",
-                vector_score=0.2,
-                embedding=(1.0, 0.0),
-                query_embedding=(1.0, 0.0),
-            ),
-        ),
-        rows_out=tuple(
-            parse_analyzer_result_rows(
-                [
-                    {
-                        "doc_id": "doc-a",
-                        "vector_score": 0.2,
-                        "semantic_score": 1.0,
-                        "final_score": 0.72,
-                        "rank": 1,
-                    }
-                ]
-            )
-        ),
-    )
-
-    assert run.rows_in[0].doc_id == "doc-a"
-    assert run.rows_out[0].doc_id == "doc-a"
-    assert run.rows_out[0].rank == 1
 
 
 def test_analysis_summary_holds_top_row_snapshot() -> None:

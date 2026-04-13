@@ -139,6 +139,260 @@ async fn build_code_search_response_returns_hits_for_plain_modelica_plugin_repos
     Ok(())
 }
 
+#[tokio::test]
+#[serial_test::serial(rust_ast_grep)]
+async fn build_code_search_response_supports_repo_scoped_ast_grep_without_published_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_rust_repo(temp.path(), "SearchRust")?;
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "rust-live".to_string(),
+            root: Some(repo_dir.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["ast-grep".to_string()],
+        }],
+    });
+
+    let response = build_code_search_response(
+        &studio,
+        "lang:rust ast:\"fn $NAME($$$ARGS) { $$$BODY }\"".to_string(),
+        Some("rust-live"),
+        10,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("Rust ast-grep code search response: {error:?}"));
+
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("ast_match") && hit.path == "src/lib.rs"),
+        "expected ast-grep hit in code search response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type, &hit.tags))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(rust_ast_grep)]
+async fn build_code_search_response_supports_repo_scoped_generic_ast_analysis_without_pattern()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_rust_repo(temp.path(), "SearchRust")?;
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "rust-live".to_string(),
+            root: Some(repo_dir.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["ast-grep".to_string()],
+        }],
+    });
+
+    let response =
+        build_code_search_response(&studio, "scan lang:rust".to_string(), Some("rust-live"), 10)
+            .await
+            .unwrap_or_else(|error| panic!("Rust ast-grep analysis response: {error:?}"));
+
+    assert!(
+        response.hits.iter().any(|hit| {
+            hit.doc_type.as_deref() == Some("ast_match")
+                && hit.path == "src/lib.rs"
+                && hit.best_section.as_deref() == Some("fn scan_rows(dataset: &Dataset) {")
+        }),
+        "expected generic ast-grep analysis hit in code search response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type, &hit.best_section, &hit.tags))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(rust_ast_grep)]
+async fn build_code_search_response_treats_placeholder_ast_pattern_as_generic_analysis()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_rust_repo(temp.path(), "SearchRust")?;
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "rust-live".to_string(),
+            root: Some(repo_dir.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["ast-grep".to_string()],
+        }],
+    });
+
+    let response = build_code_search_response(
+        &studio,
+        "lang:rust ast:\"$PATTERN\"".to_string(),
+        Some("rust-live"),
+        10,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("Rust ast-grep placeholder response: {error:?}"));
+
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("ast_match") && hit.path == "src/lib.rs"),
+        "expected placeholder ast-grep analysis hit in code search response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type, &hit.best_section, &hit.tags))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(rust_ast_grep)]
+async fn build_code_search_response_supports_repo_scoped_ast_grep_for_html_without_published_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_html_repo(temp.path(), "SearchHtml")?;
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "html-live".to_string(),
+            root: Some(repo_dir.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["ast-grep".to_string()],
+        }],
+    });
+
+    let response = build_code_search_response(
+        &studio,
+        "lang:html ast:\"<title>$TEXT</title>\"".to_string(),
+        Some("html-live"),
+        10,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("HTML ast-grep code search response: {error:?}"));
+
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("ast_match") && hit.path == "index.html"),
+        "expected HTML ast-grep hit in code search response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type, &hit.tags))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(rust_ast_grep)]
+async fn build_code_search_response_excludes_language_owned_by_non_ast_plugin_from_generic_ast_grep()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_toml_repo(temp.path(), "OwnedToml")?;
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "toml-owned".to_string(),
+            root: Some(repo_dir.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["toml".to_string()],
+        }],
+    });
+
+    let response = build_code_search_response(
+        &studio,
+        "lang:toml ast:\"name = $VALUE\"".to_string(),
+        Some("toml-owned"),
+        10,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("owned-language ast-grep code search response: {error:?}"));
+
+    assert!(
+        response.hits.is_empty(),
+        "generic ast-grep should skip files owned by a dedicated plugin window: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type, &hit.tags))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[serial_test::serial(rust_ast_grep)]
+async fn build_code_search_response_rejects_ast_grep_without_explicit_repository_scope()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_rust_repo(temp.path(), "SearchRust")?;
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "rust-live".to_string(),
+            root: Some(repo_dir.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["ast-grep".to_string()],
+        }],
+    });
+
+    let error = match build_code_search_response(
+        &studio,
+        "ast:\"fn $NAME($$$ARGS) { $$$BODY }\"".to_string(),
+        None,
+        10,
+    )
+    .await
+    {
+        Ok(response) => panic!("repo-scopeless ast-grep query should fail: {response:?}"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.code(), "MISSING_REPOSITORY");
+    assert_eq!(
+        error.error.message,
+        "ast-grep code search requires repo:<id> or an explicit repository hint"
+    );
+    Ok(())
+}
+
 async fn publish_repository_snapshot(
     studio: &crate::gateway::studio::router::StudioState,
     repo_id: &str,
@@ -208,7 +462,7 @@ fn create_sample_julia_repo(
     fs::write(
         repo_dir.join("src").join(format!("{package_name}.jl")),
         format!(
-            r#"module {package_name}
+            r"module {package_name}
 
 export solve, Problem
 
@@ -220,7 +474,7 @@ function solve(problem::Problem)
     problem.x
 end
 end
-"#
+"
         ),
     )?;
     initialize_git_fixture(&repo_dir, package_name);
@@ -245,6 +499,65 @@ fn create_sample_modelica_repo(
     fs::write(
         repo_dir.join("Controllers").join("PI.mo"),
         format!("within {package_name}.Controllers;\nmodel PI\n  parameter Real k = 1;\nend PI;\n"),
+    )?;
+    initialize_git_fixture(&repo_dir, package_name);
+    Ok(repo_dir)
+}
+
+fn create_sample_rust_repo(
+    base: &Path,
+    package_name: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let repo_dir = base.join(package_name.to_ascii_lowercase());
+    fs::create_dir_all(repo_dir.join("src"))?;
+    fs::write(
+        repo_dir.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            package_name.to_ascii_lowercase()
+        ),
+    )?;
+    fs::write(
+        repo_dir.join("src/lib.rs"),
+        r"pub struct Dataset;
+
+fn scan_rows(dataset: &Dataset) {
+    let _ = dataset;
+}
+",
+    )?;
+    initialize_git_fixture(&repo_dir, package_name);
+    Ok(repo_dir)
+}
+
+fn create_sample_toml_repo(
+    base: &Path,
+    package_name: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let repo_dir = base.join(package_name.to_ascii_lowercase());
+    fs::create_dir_all(&repo_dir)?;
+    fs::write(
+        repo_dir.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            package_name.to_ascii_lowercase()
+        ),
+    )?;
+    initialize_git_fixture(&repo_dir, package_name);
+    Ok(repo_dir)
+}
+
+fn create_sample_html_repo(
+    base: &Path,
+    package_name: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let repo_dir = base.join(package_name.to_ascii_lowercase());
+    fs::create_dir_all(&repo_dir)?;
+    fs::write(
+        repo_dir.join("index.html"),
+        format!(
+            "<!doctype html>\n<html>\n  <head>\n    <title>{package_name}</title>\n  </head>\n  <body>\n    <main><section>search fixture</section></main>\n  </body>\n</html>\n"
+        ),
     )?;
     initialize_git_fixture(&repo_dir, package_name);
     Ok(repo_dir)

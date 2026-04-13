@@ -1,5 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
+
+use xiuxian_ast::Lang;
 
 use crate::gateway::studio::router::repository::configured_repositories;
 use crate::gateway::studio::router::sanitization::{sanitize_projects, sanitize_repo_projects};
@@ -33,12 +35,20 @@ impl StudioState {
                 Some(repository_id)
             })
             .collect();
-        let supported_languages = self
+        let plugin_languages = self
             .plugin_registry
             .plugin_ids()
             .into_iter()
             .map(ToOwned::to_owned)
-            .collect();
+            .collect::<Vec<_>>();
+        let mut supported_languages = Lang::all()
+            .iter()
+            .copied()
+            .map(Lang::as_str)
+            .map(ToOwned::to_owned)
+            .collect::<BTreeSet<_>>();
+        supported_languages.extend(plugin_languages);
+        let supported_languages = supported_languages.into_iter().collect();
 
         UiCapabilities {
             languages: supported_languages,

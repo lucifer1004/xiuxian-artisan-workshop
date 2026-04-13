@@ -32,6 +32,33 @@ pub struct RegisteredRepository {
     pub plugins: Vec<RepositoryPluginConfig>,
 }
 
+impl RegisteredRepository {
+    /// Returns the configured repo-intelligence plugins for this repository.
+    pub fn repo_intelligence_plugins(&self) -> impl Iterator<Item = &RepositoryPluginConfig> + '_ {
+        self.plugins
+            .iter()
+            .filter(|plugin| plugin.is_repo_intelligence_plugin())
+    }
+
+    /// Returns whether the repository has any repo-intelligence plugins.
+    #[must_use]
+    pub fn has_repo_intelligence_plugins(&self) -> bool {
+        self.repo_intelligence_plugins().next().is_some()
+    }
+
+    /// Returns the stable repo-intelligence plugin identifiers in sorted order.
+    #[must_use]
+    pub fn repo_intelligence_plugin_ids(&self) -> Vec<String> {
+        let mut plugin_ids = self
+            .repo_intelligence_plugins()
+            .map(|plugin| plugin.id().to_string())
+            .collect::<Vec<_>>();
+        plugin_ids.sort_unstable();
+        plugin_ids.dedup();
+        plugin_ids
+    }
+}
+
 /// Specific git reference to materialize.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -88,4 +115,20 @@ impl RepositoryPluginConfig {
             Self::Id(id) | Self::Config { id, .. } => id.as_str(),
         }
     }
+
+    /// Returns whether this plugin participates in repo-intelligence analysis.
+    #[must_use]
+    pub fn is_repo_intelligence_plugin(&self) -> bool {
+        !self.is_search_only_plugin()
+    }
+
+    /// Returns whether this plugin is search-only and should not enter repo intelligence.
+    #[must_use]
+    pub fn is_search_only_plugin(&self) -> bool {
+        matches!(self.id(), "ast-grep")
+    }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/repo_intelligence/config.rs"]
+mod tests;

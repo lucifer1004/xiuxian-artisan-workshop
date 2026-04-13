@@ -55,11 +55,11 @@ Before the LLM even sees the code, the Qianji `SecurityScanMechanism` utilizes `
 
 We completely eradicated the legacy Python graph runtime code (`research_graph.py`). The entire logic of `git_repo_analyer` is now a pure declarative `repo_analyzer.toml` array executing on Kahn's topological sorting algorithm in Rust.
 
-**The "Rust-Hard, Python-Thin" Result:**
-Python (`research_entry.py`) now acts purely as a CLI facade. It manages the CLI arguments and Git submodules (which require Python's scripting flexibility), and then simply launches `cargo run --bin qianji -- repo_analyzer.toml`.
+**The "Rust-Hard, Rust-Owned" Result:**
+The runtime path for `git_repo_analyer` is now owned directly by the Rust Qianji engine and the declarative `repo_analyzer.toml` workflow. No Python local orchestration layer remains in the skill package.
 
 **Impact:**
 
 - **Performance:** DAG routing overhead dropped from milliseconds to $<100$ nanoseconds.
 - **Stability:** 100% Rust memory safety guarantees no more `asyncio` loop crashes or deadlocks during deep repo iterations.
-- **Extensibility:** Modifying the research behavior no longer requires altering core Python code. A developer merely tweaks the `.toml` file to add new prompt chains, static checks, or fallback routing logic.
+- **Extensibility:** Modifying the research behavior no longer requires altering Python glue. A developer tweaks the `.toml` workflow to add new prompt chains, static checks, or fallback routing logic.

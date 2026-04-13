@@ -28,7 +28,7 @@ Python no longer ships:
 
 The retained Python role is narrow:
 
-1. Arrow Flight transport/client helpers in `packages/python/xiuxian-wendao-py`
+1. Arrow Flight transport/client helpers in `packages/python/wendao-core-lib`
 2. thin schema/config/test helper surfaces
 
 Operational entrypoints live in Rust under `xiuxian-daochang`.

@@ -20,13 +20,13 @@ pub(in super::super::super) async fn push_background_completion(
         JobCompletionKind::Succeeded { output } => (
             EVENT_DISCORD_COMMAND_BACKGROUND_COMPLETION_SUCCEEDED_REPLIED,
             format!(
-                "Background job `{}` completed.\n\n{}",
+                "Finished background job `{}`.\n\n{}",
                 completion.job_id, output
             ),
         ),
         JobCompletionKind::Failed { error } => (
             EVENT_DISCORD_COMMAND_BACKGROUND_COMPLETION_FAILED_REPLIED,
-            format!("Background job `{}` failed: {}", completion.job_id, error),
+            format!("Background job `{}` failed.\n{}", completion.job_id, error),
         ),
         JobCompletionKind::TimedOut { timeout_secs } => (
             EVENT_DISCORD_COMMAND_BACKGROUND_COMPLETION_TIMED_OUT_REPLIED,

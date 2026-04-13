@@ -17,15 +17,14 @@ pub(crate) async fn search_intent_sources(
         if index_state.knowledge_config_missing && index_state.symbol_config_missing {
             None
         } else {
-            Some(
-                configured_parquet_query_engine_label(&studio.search_plane).map_err(|error| {
-                    StudioApiError::internal(
-                        "INTENT_SOURCE_QUERY_ENGINE_FAILED",
-                        "Failed to resolve intent source query-engine metadata",
-                        Some(error),
-                    )
-                })?,
-            )
+            #[cfg(feature = "duckdb")]
+            {
+                Some(resolve_intent_source_query_engine_label(studio)?)
+            }
+            #[cfg(not(feature = "duckdb"))]
+            {
+                Some(resolve_intent_source_query_engine_label(studio))
+            }
         };
     let (knowledge_result, symbol_result) = tokio::join!(
         async {
@@ -64,6 +63,24 @@ pub(crate) async fn search_intent_sources(
             .then_some(shared_query_engine)
             .flatten(),
     })
+}
+
+#[cfg(all(test, feature = "duckdb"))]
+fn resolve_intent_source_query_engine_label(
+    studio: &StudioState,
+) -> Result<&'static str, StudioApiError> {
+    configured_parquet_query_engine_label(&studio.search_plane).map_err(|error| {
+        StudioApiError::internal(
+            "INTENT_SOURCE_QUERY_ENGINE_FAILED",
+            "Failed to resolve intent source query-engine metadata",
+            Some(error),
+        )
+    })
+}
+
+#[cfg(all(test, not(feature = "duckdb")))]
+fn resolve_intent_source_query_engine_label(studio: &StudioState) -> &'static str {
+    configured_parquet_query_engine_label(&studio.search_plane)
 }
 
 fn decode_intent_source_result<T>(

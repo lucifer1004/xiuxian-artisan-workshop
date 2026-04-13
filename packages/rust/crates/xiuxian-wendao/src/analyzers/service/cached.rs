@@ -46,10 +46,9 @@ pub fn analyze_registered_repository_cached_bundle_with_registry(
     cwd: &Path,
     registry: &PluginRegistry,
 ) -> Result<CachedRepositoryAnalysis, RepoIntelligenceError> {
-    if repository.plugins.is_empty() {
-        return Err(RepoIntelligenceError::MissingRequiredPlugin {
+    if !repository.has_repo_intelligence_plugins() {
+        return Err(RepoIntelligenceError::MissingRepoIntelligencePlugins {
             repo_id: repository.id.clone(),
-            plugin_id: "any".to_string(),
         });
     }
 

@@ -2,7 +2,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::analyzers::{RepoIntelligenceError, RepositoryAnalysisOutput};
+use crate::analyzers::{
+    RegisteredRepository, RepoIntelligenceError, RepositoryAnalysisOutput, RepositoryPluginConfig,
+    RepositoryRefreshPolicy,
+};
 use crate::repo_index::state::collect::await_analysis_completion;
 use crate::repo_index::state::fingerprint::{fingerprint, timestamp_now};
 use crate::repo_index::state::task::RepoIndexTaskPriority;
@@ -30,6 +33,44 @@ fn sync_repositories_only_enqueues_new_or_changed_repositories() {
     assert_eq!(first, vec!["sciml".to_string()]);
     assert!(second.is_empty());
     assert_eq!(third, vec!["sciml".to_string()]);
+}
+
+#[test]
+fn sync_repositories_skips_repositories_with_only_search_only_plugins() {
+    let coordinator = new_coordinator(SearchPlaneService::new(PathBuf::from(".")));
+    let repository = RegisteredRepository {
+        id: "sciml".to_string(),
+        path: Some(PathBuf::from("./sciml")),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("ast-grep".to_string())],
+    };
+
+    let enqueued = coordinator.sync_repositories(vec![repository]);
+
+    assert!(enqueued.is_empty());
+    assert!(coordinator.pending_repo_ids_for_test().is_empty());
+    assert_eq!(coordinator.status_response(None).total, 0);
+}
+
+#[test]
+fn sync_repositories_ignores_search_only_plugin_changes_for_fingerprint() {
+    let coordinator = new_coordinator(SearchPlaneService::new(PathBuf::from(".")));
+    let repository = repo("sciml", "./sciml");
+    let repository_with_ast_grep = RegisteredRepository {
+        plugins: vec![
+            RepositoryPluginConfig::Id("julia".to_string()),
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+        ],
+        ..repository.clone()
+    };
+
+    let first = coordinator.sync_repositories(vec![repository]);
+    let second = coordinator.sync_repositories(vec![repository_with_ast_grep]);
+
+    assert_eq!(first, vec!["sciml".to_string()]);
+    assert!(second.is_empty());
 }
 
 #[tokio::test]

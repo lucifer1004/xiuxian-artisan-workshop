@@ -16,27 +16,31 @@ pub(crate) struct LocalParquetPublicationStats {
     pub(crate) fragment_count: u64,
 }
 
+pub(crate) struct LocalParquetRewriteRequest<'a> {
+    pub(crate) corpus: SearchCorpusKind,
+    pub(crate) base_table_name: Option<&'a str>,
+    pub(crate) target_table_name: &'a str,
+    pub(crate) path_column: &'a str,
+    pub(crate) replaced_paths: &'a BTreeSet<String>,
+    pub(crate) changed_batches: &'a [LanceRecordBatch],
+    pub(crate) empty_schema: Option<Arc<LanceSchema>>,
+}
+
 pub(crate) async fn rewrite_local_publication_parquet(
     service: &SearchPlaneService,
-    corpus: SearchCorpusKind,
-    base_table_name: Option<&str>,
-    target_table_name: &str,
-    path_column: &str,
-    replaced_paths: &BTreeSet<String>,
-    changed_batches: &[LanceRecordBatch],
-    empty_schema: Option<Arc<LanceSchema>>,
+    request: LocalParquetRewriteRequest<'_>,
 ) -> Result<LocalParquetPublicationStats, VectorStoreError> {
-    let mut output_batches = if let Some(base_table_name) = base_table_name {
-        load_local_publication_parquet_batches(service, corpus, base_table_name).await?
+    let mut output_batches = if let Some(base_table_name) = request.base_table_name {
+        load_local_publication_parquet_batches(service, request.corpus, base_table_name).await?
     } else {
         Vec::new()
     };
 
-    if !replaced_paths.is_empty() {
+    if !request.replaced_paths.is_empty() {
         let mut filtered_batches = Vec::with_capacity(output_batches.len());
         for batch in &output_batches {
             if let Some(filtered) =
-                filter_batch_excluding_paths(batch, path_column, replaced_paths)?
+                filter_batch_excluding_paths(batch, request.path_column, request.replaced_paths)?
             {
                 filtered_batches.push(filtered);
             }
@@ -44,11 +48,11 @@ pub(crate) async fn rewrite_local_publication_parquet(
         output_batches = filtered_batches;
     }
 
-    output_batches.extend(lance_batches_to_engine_batches(changed_batches)?);
+    output_batches.extend(lance_batches_to_engine_batches(request.changed_batches)?);
 
-    let parquet_path = service.local_table_parquet_path(corpus, target_table_name);
+    let parquet_path = service.local_table_parquet_path(request.corpus, request.target_table_name);
     if output_batches.is_empty() {
-        if let Some(schema) = empty_schema {
+        if let Some(schema) = request.empty_schema {
             write_empty_local_publication_parquet(parquet_path.as_path(), schema)?;
         } else {
             match std::fs::remove_file(parquet_path.as_path()) {

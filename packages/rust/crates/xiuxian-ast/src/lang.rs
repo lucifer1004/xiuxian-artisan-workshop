@@ -59,6 +59,36 @@ pub enum Lang {
 }
 
 impl Lang {
+    /// Return all supported AST languages in stable order.
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
+        &[
+            Self::Python,
+            Self::Rust,
+            Self::JavaScript,
+            Self::TypeScript,
+            Self::Bash,
+            Self::Go,
+            Self::Java,
+            Self::C,
+            Self::Cpp,
+            Self::CSharp,
+            Self::Ruby,
+            Self::Swift,
+            Self::Kotlin,
+            Self::Lua,
+            Self::Php,
+            Self::Json,
+            Self::Yaml,
+            Self::Toml,
+            Self::Markdown,
+            Self::Dockerfile,
+            Self::Html,
+            Self::Css,
+            Self::Sql,
+        ]
+    }
+
     /// Get the ast-grep language string
     #[must_use]
     pub fn as_str(self) -> &'static str {

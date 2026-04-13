@@ -16,7 +16,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "xiuxian-wendao-py",
+  "wendao-core-lib",
   "xiuxian-foundation",
   "xiuxian-core",
   "polyfactory>=3.2.0",
@@ -47,7 +47,7 @@ source = "vcs"
 
 
 [tool.uv.sources]
-xiuxian-wendao-py = { workspace = true }
+wendao-core-lib = { workspace = true }
 xiuxian-foundation = { workspace = true }
 xiuxian-core = { workspace = true }
 raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
@@ -57,7 +57,7 @@ raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 members = [
   "packages/python/core",
   "packages/python/foundation",
-  "packages/python/xiuxian-wendao-py",
+  "packages/python/wendao-core-lib",
 ]
 
 
@@ -71,7 +71,7 @@ line-length = 100
 src = [
   "packages/python/core/src",
   "packages/python/foundation/src",
-  "packages/python/xiuxian-wendao-py/src",
+  "packages/python/wendao-core-lib/src",
 ]
 
 [tool.ruff.lint]
@@ -98,7 +98,7 @@ known-first-party = [
   "xiuxian_foundation",
   "xiuxian_rag",
   "xiuxian_tracer",
-  "xiuxian_wendao_py",
+  "wendao_core_lib",
 ]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
@@ -117,7 +117,7 @@ explicit_package_bases = true
 mypy_path = [
   "packages/python/core/src",
   "packages/python/foundation/src",
-  "packages/python/xiuxian-wendao-py/src",
+  "packages/python/wendao-core-lib/src",
 ]
 
 # Native TOML config for pytest 9.0+ (supports list, bool, dict types)
@@ -138,7 +138,7 @@ addopts = [
 testpaths = [
   "packages/python/core/tests",
   "packages/python/foundation/tests",
-  "packages/python/xiuxian-wendao-py/tests",
+  "packages/python/wendao-core-lib/tests",
   "scripts/channel",
   "scripts/tests",
   "assets/skills",
@@ -176,7 +176,7 @@ source = [
   "xiuxian_foundation",
   "xiuxian_rag",
   "xiuxian_tracer",
-  "xiuxian_wendao_py",
+  "wendao_core_lib",
 ]
 omit = ["*/tests/*", "*/__pycache__/*", "*/.venv/*", "*/venv/*", "*/site-packages/*"]
 branch = true

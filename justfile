@@ -758,8 +758,8 @@ agent-focus spec_path:
     @cat {{spec_path}}
     @echo ""
     @echo "=== 🏗️ RELATED CODE STRUCTURE ==="
-    @echo "packages/python/xiuxian-wendao-py modules:"
-    @ls -1 packages/python/xiuxian-wendao-py/src/xiuxian_wendao_py/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
+    @echo "packages/python/wendao-core-lib modules:"
+    @ls -1 packages/python/wendao-core-lib/src/wendao_core_lib/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
     @echo "agent/skills modules:"
     @ls -1 agent/skills/ 2>/dev/null | grep -v "^_" | sed 's/^/  - /' || echo "  No skills found"
     @echo ""
@@ -1243,10 +1243,16 @@ test-python:
     @echo "[2/6] core"
     @uv run pytest packages/python/core -q
     @echo ""
-    @echo "[3/6] xiuxian-wendao-py"
-    @uv run pytest packages/python/xiuxian-wendao-py -q
+    @echo "[3/6] wendao-core-lib"
+    @uv run pytest packages/python/wendao-core-lib -q
     @echo ""
-    @echo "[4/4] test-kit"
+    @echo "[4/6] wendao-arrow-interface"
+    @cd packages/python/wendao-arrow-interface && uv run pytest tests -q
+    @echo ""
+    @echo "[5/6] xiuxian-wendao-analyzer"
+    @cd packages/python/xiuxian-wendao-analyzer && uv run pytest tests -q
+    @echo ""
+    @echo "[6/6] test-kit"
     @uv run pytest packages/python/test-kit -q
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1448,7 +1454,7 @@ wendao-ppr-rollout-status:
 [group('validate')]
 test-parallel:
     @echo "Running tests in parallel (faster)..."
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/xiuxian-wendao-py/tests/ -n auto --tb=short
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/wendao-core-lib/tests/ -n auto --tb=short
 
 [group('validate')]
 vulture:

@@ -2,6 +2,7 @@ mod barrels;
 mod code_ast;
 #[path = "config.rs"]
 mod config;
+mod error;
 mod graph;
 mod helpers;
 

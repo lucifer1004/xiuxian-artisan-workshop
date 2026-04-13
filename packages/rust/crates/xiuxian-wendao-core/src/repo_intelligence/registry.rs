@@ -60,7 +60,7 @@ impl PluginRegistry {
         repository: &RegisteredRepository,
     ) -> Result<Vec<Arc<dyn RepoIntelligencePlugin>>, RepoIntelligenceError> {
         let mut resolved = Vec::new();
-        for plugin in &repository.plugins {
+        for plugin in repository.repo_intelligence_plugins() {
             let registered =
                 self.get(plugin.id())
                     .ok_or_else(|| RepoIntelligenceError::MissingPlugin {

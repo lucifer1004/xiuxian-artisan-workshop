@@ -6,6 +6,8 @@ xiuxian_testing::crate_test_policy_harness!();
 mod chunk;
 #[path = "unit/extract.rs"]
 mod extract;
+#[path = "unit/lang.rs"]
+mod lang;
 #[path = "unit/python.rs"]
 mod python;
 #[path = "unit/python_tree_sitter.rs"]

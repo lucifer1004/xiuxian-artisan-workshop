@@ -65,8 +65,8 @@ async def call_tool(name, arguments): ...
 Skills support **cascading template loading** with "User Overrides > Skill Defaults" pattern:
 
 ```
-assets/skills/git/                    # Skill Directory
-├── templates/                         # Skill defaults (Fallback)
+skills/example/                       # Skill Directory
+├── templates/                        # Skill defaults (Fallback)
 │   ├── commit_message.j2
 │   ├── workflow_result.j2
 │   └── error_message.j2
@@ -139,7 +139,8 @@ async def command_name(param: str) -> str:
 
 ## Hot Reload
 
-Skills are automatically reloaded when `scripts/commands.py` is modified. Mtime checks are throttled to once per 100ms.
+Skills are automatically reloaded when retained skill files change. Mtime checks
+are throttled to once per 100ms.
 
 ## Skill Metadata (SKILL.md)
 
@@ -152,7 +153,7 @@ description: Use when working with version control, commits, branches, or Git op
 metadata:
   author: xiuxian-artisan-workshop
   version: "2.0.0"
-  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/git"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/skills/git"
   routing_keywords:
     - "git"
     - "commit"
@@ -169,22 +170,20 @@ metadata:
 
 > **Code is Mechanism, Prompt is Policy**
 
-## Available Commands
+## Status
 
-| Command         | Description                              |
-| --------------- | ---------------------------------------- |
-| `git.status`    | Show working tree status                 |
-| `git.commit`    | Commit staged changes                    |
+The repository no longer maintains a Python local runtime under `skills/git`.
+Retained skill directories may be metadata-only.
 ```
 
 ## Example Skills
 
-| Skill                                           | Features                          |
-| ----------------------------------------------- | --------------------------------- |
-| [Git](./git/SKILL.md)                           | Status, commit, branch management |
-| [Filesystem](./filesystem/SKILL.md)             | Read, write, search files         |
-| [Terminal](./terminal/SKILL.md)                 | Shell command execution           |
-| [Testing Protocol](./testing_protocol/SKILL.md) | Test runner integration           |
+| Skill                                           | Features                      |
+| ----------------------------------------------- | ----------------------------- |
+| [Git](./git/SKILL.md)                           | Metadata-only retired runtime |
+| [Filesystem](./filesystem/SKILL.md)             | Read, write, search files     |
+| [Terminal](./terminal/SKILL.md)                 | Shell command execution       |
+| [Testing Protocol](./testing_protocol/SKILL.md) | Test runner integration       |
 
 ## Related Documentation
 

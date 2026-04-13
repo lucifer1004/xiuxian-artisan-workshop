@@ -4,7 +4,9 @@ use crate::search::attachment::build::{AttachmentBuildPlan, AttachmentWriteResul
 use crate::search::attachment::schema::{
     attachment_batches, attachment_schema, source_path_column,
 };
-use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
+use crate::search::local_publication_parquet::{
+    LocalParquetRewriteRequest, rewrite_local_publication_parquet,
+};
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
 
 pub(crate) async fn write_attachment_epoch(
@@ -23,13 +25,15 @@ pub(crate) async fn write_attachment_epoch(
     });
     let parquet_stats = rewrite_local_publication_parquet(
         service,
-        SearchCorpusKind::Attachment,
-        base_table_name.as_deref(),
-        table_name.as_str(),
-        source_path_column(),
-        &plan.replaced_paths,
-        &changed_batches,
-        Some(attachment_schema()),
+        LocalParquetRewriteRequest {
+            corpus: SearchCorpusKind::Attachment,
+            base_table_name: base_table_name.as_deref(),
+            target_table_name: table_name.as_str(),
+            path_column: source_path_column(),
+            replaced_paths: &plan.replaced_paths,
+            changed_batches: &changed_batches,
+            empty_schema: Some(attachment_schema()),
+        },
     )
     .await?;
     Ok(AttachmentWriteResult {

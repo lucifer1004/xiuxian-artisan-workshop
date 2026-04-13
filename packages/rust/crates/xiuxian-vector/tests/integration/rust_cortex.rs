@@ -34,13 +34,13 @@ async fn test_search_tools_basic() -> Result<()> {
         (
             "git.commit",
             "Commit changes to repository",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/scripts/commit.py", "routing_keywords": ["git", "commit", "vcs"], "input_schema": {"type": "object", "properties": {"message": {"type": "string"}}}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "commit", "vcs"], "input_schema": {"type": "object", "properties": {"message": {"type": "string"}}}}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.branch",
             "Create or list branches",
-            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/scripts/branch.py", "routing_keywords": ["git", "branch", "vcs"], "input_schema": {"type": "object", "properties": {}}}"#,
+            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "branch", "vcs"], "input_schema": {"type": "object", "properties": {}}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
@@ -82,7 +82,7 @@ async fn test_agentic_search_delegates_to_hybrid() -> Result<()> {
         (
             "git.commit",
             "Commit changes",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py"}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md"}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
@@ -168,7 +168,7 @@ async fn test_agentic_search_exact_fallback_without_keyword_index() -> Result<()
     let tools = [(
         "git.commit",
         "Commit",
-        r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py"}"#,
+        r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md"}"#,
         vec![1.0; 10],
     )];
     let ids: Vec<String> = tools.iter().map(|t| t.0.to_string()).collect();
@@ -207,7 +207,7 @@ async fn test_agentic_search_skill_name_filter() -> Result<()> {
         (
             "git.commit",
             "Commit changes",
-            r#"{"skill_name": "git", "tool_name": "commit", "category": "vcs", "type": "command", "command": "git.commit", "file_path": "git/commit.py"}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "category": "vcs", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md"}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
@@ -370,7 +370,7 @@ async fn test_load_tool_registry() -> Result<()> {
         (
             "git.commit",
             "Commit changes",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git"], "input_schema": {"type": "object"}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git"], "input_schema": {"type": "object"}}"#,
             vec![0.0; 10],
         ),
         (
@@ -480,13 +480,13 @@ async fn test_search_tools_weighted_rrf() -> Result<()> {
         (
             "git.commit",
             "Commit changes to repository",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git", "commit", "vcs"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "commit", "vcs"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.status",
             "Show working tree status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/status.py", "routing_keywords": ["git", "status", "vcs"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "status", "vcs"], "input_schema": {}}"#,
             vec![0.8, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
@@ -581,13 +581,13 @@ async fn test_search_tools_field_boosting() -> Result<()> {
         (
             "git.commit",
             "Commit changes to repository",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
             vec![0.5; 10],
         ),
         (
             "git.status",
             "Show git status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/status.py", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
             vec![0.5; 10],
         ),
     ];
@@ -669,7 +669,7 @@ async fn test_search_tools_keyword_rescue() -> Result<()> {
         (
             "git.commit",
             "Commit changes",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
@@ -908,13 +908,13 @@ async fn test_search_tools_vector_only() -> Result<()> {
         (
             "git.commit",
             "Commit changes to git",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/scripts/commit.py", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.status",
             "Show git status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/scripts/status.py", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
             vec![0.1, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -1167,7 +1167,7 @@ async fn test_search_tools_same_tool_name_different_skills() -> Result<()> {
         (
             "git.status",
             "Show git repository status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/scripts/status.py", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "skills/git/SKILL.md", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (

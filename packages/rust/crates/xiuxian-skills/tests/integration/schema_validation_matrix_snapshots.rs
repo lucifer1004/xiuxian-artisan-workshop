@@ -90,7 +90,7 @@ fn snapshot_skill_index_json_schema_contract() {
         "git".to_string(),
         "Git skill".to_string(),
         "1.0.0".to_string(),
-        "assets/skills/git".to_string(),
+        "skills/git".to_string(),
     );
 
     entry.add_tool(IndexToolEntry {

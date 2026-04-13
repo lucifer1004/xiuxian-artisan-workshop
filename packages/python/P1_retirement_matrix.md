@@ -14,11 +14,15 @@ The retirement wave is largely complete.
 
 Only these Python package responsibilities remain endorsed:
 
-1. `xiuxian-wendao-py`
+1. `wendao-core-lib`
    Canonical Python transport client for Arrow Flight and Arrow IPC fallback.
-2. `foundation`
+2. `wendao-arrow-interface`
+   Downstream-facing Arrow/Polars facade over the transport substrate.
+3. `xiuxian-wendao-analyzer`
+   Analyzer workflow package above the transport substrate.
+4. `foundation`
    Thin config/schema/logging/RAG-enhancement helpers.
-3. `core`
+5. `core`
    Minimal retained helper surfaces only.
 
 ## Already Deleted

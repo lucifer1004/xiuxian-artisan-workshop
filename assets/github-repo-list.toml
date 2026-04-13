@@ -1,0 +1,5 @@
+[link_graph.projects."lancd"]
+dirs = []
+url = "https://github.com/lance-format/lance"
+refresh = "fetch"
+plugins = ["ast-grep"]

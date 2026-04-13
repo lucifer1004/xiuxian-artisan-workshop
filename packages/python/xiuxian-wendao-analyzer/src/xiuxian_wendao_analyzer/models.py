@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping
-from xiuxian_wendao_py import (
+from wendao_core_lib import (
     WendaoFlightRouteQuery,
     WendaoRepoSearchRequest,
-    WendaoRerankRequestRow,
 )
 
 
@@ -86,14 +85,6 @@ class QueryAnalysisRun:
 
 
 @dataclass(frozen=True, slots=True)
-class RerankAnalysisRun:
-    """Typed analyzer-owned rerank pipeline result."""
-
-    rows_in: tuple[WendaoRerankRequestRow, ...]
-    rows_out: tuple[AnalyzerResultRow, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class AnalysisSummary:
     """Lightweight summary over one analyzer result set."""
 
@@ -110,7 +101,6 @@ __all__ = [
     "AnalyzerResultRow",
     "QueryAnalysisRun",
     "RepoAnalysisRun",
-    "RerankAnalysisRun",
     "RowsAnalysisRun",
     "TableAnalysisRun",
     "parse_analyzer_result_rows",

@@ -32,20 +32,9 @@ Parameters:
 
 ## Runtime
 
-- Python entrypoint: `scripts/research_entry.py`
 - Rust engine: `xiuxian-qianji`
 - Workflow manifest: `workflows/repo_analyzer.toml`
-
-## Utility Tools
-
-`scripts/research.py` provides reusable helpers:
-
-- `clone_repo`
-- `repomix_map`
-- `repomix_compress_shard`
-- `init_harvest_structure`
-- `save_shard_result`
-- `save_index`
+- No Python local orchestration layer is maintained under `skills/researcher/`.
 
 ## Output
 
@@ -65,14 +54,4 @@ Parameters:
 
 ## Testing
 
-Run researcher tests only:
-
-```bash
-uv run pytest assets/skills/researcher/tests -q
-```
-
-Run all skill tests:
-
-```bash
-omni skill test --all
-```
+Validation for this skill now lives in the Rust skill scanner and routing suites.

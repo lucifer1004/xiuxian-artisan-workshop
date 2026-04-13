@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.omni.dev/xiuxian_wendao.link_graph.stats.cache.v1.schema.json",
   "title": "xiuxian_wendao.link_graph.stats.cache.v1",
-  "description": "Persistent LinkGraph stats cache payload for xiuxian-wendao-py.",
+  "description": "Persistent LinkGraph stats cache payload for wendao-core-lib.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "source_key", "updated_at_unix", "stats"],

@@ -14,7 +14,7 @@ _PROJECT_ROOT = _SCRIPT_DIR.parent.resolve()
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
+from scripts._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 
 async def main():

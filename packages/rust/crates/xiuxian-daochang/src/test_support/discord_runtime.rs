@@ -28,6 +28,7 @@ impl DiscordForegroundInterruptController {
 /// Test-only harness for driving Discord foreground runtime scheduling.
 pub struct DiscordForegroundRuntimeHarness {
     inner: runtime::TestDiscordForegroundRuntime,
+    completion_rx: tokio::sync::mpsc::Receiver<JobCompletion>,
 }
 
 impl DiscordForegroundRuntimeHarness {
@@ -51,6 +52,17 @@ impl DiscordForegroundRuntimeHarness {
     pub async fn abort_and_drain_foreground_tasks(&mut self) {
         self.inner.abort_and_drain_foreground_tasks().await;
     }
+
+    /// Receive and forward the next background completion through the runtime.
+    pub async fn push_next_background_completion(&mut self) -> bool {
+        match self.completion_rx.recv().await {
+            Some(completion) => {
+                self.inner.push_completion(completion).await;
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// Build a test-only Discord foreground runtime harness.
@@ -62,14 +74,17 @@ pub fn build_discord_foreground_runtime(
     foreground_max_in_flight_messages: usize,
     foreground_queue_mode: ForegroundQueueMode,
 ) -> DiscordForegroundRuntimeHarness {
-    let (inner, _completion_rx) = runtime::test_build_discord_foreground_runtime(
+    let (inner, completion_rx) = runtime::test_build_discord_foreground_runtime(
         agent,
         channel,
         turn_timeout_secs,
         foreground_max_in_flight_messages,
         foreground_queue_mode,
     );
-    DiscordForegroundRuntimeHarness { inner }
+    DiscordForegroundRuntimeHarness {
+        inner,
+        completion_rx,
+    }
 }
 
 pub async fn process_discord_message(

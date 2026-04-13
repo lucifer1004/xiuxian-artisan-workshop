@@ -1,0 +1,65 @@
+"""Downstream-facing Arrow Flight facade for Wendao consumers."""
+
+from ._version import __version__
+from .protocols import (
+    AnalyzedT,
+    ArrowTableAnalyzer,
+    ArrowTableParser,
+    ParsedT,
+    RowsAnalyzer,
+)
+from .result import WendaoArrowResult
+from .session import WendaoArrowSession, connect
+from .testing import WendaoArrowCall, WendaoArrowScriptedClient
+from wendao_core_lib import (
+    SEARCH_ATTACHMENTS_ROUTE,
+    REPO_SEARCH_ROUTE,
+    RERANK_EXCHANGE_ROUTE,
+    WendaoAttachmentSearchRequest,
+    WendaoAttachmentSearchResultRow,
+    WendaoFlightRouteQuery,
+    WendaoRepoSearchRequest,
+    WendaoRepoSearchResultRow,
+    WendaoRerankRequestRow,
+    WendaoRerankResultRow,
+    WendaoTransportClient,
+    WendaoTransportConfig,
+    WendaoTransportEndpoint,
+    attachment_search_request,
+    parse_attachment_search_rows,
+    parse_repo_search_rows,
+    parse_rerank_response_rows,
+    repo_search_request,
+)
+
+__all__ = [
+    "__version__",
+    "AnalyzedT",
+    "ArrowTableAnalyzer",
+    "ArrowTableParser",
+    "ParsedT",
+    "SEARCH_ATTACHMENTS_ROUTE",
+    "REPO_SEARCH_ROUTE",
+    "RERANK_EXCHANGE_ROUTE",
+    "RowsAnalyzer",
+    "WendaoArrowResult",
+    "WendaoArrowCall",
+    "WendaoArrowScriptedClient",
+    "WendaoAttachmentSearchRequest",
+    "WendaoAttachmentSearchResultRow",
+    "WendaoArrowSession",
+    "WendaoFlightRouteQuery",
+    "WendaoRepoSearchRequest",
+    "WendaoRepoSearchResultRow",
+    "WendaoRerankRequestRow",
+    "WendaoRerankResultRow",
+    "WendaoTransportClient",
+    "WendaoTransportConfig",
+    "WendaoTransportEndpoint",
+    "attachment_search_request",
+    "connect",
+    "parse_attachment_search_rows",
+    "parse_repo_search_rows",
+    "parse_rerank_response_rows",
+    "repo_search_request",
+]

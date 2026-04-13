@@ -6,6 +6,7 @@ use std::sync::Arc;
 use xiuxian_daochang::{NativeTool, NativeToolCallContext, NativeToolRegistry};
 
 struct MockTool;
+struct AlphaTool;
 
 #[async_trait]
 impl NativeTool for MockTool {
@@ -24,6 +25,26 @@ impl NativeTool for MockTool {
         _context: &NativeToolCallContext,
     ) -> anyhow::Result<String> {
         Ok("Mock success".to_string())
+    }
+}
+
+#[async_trait]
+impl NativeTool for AlphaTool {
+    fn name(&self) -> &str {
+        "alpha.test"
+    }
+    fn description(&self) -> &str {
+        "Alphabetically earlier tool"
+    }
+    fn parameters(&self) -> serde_json::Value {
+        json!({})
+    }
+    async fn call(
+        &self,
+        _args: Option<serde_json::Value>,
+        _context: &NativeToolCallContext,
+    ) -> anyhow::Result<String> {
+        Ok("Alpha success".to_string())
     }
 }
 
@@ -58,4 +79,18 @@ fn test_registry_summary_injection() {
         summary.contains("Native Core Tools"),
         "Summary should have standard prefix"
     );
+}
+
+#[test]
+fn test_list_for_llm_is_sorted_by_tool_name() {
+    let mut registry = NativeToolRegistry::new();
+    registry.register(Arc::new(MockTool));
+    registry.register(Arc::new(AlphaTool));
+
+    let tools = registry.list_for_llm();
+    let names = tools
+        .iter()
+        .filter_map(|tool| tool.get("name").and_then(serde_json::Value::as_str))
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["alpha.test", "mock.test"]);
 }

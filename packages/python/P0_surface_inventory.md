@@ -9,13 +9,18 @@ metadata:
 ## Current State
 
 The historical inventory phase is complete. The Python tree has already been
-collapsed to the retained post-deletion surface:
+collapsed to the retained post-deletion surface plus two active consumer-layer
+packages:
 
-1. `xiuxian-wendao-py`
+1. `wendao-core-lib`
    Arrow Flight / Arrow IPC transport client and thin compatibility helpers.
-2. `foundation`
+2. `wendao-arrow-interface`
+   Downstream-facing Arrow/Polars facade over the Wendao transport substrate.
+3. `xiuxian-wendao-analyzer`
+   Analyzer workflow layer built on top of the same transport substrate.
+4. `foundation`
    Thin config, schema, logging, and RAG-enhancement helpers.
-3. `core`
+5. `core`
    Minimal retained compatibility/helpers around kernel-adjacent utilities.
 
 The old runtime-center packages are no longer present:
@@ -28,7 +33,7 @@ The old runtime-center packages are no longer present:
 
 ## Retained Public Surface
 
-### `xiuxian_wendao_py`
+### `wendao_core_lib`
 
 Retained role:
 
@@ -36,6 +41,22 @@ Retained role:
 - Arrow IPC fallback helpers
 - thin compatibility/config/runtime utilities that still serve transport
   consumers
+
+### `wendao_arrow_interface`
+
+Retained role:
+
+- downstream-facing session/result facade
+- Arrow table to Polars dataframe conversion
+- parser/analyzer composition hooks over Wendao transport results
+
+### `xiuxian_wendao_analyzer`
+
+Retained role:
+
+- analyzer strategies and ranking workflows
+- typed analysis models and run objects
+- analyzer-facing workflows above `wendao_core_lib`
 
 ### `xiuxian_foundation`
 

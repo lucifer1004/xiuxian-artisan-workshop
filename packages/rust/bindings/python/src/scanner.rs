@@ -166,7 +166,7 @@ pub fn get_skill_index_schema() -> PyResult<String> {
 /// the metadata as a PySkillMetadata object.
 ///
 /// Args:
-///   skill_path: Path to the skill directory (e.g., "assets/skills/git")
+///   skill_path: Path to the skill directory (e.g., "skills/git")
 ///
 /// Returns:
 ///   PySkillMetadata if successful, None if skill not found or invalid

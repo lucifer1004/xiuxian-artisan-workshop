@@ -19,7 +19,7 @@ pub struct UiConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiCapabilities {
-    /// Supported language identifiers reported by the gateway plugin registry.
+    /// Supported language identifiers reported by the gateway capability surface.
     #[serde(rename = "supportedLanguages")]
     pub languages: Vec<String>,
     /// Supported repository identifiers reported by the gateway UI config.

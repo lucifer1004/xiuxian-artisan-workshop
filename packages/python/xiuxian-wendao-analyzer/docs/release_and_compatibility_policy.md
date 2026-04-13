@@ -1,125 +1,61 @@
----
-type: knowledge
-metadata:
-  title: "Release and Compatibility Policy"
----
-
-# Release and Compatibility Policy
+# Release And Compatibility Policy
 
 This package is currently in beta.
 
-The goal of this policy is to state what external users may rely on today, and
-what may still change.
-
-## Current Stability Reading
-
-`xiuxian-wendao-analyzer` is implemented and usable, but not yet a frozen
-general-availability surface.
-
-The current lockable beta baseline is `0.1.1`.
-
-External users may rely on:
-
-1. the package existing as a separate dependency from `xiuxian-wendao-py`
-2. the documented workflow split between:
-   - host-backed repo-search analysis
-   - host-backed rerank exchange analysis
-   - local rerank analysis
-3. the current example entrypoints under `examples/`
-4. the current tutorial set under `docs/`
-
-External users should not yet assume:
-
-1. a stable plugin migration story
-2. a live-host custom Python analyzer rerank workflow above the current
-   transport route
-3. a permanent guarantee for every helper-shaped convenience symbol
-
 ## Compatibility Rule For This Beta
 
-During the current beta phase:
+The current lockable beta baseline is `0.2.1`.
 
-1. breaking changes to documented workflows should be treated as high-cost
-2. changes to runnable examples and tutorials must stay synchronized
-3. helper additions are allowed, but helper churn should not invalidate the
-   documented workflow entrypoints without an explicit migration note
+The compatibility promise is workflow-frozen, not helper-frozen.
 
-The practical contract is workflow-first:
+That means we protect the documented workflow set:
 
-1. prefer keeping `run_repo_analysis(...)`-based repo workflows stable
-2. prefer keeping `run_rerank_exchange_analysis(...)`-based host-backed rerank
-   workflows stable
-3. prefer keeping `run_rerank_analysis(...)`-based local workflows stable
-4. treat lower-level helper reshaping as less stable than the top-level
-   documented workflows
+1. offline repo-search authoring with `WendaoArrowSession.for_repo_search_testing(...)`
+2. scripted PDF attachment search with `WendaoArrowSession.attachment_search(...)`
+3. host-backed repo-search analysis with `run_repo_analysis(...)`
+4. host-backed repo-search analysis with a custom analyzer object
+5. generic rows, table, and query analysis over Rust-returned data
 
-For the current locked beta baseline:
+It does not mean a permanent guarantee for every helper-shaped convenience
+symbol that previously appeared during beta exploration.
 
-1. package-root version export is part of the public package boundary
-2. repo-search examples and tests remain aligned with the `schema_version=v2`
-   Flight contract
-3. host-backed rerank exchange remains aligned with the live `/rerank/flight`
-   seam owned below this package
+## Boundary Stability
 
-## What A Future Freeze Would Need
+The current beta rule is:
 
-The package should not claim broader compatibility guarantees until at least:
+1. Rust and transport packages own rerank transport behavior
+2. `xiuxian-wendao-analyzer` owns analysis over returned rows and tables
+3. analyzer-owned rerank helpers are out of scope for this beta baseline
 
-1. a release policy is written for versioning and change notes
-2. the supported public workflow entrypoints are explicitly frozen
-3. the current beta gaps are either closed or intentionally accepted
-
-## Current Beta Exit Reading
-
-The package is close to a stable beta workflow boundary, but not yet at a
-general freeze point.
-
-Exit-ready evidence already exists for:
-
-1. host-backed repo-search with built-in ranking
-2. host-backed repo-search with a custom Python analyzer
-3. host-backed rerank exchange analysis through a live `/rerank/flight` route
-4. local rerank analysis over typed rows and Arrow tables
-5. shipped examples and one-shot beta smoke coverage for the current repo paths
-6. substrate-level live `/rerank/flight` exchange through `xiuxian-wendao-py`
-
-Exit blockers still remain for:
-
-1. live-host custom Python analyzer rerank workflows
-2. plugin migration and compatibility guidance
-3. a broader public API freeze beyond workflow-first guarantees
-
-The current reading should stay workflow-first:
-
-1. beta exit should be judged by missing external workflows
-2. beta exit should not be judged by raw helper count or helper symmetry
+If you need rerank data, use the substrate-level transport in `wendao-core-lib`
+or the facade in `wendao-arrow-interface`, then analyze the returned table with
+generic analyzer helpers.
 
 ## Current Beta Freeze Reading
 
-The current beta should be treated as workflow-frozen, not helper-frozen.
+Frozen now:
 
-Frozen for this beta:
+1. the repo-search workflows documented in the README and tutorials
+2. the five shipped examples under `examples/`
+3. `AnalyzerConfig(strategy="score_rank")` as the built-in analyzer strategy
 
-1. the documented workflow split:
-   - host-backed repo-search analysis
-   - host-backed rerank exchange analysis
-   - local rerank analysis
-2. the shipped example set under `examples/`
+Not frozen now:
 
-Not frozen for this beta:
+1. new helper symmetry for every possible Wendao route
+2. future analyzer strategies beyond `score_rank`
+3. any previously exposed beta-only rerank helper that conflicts with the
+   Rust-query-first analyzer boundary
 
-1. lower-level helper reshaping below the documented workflows
-2. live-host custom Python analyzer rerank workflows
-3. plugin migration semantics
+## Current Beta Exit Reading
 
-The practical freeze rule remains narrow:
+The package is usable now, but not yet GA:
 
-1. do not widen the workflow set without a new external-user workflow gap
-2. do not add example variants just for symmetry
-3. prefer keeping the current workflow and example set coherent over growing it
+1. repo-search host-backed validation exists
+2. offline scripted authoring exists
+3. docs now align with the Rust-query-first analyzer ownership model
 
-## Related Documents
+Remaining beta gaps:
 
-1. package overview: [README.md](../README.md)
-2. onboarding tutorial: [first_analyzer_author_tutorial.md](./first_analyzer_author_tutorial.md)
-3. custom analyzer tutorial: [write_your_first_custom_analyzer.md](./write_your_first_custom_analyzer.md)
+1. no GA-level release promise yet
+2. no broad downstream compatibility window yet
+3. no guarantee that new workflows will be added without version movement

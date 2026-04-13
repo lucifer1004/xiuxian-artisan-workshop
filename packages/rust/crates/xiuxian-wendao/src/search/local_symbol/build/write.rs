@@ -2,7 +2,9 @@ use std::collections::BTreeSet;
 
 use xiuxian_vector_store::VectorStoreError;
 
-use crate::search::local_publication_parquet::rewrite_local_publication_parquet;
+use crate::search::local_publication_parquet::{
+    LocalParquetRewriteRequest, rewrite_local_publication_parquet,
+};
 use crate::search::local_symbol::build::{LocalSymbolBuildPlan, LocalSymbolWriteResult};
 use crate::search::local_symbol::schema::{local_symbol_batches, local_symbol_schema, path_column};
 use crate::search::{SearchBuildLease, SearchCorpusKind, SearchPlaneService};
@@ -36,13 +38,15 @@ pub(crate) async fn write_local_symbol_epoch(
         });
         let parquet_stats = rewrite_local_publication_parquet(
             service,
-            SearchCorpusKind::LocalSymbol,
-            base_table_name.as_deref(),
-            table_name.as_str(),
-            path_column(),
-            &partition_plan.replaced_paths,
-            &changed_batches,
-            Some(local_symbol_schema()),
+            LocalParquetRewriteRequest {
+                corpus: SearchCorpusKind::LocalSymbol,
+                base_table_name: base_table_name.as_deref(),
+                target_table_name: table_name.as_str(),
+                path_column: path_column(),
+                replaced_paths: &partition_plan.replaced_paths,
+                changed_batches: &changed_batches,
+                empty_schema: Some(local_symbol_schema()),
+            },
         )
         .await?;
         wrote_epoch_tables = true;
@@ -55,15 +59,19 @@ pub(crate) async fn write_local_symbol_epoch(
 
     if !wrote_epoch_tables {
         let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
+        let empty_paths = BTreeSet::new();
+        let empty_batches = [];
         let parquet_stats = rewrite_local_publication_parquet(
             service,
-            SearchCorpusKind::LocalSymbol,
-            None,
-            table_name.as_str(),
-            path_column(),
-            &BTreeSet::new(),
-            &[],
-            Some(local_symbol_schema()),
+            LocalParquetRewriteRequest {
+                corpus: SearchCorpusKind::LocalSymbol,
+                base_table_name: None,
+                target_table_name: table_name.as_str(),
+                path_column: path_column(),
+                replaced_paths: &empty_paths,
+                changed_batches: &empty_batches,
+                empty_schema: Some(local_symbol_schema()),
+            },
         )
         .await?;
         row_count = parquet_stats.row_count;

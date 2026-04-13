@@ -55,8 +55,9 @@ result formatting. The preferred tool argument is `query`; the legacy `request`
 field remains accepted for compatibility. The legacy zhenfa bridge
 intentionally does not register `wendao.search`; direct gateway native-tool
 dispatch is the only supported ownership path. Native-only agents advertise
-both `wendao.search` and `knowledge.search` to the LLM even when no external
-tool runtime is configured, so real tool-calling does not depend on
+both `knowledge.search` and `wendao.search` to the LLM in deterministic name
+order, with `knowledge.search` as the preferred knowledge-facing entrypoint,
+even when no external tool runtime is configured, so real tool-calling does not depend on
 MCP/external-tool startup.
 
 ## Discord Mention Policy
@@ -82,6 +83,11 @@ Runtime control uses the current recipient channel:
 
 Slash interactions and slash-style managed commands remain usable even when
 mention gating is enabled.
+
+Foreground Discord turns that exceed the runtime timeout are automatically
+requeued as background jobs. Daochang replies with a short background-job
+handoff immediately and posts the completion back into the same channel when
+the background run finishes.
 
 ## Reusing LiteLLM (no extra bridge)
 

@@ -175,7 +175,7 @@ async fn test_create_scalar_index_after_add_documents() -> Result<()> {
     let metadata1 = serde_json::json!({
         "skill_name": "git",
         "category": "vcs",
-        "file_path": "git/commit.py",
+        "file_path": "skills/git/SKILL.md",
         "tool_name": "commit",
     })
     .to_string();

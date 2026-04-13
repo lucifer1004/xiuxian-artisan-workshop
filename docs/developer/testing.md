@@ -19,9 +19,11 @@ Retained Python testing covers only:
 
 1. `packages/python/foundation/tests`
 2. `packages/python/core/tests`
-3. `packages/python/xiuxian-wendao-py/tests`
-4. `scripts/channel/test_*.py`
-5. `scripts/tests/test_*.py`
+3. `packages/python/wendao-core-lib/tests`
+4. `packages/python/wendao-arrow-interface/tests`
+5. `packages/python/xiuxian-wendao-analyzer/tests`
+6. `scripts/channel/test_*.py`
+7. `scripts/tests/test_*.py`
 
 Python agent/skill/runtime test suites are gone with the deleted packages.
 
@@ -34,7 +36,9 @@ just test-python
 # Direct package-level runs
 uv run pytest packages/python/foundation/tests
 uv run pytest packages/python/core/tests
-uv run pytest packages/python/xiuxian-wendao-py/tests
+uv run pytest packages/python/wendao-core-lib/tests
+cd packages/python/wendao-arrow-interface && uv run pytest tests
+cd packages/python/xiuxian-wendao-analyzer && uv run pytest tests
 uv run pytest scripts/channel
 uv run pytest scripts/tests
 
