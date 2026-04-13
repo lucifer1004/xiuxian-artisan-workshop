@@ -80,6 +80,21 @@ class WendaoArrowSession:
 
     client: WendaoArrowSessionClient
 
+    @staticmethod
+    def _query_from_route_input(
+        route_or_query: str | WendaoFlightRouteQuery,
+        *,
+        ticket: str | bytes | None = None,
+    ) -> WendaoFlightRouteQuery:
+        if isinstance(route_or_query, WendaoFlightRouteQuery):
+            if ticket is not None:
+                raise ValueError(
+                    "ticket must not be passed separately when route_or_query is a "
+                    "WendaoFlightRouteQuery"
+                )
+            return route_or_query
+        return WendaoFlightRouteQuery(route=route_or_query, ticket=ticket)
+
     @classmethod
     def from_endpoint(
         cls,
@@ -146,62 +161,115 @@ class WendaoArrowSession:
     def for_repo_search_testing(
         cls,
         rows: pa.Table | Sequence[Mapping[str, object]],
+        *,
+        request: WendaoRepoSearchRequest | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowSession":
         """Build one scripted session for the stable repo-search workflow."""
 
         from .testing import WendaoArrowScriptedClient
 
-        return cls.from_client(WendaoArrowScriptedClient.for_repo_search_rows(rows))
+        return cls.from_client(
+            WendaoArrowScriptedClient.for_repo_search_rows(
+                rows,
+                request=request,
+                extra_metadata=extra_metadata,
+            )
+        )
 
     @classmethod
     def for_attachment_search_testing(
         cls,
         rows: pa.Table | Sequence[Mapping[str, object]],
+        *,
+        request: WendaoAttachmentSearchRequest | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowSession":
         """Build one scripted session for the stable attachment-search workflow."""
 
         from .testing import WendaoArrowScriptedClient
 
-        return cls.from_client(WendaoArrowScriptedClient.for_attachment_search_rows(rows))
+        return cls.from_client(
+            WendaoArrowScriptedClient.for_attachment_search_rows(
+                rows,
+                request=request,
+                extra_metadata=extra_metadata,
+            )
+        )
 
     @classmethod
     def for_query_testing(
         cls,
         route: str,
         rows: pa.Table | Sequence[Mapping[str, object]],
+        *,
+        ticket: str | bytes | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowSession":
         """Build one scripted session for a single generic query route."""
 
         from .testing import WendaoArrowScriptedClient
 
-        return cls.from_client(WendaoArrowScriptedClient.for_query_route(route, rows))
+        return cls.from_client(
+            WendaoArrowScriptedClient().add_query_response(
+                route,
+                rows,
+                ticket=ticket,
+                extra_metadata=extra_metadata,
+            )
+        )
 
     @classmethod
     def for_rerank_response_testing(
         cls,
         rows: pa.Table | Sequence[Mapping[str, object]],
+        *,
+        request_rows: Sequence[WendaoRerankRequestRow] | None = None,
+        top_k: int | None = None,
+        min_final_score: float | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowSession":
         """Build one scripted session for the stable rerank workflow."""
 
         from .testing import WendaoArrowScriptedClient
 
-        return cls.from_client(WendaoArrowScriptedClient.for_rerank_response_rows(rows))
+        return cls.from_client(
+            WendaoArrowScriptedClient.for_rerank_response_rows(
+                rows,
+                request_rows=request_rows,
+                top_k=top_k,
+                min_final_score=min_final_score,
+                extra_metadata=extra_metadata,
+            )
+        )
 
     @classmethod
     def for_exchange_testing(
         cls,
         route: str,
         rows: pa.Table | Sequence[Mapping[str, object]],
+        *,
+        ticket: str | bytes | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
+        request_table: pa.Table | Sequence[Mapping[str, object]] | None = None,
     ) -> "WendaoArrowSession":
         """Build one scripted session for a single generic exchange route."""
 
         from .testing import WendaoArrowScriptedClient
 
-        return cls.from_client(WendaoArrowScriptedClient.for_exchange_route(route, rows))
+        return cls.from_client(
+            WendaoArrowScriptedClient().add_exchange_response(
+                route,
+                rows,
+                ticket=ticket,
+                extra_metadata=extra_metadata,
+                request_table=request_table,
+            )
+        )
 
     def query(
         self,
-        route: str,
+        route_or_query: str | WendaoFlightRouteQuery,
         *,
         ticket: str | bytes | None = None,
         extra_metadata: Mapping[str, str] | None = None,
@@ -209,7 +277,7 @@ class WendaoArrowSession:
     ) -> WendaoArrowResult:
         """Read one query result table from a typed Wendao Flight route."""
 
-        query = WendaoFlightRouteQuery(route=route, ticket=ticket)
+        query = self._query_from_route_input(route_or_query, ticket=ticket)
         table = self.client.read_query_table(
             query,
             extra_metadata=extra_metadata,
@@ -223,7 +291,7 @@ class WendaoArrowSession:
 
     def exchange(
         self,
-        route: str,
+        route_or_query: str | WendaoFlightRouteQuery,
         table: pa.Table,
         *,
         ticket: str | bytes | None = None,
@@ -232,7 +300,7 @@ class WendaoArrowSession:
     ) -> WendaoArrowResult:
         """Exchange one Arrow table through a typed Wendao Flight route."""
 
-        query = WendaoFlightRouteQuery(route=route, ticket=ticket)
+        query = self._query_from_route_input(route_or_query, ticket=ticket)
         response = self.client.exchange_query_table(
             query,
             table,

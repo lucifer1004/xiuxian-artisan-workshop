@@ -7082,7 +7082,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 [[package]]
 name = "litellm-rs"
 version = "0.4.16"
-source = "git+https://github.com/majiayu000/litellm-rs?rev=63f0c2b6faf9e38d7a43c76e0a91550c7c69f2e5#63f0c2b6faf9e38d7a43c76e0a91550c7c69f2e5"
+source = "git+https://github.com/majiayu000/litellm-rs?rev=22b71f5bf640873e8ad8beaf62756a485f224315#22b71f5bf640873e8ad8beaf62756a485f224315"
 dependencies = [
  "arc-swap",
  "async-stream",

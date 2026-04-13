@@ -1,4 +1,4 @@
-[link_graph.projects."lancd"]
+[link_graph.projects."lance"]
 dirs = []
 url = "https://github.com/lance-format/lance"
 refresh = "fetch"

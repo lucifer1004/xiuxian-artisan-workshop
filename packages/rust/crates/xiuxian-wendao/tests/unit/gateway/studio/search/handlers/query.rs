@@ -1,7 +1,10 @@
 use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind, SymbolSearchHit};
 use crate::gateway::studio::search::handlers::code_search::{
     helpers::symbol_search_hit_to_search_hit,
-    query::{infer_repo_hint_from_query, repo_search_result_limits, repo_wide_code_search_timeout},
+    query::{
+        infer_repo_hint_from_query, infer_repo_hint_from_repositories,
+        query_uses_redundant_repo_seed, repo_search_result_limits, repo_wide_code_search_timeout,
+    },
 };
 use crate::gateway::studio::search::handlers::test_prelude::SearchQuery;
 use crate::parsers::search::repo_code_query::parse_repo_code_search_query;
@@ -63,6 +66,38 @@ fn infer_repo_hint_from_query_ignores_ambiguous_normalized_repo_seed() {
     let inferred = infer_repo_hint_from_query(&parsed, ["SciMLBase.jl", "scimlbase"]);
 
     assert_eq!(inferred, None);
+}
+
+#[test]
+fn infer_repo_hint_from_repositories_matches_url_basename_alias() {
+    let parsed = parse_repo_code_search_query("lance");
+    let repositories = vec![crate::analyzers::RegisteredRepository {
+        id: "lancd".to_string(),
+        path: None,
+        url: Some("https://github.com/lance-format/lance".to_string()),
+        git_ref: None,
+        refresh: crate::analyzers::RepositoryRefreshPolicy::Fetch,
+        plugins: vec![],
+    }];
+
+    let inferred = infer_repo_hint_from_repositories(&parsed, repositories.as_slice());
+
+    assert_eq!(inferred.as_deref(), Some("lancd"));
+}
+
+#[test]
+fn query_uses_redundant_repo_seed_for_structural_repo_alias_query() {
+    let parsed = parse_repo_code_search_query("lance ast:\"$PATTERN\" lang:rust");
+    let repository = crate::analyzers::RegisteredRepository {
+        id: "lancd".to_string(),
+        path: None,
+        url: Some("https://github.com/lance-format/lance".to_string()),
+        git_ref: None,
+        refresh: crate::analyzers::RepositoryRefreshPolicy::Fetch,
+        plugins: vec![],
+    };
+
+    assert!(query_uses_redundant_repo_seed(&parsed, &repository));
 }
 
 #[test]

@@ -46,11 +46,11 @@ packages/python/
   core/                      minimal retained helper surface
 ```
 
-The root workspace is explicitly limited to the retained substrate packages
-`wendao-core-lib`, `foundation`, and `core`. Consumer-facing facade packages
-may still live beside them when they compose, rather than replace, the
-retained transport boundary. `wendao-arrow-interface` and
-`xiuxian-wendao-analyzer` are active consumer packages in that adjacent layer.
+The root workspace now includes the retained substrate packages
+`wendao-core-lib`, `foundation`, and `core`, plus the public consumer facade
+`wendao-arrow-interface`. The beta analyzer package
+`xiuxian-wendao-analyzer` remains an active adjacent consumer package rather
+than part of the root default workspace surface.
 
 Retained Python code now ships under direct top-level packages:
 

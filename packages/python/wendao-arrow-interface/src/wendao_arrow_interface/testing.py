@@ -53,11 +53,62 @@ class WendaoArrowCall:
     top_k: int | None = None
     min_final_score: float | None = None
 
+    @property
+    def effective_metadata(self) -> dict[str, str]:
+        """Return the recorded effective Flight metadata for this call."""
+
+        return dict(self.extra_metadata or {})
+
+    def derived_metadata(self) -> dict[str, str]:
+        """Derive the expected effective metadata from the call contract."""
+
+        if self.operation == "repo_search":
+            if self.request is None:
+                raise ValueError("repo_search calls require one request to derive metadata")
+            return repo_search_metadata(self.request)
+        if self.operation == "attachment_search":
+            if self.request is None:
+                raise ValueError("attachment_search calls require one request to derive metadata")
+            return attachment_search_metadata(self.request)
+        if self.operation == "rerank":
+            return _rerank_call_metadata(
+                embedding_dimension=self.embedding_dimension,
+                top_k=self.top_k,
+                min_final_score=self.min_final_score,
+            )
+        return self.effective_metadata
+
+    def metadata_matches_contract(self) -> bool:
+        """Return whether the recorded metadata matches the call contract."""
+
+        return self.effective_metadata == self.derived_metadata()
+
+    def assert_metadata_matches_contract(self) -> None:
+        """Raise when the recorded metadata diverges from the call contract."""
+
+        expected = self.derived_metadata()
+        actual = self.effective_metadata
+        if actual != expected:
+            raise AssertionError(
+                f"recorded metadata mismatch for {self.operation!r} on route {self.route!r}: "
+                f"expected {expected!r}, got {actual!r}"
+            )
+
 
 @dataclass(slots=True)
 class _QueuedTypedResponse:
     table: pa.Table
     expected_request: WendaoRepoSearchRequest | WendaoAttachmentSearchRequest | None = None
+    expected_extra_metadata: Mapping[str, str] | None = None
+
+
+@dataclass(slots=True)
+class _QueuedGenericResponse:
+    route: str
+    table: pa.Table
+    expected_ticket: str | bytes | None = None
+    expected_extra_metadata: Mapping[str, str] | None = None
+    expected_request_table: pa.Table | None = None
 
 
 @dataclass(slots=True)
@@ -67,6 +118,7 @@ class _QueuedRerankResponse:
     expected_embedding_dimension: int | None = None
     expected_top_k: int | None = None
     expected_min_final_score: float | None = None
+    expected_extra_metadata: Mapping[str, str] | None = None
 
 
 class WendaoArrowScriptedClient:
@@ -87,14 +139,14 @@ class WendaoArrowScriptedClient:
         attachment_search_table: TableLike | None = None,
         rerank_table: TableLike | None = None,
     ) -> None:
-        self.query_tables = {
-            _normalize_route(route): _coerce_table(table)
-            for route, table in (query_tables or {}).items()
-        }
-        self.exchange_tables = {
-            _normalize_route(route): _coerce_table(table)
-            for route, table in (exchange_tables or {}).items()
-        }
+        self.query_tables = {}
+        self.exchange_tables = {}
+        self._query_responses: list[_QueuedGenericResponse] = []
+        self._exchange_responses: list[_QueuedGenericResponse] = []
+        for route, table in (query_tables or {}).items():
+            self.add_query_response(route, table)
+        for route, table in (exchange_tables or {}).items():
+            self.add_exchange_response(route, table)
         self._repo_search_responses: list[_QueuedTypedResponse] = []
         self._attachment_search_responses: list[_QueuedTypedResponse] = []
         self._rerank_responses: list[_QueuedRerankResponse] = []
@@ -111,13 +163,22 @@ class WendaoArrowScriptedClient:
         table_or_rows: TableLike,
         *,
         request: WendaoRepoSearchRequest | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowScriptedClient":
         """Queue one typed repo-search response, optionally tied to one request."""
 
+        expected_extra_metadata = (
+            dict(extra_metadata)
+            if extra_metadata is not None
+            else None
+            if request is None
+            else repo_search_metadata(request)
+        )
         self._repo_search_responses.append(
             _QueuedTypedResponse(
                 table=_coerce_table(table_or_rows),
                 expected_request=request,
+                expected_extra_metadata=expected_extra_metadata,
             )
         )
         return self
@@ -127,13 +188,72 @@ class WendaoArrowScriptedClient:
         table_or_rows: TableLike,
         *,
         request: WendaoAttachmentSearchRequest | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowScriptedClient":
         """Queue one typed attachment-search response, optionally tied to one request."""
 
+        expected_extra_metadata = (
+            dict(extra_metadata)
+            if extra_metadata is not None
+            else None
+            if request is None
+            else attachment_search_metadata(request)
+        )
         self._attachment_search_responses.append(
             _QueuedTypedResponse(
                 table=_coerce_table(table_or_rows),
                 expected_request=request,
+                expected_extra_metadata=expected_extra_metadata,
+            )
+        )
+        return self
+
+    def add_query_response(
+        self,
+        route: str,
+        table_or_rows: TableLike,
+        *,
+        ticket: str | bytes | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
+    ) -> "WendaoArrowScriptedClient":
+        """Queue one generic query response, optionally tied to ticket or metadata."""
+
+        normalized_route = _normalize_route(route)
+        table = _coerce_table(table_or_rows)
+        self.query_tables[normalized_route] = table
+        self._query_responses.append(
+            _QueuedGenericResponse(
+                route=normalized_route,
+                table=table,
+                expected_ticket=ticket,
+                expected_extra_metadata=None if extra_metadata is None else dict(extra_metadata),
+            )
+        )
+        return self
+
+    def add_exchange_response(
+        self,
+        route: str,
+        table_or_rows: TableLike,
+        *,
+        ticket: str | bytes | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
+        request_table: pa.Table | Sequence[Mapping[str, object]] | None = None,
+    ) -> "WendaoArrowScriptedClient":
+        """Queue one generic exchange response, optionally tied to request details."""
+
+        normalized_route = _normalize_route(route)
+        table = _coerce_table(table_or_rows)
+        self.exchange_tables[normalized_route] = table
+        self._exchange_responses.append(
+            _QueuedGenericResponse(
+                route=normalized_route,
+                table=table,
+                expected_ticket=ticket,
+                expected_extra_metadata=None if extra_metadata is None else dict(extra_metadata),
+                expected_request_table=(
+                    None if request_table is None else _coerce_table(request_table)
+                ),
             )
         )
         return self
@@ -145,6 +265,7 @@ class WendaoArrowScriptedClient:
         request_rows: Sequence[WendaoRerankRequestRow] | None = None,
         top_k: int | None = None,
         min_final_score: float | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
     ) -> "WendaoArrowScriptedClient":
         """Queue one typed rerank response, optionally tied to one request batch."""
 
@@ -154,6 +275,17 @@ class WendaoArrowScriptedClient:
             rows = list(request_rows)
             expected_request_table = build_rerank_request_table(rows)
             expected_embedding_dimension = rerank_embedding_dimension(rows)
+        expected_extra_metadata = (
+            dict(extra_metadata)
+            if extra_metadata is not None
+            else _rerank_call_metadata(
+                embedding_dimension=expected_embedding_dimension,
+                top_k=top_k,
+                min_final_score=min_final_score,
+            )
+            if (request_rows is not None or top_k is not None or min_final_score is not None)
+            else None
+        )
         self._rerank_responses.append(
             _QueuedRerankResponse(
                 table=_coerce_table(table_or_rows),
@@ -161,12 +293,19 @@ class WendaoArrowScriptedClient:
                 expected_embedding_dimension=expected_embedding_dimension,
                 expected_top_k=top_k,
                 expected_min_final_score=min_final_score,
+                expected_extra_metadata=expected_extra_metadata,
             )
         )
         return self
 
     @classmethod
-    def for_repo_search_rows(cls, rows: TableLike) -> "WendaoArrowScriptedClient":
+    def for_repo_search_rows(
+        cls,
+        rows: TableLike,
+        *,
+        request: WendaoRepoSearchRequest | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
+    ) -> "WendaoArrowScriptedClient":
         """Build one scripted client for the stable repo-search response shape.
 
         The same rows are registered on both the typed repo-search helper path
@@ -174,48 +313,67 @@ class WendaoArrowScriptedClient:
         one fixture across the session facade and analyzer runtime.
         """
 
-        return cls(
-            query_tables={REPO_SEARCH_ROUTE: rows},
-            repo_search_table=rows,
+        return cls(query_tables={REPO_SEARCH_ROUTE: rows}).add_repo_search_response(
+            rows,
+            request=request,
+            extra_metadata=extra_metadata,
         )
 
     @classmethod
-    def for_attachment_search_rows(cls, rows: TableLike) -> "WendaoArrowScriptedClient":
+    def for_attachment_search_rows(
+        cls,
+        rows: TableLike,
+        *,
+        request: WendaoAttachmentSearchRequest | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
+    ) -> "WendaoArrowScriptedClient":
         """Build one scripted client for the stable attachment-search response shape.
 
         The same rows are registered on both the typed attachment-search helper
         path and the generic route-backed query path.
         """
 
-        return cls(
-            query_tables={SEARCH_ATTACHMENTS_ROUTE: rows},
-            attachment_search_table=rows,
+        return cls(query_tables={SEARCH_ATTACHMENTS_ROUTE: rows}).add_attachment_search_response(
+            rows,
+            request=request,
+            extra_metadata=extra_metadata,
         )
 
     @classmethod
     def for_query_route(cls, route: str, rows: TableLike) -> "WendaoArrowScriptedClient":
         """Build one scripted client for a single generic query route."""
 
-        return cls(query_tables={route: rows})
+        return cls().add_query_response(route, rows)
 
     @classmethod
-    def for_rerank_response_rows(cls, rows: TableLike) -> "WendaoArrowScriptedClient":
+    def for_rerank_response_rows(
+        cls,
+        rows: TableLike,
+        *,
+        request_rows: Sequence[WendaoRerankRequestRow] | None = None,
+        top_k: int | None = None,
+        min_final_score: float | None = None,
+        extra_metadata: Mapping[str, str] | None = None,
+    ) -> "WendaoArrowScriptedClient":
         """Build one scripted client for the stable rerank response shape.
 
         The same rows are registered on both the typed rerank helper path and
         the generic route-backed exchange path.
         """
 
-        return cls(
-            exchange_tables={RERANK_EXCHANGE_ROUTE: rows},
-            rerank_table=rows,
+        return cls(exchange_tables={RERANK_EXCHANGE_ROUTE: rows}).add_rerank_response(
+            rows,
+            request_rows=request_rows,
+            top_k=top_k,
+            min_final_score=min_final_score,
+            extra_metadata=extra_metadata,
         )
 
     @classmethod
     def for_exchange_route(cls, route: str, rows: TableLike) -> "WendaoArrowScriptedClient":
         """Build one scripted client for a single generic exchange route."""
 
-        return cls(exchange_tables={route: rows})
+        return cls().add_exchange_response(route, rows)
 
     def read_query_table(
         self,
@@ -234,7 +392,13 @@ class WendaoArrowScriptedClient:
                 connect_kwargs=dict(connect_kwargs),
             )
         )
-        return self._require_registered_table(self.query_tables, route, "query")
+        return self._dequeue_generic_response(
+            self._query_responses,
+            operation="query",
+            route=route,
+            ticket=query.ticket,
+            extra_metadata=dict(extra_metadata or {}),
+        )
 
     def exchange_query_table(
         self,
@@ -255,7 +419,14 @@ class WendaoArrowScriptedClient:
                 connect_kwargs=dict(connect_kwargs),
             )
         )
-        return self._require_registered_table(self.exchange_tables, route, "exchange")
+        return self._dequeue_generic_response(
+            self._exchange_responses,
+            operation="exchange",
+            route=route,
+            ticket=query.ticket,
+            extra_metadata=dict(extra_metadata or {}),
+            request_table=table,
+        )
 
     def read_repo_search_table(
         self,
@@ -277,6 +448,7 @@ class WendaoArrowScriptedClient:
             operation="repo_search",
             route=REPO_SEARCH_ROUTE,
             request=request,
+            extra_metadata=extra_metadata,
         )
 
     def read_attachment_search_table(
@@ -299,6 +471,7 @@ class WendaoArrowScriptedClient:
             operation="attachment_search",
             route=SEARCH_ATTACHMENTS_ROUTE,
             request=request,
+            extra_metadata=extra_metadata,
         )
 
     def exchange_rerank_table(
@@ -332,6 +505,7 @@ class WendaoArrowScriptedClient:
             embedding_dimension=embedding_dimension,
             top_k=top_k,
             min_final_score=min_final_score,
+            extra_metadata=extra_metadata,
         )
 
     def exchange_rerank_result_rows(
@@ -372,6 +546,7 @@ class WendaoArrowScriptedClient:
         operation: str,
         route: str,
         request: WendaoRepoSearchRequest | WendaoAttachmentSearchRequest,
+        extra_metadata: Mapping[str, str],
     ) -> pa.Table:
         if not queued_responses:
             raise LookupError(f"no scripted {operation} response registered for route {route!r}")
@@ -381,6 +556,52 @@ class WendaoArrowScriptedClient:
                 f"scripted {operation} request mismatch for route {route!r}: "
                 f"expected {response.expected_request!r}, got {request!r}"
             )
+        if response.expected_extra_metadata is not None and dict(
+            response.expected_extra_metadata
+        ) != dict(extra_metadata):
+            raise AssertionError(
+                f"scripted {operation} metadata mismatch for route {route!r}: "
+                f"expected {dict(response.expected_extra_metadata)!r}, got {dict(extra_metadata)!r}"
+            )
+        queued_responses.pop(0)
+        return response.table
+
+    @staticmethod
+    def _dequeue_generic_response(
+        queued_responses: list[_QueuedGenericResponse],
+        *,
+        operation: str,
+        route: str,
+        ticket: str | bytes | None,
+        extra_metadata: Mapping[str, str],
+        request_table: pa.Table | None = None,
+    ) -> pa.Table:
+        if not queued_responses:
+            raise LookupError(f"no scripted {operation} response registered for route {route!r}")
+        response = queued_responses[0]
+        if response.route != route:
+            raise AssertionError(
+                f"scripted {operation} route mismatch: expected {response.route!r}, got {route!r}"
+            )
+        if response.expected_ticket is not None and response.expected_ticket != ticket:
+            raise AssertionError(
+                f"scripted {operation} ticket mismatch for route {route!r}: "
+                f"expected {response.expected_ticket!r}, got {ticket!r}"
+            )
+        if response.expected_extra_metadata is not None and dict(
+            response.expected_extra_metadata
+        ) != dict(extra_metadata):
+            raise AssertionError(
+                f"scripted {operation} metadata mismatch for route {route!r}: "
+                f"expected {dict(response.expected_extra_metadata)!r}, got {dict(extra_metadata)!r}"
+            )
+        if response.expected_request_table is not None:
+            if request_table is None or not _tables_equal(
+                response.expected_request_table, request_table
+            ):
+                raise AssertionError(
+                    f"scripted {operation} request table mismatch for route {route!r}"
+                )
         queued_responses.pop(0)
         return response.table
 
@@ -391,6 +612,7 @@ class WendaoArrowScriptedClient:
         embedding_dimension: int | None,
         top_k: int | None,
         min_final_score: float | None,
+        extra_metadata: Mapping[str, str],
     ) -> pa.Table:
         if not self._rerank_responses:
             raise LookupError(
@@ -426,6 +648,13 @@ class WendaoArrowScriptedClient:
                 "scripted rerank min_final_score mismatch for route "
                 f"{RERANK_EXCHANGE_ROUTE!r}: expected "
                 f"{response.expected_min_final_score!r}, got {min_final_score!r}"
+            )
+        if response.expected_extra_metadata is not None and dict(
+            response.expected_extra_metadata
+        ) != dict(extra_metadata):
+            raise AssertionError(
+                f"scripted rerank metadata mismatch for route {RERANK_EXCHANGE_ROUTE!r}: "
+                f"expected {dict(response.expected_extra_metadata)!r}, got {dict(extra_metadata)!r}"
             )
         self._rerank_responses.pop(0)
         return response.table

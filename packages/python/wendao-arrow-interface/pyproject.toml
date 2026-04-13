@@ -1,6 +1,6 @@
 [project]
 name = "wendao-arrow-interface"
-version = "0.2.0"
+version = "0.2.4"
 description = "Downstream-facing Arrow Flight facade for Wendao Python consumers"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,4 +31,4 @@ packages = ["src/wendao_arrow_interface"]
 package = true
 
 [tool.uv.sources]
-wendao-core-lib = { path = "../wendao-core-lib" }
+wendao-core-lib = { workspace = true }

@@ -50,10 +50,22 @@ Current testing surface:
    - `WendaoArrowSession.for_exchange_testing(...)`
    - `WendaoArrowScriptedClient.for_query_route(...)`
    - `WendaoArrowScriptedClient.for_exchange_route(...)`
+   - `WendaoArrowScriptedClient.add_query_response(...)`
+   - `WendaoArrowScriptedClient.add_exchange_response(...)`
 6. advanced typed tests can queue multiple typed responses through:
    - `WendaoArrowScriptedClient.add_repo_search_response(...)`
    - `WendaoArrowScriptedClient.add_attachment_search_response(...)`
    - `WendaoArrowScriptedClient.add_rerank_response(...)`
+7. the facade itself re-exports `repo_search_metadata(...)`,
+   `attachment_search_metadata(...)`, and `rerank_request_metadata(...)` so
+   tests can assert effective Flight headers without dropping back to
+   `wendao-core-lib`
+8. recorded `WendaoArrowCall` values also expose `effective_metadata`,
+   `derived_metadata()`, and `assert_metadata_matches_contract()` for
+   contract-aware assertions that stay entirely on the facade object
+9. typed scripted registrations can also accept explicit `extra_metadata=...`
+   expectations, so repo, attachment, and rerank helpers can fail immediately
+   when effective headers drift from the intended contract
 
 Boundary rules:
 
@@ -191,15 +203,22 @@ session = WendaoArrowSession.from_client(scripted)
 repo_result = session.repo_search("cache policy", limit=5)
 
 assert repo_result.parse_repo_search_rows()[0].doc_id == "doc-1"
-assert scripted.calls[0].request.query_text == "cache policy"
+call = scripted.calls[0]
+assert call.request is not None
+assert call.request.query_text == "cache policy"
+assert call.effective_metadata == call.derived_metadata()
+call.assert_metadata_matches_contract()
 ```
 
 If one typed route needs different responses across calls, queue them directly
 on the scripted client:
 
 ```python
-from wendao_arrow_interface import WendaoArrowScriptedClient, WendaoArrowSession
-from wendao_core_lib import attachment_search_request
+from wendao_arrow_interface import (
+    WendaoArrowScriptedClient,
+    WendaoArrowSession,
+    attachment_search_request,
+)
 
 scripted = WendaoArrowScriptedClient()
 scripted.add_attachment_search_response(
@@ -218,6 +237,76 @@ second = session.attachment_search("roadmap", ext_filters=("png",), kind_filters
 assert first.to_rows()[0]["attachmentName"] == "design-review.pdf"
 assert second.to_rows()[0]["attachmentName"] == "roadmap.png"
 assert scripted.calls[0].extra_metadata is not None
+```
+
+If you want the typed fixture itself to fail when metadata drifts, pass an
+explicit expectation during registration:
+
+```python
+from wendao_arrow_interface import (
+    WendaoArrowScriptedClient,
+    WendaoArrowSession,
+    attachment_search_metadata,
+    attachment_search_request,
+)
+
+request = attachment_search_request("architecture", ext_filters=("pdf",), kind_filters=("pdf",))
+scripted = WendaoArrowScriptedClient().add_attachment_search_response(
+    [{"attachmentName": "design-review.pdf", "attachmentExt": "pdf", "kind": "pdf"}],
+    request=request,
+    extra_metadata=attachment_search_metadata(request),
+)
+
+session = WendaoArrowSession.from_client(scripted)
+session.attachment_search(request)
+```
+
+Custom generic routes can now be queued the same way, including expected
+metadata or request-table checks:
+
+```python
+from wendao_arrow_interface import WendaoArrowScriptedClient, WendaoArrowSession
+import pyarrow as pa
+
+scripted = WendaoArrowScriptedClient()
+scripted.add_query_response(
+    "/search/custom/demo",
+    [{"doc_id": "doc-1", "score": 0.9}],
+    ticket="ticket-1",
+    extra_metadata={"x-mode": "query"},
+)
+scripted.add_exchange_response(
+    "/exchange/custom/demo",
+    [{"doc_id": "doc-2", "status": "ok"}],
+    ticket="ticket-2",
+    extra_metadata={"x-mode": "exchange"},
+    request_table=[{"seed": "value"}],
+)
+
+session = WendaoArrowSession.from_client(scripted)
+query = session.query("/search/custom/demo", ticket="ticket-1", extra_metadata={"x-mode": "query"})
+exchange = session.exchange(
+    "/exchange/custom/demo",
+    pa.Table.from_pylist([{"seed": "value"}]),
+    ticket="ticket-2",
+    extra_metadata={"x-mode": "exchange"},
+)
+
+assert query.to_rows()[0]["doc_id"] == "doc-1"
+assert exchange.to_rows()[0]["status"] == "ok"
+```
+
+The live generic session surface also accepts `WendaoFlightRouteQuery`
+directly, so callers that already have a typed query object do not need to
+reconstruct `route + ticket` manually:
+
+```python
+from wendao_arrow_interface import WendaoArrowSession, WendaoFlightRouteQuery
+
+session = WendaoArrowSession.from_endpoint(host="127.0.0.1", port=50051)
+query = WendaoFlightRouteQuery(route="/search/custom/demo", ticket="custom-ticket")
+
+result = session.query(query, extra_metadata={"x-mode": "query"})
 ```
 
 For the stable repo-search and rerank workflows, prefer the contract-aware

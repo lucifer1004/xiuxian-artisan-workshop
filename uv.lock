@@ -12,6 +12,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "wendao-arrow-interface",
     "wendao-core-lib",
     "xiuxian-artisan-workshop-py",
     "xiuxian-core",
@@ -4609,6 +4610,40 @@ wheels = [
 ]
 
 [[package]]
+name = "wendao-arrow-interface"
+version = "0.2.4"
+source = { editable = "packages/python/wendao-arrow-interface" }
+dependencies = [
+    { name = "pyarrow" },
+    { name = "wendao-core-lib" },
+]
+
+[package.optional-dependencies]
+polars = [
+    { name = "polars" },
+]
+
+[package.dev-dependencies]
+test = [
+    { name = "polars" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "polars", marker = "extra == 'polars'", specifier = ">=1.0.0" },
+    { name = "pyarrow", specifier = ">=14.0.0" },
+    { name = "wendao-core-lib", editable = "packages/python/wendao-core-lib" },
+]
+provides-extras = ["polars"]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "polars", specifier = ">=1.0.0" },
+    { name = "pytest", specifier = ">=8.0" },
+]
+
+[[package]]
 name = "wendao-core-lib"
 version = "0.1.1"
 source = { editable = "packages/python/wendao-core-lib" }
@@ -4653,6 +4688,7 @@ dev = [
     { name = "dirty-equals" },
     { name = "huggingface-hub" },
     { name = "maturin" },
+    { name = "polars" },
     { name = "polyfactory" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -4665,6 +4701,7 @@ dev = [
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "vulture" },
+    { name = "wendao-arrow-interface" },
     { name = "wendao-core-lib" },
     { name = "xiuxian-core" },
     { name = "xiuxian-foundation" },
@@ -4685,6 +4722,7 @@ dev = [
     { name = "dirty-equals", specifier = ">=0.11" },
     { name = "huggingface-hub", specifier = ">=0.35.0" },
     { name = "maturin", specifier = ">=1.11.5" },
+    { name = "polars", specifier = ">=1.0.0" },
     { name = "polyfactory", specifier = ">=3.2.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0,<2.0" },
@@ -4697,6 +4735,7 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.6.1" },
     { name = "ruff", specifier = ">=0.14.10" },
     { name = "vulture", specifier = ">=2.14" },
+    { name = "wendao-arrow-interface", editable = "packages/python/wendao-arrow-interface" },
     { name = "wendao-core-lib", editable = "packages/python/wendao-core-lib" },
     { name = "xiuxian-core", editable = "packages/python/core" },
     { name = "xiuxian-foundation", editable = "packages/python/foundation" },

@@ -11,16 +11,17 @@ from wendao_arrow_interface import (
     WendaoArrowResult,
     WendaoArrowScriptedClient,
     WendaoArrowSession,
+    WendaoFlightRouteQuery,
+    attachment_search_metadata,
+    repo_search_metadata,
+    rerank_request_metadata,
 )
 from wendao_core_lib import (
-    attachment_search_metadata,
     attachment_search_request,
     WendaoAttachmentSearchRequest,
     WendaoRerankRequestRow,
     build_rerank_request_table,
-    repo_search_metadata,
     repo_search_request,
-    rerank_request_metadata,
 )
 
 
@@ -96,10 +97,16 @@ def test_session_from_endpoint_builds_transport_client() -> None:
 
 
 def test_query_wraps_transport_table_fetch() -> None:
-    session = WendaoArrowSession.for_query_testing("/search/repos/main", _repo_search_table())
+    session = WendaoArrowSession.for_query_testing(
+        "/search/repos/main",
+        _repo_search_table(),
+        ticket="repos-ticket",
+        extra_metadata={"x-test": "1"},
+    )
 
     result = session.query(
         "/search/repos/main",
+        ticket="repos-ticket",
         extra_metadata={"x-test": "1"},
         tls_root_certs=b"roots",
     )
@@ -118,6 +125,35 @@ def test_query_wraps_transport_table_fetch() -> None:
             connect_kwargs={"tls_root_certs": b"roots"},
         )
     ]
+
+
+def test_query_accepts_wendao_flight_route_query() -> None:
+    query = WendaoFlightRouteQuery(route="search/custom/demo", ticket="custom-ticket")
+    session = WendaoArrowSession.for_query_testing(
+        "/search/custom/demo",
+        [{"doc_id": "doc-1", "score": 0.9}],
+        ticket="custom-ticket",
+        extra_metadata={"x-mode": "query"},
+    )
+
+    result = session.query(query, extra_metadata={"x-mode": "query"})
+
+    assert result.query == query
+    assert result.route == "/search/custom/demo"
+    assert result.to_rows()[0]["doc_id"] == "doc-1"
+    assert isinstance(session.client, WendaoArrowScriptedClient)
+    assert session.client.calls[0].query == query
+
+
+def test_query_rejects_duplicate_ticket_when_query_object_is_provided() -> None:
+    session = WendaoArrowSession.for_query_testing("/search/custom/demo", _repo_search_table())
+
+    try:
+        session.query(WendaoFlightRouteQuery(route="/search/custom/demo"), ticket="duplicate")
+    except ValueError as error:
+        assert "ticket must not be passed separately" in str(error)
+    else:
+        raise AssertionError("expected duplicate query ticket to raise ValueError")
 
 
 def test_repo_search_accepts_typed_queue_and_records_effective_metadata() -> None:
@@ -164,6 +200,63 @@ def test_repo_search_accepts_typed_queue_and_records_effective_metadata() -> Non
             connect_kwargs={},
         ),
     ]
+
+
+def test_repo_search_testing_helper_accepts_expected_request_and_preserves_normalized_metadata() -> (
+    None
+):
+    request = repo_search_request(
+        "graph search",
+        limit=5,
+        language_filters=("rust", " rust "),
+        path_prefixes=("src", " src "),
+    )
+    session = WendaoArrowSession.for_repo_search_testing(_repo_search_table(), request=request)
+
+    result = session.repo_search(request)
+
+    assert result.request == request
+    assert isinstance(session.client, WendaoArrowScriptedClient)
+    assert session.client.calls[0].request == request
+    assert session.client.calls[0].extra_metadata == repo_search_metadata(request)
+    assert session.client.calls[0].request is not None
+    assert session.client.calls[0].request.language_filters == ("rust", " rust ")
+    assert session.client.calls[0].effective_metadata == session.client.calls[0].derived_metadata()
+    assert session.client.calls[0].metadata_matches_contract()
+    session.client.calls[0].assert_metadata_matches_contract()
+
+
+def test_repo_search_typed_registration_can_enforce_expected_metadata() -> None:
+    request = repo_search_request("graph search", limit=5)
+    scripted = WendaoArrowScriptedClient().add_repo_search_response(
+        _repo_search_table(),
+        request=request,
+        extra_metadata={"x-test": "unexpected"},
+    )
+    session = WendaoArrowSession.from_client(scripted)
+
+    try:
+        session.repo_search(request)
+    except AssertionError as error:
+        assert "scripted repo_search metadata mismatch" in str(error)
+    else:
+        raise AssertionError("expected typed repo_search metadata mismatch to raise")
+
+
+def test_repo_search_testing_helper_can_override_expected_metadata() -> None:
+    request = repo_search_request("graph search", limit=5)
+    session = WendaoArrowSession.for_repo_search_testing(
+        _repo_search_table(),
+        request=request,
+        extra_metadata={"x-test": "unexpected"},
+    )
+
+    try:
+        session.repo_search(request)
+    except AssertionError as error:
+        assert "scripted repo_search metadata mismatch" in str(error)
+    else:
+        raise AssertionError("expected helper-provided repo_search metadata mismatch to raise")
 
 
 def test_attachment_search_accepts_typed_queue_and_records_effective_metadata() -> None:
@@ -226,6 +319,56 @@ def test_attachment_search_accepts_typed_queue_and_records_effective_metadata() 
     ]
 
 
+def test_attachment_search_testing_helper_accepts_expected_request_and_preserves_normalized_metadata() -> (
+    None
+):
+    request = attachment_search_request(
+        "architecture",
+        limit=5,
+        ext_filters=("PDF", " pdf "),
+        kind_filters=("PDF", " pdf "),
+        case_sensitive=True,
+    )
+    session = WendaoArrowSession.for_attachment_search_testing(
+        _attachment_search_table(),
+        request=request,
+    )
+
+    result = session.attachment_search(request)
+
+    assert result.request == request
+    assert isinstance(session.client, WendaoArrowScriptedClient)
+    assert session.client.calls[0].request == request
+    assert session.client.calls[0].extra_metadata == attachment_search_metadata(request)
+    assert session.client.calls[0].request is not None
+    assert session.client.calls[0].request.ext_filters == ("PDF", " pdf ")
+    assert session.client.calls[0].effective_metadata == session.client.calls[0].derived_metadata()
+    assert session.client.calls[0].metadata_matches_contract()
+    session.client.calls[0].assert_metadata_matches_contract()
+
+
+def test_attachment_search_typed_registration_can_enforce_expected_metadata() -> None:
+    request = attachment_search_request(
+        "architecture",
+        limit=5,
+        ext_filters=("pdf",),
+        kind_filters=("pdf",),
+    )
+    scripted = WendaoArrowScriptedClient().add_attachment_search_response(
+        _attachment_search_table(),
+        request=request,
+        extra_metadata={"x-test": "unexpected"},
+    )
+    session = WendaoArrowSession.from_client(scripted)
+
+    try:
+        session.attachment_search(request)
+    except AssertionError as error:
+        assert "scripted attachment_search metadata mismatch" in str(error)
+    else:
+        raise AssertionError("expected typed attachment_search metadata mismatch to raise")
+
+
 def test_rerank_uses_typed_request_builder_and_records_effective_metadata() -> None:
     request_rows = [
         WendaoRerankRequestRow(
@@ -271,6 +414,86 @@ def test_rerank_uses_typed_request_builder_and_records_effective_metadata() -> N
     assert call.top_k == 3
     assert call.min_final_score == 0.5
     assert call.connect_kwargs == {}
+    assert call.effective_metadata == call.derived_metadata()
+    assert call.metadata_matches_contract()
+    call.assert_metadata_matches_contract()
+
+
+def test_rerank_testing_helper_accepts_expected_request_batch() -> None:
+    request_rows = [
+        WendaoRerankRequestRow(
+            doc_id="doc-1",
+            vector_score=0.7,
+            embedding=(1.0, 0.0),
+            query_embedding=(1.0, 0.0),
+        )
+    ]
+    session = WendaoArrowSession.for_rerank_response_testing(
+        _rerank_response_table(),
+        request_rows=request_rows,
+        top_k=3,
+        min_final_score=0.5,
+    )
+
+    result = session.rerank(request_rows, top_k=3, min_final_score=0.5)
+
+    assert result.parse_rerank_rows()[0].doc_id == "doc-1"
+    assert isinstance(session.client, WendaoArrowScriptedClient)
+    assert session.client.calls[0].extra_metadata == rerank_request_metadata(
+        request_rows,
+        top_k=3,
+        min_final_score=0.5,
+    )
+    assert session.client.calls[0].effective_metadata == session.client.calls[0].derived_metadata()
+    assert session.client.calls[0].metadata_matches_contract()
+    session.client.calls[0].assert_metadata_matches_contract()
+
+
+def test_rerank_typed_registration_can_enforce_expected_metadata() -> None:
+    request_rows = [
+        WendaoRerankRequestRow(
+            doc_id="doc-1",
+            vector_score=0.7,
+            embedding=(1.0, 0.0),
+            query_embedding=(1.0, 0.0),
+        )
+    ]
+    scripted = WendaoArrowScriptedClient().add_rerank_response(
+        _rerank_response_table(),
+        request_rows=request_rows,
+        top_k=3,
+        min_final_score=0.5,
+        extra_metadata={"x-test": "unexpected"},
+    )
+    session = WendaoArrowSession.from_client(scripted)
+
+    try:
+        session.rerank(request_rows, top_k=3, min_final_score=0.5)
+    except AssertionError as error:
+        assert "scripted rerank metadata mismatch" in str(error)
+    else:
+        raise AssertionError("expected typed rerank metadata mismatch to raise")
+
+
+def test_generic_call_metadata_helpers_reflect_recorded_metadata() -> None:
+    scripted = WendaoArrowScriptedClient().add_query_response(
+        "/search/custom/demo",
+        [{"doc_id": "doc-1", "score": 0.9}],
+        ticket="custom-ticket",
+        extra_metadata={"x-mode": "query"},
+    )
+    session = WendaoArrowSession.from_client(scripted)
+
+    session.query(
+        WendaoFlightRouteQuery(route="/search/custom/demo", ticket="custom-ticket"),
+        extra_metadata={"x-mode": "query"},
+    )
+
+    call = scripted.calls[0]
+    assert call.effective_metadata == {"x-mode": "query"}
+    assert call.derived_metadata() == {"x-mode": "query"}
+    assert call.metadata_matches_contract()
+    call.assert_metadata_matches_contract()
 
 
 def test_result_supports_rows_analyzers_and_optional_polars_adapter() -> None:
@@ -320,17 +543,30 @@ def test_result_from_rows_builds_one_lightweight_fixture() -> None:
 
 def test_generic_route_scoped_helpers_cover_query_and_exchange_paths() -> None:
     query_session = WendaoArrowSession.for_query_testing(
-        "/search/custom/demo", _repo_search_table()
+        "/search/custom/demo",
+        _repo_search_table(),
+        ticket="query-ticket",
+        extra_metadata={"x-route": "query"},
     )
+    request_table = pa.Table.from_pylist([{"seed": "value"}])
     exchange_session = WendaoArrowSession.for_exchange_testing(
         "/exchange/custom/demo",
         [{"doc_id": "doc-9", "status": "ok"}],
+        ticket="exchange-ticket",
+        extra_metadata={"x-route": "exchange"},
+        request_table=request_table,
     )
 
-    query_result = query_session.query("/search/custom/demo")
+    query_result = query_session.query(
+        "/search/custom/demo",
+        ticket="query-ticket",
+        extra_metadata={"x-route": "query"},
+    )
     exchange_result = exchange_session.exchange(
         "/exchange/custom/demo",
-        pa.Table.from_pylist([{"seed": "value"}]),
+        request_table,
+        ticket="exchange-ticket",
+        extra_metadata={"x-route": "exchange"},
     )
 
     assert query_result.query is not None
@@ -339,6 +575,85 @@ def test_generic_route_scoped_helpers_cover_query_and_exchange_paths() -> None:
     assert exchange_result.query is not None
     assert exchange_result.query.normalized_route() == "/exchange/custom/demo"
     assert exchange_result.to_rows()[0]["status"] == "ok"
+
+
+def test_exchange_accepts_wendao_flight_route_query() -> None:
+    query = WendaoFlightRouteQuery(route="exchange/custom/demo", ticket="exchange-ticket")
+    request_table = pa.Table.from_pylist([{"seed": "value"}])
+    session = WendaoArrowSession.for_exchange_testing(
+        "/exchange/custom/demo",
+        [{"doc_id": "doc-9", "status": "ok"}],
+        ticket="exchange-ticket",
+        extra_metadata={"x-route": "exchange"},
+        request_table=request_table,
+    )
+
+    result = session.exchange(
+        query,
+        request_table,
+        extra_metadata={"x-route": "exchange"},
+    )
+
+    assert result.query == query
+    assert result.route == "/exchange/custom/demo"
+    assert result.to_rows()[0]["status"] == "ok"
+    assert isinstance(session.client, WendaoArrowScriptedClient)
+    assert session.client.calls[0].query == query
+
+
+def test_exchange_rejects_duplicate_ticket_when_query_object_is_provided() -> None:
+    session = WendaoArrowSession.for_exchange_testing(
+        "/exchange/custom/demo",
+        [{"doc_id": "doc-9", "status": "ok"}],
+    )
+
+    try:
+        session.exchange(
+            WendaoFlightRouteQuery(route="/exchange/custom/demo"),
+            pa.Table.from_pylist([{"seed": "value"}]),
+            ticket="duplicate",
+        )
+    except ValueError as error:
+        assert "ticket must not be passed separately" in str(error)
+    else:
+        raise AssertionError("expected duplicate exchange ticket to raise ValueError")
+
+
+def test_generic_scripted_client_supports_queued_query_and_exchange_expectations() -> None:
+    scripted = WendaoArrowScriptedClient()
+    scripted.add_query_response(
+        "/search/custom/demo",
+        [{"doc_id": "doc-1", "score": 0.9}],
+        ticket="ticket-1",
+        extra_metadata={"x-mode": "query"},
+    )
+    scripted.add_exchange_response(
+        "/exchange/custom/demo",
+        [{"doc_id": "doc-2", "status": "ok"}],
+        ticket="ticket-2",
+        extra_metadata={"x-mode": "exchange"},
+        request_table=[{"seed": "value"}],
+    )
+    session = WendaoArrowSession.from_client(scripted)
+
+    query_result = session.query(
+        "/search/custom/demo",
+        ticket="ticket-1",
+        extra_metadata={"x-mode": "query"},
+    )
+    exchange_result = session.exchange(
+        "/exchange/custom/demo",
+        pa.Table.from_pylist([{"seed": "value"}]),
+        ticket="ticket-2",
+        extra_metadata={"x-mode": "exchange"},
+    )
+
+    assert query_result.to_rows()[0]["doc_id"] == "doc-1"
+    assert exchange_result.to_rows()[0]["status"] == "ok"
+    assert [call.extra_metadata for call in scripted.calls] == [
+        {"x-mode": "query"},
+        {"x-mode": "exchange"},
+    ]
 
 
 def test_generic_result_fixture_helpers_attach_normalized_queries() -> None:

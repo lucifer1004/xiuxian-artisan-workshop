@@ -17,8 +17,10 @@ dependencies = [
 [dependency-groups]
 dev = [
   "wendao-core-lib",
+  "wendao-arrow-interface",
   "xiuxian-foundation",
   "xiuxian-core",
+  "polars>=1.0.0",
   "polyfactory>=3.2.0",
   "pytest>=9.0.2",
   "pytest-asyncio>=1.3.0,<2.0",
@@ -48,6 +50,7 @@ source = "vcs"
 
 [tool.uv.sources]
 wendao-core-lib = { workspace = true }
+wendao-arrow-interface = { workspace = true }
 xiuxian-foundation = { workspace = true }
 xiuxian-core = { workspace = true }
 raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
@@ -57,6 +60,7 @@ raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 members = [
   "packages/python/core",
   "packages/python/foundation",
+  "packages/python/wendao-arrow-interface",
   "packages/python/wendao-core-lib",
 ]
 
@@ -71,6 +75,7 @@ line-length = 100
 src = [
   "packages/python/core/src",
   "packages/python/foundation/src",
+  "packages/python/wendao-arrow-interface/src",
   "packages/python/wendao-core-lib/src",
 ]
 
@@ -98,6 +103,7 @@ known-first-party = [
   "xiuxian_foundation",
   "xiuxian_rag",
   "xiuxian_tracer",
+  "wendao_arrow_interface",
   "wendao_core_lib",
 ]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
@@ -117,6 +123,7 @@ explicit_package_bases = true
 mypy_path = [
   "packages/python/core/src",
   "packages/python/foundation/src",
+  "packages/python/wendao-arrow-interface/src",
   "packages/python/wendao-core-lib/src",
 ]
 
@@ -138,6 +145,7 @@ addopts = [
 testpaths = [
   "packages/python/core/tests",
   "packages/python/foundation/tests",
+  "packages/python/wendao-arrow-interface/tests",
   "packages/python/wendao-core-lib/tests",
   "scripts/channel",
   "scripts/tests",
@@ -176,6 +184,7 @@ source = [
   "xiuxian_foundation",
   "xiuxian_rag",
   "xiuxian_tracer",
+  "wendao_arrow_interface",
   "wendao_core_lib",
 ]
 omit = ["*/tests/*", "*/__pycache__/*", "*/.venv/*", "*/venv/*", "*/site-packages/*"]

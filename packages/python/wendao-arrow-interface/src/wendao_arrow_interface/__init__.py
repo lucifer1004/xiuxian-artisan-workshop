@@ -26,9 +26,12 @@ from wendao_core_lib import (
     WendaoTransportConfig,
     WendaoTransportEndpoint,
     attachment_search_request,
+    attachment_search_metadata,
     parse_attachment_search_rows,
     parse_repo_search_rows,
     parse_rerank_response_rows,
+    rerank_request_metadata,
+    repo_search_metadata,
     repo_search_request,
 )
 
@@ -57,9 +60,12 @@ __all__ = [
     "WendaoTransportConfig",
     "WendaoTransportEndpoint",
     "attachment_search_request",
+    "attachment_search_metadata",
     "connect",
     "parse_attachment_search_rows",
     "parse_repo_search_rows",
     "parse_rerank_response_rows",
+    "rerank_request_metadata",
+    "repo_search_metadata",
     "repo_search_request",
 ]

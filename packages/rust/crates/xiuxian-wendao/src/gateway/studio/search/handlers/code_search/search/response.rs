@@ -12,7 +12,8 @@ use crate::search::repo_search::{
 use crate::search::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
 
 use crate::gateway::studio::search::handlers::code_search::query::{
-    infer_repo_hint_from_query, repo_search_result_limits, repo_wide_code_search_timeout,
+    infer_repo_hint_from_repositories, query_uses_redundant_repo_seed, repo_search_result_limits,
+    repo_wide_code_search_timeout,
 };
 
 /// Build one code-search response from the Studio search plane.
@@ -48,12 +49,8 @@ pub(crate) async fn build_code_search_response_with_budget(
     let mut parsed = parse_repo_code_search_query_with_repo_hint(raw_query.as_str(), repo_hint);
     let configured_repositories = configured_repositories(studio);
     if parsed.repo.is_none() {
-        parsed.repo = infer_repo_hint_from_query(
-            &parsed,
-            configured_repositories
-                .iter()
-                .map(|repository| repository.id.as_str()),
-        );
+        parsed.repo =
+            infer_repo_hint_from_repositories(&parsed, configured_repositories.as_slice());
     }
     let effective_repo_hint = parsed.repo.as_deref();
     let effective_repo_wide_budget = if effective_repo_hint.is_some() {
@@ -66,6 +63,11 @@ pub(crate) async fn build_code_search_response_with_budget(
     } else {
         None
     };
+    if let Some(repository) = selected_repository.as_ref()
+        && query_uses_redundant_repo_seed(&parsed, repository)
+    {
+        parsed.search_term = None;
+    }
     let repo_ids = if let Some(repository) = selected_repository.as_ref() {
         vec![repository.id.clone()]
     } else {

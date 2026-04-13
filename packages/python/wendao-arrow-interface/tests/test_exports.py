@@ -40,10 +40,13 @@ def test_public_exports_include_core_interface_surface() -> None:
     assert "RowsAnalyzer" in interface.__all__
     assert "connect" in interface.__all__
     assert "attachment_search_request" in interface.__all__
+    assert "attachment_search_metadata" in interface.__all__
     assert "parse_attachment_search_rows" in interface.__all__
+    assert "repo_search_metadata" in interface.__all__
     assert "repo_search_request" in interface.__all__
     assert "parse_repo_search_rows" in interface.__all__
     assert "parse_rerank_response_rows" in interface.__all__
+    assert "rerank_request_metadata" in interface.__all__
     assert "PolarsFrameParser" not in interface.__all__
     assert "PolarsFrameAnalyzer" not in interface.__all__
 
@@ -66,10 +69,13 @@ def test_public_exports_preserve_expected_symbol_kinds() -> None:
 
     assert callable(interface.connect)
     assert callable(interface.attachment_search_request)
+    assert callable(interface.attachment_search_metadata)
     assert callable(interface.parse_attachment_search_rows)
+    assert callable(interface.repo_search_metadata)
     assert callable(interface.repo_search_request)
     assert callable(interface.parse_repo_search_rows)
     assert callable(interface.parse_rerank_response_rows)
+    assert callable(interface.rerank_request_metadata)
     assert callable(interface.WendaoArrowResult.from_rows)
     assert callable(interface.WendaoArrowResult.from_query_rows)
     assert callable(interface.WendaoArrowResult.from_exchange_rows)
@@ -86,15 +92,23 @@ def test_public_exports_preserve_expected_symbol_kinds() -> None:
     assert callable(interface.WendaoArrowScriptedClient.for_attachment_search_rows)
     assert callable(interface.WendaoArrowScriptedClient.for_repo_search_rows)
     assert callable(interface.WendaoArrowScriptedClient.for_rerank_response_rows)
+    assert callable(interface.WendaoArrowScriptedClient.add_query_response)
+    assert callable(interface.WendaoArrowScriptedClient.add_exchange_response)
     assert callable(interface.WendaoArrowScriptedClient.add_attachment_search_response)
     assert callable(interface.WendaoArrowScriptedClient.add_repo_search_response)
     assert callable(interface.WendaoArrowScriptedClient.add_rerank_response)
+    assert isinstance(
+        interface.WendaoArrowCall(operation="query", route="/").effective_metadata, dict
+    )
+    assert callable(interface.WendaoArrowCall.derived_metadata)
+    assert callable(interface.WendaoArrowCall.metadata_matches_contract)
+    assert callable(interface.WendaoArrowCall.assert_metadata_matches_contract)
     assert not hasattr(interface.WendaoArrowResult, "parse_dataframe")
     assert not hasattr(interface.WendaoArrowResult, "analyze_dataframe")
 
 
 def test_package_root_exports_version_matching_pyproject() -> None:
-    assert interface.__version__ == "0.2.0"
+    assert interface.__version__ == "0.2.4"
     assert interface.__version__ == _pyproject_version()
 
 
