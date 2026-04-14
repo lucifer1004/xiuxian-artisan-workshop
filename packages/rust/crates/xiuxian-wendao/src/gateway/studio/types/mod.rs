@@ -20,14 +20,16 @@ mod vfs;
 
 pub use analysis::{
     AnalysisEdge, AnalysisEdgeKind, AnalysisEvidence, AnalysisNode, AnalysisNodeKind,
-    MarkdownAnalysisResponse, MarkdownRetrievalAtom, MermaidProjection, MermaidViewKind,
+    MarkdownAnalysisDocumentLink, MarkdownAnalysisDocumentLinkKind,
+    MarkdownAnalysisDocumentMetadata, MarkdownAnalysisResponse, MarkdownRetrievalAtom,
+    MermaidProjection, MermaidViewKind,
 };
 pub use attachments::{AttachmentSearchHit, AttachmentSearchResponse};
 pub use code_ast::{
     CodeAstAnalysisResponse, CodeAstEdge, CodeAstEdgeKind, CodeAstNode, CodeAstNodeKind,
     CodeAstProjection, CodeAstProjectionKind, CodeAstRetrievalAtom, CodeAstRetrievalAtomScope,
 };
-pub use collection::studio_type_collection;
+pub use collection::{studio_frontend_type_collection, studio_type_collection};
 pub use config::{
     UiCapabilities, UiConfig, UiPluginArtifact, UiPluginLaunchSpec, UiProjectConfig,
     UiRepoProjectConfig,

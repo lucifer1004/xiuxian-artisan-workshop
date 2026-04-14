@@ -132,12 +132,13 @@ the current `plan` node owns `codex-plan.mmd`, and that file is part of the
 node contract rather than an ad hoc extra artifact. Mermaid parsing for those
 scenario-case files should prefer a mature parser dependency; the current
 implementation uses `merman-core`. The parsed graph identity should come from
-the owning Mermaid filename stem as `merimind_graph_name`, not from the
-Mermaid direction token such as `LR`. A first-version valid scenario-case
-graph must cover every registered Flowhub module node required by the current
-root contract, must include at least one edge between Flowhub module nodes,
-must preserve one connected module backbone over those module nodes, and must
-not introduce undeclared graph-node labels outside the recognized guard or
+module-owned `[[graph]].name` when declared, otherwise from the owning
+Mermaid filename stem as `merimind_graph_name`, and never from the Mermaid
+direction token such as `LR`. A first-version valid scenario-case graph must
+cover every registered Flowhub module node required by the current root
+contract, must include at least one edge between Flowhub module nodes, must
+preserve one connected module backbone over those module nodes, and must not
+introduce undeclared graph-node labels outside the recognized guard or
 process vocabulary.
 
 ## 4. What `plan` Actually Is
@@ -692,7 +693,8 @@ graph header deterministically.
 
 For v0, `Name` must render the stable `merimind_graph_name`.
 
-`merimind_graph_name` must derive from the owning Mermaid filename stem.
+`merimind_graph_name` must resolve from module-owned `[[graph]].name` when
+declared, otherwise from the owning Mermaid filename stem.
 
 It must not derive from:
 
@@ -703,11 +705,14 @@ It must not derive from:
 Therefore:
 
 1. `qianji-flowhub/plan/codex-plan.mmd` renders `Name: codex-plan`
-2. changing the Mermaid direction token does not change graph identity
-3. changing internal node labels does not change graph identity
+2. `qianji-flowhub/wendao/docs-search.mmd` may render `Name: DOC_SEARCH`
+   through `[[graph]].name = "DOC_SEARCH"`
+3. changing the Mermaid direction token does not change graph identity
+4. changing internal node labels does not change graph identity
 
 This keeps graph identity anchored to the contracted scenario-case file rather
-than to mutable graph body details.
+than to mutable graph body details while still allowing explicit,
+module-owned names when the filename is only a transport path.
 
 #### `Path`
 
@@ -735,7 +740,8 @@ the caller-provided filesystem path instead.
 
 The v0 naming and path rule is:
 
-1. `Name` comes from the owning Mermaid filename stem as `merimind_graph_name`
+1. `Name` comes from `[[graph]].name` or the owning Mermaid filename-stem
+   fallback as `merimind_graph_name`
 2. `Path` points to the owning Mermaid file, not to the localized workdir
 3. repo-owned graph files should render with repo-root-relative paths
 

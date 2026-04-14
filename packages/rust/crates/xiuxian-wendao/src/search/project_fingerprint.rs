@@ -35,7 +35,41 @@ pub(crate) struct ProjectScannedFile {
     pub(crate) modified_nanos: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ProjectScanInventory {
+    files: Vec<ProjectScannedFile>,
+}
+
+impl ProjectScanInventory {
+    #[must_use]
+    pub(crate) fn new(files: Vec<ProjectScannedFile>) -> Self {
+        Self { files }
+    }
+
+    #[must_use]
+    pub(crate) fn symbol_files(&self) -> &[ProjectScannedFile] {
+        self.files.as_slice()
+    }
+
+    #[must_use]
+    pub(crate) fn note_files(&self) -> Vec<ProjectScannedFile> {
+        filter_scanned_files_for_mode(self.files.as_slice(), ProjectFingerprintMode::Note)
+    }
+
+    #[must_use]
+    pub(crate) fn source_files(&self) -> Vec<ProjectScannedFile> {
+        filter_scanned_files_for_mode(self.files.as_slice(), ProjectFingerprintMode::Source)
+    }
+}
+
 impl ProjectScannedFile {
+    #[must_use]
+    pub(crate) fn modified_unix_ms(&self) -> u64 {
+        self.modified_secs
+            .saturating_mul(1_000)
+            .saturating_add(u64::from(self.modified_nanos / 1_000_000))
+    }
+
     #[must_use]
     pub(crate) fn to_file_fingerprint(
         &self,
@@ -46,14 +80,23 @@ impl ProjectScannedFile {
             relative_path: self.normalized_path.clone(),
             partition_id: Some(self.partition_id.clone()),
             size_bytes: self.size_bytes,
-            modified_unix_ms: self
-                .modified_secs
-                .saturating_mul(1_000)
-                .saturating_add(u64::from(self.modified_nanos / 1_000_000)),
+            modified_unix_ms: self.modified_unix_ms(),
             extractor_version,
             schema_version,
             blake3: None,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn to_semantic_file_fingerprint(
+        &self,
+        extractor_version: u32,
+        schema_version: u32,
+        blake3: String,
+    ) -> SearchFileFingerprint {
+        let mut fingerprint = self.to_file_fingerprint(extractor_version, schema_version);
+        fingerprint.blake3 = Some(blake3);
+        fingerprint
     }
 }
 
@@ -65,51 +108,143 @@ struct ProjectFileMetadata {
     modified_nanos: u32,
 }
 
+#[cfg(test)]
 pub(crate) fn fingerprint_symbol_projects(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
 ) -> String {
-    let files = scan_symbol_project_files(project_root, config_root, projects);
-    fingerprint_projects(
-        project_root,
-        config_root,
-        projects,
-        ProjectFingerprintMode::Symbol,
-        &files,
-    )
+    fingerprint_symbol_projects_with_scanned_files(project_root, config_root, projects).0
 }
 
+#[cfg(test)]
 pub(crate) fn fingerprint_source_projects(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
 ) -> String {
-    let files = scan_source_project_files(project_root, config_root, projects);
-    fingerprint_projects(
-        project_root,
-        config_root,
-        projects,
-        ProjectFingerprintMode::Source,
-        &files,
-    )
+    fingerprint_source_projects_with_scanned_files(project_root, config_root, projects).0
 }
 
+#[cfg(test)]
 pub(crate) fn fingerprint_note_projects(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
 ) -> String {
-    let files = scan_note_project_files(project_root, config_root, projects);
+    fingerprint_note_projects_with_scanned_files(project_root, config_root, projects).0
+}
+
+#[cfg(test)]
+pub(crate) fn fingerprint_symbol_projects_with_scanned_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+) -> (String, Vec<ProjectScannedFile>) {
+    let files = scan_symbol_project_files(project_root, config_root, projects);
+    let fingerprint = fingerprint_projects(
+        project_root,
+        config_root,
+        projects,
+        ProjectFingerprintMode::Symbol,
+        &files,
+    );
+    (fingerprint, files)
+}
+
+pub(crate) fn fingerprint_symbol_projects_from_scanned_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    files: &[ProjectScannedFile],
+) -> String {
     fingerprint_projects(
+        project_root,
+        config_root,
+        projects,
+        ProjectFingerprintMode::Symbol,
+        files,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn fingerprint_source_projects_with_scanned_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+) -> (String, Vec<ProjectScannedFile>) {
+    let files = scan_source_project_files(project_root, config_root, projects);
+    let fingerprint = fingerprint_projects(
+        project_root,
+        config_root,
+        projects,
+        ProjectFingerprintMode::Source,
+        &files,
+    );
+    (fingerprint, files)
+}
+
+pub(crate) fn fingerprint_source_projects_from_scanned_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    files: &[ProjectScannedFile],
+) -> String {
+    fingerprint_projects(
+        project_root,
+        config_root,
+        projects,
+        ProjectFingerprintMode::Source,
+        files,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn fingerprint_note_projects_with_scanned_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+) -> (String, Vec<ProjectScannedFile>) {
+    let files = scan_note_project_files(project_root, config_root, projects);
+    let fingerprint = fingerprint_projects(
         project_root,
         config_root,
         projects,
         ProjectFingerprintMode::Note,
         &files,
+    );
+    (fingerprint, files)
+}
+
+pub(crate) fn fingerprint_note_projects_from_scanned_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    files: &[ProjectScannedFile],
+) -> String {
+    fingerprint_projects(
+        project_root,
+        config_root,
+        projects,
+        ProjectFingerprintMode::Note,
+        files,
     )
 }
 
+pub(crate) fn scan_supported_project_files(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+) -> ProjectScanInventory {
+    ProjectScanInventory::new(project_files(
+        project_root,
+        config_root,
+        projects,
+        ProjectFingerprintMode::Symbol,
+    ))
+}
+
+#[cfg(test)]
 pub(crate) fn scan_symbol_project_files(
     project_root: &Path,
     config_root: &Path,
@@ -123,6 +258,7 @@ pub(crate) fn scan_symbol_project_files(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn scan_source_project_files(
     project_root: &Path,
     config_root: &Path,
@@ -136,6 +272,7 @@ pub(crate) fn scan_source_project_files(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn scan_note_project_files(
     project_root: &Path,
     config_root: &Path,
@@ -189,6 +326,17 @@ fn project_file_metadata(files: &[ProjectScannedFile]) -> Vec<ProjectFileMetadat
             modified_secs: file.modified_secs,
             modified_nanos: file.modified_nanos,
         })
+        .collect()
+}
+
+fn filter_scanned_files_for_mode(
+    files: &[ProjectScannedFile],
+    mode: ProjectFingerprintMode,
+) -> Vec<ProjectScannedFile> {
+    files
+        .iter()
+        .filter(|file| matches_mode(mode, Path::new(file.normalized_path.as_str())))
+        .cloned()
         .collect()
 }
 

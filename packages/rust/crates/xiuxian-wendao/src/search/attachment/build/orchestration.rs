@@ -5,35 +5,92 @@ use tokio::runtime::Handle;
 use crate::gateway::studio::types::UiProjectConfig;
 #[cfg(test)]
 use crate::search::attachment::build::AttachmentBuildError;
+#[cfg(test)]
+use crate::search::attachment::build::plan_attachment_build;
 use crate::search::attachment::build::{
-    fingerprint_projects, plan_attachment_build, write_attachment_epoch,
+    plan_attachment_build_with_scanned_files, write_attachment_epoch,
 };
 use crate::search::attachment::schema::projected_columns_with_hit_json;
-use crate::search::{BeginBuildDecision, SearchCorpusKind, SearchPlaneService};
+use crate::search::{
+    BeginBuildDecision, ProjectScannedFile, SearchCorpusKind, SearchPlaneService,
+    fingerprint_note_projects_from_scanned_files,
+};
 
+#[cfg(test)]
 pub(crate) fn ensure_attachment_index_started(
     service: &SearchPlaneService,
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) {
+) -> bool {
     if projects.is_empty() {
-        return;
+        return false;
     }
 
-    let fingerprint = fingerprint_projects(project_root, config_root, projects);
+    let (fingerprint, scanned_files) = service.fingerprint_note_projects_with_repeat_work_details(
+        "attachment.fingerprint",
+        project_root,
+        config_root,
+        projects,
+    );
+    ensure_attachment_index_started_with_fingerprint_and_scanned_files(
+        service,
+        project_root,
+        config_root,
+        projects,
+        fingerprint,
+        scanned_files,
+    )
+}
+
+pub(crate) fn ensure_attachment_index_started_with_scanned_files(
+    service: &SearchPlaneService,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    scanned_files: &[ProjectScannedFile],
+) -> bool {
+    if projects.is_empty() {
+        return false;
+    }
+
+    let fingerprint = fingerprint_note_projects_from_scanned_files(
+        project_root,
+        config_root,
+        projects,
+        scanned_files,
+    );
+    ensure_attachment_index_started_with_fingerprint_and_scanned_files(
+        service,
+        project_root,
+        config_root,
+        projects,
+        fingerprint,
+        scanned_files.to_vec(),
+    )
+}
+
+fn ensure_attachment_index_started_with_fingerprint_and_scanned_files(
+    service: &SearchPlaneService,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    fingerprint: String,
+    scanned_files: Vec<ProjectScannedFile>,
+) -> bool {
     let decision = service.coordinator().begin_build(
         SearchCorpusKind::Attachment,
         fingerprint,
         SearchCorpusKind::Attachment.schema_version(),
     );
     let BeginBuildDecision::Started(lease) = decision else {
-        return;
+        return false;
     };
 
     let build_projects = projects.to_vec();
     let build_project_root = project_root.to_path_buf();
     let build_config_root = config_root.to_path_buf();
+    let build_scanned_files = scanned_files;
     let active_epoch = service.corpus_active_epoch(SearchCorpusKind::Attachment);
     let service = service.clone();
 
@@ -42,11 +99,14 @@ pub(crate) fn ensure_attachment_index_started(
             let previous_fingerprints = service
                 .corpus_file_fingerprints(SearchCorpusKind::Attachment)
                 .await;
+            let build_service = service.clone();
             let build: Result<_, tokio::task::JoinError> = tokio::task::spawn_blocking(move || {
-                plan_attachment_build(
+                plan_attachment_build_with_scanned_files(
+                    &build_service,
                     build_project_root.as_path(),
                     build_config_root.as_path(),
                     &build_projects,
+                    build_scanned_files.as_slice(),
                     active_epoch,
                     &previous_fingerprints,
                 )
@@ -65,11 +125,10 @@ pub(crate) fn ensure_attachment_index_started(
                     }
                     let write = write.unwrap_or_else(|_| unreachable!());
                     service.coordinator().update_progress(&lease, 0.8);
-                    if service.publish_ready_and_maintain(
-                        &lease,
-                        write.row_count,
-                        write.fragment_count,
-                    ) {
+                    if service
+                        .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                        .await
+                    {
                         service
                             .set_corpus_file_fingerprints(
                                 SearchCorpusKind::Attachment,
@@ -105,6 +164,8 @@ pub(crate) fn ensure_attachment_index_started(
             "Tokio runtime unavailable for attachment index build",
         );
     }
+
+    true
 }
 
 #[cfg(test)]
@@ -126,6 +187,7 @@ pub(crate) async fn publish_attachments_from_projects(
         }
     };
     let plan = plan_attachment_build(
+        service,
         project_root,
         config_root,
         projects,
@@ -138,7 +200,9 @@ pub(crate) async fn publish_attachments_from_projects(
             service
                 .prewarm_epoch_table(lease.corpus, lease.epoch, &prewarm_columns)
                 .await?;
-            service.publish_ready_and_maintain(&lease, write.row_count, write.fragment_count);
+            service
+                .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                .await;
             Ok(())
         }
         Err(error) => {

@@ -8,6 +8,7 @@ pub(crate) use planner::{
 };
 pub(crate) use projection::{
     run_docs_family_cluster, run_docs_family_context, run_docs_family_search, run_docs_navigation,
-    run_docs_navigation_search, run_docs_page, run_docs_projected_gap_report, run_docs_retrieval,
-    run_docs_retrieval_context, run_docs_retrieval_hit, run_docs_search,
+    run_docs_navigation_search, run_docs_page, run_docs_page_index_tree,
+    run_docs_projected_gap_report, run_docs_retrieval, run_docs_retrieval_context,
+    run_docs_retrieval_hit, run_docs_search,
 };

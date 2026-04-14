@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::search::cache::{SearchPlaneCache, SearchPlaneCacheTtl};
 use crate::search::{
-    SearchCorpusKind, SearchFileFingerprint, SearchRepoCorpusRecord,
+    SearchCorpusKind, SearchFileFingerprint, SearchManifestRecord, SearchRepoCorpusRecord,
     SearchRepoCorpusSnapshotRecord, SearchRepoPublicationRecord,
 };
 
@@ -184,6 +184,31 @@ impl SearchPlaneCache {
             return;
         };
         let key = self.keyspace.corpus_file_fingerprints_key(corpus);
+        let Ok(mut connection) = client
+            .get_multiplexed_async_connection_with_config(&self.async_connection_config())
+            .await
+        else {
+            return;
+        };
+        let _: redis::RedisResult<()> = connection.set(key, payload).await;
+    }
+
+    pub(crate) async fn set_corpus_manifest(&self, record: &SearchManifestRecord) {
+        #[cfg(test)]
+        {
+            self.shadow
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .corpus_manifests
+                .insert(record.corpus, record.clone());
+        }
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Ok(payload) = serde_json::to_string(record) else {
+            return;
+        };
+        let key = self.keyspace.corpus_manifest_key(record.corpus);
         let Ok(mut connection) = client
             .get_multiplexed_async_connection_with_config(&self.async_connection_config())
             .await

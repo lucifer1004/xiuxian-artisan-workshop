@@ -41,6 +41,8 @@ pub use julia_transport::{
 #[cfg(feature = "studio")]
 pub(crate) use projection::build_repo_projected_page_search_with_artifacts;
 pub use projection::*;
+#[cfg(any(test, feature = "zhenfa-router"))]
+pub(crate) use projection::{DocsToolRuntime, DocsToolRuntimeHandle};
 pub use registry::load_registered_repository;
 #[cfg(feature = "studio")]
 pub(crate) use search::ExampleSearchMetadata;

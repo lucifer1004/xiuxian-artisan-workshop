@@ -2,11 +2,14 @@ use super::test_prelude::*;
 use super::*;
 use crate::gateway::studio::build_ast_index;
 use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::gateway::studio::search::handlers::knowledge::intent::ensure_intent_indices;
+use crate::gateway::studio::search::handlers::status::search_index_status;
 use crate::gateway::studio::search::support::strip_option;
 use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f64};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
 use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot};
 use crate::search::SearchPlaneService;
+use chrono::DateTime;
 use serde_json::json;
 use tempfile::tempdir;
 
@@ -57,7 +60,7 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
     studio_state.project_root = temp_dir.path().to_path_buf();
     studio_state.config_root = temp_dir.path().to_path_buf();
     studio_state.search_plane = SearchPlaneService::new(temp_dir.path().to_path_buf());
-    studio_state.set_ui_config(UiConfig {
+    studio_state.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -80,6 +83,17 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
         }),
         temp_dir,
     }
+}
+
+fn cold_start_corpus<'a>(
+    telemetry: &'a crate::gateway::studio::router::StudioSearchColdStartTelemetry,
+    corpus: &str,
+) -> &'a crate::gateway::studio::router::StudioSearchColdStartCorpusTelemetry {
+    telemetry
+        .corpora
+        .iter()
+        .find(|entry| entry.corpus == corpus)
+        .unwrap_or_else(|| panic!("missing cold-start telemetry corpus `{corpus}`"))
 }
 
 async fn publish_local_symbol_index(state: &Arc<GatewayState>) {
@@ -326,7 +340,45 @@ async fn search_knowledge_returns_payload() {
 }
 
 #[tokio::test]
-async fn search_knowledge_waits_for_initial_index_publication() {
+async fn knowledge_intent_uses_shared_scan_bundle_to_start_indices() {
+    let fixture = make_state_with_docs(vec![
+        (
+            "docs/alpha.md",
+            "# Alpha\n\nIntent search should share its startup scan.\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/lib.rs",
+            "pub fn intent_shared_scan() {}\n",
+        ),
+    ]);
+
+    let index_state = ensure_intent_indices(fixture.state.studio.as_ref())
+        .unwrap_or_else(|error| panic!("intent index bootstrap should succeed: {error:?}"));
+    assert!(!index_state.knowledge_config_missing);
+    assert!(!index_state.symbol_config_missing);
+
+    let telemetry = fixture.state.studio.search_plane.repeat_work_telemetry();
+    assert!(
+        telemetry.source_operations.iter().any(|entry| {
+            entry.source == "knowledge_intent"
+                && entry.operation == "scan_supported_project_files"
+                && entry.file_observation_count >= 2
+        }),
+        "knowledge intent should record the shared scan bundle"
+    );
+    assert!(
+        telemetry.source_operations.iter().all(|entry| {
+            !((entry.source == "knowledge_section.fingerprint"
+                && entry.operation == "scan_note_project_files")
+                || (entry.source == "local_symbol.fingerprint"
+                    && entry.operation == "scan_symbol_project_files"))
+        }),
+        "knowledge intent should avoid starting its note and symbol corpora with separate scans"
+    );
+}
+
+#[tokio::test]
+async fn search_knowledge_returns_partial_response_before_initial_index_publication() {
     let fixture = make_state_with_docs(vec![(
         "alpha.md",
         "# Alpha\n\nThis note contains search target keyword: wendao.\n",
@@ -344,7 +396,186 @@ async fn search_knowledge_waits_for_initial_index_publication() {
         panic!("expected cold-start knowledge search request to succeed");
     };
 
-    assert!(response.hit_count >= 1);
+    assert_eq!(response.hit_count, 0);
+    assert!(response.partial);
+    assert_eq!(response.indexing_state.as_deref(), Some("indexing"));
+    assert!(response.hits.is_empty());
+
+    let telemetry = fixture.state.studio.search_cold_start_telemetry();
+    let knowledge = cold_start_corpus(&telemetry, "knowledge_section");
+    assert_eq!(
+        knowledge
+            .first_partial_search_response
+            .as_ref()
+            .and_then(|event| event.source.as_deref()),
+        Some("knowledge_search")
+    );
+    assert!(knowledge.first_ready_search_response.is_none());
+}
+
+#[tokio::test]
+async fn search_index_status_handler_includes_cold_start_telemetry() {
+    let fixture = make_state_with_docs(vec![(
+        "alpha.md",
+        "# Alpha\n\nThis note contains search target keyword: wendao.\n",
+    )]);
+
+    let partial = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "wendao",
+        5,
+        Some("semantic_lookup".to_string()),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("cold-start knowledge search should succeed: {error:?}"));
+    assert!(partial.partial);
+
+    publish_knowledge_section_index(&fixture.state).await;
+
+    let ready = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "wendao",
+        5,
+        Some("semantic_lookup".to_string()),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("ready knowledge search should succeed: {error:?}"));
+    assert!(!ready.partial);
+
+    let payload = serde_json::to_value(
+        search_index_status(State(Arc::clone(&fixture.state)))
+            .await
+            .unwrap_or_else(|error| panic!("status handler should resolve: {error:?}"))
+            .0,
+    )
+    .unwrap_or_else(|error| panic!("serialize status payload: {error}"));
+
+    let cold_start = payload
+        .get("coldStartTelemetry")
+        .and_then(serde_json::Value::as_object)
+        .unwrap_or_else(|| panic!("status payload should include coldStartTelemetry"));
+    let repeat_work = cold_start
+        .get("diagnostics")
+        .and_then(|value| value.get("repeatWork"))
+        .and_then(serde_json::Value::as_object)
+        .unwrap_or_else(|| panic!("coldStartTelemetry should include diagnostics.repeatWork"));
+    assert_eq!(
+        cold_start
+            .get("coldStartWindowMs")
+            .and_then(serde_json::Value::as_u64),
+        Some(60_000)
+    );
+    let corpora = cold_start
+        .get("corpora")
+        .and_then(serde_json::Value::as_array)
+        .unwrap_or_else(|| panic!("coldStartTelemetry should include corpora"));
+    let knowledge = corpora
+        .iter()
+        .find(|entry| {
+            entry
+                .get("corpus")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|corpus| corpus == "knowledge_section")
+        })
+        .unwrap_or_else(|| panic!("knowledge_section telemetry should be present"));
+    let status_knowledge = payload
+        .get("corpora")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|corpora| {
+            corpora.iter().find(|entry| {
+                entry
+                    .get("corpus")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|corpus| corpus == "knowledge_section")
+            })
+        })
+        .unwrap_or_else(|| panic!("status payload should include knowledge_section corpus row"));
+    assert_eq!(
+        knowledge
+            .get("firstPartialSearchResponse")
+            .and_then(|value| value.get("source"))
+            .and_then(serde_json::Value::as_str),
+        Some("knowledge_search")
+    );
+    assert_eq!(
+        knowledge
+            .get("firstReadySearchResponse")
+            .and_then(|value| value.get("source"))
+            .and_then(serde_json::Value::as_str),
+        Some("knowledge_search")
+    );
+    let first_ready_observed_source = knowledge
+        .get("firstReadyObserved")
+        .and_then(|value| value.get("source"))
+        .and_then(serde_json::Value::as_str);
+    assert!(
+        first_ready_observed_source.is_some_and(|source| {
+            source == "knowledge_search"
+                || source == "search_index_status"
+                || source == "search_plane_bootstrap"
+        }),
+        "unexpected firstReadyObserved source: {first_ready_observed_source:?}, entry={knowledge:#?}"
+    );
+    let observed_ready_at = knowledge
+        .get("firstReadyObserved")
+        .and_then(|value| value.get("recordedAt"))
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .unwrap_or_else(|| panic!("firstReadyObserved.recordedAt should be RFC3339"));
+    let current_build_finished_at = status_knowledge
+        .get("buildFinishedAt")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .unwrap_or_else(|| panic!("status payload buildFinishedAt should be RFC3339"));
+    assert!(observed_ready_at <= current_build_finished_at);
+    let source_operations = repeat_work
+        .get("sourceOperations")
+        .and_then(serde_json::Value::as_array)
+        .unwrap_or_else(|| panic!("repeatWork should include sourceOperations"));
+    assert!(
+        source_operations.iter().any(|entry| {
+            entry
+                .get("source")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|source| source == "config_apply")
+                && entry
+                    .get("operation")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|operation| operation == "scan_supported_project_files")
+        }),
+        "repeat-work telemetry should capture the eager config-apply shared scan"
+    );
+    assert_eq!(
+        repeat_work
+            .get("summary")
+            .and_then(|value| value.get("findingCount"))
+            .and_then(serde_json::Value::as_u64),
+        repeat_work
+            .get("findings")
+            .and_then(serde_json::Value::as_array)
+            .map(|findings| findings.len() as u64)
+    );
+    assert!(
+        repeat_work
+            .get("hotPaths")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|paths| !paths.is_empty()),
+        "repeat-work telemetry should surface repeated hot paths after one cold-start build"
+    );
+    assert!(
+        repeat_work
+            .get("findings")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|findings| {
+                findings.iter().any(|entry| {
+                    entry
+                        .get("kind")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|kind| kind == "cross_operation_hot_path")
+                })
+            }),
+        "repeat-work telemetry should surface detector findings for repeated hot paths"
+    );
 }
 
 #[tokio::test]
@@ -414,7 +645,7 @@ async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
     )
     .unwrap_or_else(|error| panic!("write project file: {error}"));
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: fixture.state.studio.configured_projects(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "valid".to_string(),
@@ -566,7 +797,7 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
             "# Main\n\nThis note also contains search target keyword: wendao.\n",
         ),
     ]);
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![
             UiProjectConfig {
                 name: "kernel".to_string(),
@@ -643,7 +874,7 @@ async fn search_attachments_returns_payload() {
         ),
         ("docs/beta.md", "# Beta\n\n![Avatar](images/avatar.jpg)\n"),
     ]);
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -696,12 +927,12 @@ async fn search_attachments_returns_payload() {
 }
 
 #[tokio::test]
-async fn search_attachments_waits_for_initial_index_publication() {
+async fn search_attachments_returns_partial_response_before_initial_index_publication() {
     let fixture = make_state_with_docs(vec![(
         "docs/alpha.md",
         "# Alpha\n\n![Topology](assets/topology.png)\n\n[Spec](files/spec.pdf)\n",
     )]);
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -726,7 +957,10 @@ async fn search_attachments_waits_for_initial_index_publication() {
         panic!("expected cold-start attachment search request to succeed");
     };
 
-    assert!(response.hit_count >= 1);
+    assert_eq!(response.hit_count, 0);
+    assert!(response.partial);
+    assert_eq!(response.indexing_state.as_deref(), Some("indexing"));
+    assert!(response.hits.is_empty());
 }
 
 #[tokio::test]
@@ -735,7 +969,7 @@ async fn search_attachments_respects_extension_and_kind_filters() {
         "docs/alpha.md",
         "# Alpha\n\n![Topology](assets/topology.png)\n\n[Spec](files/spec.pdf)\n",
     )]);
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -949,7 +1183,7 @@ async fn search_ast_includes_markdown_outline_hits() {
         "docs/03_features/204_gateway_api_contracts.md",
         "# Gateway API Contracts\n\n## AST Search\n\n- [ ] Verify docs AST alignment.\n",
     )]);
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -1013,7 +1247,7 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
         "docs/index.md",
         "# Studio Functional Ledger\n:PROPERTIES:\n:ID: SearchBarProtocol\n:OBSERVE: lang:typescript scope:\"src/components/SearchBar/**\" \"export const SearchBar: React.FC<SearchBarProps> = ({ $$$ })\"\n:END:\n\n## Runtime Contract\n",
     )]);
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "main".to_string(),
             root: ".".to_string(),
@@ -1072,7 +1306,7 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
 }
 
 #[tokio::test]
-async fn search_ast_waits_for_initial_index_publication() {
+async fn search_ast_returns_partial_response_before_initial_index_publication() {
     let fixture = make_state_with_docs(vec![(
         "packages/rust/crates/demo/src/lib.rs",
         "pub struct AlphaService {\n    ready: bool,\n}\n\npub fn alpha_handler() {}\n",
@@ -1091,7 +1325,10 @@ async fn search_ast_waits_for_initial_index_publication() {
         panic!("expected cold-start AST search request to succeed");
     };
 
-    assert!(response.0.hit_count >= 1);
+    assert_eq!(response.0.hit_count, 0);
+    assert!(response.0.partial);
+    assert_eq!(response.0.indexing_state.as_deref(), Some("indexing"));
+    assert!(response.0.hits.is_empty());
 }
 
 #[tokio::test]
@@ -1444,7 +1681,7 @@ async fn search_references_returns_payload() {
 }
 
 #[tokio::test]
-async fn search_references_waits_for_initial_index_publication() {
+async fn search_references_returns_partial_response_before_initial_index_publication() {
     let fixture = make_state_with_docs(vec![(
         "packages/rust/crates/demo/src/lib.rs",
         "pub struct AlphaService {\n    ready: bool,\n}\n\npub fn alpha_handler() {\n    let _service = AlphaService { ready: true };\n}\n",
@@ -1463,7 +1700,10 @@ async fn search_references_waits_for_initial_index_publication() {
         panic!("expected cold-start reference search request to succeed");
     };
 
-    assert!(response.hit_count >= 1);
+    assert_eq!(response.hit_count, 0);
+    assert!(response.partial);
+    assert_eq!(response.indexing_state.as_deref(), Some("indexing"));
+    assert!(response.hits.is_empty());
 }
 
 #[tokio::test]
@@ -1600,7 +1840,7 @@ async fn search_symbols_respects_glob_dir_filters() {
         ),
     ]);
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),

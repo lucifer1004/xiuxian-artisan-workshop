@@ -1,12 +1,5 @@
 use crate::gateway::openapi::paths::{self as openapi_paths, RouteContract};
 
-pub(super) const UI_CONFIG: RouteContract = RouteContract {
-    axum_path: openapi_paths::API_UI_CONFIG_AXUM_PATH,
-    openapi_path: openapi_paths::API_UI_CONFIG_OPENAPI_PATH,
-    methods: &["get", "post"],
-    path_params: &[],
-};
-
 pub(super) const UI_CAPABILITIES: RouteContract = RouteContract {
     axum_path: openapi_paths::API_UI_CAPABILITIES_AXUM_PATH,
     openapi_path: openapi_paths::API_UI_CAPABILITIES_OPENAPI_PATH,

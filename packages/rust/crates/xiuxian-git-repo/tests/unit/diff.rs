@@ -1,4 +1,6 @@
-use xiuxian_git_repo::{RevisionChangeKind, diff_checkout_revisions};
+use xiuxian_git_repo::{
+    RevisionChangeKind, diff_checkout_revisions, read_checkout_file_bytes_at_revision,
+};
 
 use crate::support::{
     append_repo_file_and_commit, head_revision, init_test_repository, must,
@@ -73,4 +75,45 @@ fn diff_checkout_revisions_returns_empty_summary_for_identical_revisions() {
     assert!(diff.is_empty());
     assert!(diff.changed_paths().is_empty());
     assert!(diff.deleted_paths().is_empty());
+}
+
+#[test]
+fn diff_checkout_revision_file_reads_previous_blob_contents() {
+    let repository = temp_dir();
+    init_test_repository(repository.path());
+    append_repo_file_and_commit(
+        repository.path(),
+        "src/Alpha.jl",
+        "module Alpha\nalpha() = 1\nend\n",
+        "add alpha",
+    );
+    let previous_revision = head_revision(repository.path());
+
+    append_repo_file_and_commit(
+        repository.path(),
+        "src/Alpha.jl",
+        "module Alpha\nalpha() = 2\nend\n",
+        "modify alpha",
+    );
+    let revision = head_revision(repository.path());
+
+    let previous_blob = must(
+        read_checkout_file_bytes_at_revision(repository.path(), &previous_revision, "src/Alpha.jl"),
+        "read previous revision file",
+    )
+    .expect("previous revision file should exist");
+    let current_blob = must(
+        read_checkout_file_bytes_at_revision(repository.path(), &revision, "src/Alpha.jl"),
+        "read current revision file",
+    )
+    .expect("current revision file should exist");
+
+    assert_eq!(
+        String::from_utf8(previous_blob).expect("previous blob should be utf8"),
+        "module Alpha\nalpha() = 1\nend\n"
+    );
+    assert_eq!(
+        String::from_utf8(current_blob).expect("current blob should be utf8"),
+        "module Alpha\nalpha() = 2\nend\n"
+    );
 }

@@ -127,9 +127,12 @@ pub(crate) fn build_repository_analysis_cache_key(
     metadata: Option<&LocalCheckoutMetadata>,
 ) -> RepositoryAnalysisCacheKey {
     let plugin_ids = repository.repo_intelligence_plugin_ids();
-    let analysis_identity =
-        collect_repository_analysis_identity(source.checkout_root.as_path(), plugin_ids.as_slice())
-            .unwrap_or_else(|| fallback_analysis_identity(source, metadata, plugin_ids.as_slice()));
+    let analysis_identity = collect_repository_analysis_identity(
+        repository,
+        source.checkout_root.as_path(),
+        plugin_ids.as_slice(),
+    )
+    .unwrap_or_else(|| fallback_analysis_identity(source, metadata, plugin_ids.as_slice()));
 
     RepositoryAnalysisCacheKey {
         repo_id: repository.id.clone(),

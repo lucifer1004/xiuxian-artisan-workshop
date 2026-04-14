@@ -36,8 +36,8 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `analyzers/service/helpers/tests.rs` is now split into `analyzers/service/helpers/tests/` with dedicated fixture and themed assertion modules, while the helpers test surface remains unchanged; the next bounded target is `search/local_symbol/query/shared.rs`
 - `search/reference_occurrence/query.rs` is now split into `search/reference_occurrence/query/` with dedicated search, candidates, decode, and tests modules, while the reference-occurrence search surface remains unchanged; the next bounded target is `search/repo_entity/build/tests.rs`
 - `search/service/core/construction.rs` is now split into `search/service/core/construction/` with dedicated runtime, paths, concurrency, and tests modules, while the public `SearchPlaneService` construction surface remains unchanged; the next bounded target is `gateway/studio/router/handlers/repo/analysis/search.rs`
-- `gateway/studio/router/handlers/repo/analysis/search.rs` is now split into `gateway/studio/router/handlers/repo/analysis/search/` with dedicated cache, publication, module, symbol, example, and tests modules, while the repo-analysis handler surface remains unchanged; the next bounded target is `zhenfa_router/native/section_create.rs`
-- `zhenfa_router/native/section_create.rs` is now split into `zhenfa_router/native/section_create/` with dedicated types, insertion, building, and tests modules, while the section-creation surface remains unchanged; the next bounded target is `analyzers/query/docs/planner.rs`
+- `gateway/studio/router/handlers/repo/analysis/search.rs` is now split into `gateway/studio/router/handlers/repo/analysis/search/` with dedicated cache, publication, module, symbol, example, and tests modules, while the repo-analysis handler surface remains unchanged; the next bounded target is `analyzers/query/docs/planner.rs`
+- the old `zhenfa_router/native/section_create/` helper home has now been retired in favor of the parser-owned `xiuxian-wendao-parsers::section_create` surface plus the Wendao-local adapter `src/parsers/markdown/section_create/`; the semantic-edit surface remains unchanged while parser ownership no longer lives under `zhenfa_router`
 - `gateway/studio/router/code_ast.rs` is now split into `gateway/studio/router/code_ast/` with dedicated response, resolve, blocks, and atoms modules, while the public code-AST router surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/knowledge/intent.rs`
 - `gateway/studio/search/definition.rs` is now split into `gateway/studio/search/definition/` with dedicated resolve, filters, and tests modules, while the public definition resolution surface remains unchanged; the next bounded target is `analyzers/service/projection/planner/api.rs`
 - `link_graph/index/build/assemble.rs` is now split into `link_graph/index/build/assemble/` with dedicated inputs, notes, edges, virtual-nodes, finalize, and api modules, while the public link-graph index build surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/code_search/search.rs`
@@ -49,6 +49,7 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `attachment` now backs `search_attachments`
 - `repo_content_chunk` now backs code-search file fallback and removes long-lived source blob storage from `RepoIndexSnapshot`
 - `repo_entity` now materializes repo analyzer modules, symbols, and examples into per-repository Lance tables
+- repo-backed incremental planning now uses semantic equivalence instead of raw whole-file metadata equality: `repo_entity` changed-path detection reuses analyzer-row semantic hashes, `repo_content_chunk` fingerprints hash document contents, and shared repo staging keeps metadata-only refreshes on the existing Parquet table instead of rotating table identity
 - `knowledge_section` now backs `search_knowledge` and non-code `search_intent`, with note body and section text materialized into Lance `search_text`
 - non-code `search_intent` now merges `knowledge_section`, `local_symbol`, and repo-content hits into a single hybrid response path instead of treating intent as a pure knowledge lookup
 - code-biased Studio search now queries `repo_entity` before repo-content fallback, and hybrid intent merges repo-entity hits into the same ranked response path
@@ -103,6 +104,12 @@ Replace Studio request-path search hot spots with a background-built search plan
 - repo publication manifests now also carry `source_revision`, and repo indexing threads `sync_result.revision` into both repo-backed publish paths so published tables are pinned to the exact source revision that produced them
 - repo-backed publication planning was already incremental before the latest repo-index audit. `repo_entity` and `repo_content_chunk` both compute per-file fingerprints and reuse prior publications through staged mutation (`noop`, revision-only refresh, or clone-and-mutate) instead of blindly rebuilding every row on every refresh
 - practical repo-index incrementality is now pushed one layer earlier too. `RepoIndexCoordinator::process_task(...)` now skips analyzer execution and code-document collection for managed remotes when both repo-backed corpora already expose readable Parquet publications for the synced revision, so steady-state remote refreshes no longer pay the full post-sync indexing cost just to rediscover an unchanged publication
+- Julia repo-index incrementality now also uses parser-summary semantics instead of raw source churn for safe leaf-file edits. `prepare_incremental_analysis(...)` reads the previous revision blob through `xiuxian-git-repo`, compares previous/current Julia parser-summary file fingerprints, and reuses cached analysis when those semantic fingerprints match, so comment-only or formatting-only leaf edits stop before incremental analyzer execution
+- single-plugin Modelica repo-index incrementality now also reuses cached analysis for AST-equivalent `.mo` churn. `prepare_incremental_analysis(...)` compares previous/current Modelica semantic fingerprints and short-circuits to cached analysis reuse when they match; those fingerprints now include both parser-summary payloads and file-local doc-topology markers so large `package.mo` and UsersGuide `.mo` files can reuse safely without misclassifying doc-surface edits as no-ops, while real Modelica semantic edits still fall back to full analysis until Modelica incremental overlay merge grows first-class ownership for imports and repository-level module reconstruction
+- supported mixed `julia+modelica` repositories now share that same repo-index semantic-reuse fast path for AST-equivalent churn. When every analysis-affecting modified `.jl` or `.mo` file keeps the same parser-summary fingerprint across revisions, `prepare_incremental_analysis(...)` reuses cached analysis directly without widening into mixed-plugin overlay merge; unknown-plugin mixes still stay on the conservative fallback path
+- Julia analyzer cache identity now uses that same semantic owner for `src/*.jl` too. `RepositoryAnalysisCacheKey.analysis_identity` now prefers Julia parser-summary file fingerprints over raw file bytes for single-plugin Julia source files, while keeping a raw-contents fallback when parser-summary is unavailable so the cache-key path does not become a mandatory parser-summary bootstrap edge
+- Modelica analyzer cache identity now follows the same bounded semantic-owner rule for single-plugin `.mo` repositories. `RepositoryAnalysisCacheKey.analysis_identity` prefers Modelica parser-summary plus doc-surface semantic fingerprints over raw contents for AST-equivalent source churn, but preserves the raw-contents fallback when parser-summary is unavailable so cache-key lookup does not require a mandatory Modelica parser-summary bootstrap
+- the next bounded mixed-plugin owner is now closed too: repositories that only register `julia` and `modelica` keep parser-summary semantic identity for `.jl` and `.mo` files instead of dropping back to raw contents just because the repository is mixed, while unknown-plugin mixes still stay on the conservative raw-contents path until a broader capability owner exists
 - repo-index restart warm-start is now more selective. `RepoIndexCoordinator::sync_repositories(...)` hydrates persisted repo-backed state plus config fingerprints before enqueue for local checkouts, and it now also allows a bounded managed-remote fast path when local `Status` metadata still proves the published revision is current: `manual` remotes may reuse healthy in-sync managed assets directly; `fetch` remotes may do so when the local mirror fetch timestamp is still `Fresh` or `Aging`; the same `fetch` remotes may also reuse healthy same-revision assets after `last_fetched_at` has gone `Stale` when a recent persisted upstream probe marker still matches that revision; retryable probe failures no longer destroy that recent success proof, so startup hydration may still reuse a healthy same-revision readable remote while the preserved last-success marker remains within the accepted freshness window; and commit-pinned `fetch` remotes may likewise reuse healthy same-revision assets even after the local fetch timestamp has gone `Stale` because upstream drift no longer changes the selected revision
 - managed-remote `Ensure` also does less redundant local Git work now. Fetch-policy remotes first probe upstream ref advertisements and only fall through to a full mirror fetch when the advertised target revision actually changed or cannot be determined, so unchanged branch/default/tag remotes stop downloading a packfile on every startup cycle; the no-fetch probe-success path now also persists a small mirror-side probe marker so startup hydration can reuse that proof later without redefining `last_fetched_at`, and the retryable-failure path preserves the most recent matching success marker instead of replacing it with weaker outage-only state; when a mirror fetch does still happen, Wendao also skips the follow-up checkout-side fetch whenever the desired revision from the mirror already matches the current checkout revision. Commit-pinned `fetch` remotes sit on an even stronger immutable fast path and skip that upstream mirror fetch entirely once the local mirror already contains the pinned commit
 - `code_search` and code-biased hybrid `intent` now keep serving published repo-backed tables while a repo refresh is in flight, instead of collapsing to snapshot-miss pending state as soon as repo indexing starts
@@ -158,7 +165,11 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the gateway warm-cache perf lane is now owned exclusively by the formal `xiuxian-testing-gate` target in `tests/performance/gateway_search.rs`. `repo_module_search`, `repo_symbol_search`, `repo_example_search`, `repo_projected_page_search`, `studio_code_search`, and `search_index_status` all validate there as isolated per-case gates under `serial_test::file_serial`
 - `xiuxian-wendao-runtime::WendaoFlightService` now keeps a bounded reusable route-payload cache instead of a one-shot get/do_get handoff only. Repeated identical `GetFlightInfo` requests can reuse the already materialized batch/app-metadata payload instead of re-entering the provider, and focused runtime server tests now lock that behavior for both repeated `GetFlightInfo` and the existing `GetFlightInfo -> DoGet` handoff
 - the same cached payload path now also lazily owns encoded `DoGet` frames, so repeated identical `DoGet` requests can reuse the already encoded Flight payload instead of rerunning batch-to-Flight encoding work after the first request
-- the frontend live Flight perf harness now also normalizes loopback origins, avoids redundant `/api/ui/config` writes, and waits for `/api/search/index/status` plus `/api/repo/index/status` to settle before measured Flight runs begin. That turns the suite into a steady-state perf proof instead of a restart-noise detector only
+- the frontend live Flight perf harness now also normalizes loopback origins,
+  avoids redundant runtime config sync retries, and waits for
+  `/api/search/index/status` plus `/api/repo/index/status` to settle before
+  measured Flight runs begin. That turns the suite into a steady-state perf
+  proof instead of a restart-noise detector only
 - the latest steady-state same-port live proof on the default `127.0.0.1:9517` gateway after the `DoGet` encoded-frame reuse slice reported `2.15ms` overall average, `3.31ms` P95, with `GetFlightInfo` averaging `0.86ms` and `DoGet` averaging `0.79ms` across the checked-in 179-repository config
 - the production-line restart audit also exposed an operator wiring issue outside the request path: `process.nix` had been recording the wrapper-shell PID in `wendao.pid`, while readiness compared that pidfile against `x-wendao-process-id`. The gateway process entry now records the actual child PID so local operator restarts can validate against the real listener process instead
 - the next fresh restart proof exposed the remaining blocker more precisely: `repo_entity` / `repo_content_chunk` could reenter a transient runtime-only in-memory state after restart, which made `/api/search/index/status` report `published_manifest_missing` and kept the live perf harness waiting for steady state even though persisted repo-corpus publication records already existed
@@ -214,6 +225,80 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the old lib-only gateway perf calibration lane is now removed, and the follow-up runtime-stability fix is landed too: `RepoIndexCoordinator` now has an explicit stop path, `StudioState::stop_background_services()` stops both repo and symbol coordinators, the formal perf fixture calls that unified shutdown on drop, and the six-case formal gateway bundle is back to a clean `6 passed, 0 leaky`
 - `local_symbol` and `reference_occurrence` are now aligned with the larger corpora on the read path too: both search queries stream projected Lance batches through bounded rerank windows, both record query telemetry into search-plane status snapshots, and `local_symbol` now explicitly returns no hits for an empty query instead of treating the empty string as a universal prefix
 - the remaining `local_symbol` autocomplete scan is now aligned too: uncached autocomplete suggestions stream through the same bounded retained-window discipline, and `local_symbol` status telemetry now distinguishes `scope=search` from `scope=autocomplete`
+- the compile-graph thinning lane is now active too: Arrow/DataFusion-heavy SQL
+  query adapters are explicitly gated behind `search-runtime`, and the
+  Arrow-backed link-graph quantum-fusion scorer/export surface is explicitly
+  gated behind `vector-store`, so `cargo check -p xiuxian-wendao --lib
+--no-default-features` stops paying for those default-disabled surfaces by
+  construction
+- that compile-thinning lane now has its next bounded owner cut too:
+  `graphql-parser` and `xiuxian-vector` are explicit `search-runtime`
+  dependencies, `notify` plus `notify-debouncer-full` are explicit
+  `zhenfa-router` dependencies, and `reqwest` plus `xiuxian-zhenfa` now sit
+  behind their real `vector-store` / `zhenfa-router` / `studio` owners, so the
+  remaining direct `--no-default-features` edges are down to `tantivy`,
+  `xiuxian-ast`, and `xiuxian-wendao-runtime`
+- the repo-index parser-summary incremental lane now has its first true
+  Modelica semantic overlay cut. Single-plugin safe leaf API `.mo` files now
+  incremental-merge real declaration changes on top of the previous analysis
+  instead of falling back immediately to a full rebuild, while `package.mo`,
+  import-bearing files, documentation-annotation files, and broader
+  repository-shape Modelica edits remain on the conservative fallback path
+- that same Modelica overlay lane now also owns import-bearing leaf files.
+  Plugin file overlays can emit import rows, repo-analysis import rows now keep
+  repository-relative source paths, and changed-path incremental merge replaces
+  stale imports by path together with symbols. Documentation-annotation files
+  and broader package-shape Modelica edits remain the next conservative
+  fallback boundary
+- that same bounded overlay lane now also owns one safe root `package.mo`
+  file at a time. Root-package incremental admission now uses a lightweight
+  lexical owner for package identity, import extraction, and semantic
+  fingerprinting, so very large root `package.mo` files no longer need to
+  re-enter Modelica parser-summary just to prove AST-equivalent churn or apply
+  bounded root-local import/documentation overlays; root package renames,
+  UsersGuide/support `package.mo`, and broader package-shape edits still stay
+  on the conservative full-analysis path
+- that same safe root-package owner now also applies during full repository
+  analysis. When the repository root `package.mo` stays inside the bounded
+  no-nested-declarations contract, repository analysis reuses lexical root
+  package metadata for imports and skips root-package symbol parser-summary
+  work entirely, so large root `package.mo` files no longer need Modelica
+  parser-summary just to materialize root-local import/documentation rows
+  during full analysis; nested declarations, UsersGuide/support `package.mo`,
+  and broader package-shape files still stay on the conservative fallback path
+- that same lexical package owner now also extends to safe API-surface nested
+  `package.mo` files during full repository analysis and repo-owned
+  `analyze_file(...)`. When a nested package file keeps package identity aligned
+  with its directory path and stays inside the bounded import/doc-only
+  contract, Wendao skips package-file parser-summary symbol work and reuses
+  lexical import metadata there too; package-name/path mismatch, nested
+  declarations, and UsersGuide/support `package.mo` files still stay on the
+  conservative parser-summary fallback path
+- that same bounded nested-package owner now also extends into repo-index
+  incremental preparation. One changed safe API-surface nested `package.mo`
+  file can now reuse the incremental overlay lane, and package-file semantic
+  fingerprints ignore import line-number drift so comment-only churn keeps
+  cached analysis; nested declarations, package-name/path mismatch,
+  UsersGuide/support `package.mo`, and root package rename semantics still stay
+  on the conservative fallback path
+- the same Modelica package owner now also removes repeated scan/read churn
+  within one repository-analysis pass. Full repository analysis and repo-owned
+  `analyze_file(...)` now build one shared repository snapshot, reuse one
+  sorted file inventory, and reuse preloaded `.mo` contents plus parsed
+  `package.order` rows across module/import/doc/example collection, so large
+  `package.mo` files stop being reread multiple times inside the same pass
+  without widening parser-summary fallback or the existing bounded lexical and
+  incremental admission rules
+- `xiuxian-ast` is now pulled only when one of its real owners is enabled too:
+  `search-runtime`, `studio`, and `zhenfa-router` each declare the dependency
+  explicitly, and `cargo tree -p xiuxian-wendao --no-default-features -e normal`
+  now shows only `tantivy` plus `xiuxian-wendao-runtime` as remaining direct
+  edges in the minimal build
+- `tantivy` is now pulled only behind the new `repo-lexical-index` owner too:
+  the indexed fast path remains enabled for default and Studio builds, while
+  the no-feature lane falls back to the existing lexical / heuristic ranking
+  helpers, and `cargo tree -p xiuxian-wendao --no-default-features -e normal`
+  now bottoms out at `xiuxian-wendao-runtime` as the only remaining direct edge
 - the response-level telemetry surface now also groups by raw scope hint. `/api/search/index/status` `queryTelemetrySummary` keeps the global totals and now adds `scopes[]` buckets with per-scope source counts, latest capture time, scan/match/result totals, and bounded-rerank trim/drop totals so clients can see which lane or repo last drove pressure without re-summing corpus rows
 - the formal `search_index_status` warm-cache gate now consumes those scope buckets too. The repo-scoped code-search warmup must leave a `gateway-sync` bucket in `queryTelemetrySummary.scopes`, and the performance support layer now formats scope pressure into compact diagnostics so a failing gate names the hot scope instead of only saying that the summary was malformed
 - that formal status gate no longer warms telemetry through the full HTTP `intent` path. `GatewayPerfFixture::warm_repo_scope_query(...)` now exercises `SearchPlaneService` directly for repo-scoped telemetry seeding, which preserves the same `gateway-sync` scope bucket while eliminating the slow nextest wall-clock inflation from unnecessary handler-path setup
@@ -735,14 +820,15 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the docs router export audit is now landed too. Docs handler re-exports now
   resolve through `handlers/docs_exports.rs`, so the outward-facing docs symbol
   boundary is grouped instead of repeated inline in `handlers/mod.rs`
-- deferred repo bootstrap is now corrected too. `set_ui_config(...)` no longer
-  drops eager repo/symbol indexing when an unchanged sanitized config is
+- deferred repo bootstrap is now corrected too. The eager config-apply path no
+  longer drops repo or symbol indexing when an unchanged sanitized config is
   explicitly re-applied, and `/api/repo/index/status` now seeds deferred repo
   indexing on first access instead of remaining stuck at `total = 0` with a
   populated repo-project config
-- Studio UI config persistence now also has a stable on-disk contract. The
-  handler persists `UiConfig` back into the base `wendao.toml`, while still
-  reading any legacy `wendao.studio.overlay.toml` during migration and
+- Studio startup now treats config ownership as backend-loaded only. The
+  runtime still reads legacy `wendao.studio.overlay.toml` composition during
+  migration, but `/api/ui/config` no longer exists as a live persistence
+  surface for rewriting `wendao.toml`
   removing it on the next successful write. Gateway bootstrap plus Studio
   bootstrap therefore keep old overlay-backed state bootable without
   continuing to generate overlay files.

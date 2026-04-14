@@ -27,7 +27,9 @@ mod symbol_cache;
 mod traversal;
 mod types;
 
+#[cfg(feature = "vector-store")]
 pub use search::quantum_fusion::orchestrate::QuantumContextBuildError;
+#[cfg(feature = "vector-store")]
 pub use search::quantum_fusion::semantic_ignition::{
     QuantumSemanticIgnition, QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture,
 };

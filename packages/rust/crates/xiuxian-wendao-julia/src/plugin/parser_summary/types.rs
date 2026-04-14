@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
+use serde::Serialize;
+
 /// Target kinds preserved by the native Julia parser docstring contract.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) enum JuliaParserDocTargetKind {
     /// A module-level docstring.
     Module,
@@ -10,7 +12,7 @@ pub(crate) enum JuliaParserDocTargetKind {
 }
 
 /// Julia symbol kinds preserved by the native parser-summary contract.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) enum JuliaParserSymbolKind {
     /// A function-like declaration.
     Function,
@@ -23,7 +25,7 @@ pub(crate) enum JuliaParserSymbolKind {
 }
 
 /// One Julia symbol preserved from the native parser-summary contract.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) struct JuliaParserSymbol {
     /// Symbol display name.
     pub(crate) name: String,
@@ -41,7 +43,7 @@ pub(crate) struct JuliaParserSymbol {
 
 /// One Julia import-like dependency preserved from the native parser-summary
 /// contract.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) struct JuliaParserImport {
     /// Imported module or qualified target name.
     pub(crate) module: String,
@@ -67,7 +69,7 @@ pub(crate) struct JuliaParserImport {
 
 /// One Julia docstring attachment preserved from the native parser-summary
 /// contract.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) struct JuliaParserDocAttachment {
     /// Target display name.
     pub(crate) target_name: String,
@@ -85,7 +87,7 @@ pub(crate) struct JuliaParserDocAttachment {
 
 /// Julia file summary consumed by repo-intelligence after the native parser
 /// cutover.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct JuliaParserFileSummary {
     /// Optional module declared in the parsed file.
     pub(crate) module_name: Option<String>,
@@ -103,7 +105,7 @@ pub(crate) struct JuliaParserFileSummary {
 
 /// Julia root summary consumed by repo-intelligence after the native parser
 /// cutover.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct JuliaParserSourceSummary {
     /// Root module name.
     pub(crate) module_name: String,

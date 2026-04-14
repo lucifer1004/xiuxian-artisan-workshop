@@ -4,6 +4,7 @@ use crate::gateway::studio::search::project_scope::{
     SearchProjectMetadata, resolve_project_root_path,
 };
 use crate::gateway::studio::types::UiProjectConfig;
+#[cfg(test)]
 use crate::search::fingerprint_note_projects;
 
 pub(super) fn studio_display_path(
@@ -43,6 +44,7 @@ pub(super) fn studio_display_path(
     normalized
 }
 
+#[cfg(test)]
 pub(super) fn fingerprint_projects(
     project_root: &Path,
     config_root: &Path,

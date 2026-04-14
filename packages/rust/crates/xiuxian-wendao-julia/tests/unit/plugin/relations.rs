@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 
 use serde_json::json;
-use xiuxian_wendao_core::repo_intelligence::ModuleRecord;
+use xiuxian_wendao_core::repo_intelligence::{DocRecord, ModuleRecord, RelationKind};
 
-use super::{doc_targets_for_annotation_doc, doc_targets_for_file_doc};
+use super::{
+    build_incremental_doc_relations, doc_targets_for_annotation_doc, doc_targets_for_file_doc,
+};
 
 #[test]
 fn doc_targets_for_file_doc_links_users_guide_docs_to_owner_modules() {
@@ -166,6 +168,66 @@ fn doc_targets_for_annotation_doc_links_users_guide_docs_to_owner_modules() {
     insta::assert_json_snapshot!(
         "doc_targets_for_annotation_doc_links_users_guide_docs_to_owner_modules",
         payload
+    );
+}
+
+#[test]
+fn build_incremental_doc_relations_rehydrates_readme_and_annotation_docs() {
+    let modules = vec![
+        module("repo:modelica-demo:module:DemoLib", "DemoLib", "package.mo"),
+        module(
+            "repo:modelica-demo:module:DemoLib.Controllers",
+            "DemoLib.Controllers",
+            "Controllers/package.mo",
+        ),
+    ];
+    let docs = vec![
+        DocRecord {
+            repo_id: "modelica-demo".to_string(),
+            doc_id: "repo:modelica-demo:doc:README.md".to_string(),
+            title: "README".to_string(),
+            path: "README.md".to_string(),
+            format: Some("md".to_string()),
+            doc_target: None,
+        },
+        DocRecord {
+            repo_id: "modelica-demo".to_string(),
+            doc_id: "repo:modelica-demo:doc:Controllers/package.mo#annotation.documentation"
+                .to_string(),
+            title: "Controllers documentation".to_string(),
+            path: "Controllers/package.mo#annotation.documentation".to_string(),
+            format: Some("modelica_annotation".to_string()),
+            doc_target: None,
+        },
+    ];
+
+    let relations = build_incremental_doc_relations("modelica-demo", &modules, &[], &docs);
+    let payload = json!(
+        relations
+            .into_iter()
+            .map(|relation| {
+                (
+                    relation.source_id,
+                    relation.target_id,
+                    relation.kind == RelationKind::Documents,
+                )
+            })
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        payload,
+        json!([
+            [
+                "repo:modelica-demo:doc:README.md",
+                "repo:modelica-demo:module:DemoLib",
+                true
+            ],
+            [
+                "repo:modelica-demo:doc:Controllers/package.mo#annotation.documentation",
+                "repo:modelica-demo:module:DemoLib.Controllers",
+                true
+            ]
+        ])
     );
 }
 

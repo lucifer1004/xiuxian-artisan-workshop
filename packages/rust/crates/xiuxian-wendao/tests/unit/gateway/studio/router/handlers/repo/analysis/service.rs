@@ -16,7 +16,7 @@ async fn run_repo_overview_returns_zero_summary_for_search_only_repository() {
         ),
         search_plane_root,
     );
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: Vec::new(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "lance".to_string(),

@@ -95,7 +95,7 @@ async fn publish_ready_and_maintain_preserves_local_shutdown_without_compaction_
     };
 
     service.stop_local_maintenance();
-    assert!(service.publish_ready_and_maintain(&lease, 10, 3));
+    assert!(service.publish_ready_and_maintain(&lease, 10, 3).await);
 
     let status = service
         .coordinator()

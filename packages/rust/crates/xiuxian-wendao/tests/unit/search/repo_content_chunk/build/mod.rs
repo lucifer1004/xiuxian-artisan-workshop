@@ -5,11 +5,10 @@ use std::sync::Arc;
 use crate::repo_index::RepoCodeDocument;
 use crate::search::repo_content_chunk::build::orchestration::publish_repo_content_chunks;
 use crate::search::repo_content_chunk::build::plan::{
-    plan_repo_content_chunk_build, versioned_repo_content_table_name,
+    plan_repo_content_chunk_build, repo_content_chunk_file_fingerprints,
+    versioned_repo_content_table_name,
 };
-use crate::search::repo_content_chunk::build::types::{
-    REPO_CONTENT_CHUNK_EXTRACTOR_VERSION, RepoContentChunkBuildAction,
-};
+use crate::search::repo_content_chunk::build::types::RepoContentChunkBuildAction;
 use crate::search::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
     SearchPublicationStorageFormat, SearchRepoCorpusRecord, SearchRepoPublicationInput,
@@ -167,18 +166,7 @@ fn plan_repo_content_chunk_build_reuses_table_for_revision_only_refresh() {
     let documents = vec![repo_document("src/lib.rs", "fn alpha() {}\n", 14, 10)];
     let table_name = versioned_repo_content_table_name(
         "alpha/repo",
-        &documents
-            .iter()
-            .map(|document| {
-                (
-                    document.path.clone(),
-                    document.to_file_fingerprint(
-                        REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
-                        SearchCorpusKind::RepoContentChunk.schema_version(),
-                    ),
-                )
-            })
-            .collect::<BTreeMap<_, _>>(),
+        &repo_content_chunk_file_fingerprints(&documents),
         Some("rev-1"),
     );
     let publication = SearchRepoPublicationRecord::new(
@@ -199,18 +187,7 @@ fn plan_repo_content_chunk_build_reuses_table_for_revision_only_refresh() {
         &documents,
         Some("rev-2"),
         Some(&publication),
-        &documents
-            .iter()
-            .map(|document| {
-                (
-                    document.path.clone(),
-                    document.to_file_fingerprint(
-                        REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
-                        SearchCorpusKind::RepoContentChunk.schema_version(),
-                    ),
-                )
-            })
-            .collect::<BTreeMap<_, _>>(),
+        &repo_content_chunk_file_fingerprints(&documents),
     );
 
     match plan.action {
@@ -298,4 +275,79 @@ async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
             .map(|fingerprint| fingerprint.modified_unix_ms),
         Some(20)
     );
+}
+
+#[test]
+fn plan_repo_content_chunk_build_ignores_metadata_only_edits_when_contents_are_unchanged() {
+    let first_documents = vec![repo_document("src/lib.rs", "fn alpha() {}\n", 14, 10)];
+    let first_plan = plan_repo_content_chunk_build(
+        "alpha/repo",
+        &first_documents,
+        Some("rev-1"),
+        None,
+        &BTreeMap::new(),
+    );
+    let previous_publication = match first_plan.action {
+        RepoContentChunkBuildAction::ReplaceAll { ref table_name, .. } => {
+            SearchRepoPublicationRecord::new(
+                SearchCorpusKind::RepoContentChunk,
+                "alpha/repo",
+                SearchRepoPublicationInput {
+                    table_name: table_name.clone(),
+                    schema_version: SearchCorpusKind::RepoContentChunk.schema_version(),
+                    source_revision: Some("rev-1".to_string()),
+                    table_version_id: 1,
+                    row_count: 1,
+                    fragment_count: 1,
+                    published_at: "2026-03-24T12:00:00Z".to_string(),
+                },
+            )
+        }
+        other => panic!("unexpected first build action: {other:?}"),
+    };
+
+    let second_documents = vec![repo_document("src/lib.rs", "fn alpha() {}\n", 14, 20)];
+    let second_plan = plan_repo_content_chunk_build(
+        "alpha/repo",
+        &second_documents,
+        Some("rev-2"),
+        Some(&previous_publication),
+        &first_plan.file_fingerprints,
+    );
+
+    let first_table_name = versioned_repo_content_table_name(
+        "alpha/repo",
+        &first_plan.file_fingerprints,
+        Some("rev-2"),
+    );
+    let second_table_name = versioned_repo_content_table_name(
+        "alpha/repo",
+        &second_plan.file_fingerprints,
+        Some("rev-2"),
+    );
+    assert_eq!(first_table_name, second_table_name);
+    assert_eq!(
+        first_plan
+            .file_fingerprints
+            .get("src/lib.rs")
+            .and_then(|fingerprint| fingerprint.blake3.as_deref()),
+        second_plan
+            .file_fingerprints
+            .get("src/lib.rs")
+            .and_then(|fingerprint| fingerprint.blake3.as_deref())
+    );
+    assert_eq!(
+        second_plan
+            .file_fingerprints
+            .get("src/lib.rs")
+            .map(|fingerprint| fingerprint.modified_unix_ms),
+        Some(20)
+    );
+
+    match second_plan.action {
+        RepoContentChunkBuildAction::RefreshPublication { table_name } => {
+            assert_eq!(table_name, previous_publication.table_name);
+        }
+        other => panic!("unexpected second build action: {other:?}"),
+    }
 }

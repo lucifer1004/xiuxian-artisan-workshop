@@ -146,6 +146,21 @@ impl SearchPlaneService {
     }
 
     #[must_use]
+    pub(crate) fn local_corpus_runtime_root(&self) -> std::path::PathBuf {
+        self.storage_root.join("_runtime").join("local_corpus")
+    }
+
+    #[must_use]
+    pub(crate) fn local_corpus_manifest_json_path(
+        &self,
+        corpus: SearchCorpusKind,
+    ) -> std::path::PathBuf {
+        self.local_corpus_runtime_root()
+            .join("manifests")
+            .join(format!("{}.json", corpus.as_str()))
+    }
+
+    #[must_use]
     pub(crate) fn repo_corpus_record_json_path(
         &self,
         corpus: SearchCorpusKind,

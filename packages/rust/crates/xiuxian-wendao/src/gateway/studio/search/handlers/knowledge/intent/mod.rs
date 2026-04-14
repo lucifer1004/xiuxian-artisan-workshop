@@ -10,6 +10,8 @@ mod types;
 pub use entry::build_intent_search_response;
 #[cfg(test)]
 pub(crate) use entry::load_intent_search_response_with_metadata;
+#[cfg(test)]
+pub(crate) use indices::ensure_intent_indices;
 pub(crate) use types::IntentSearchTransportMetadata;
 #[cfg(all(test, feature = "duckdb"))]
 pub(crate) use types::configured_parquet_query_engine_label;

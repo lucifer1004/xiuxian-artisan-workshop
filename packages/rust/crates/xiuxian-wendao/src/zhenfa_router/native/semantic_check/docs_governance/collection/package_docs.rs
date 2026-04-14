@@ -1,7 +1,7 @@
 use super::footer::collect_stale_index_footer_standards;
 use super::hidden_links::collect_hidden_path_link_issues;
 use super::relations::collect_stale_index_relation_links;
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::{
+use crate::parsers::docs_governance::{
     derive_opaque_doc_id, is_opaque_doc_id, is_package_local_crate_doc, parse_top_properties_drawer,
 };
 use crate::zhenfa_router::native::semantic_check::docs_governance::types::DOC_IDENTITY_PROTOCOL_ISSUE_TYPE;

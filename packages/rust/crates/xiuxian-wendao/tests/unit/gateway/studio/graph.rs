@@ -79,7 +79,7 @@ fn push_ui_config_from_toml(fixture: &GraphFixture, toml_content: &str) {
         )
         .collect::<Vec<_>>();
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects,
         repo_projects: Vec::new(),
     });

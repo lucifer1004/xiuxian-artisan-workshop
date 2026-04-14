@@ -61,7 +61,7 @@ pub use dirs::{PrjDirs, get_cache_home, get_config_home, get_data_home};
 pub use discover::{
     DiscoverOptions, count_files_in_dir, discover_files, discover_files_in_dir, should_skip_path,
 };
-pub use error::IoError;
+pub use error::{IoError, Result};
 pub use sync::read_text_safe;
 #[cfg(feature = "notify")]
 pub use watcher::{

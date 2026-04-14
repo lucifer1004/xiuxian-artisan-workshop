@@ -56,7 +56,7 @@ impl SearchPlaneService {
             manifest_keyspace.clone(),
             maintenance_policy,
         ));
-        Self {
+        let service = Self {
             project_root,
             storage_root,
             manifest_keyspace,
@@ -76,8 +76,15 @@ impl SearchPlaneService {
                 crate::search::service::core::types::RepoMaintenanceRuntime::default(),
             )),
             query_telemetry: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
+            markdown_snapshot_entries: Arc::new(dashmap::DashMap::new()),
+            source_snapshot_entries: Arc::new(dashmap::DashMap::new()),
+            repeat_work_telemetry: Arc::new(RwLock::new(
+                crate::search::service::core::repeat_work::SearchBuildRepeatWorkTelemetryState::default(),
+            )),
             repo_corpus_records: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
-        }
+        };
+        service.restore_local_corpus_statuses_from_runtime();
+        service
     }
 
     #[cfg(test)]

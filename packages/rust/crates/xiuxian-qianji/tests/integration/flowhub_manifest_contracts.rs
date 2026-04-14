@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use tempfile::TempDir;
 use xiuxian_config_core::resolve_project_root;
-use xiuxian_qianji::contracts::{TemplateLinkRef, TemplateUseSpec};
+use xiuxian_qianji::contracts::{FlowhubGraphTopology, TemplateLinkRef, TemplateUseSpec};
 use xiuxian_qianji::{
     load_flowhub_module_manifest, load_flowhub_scenario_manifest, parse_flowhub_module_manifest,
     parse_flowhub_scenario_manifest, resolve_flowhub_module_children,
@@ -54,6 +54,7 @@ fn flowhub_rust_module_manifest_parses_as_leaf_node() {
     assert_eq!(manifest.exports.entry, "task.rust-start");
     assert_eq!(manifest.exports.ready, "task.constraints-ready");
     assert!(manifest.contract.is_none());
+    assert!(manifest.graph.is_empty());
     assert!(manifest.validation.is_empty());
     assert!(manifest.template.is_none());
 }
@@ -99,8 +100,37 @@ fn load_flowhub_module_manifest_reads_real_leaf_file() {
     assert_eq!(manifest.module.name, "blueprint");
     assert_eq!(manifest.exports.ready, "task.blueprint-ready");
     assert!(manifest.contract.is_none());
+    assert!(manifest.graph.is_empty());
     assert!(manifest.template.is_none());
     assert!(manifest.validation.is_empty());
+}
+
+#[test]
+fn load_flowhub_module_manifest_reads_real_plan_graph_topology_contract() {
+    let manifest = load_flowhub_module_manifest(flowhub_root().join("plan/qianji.toml"))
+        .unwrap_or_else(|error| panic!("plan module manifest should load: {error}"));
+
+    assert_eq!(manifest.graph.len(), 1);
+    assert_eq!(manifest.graph[0].path, "codex-plan.mmd");
+    assert_eq!(manifest.graph[0].name, None);
+    assert_eq!(
+        manifest.graph[0].topology,
+        FlowhubGraphTopology::BoundedLoop
+    );
+}
+
+#[test]
+fn load_flowhub_module_manifest_reads_real_wendao_graph_topology_contract() {
+    let manifest = load_flowhub_module_manifest(flowhub_root().join("wendao/qianji.toml"))
+        .unwrap_or_else(|error| panic!("wendao module manifest should load: {error}"));
+
+    assert_eq!(manifest.graph.len(), 1);
+    assert_eq!(manifest.graph[0].path, "docs-search.mmd");
+    assert_eq!(manifest.graph[0].name.as_deref(), Some("DOC_SEARCH"));
+    assert_eq!(
+        manifest.graph[0].topology,
+        FlowhubGraphTopology::BoundedLoop
+    );
 }
 
 #[test]
@@ -173,6 +203,67 @@ use = ["blueprint"]
     let message = error.to_string();
     assert!(message.contains("template.use"));
     assert!(message.contains("<module-ref> as <alias>"));
+}
+
+#[test]
+fn flowhub_module_manifest_rejects_graph_entries_outside_contract_required() {
+    let error = parse_flowhub_module_manifest(
+        r#"
+version = 1
+
+[module]
+name = "wendao"
+
+[exports]
+entry = "task.wendao-start"
+ready = "task.wendao-ready"
+
+[contract]
+required = ["qianji.toml"]
+
+[[graph]]
+path = "docs-search.mmd"
+topology = "bounded_loop"
+"#,
+    )
+    .err()
+    .unwrap_or_else(|| panic!("invalid graph contract should fail"));
+
+    assert!(
+        error
+            .to_string()
+            .contains("must also be declared in `contract.required`")
+    );
+}
+
+#[test]
+fn flowhub_module_manifest_rejects_blank_graph_name_override() {
+    let error = parse_flowhub_module_manifest(
+        r#"
+version = 1
+
+[module]
+name = "wendao"
+
+[exports]
+entry = "task.wendao-start"
+ready = "task.wendao-ready"
+
+[contract]
+required = ["docs-search.mmd"]
+
+[[graph]]
+path = "docs-search.mmd"
+name = "   "
+topology = "bounded_loop"
+"#,
+    )
+    .err()
+    .unwrap_or_else(|| panic!("blank graph name should fail"));
+
+    let message = error.to_string();
+    assert!(message.contains("[[graph]].name"));
+    assert!(message.contains("non-empty"));
 }
 
 #[test]

@@ -1,23 +1,40 @@
 use super::types::SearchPlaneService;
 use crate::gateway::studio::types::UiProjectConfig;
 use crate::search::{
-    AttachmentSearchError, KnowledgeSectionSearchError, LocalSymbolSearchError,
+    AttachmentSearchError, KnowledgeSectionSearchError, LocalSymbolSearchError, ProjectScannedFile,
     ReferenceOccurrenceSearchError,
 };
 
 impl SearchPlaneService {
+    #[cfg(test)]
     pub(crate) fn ensure_local_symbol_index_started(
         &self,
         project_root: &std::path::Path,
         config_root: &std::path::Path,
         projects: &[UiProjectConfig],
-    ) {
+    ) -> bool {
         crate::search::local_symbol::ensure_local_symbol_index_started(
             self,
             project_root,
             config_root,
             projects,
-        );
+        )
+    }
+
+    pub(crate) fn ensure_local_symbol_index_started_with_scanned_files(
+        &self,
+        project_root: &std::path::Path,
+        config_root: &std::path::Path,
+        projects: &[UiProjectConfig],
+        scanned_files: &[ProjectScannedFile],
+    ) -> bool {
+        crate::search::local_symbol::ensure_local_symbol_index_started_with_scanned_files(
+            self,
+            project_root,
+            config_root,
+            projects,
+            scanned_files,
+        )
     }
 
     pub(crate) async fn search_local_symbols(
@@ -28,18 +45,35 @@ impl SearchPlaneService {
         crate::search::local_symbol::search_local_symbols(self, query, limit).await
     }
 
+    #[cfg(test)]
     pub(crate) fn ensure_knowledge_section_index_started(
         &self,
         project_root: &std::path::Path,
         config_root: &std::path::Path,
         projects: &[UiProjectConfig],
-    ) {
+    ) -> bool {
         crate::search::knowledge_section::ensure_knowledge_section_index_started(
             self,
             project_root,
             config_root,
             projects,
-        );
+        )
+    }
+
+    pub(crate) fn ensure_knowledge_section_index_started_with_scanned_files(
+        &self,
+        project_root: &std::path::Path,
+        config_root: &std::path::Path,
+        projects: &[UiProjectConfig],
+        scanned_files: &[ProjectScannedFile],
+    ) -> bool {
+        crate::search::knowledge_section::ensure_knowledge_section_index_started_with_scanned_files(
+            self,
+            project_root,
+            config_root,
+            projects,
+            scanned_files,
+        )
     }
 
     pub(crate) async fn search_knowledge_sections(
@@ -50,18 +84,35 @@ impl SearchPlaneService {
         crate::search::knowledge_section::search_knowledge_sections(self, query, limit).await
     }
 
+    #[cfg(test)]
     pub(crate) fn ensure_attachment_index_started(
         &self,
         project_root: &std::path::Path,
         config_root: &std::path::Path,
         projects: &[UiProjectConfig],
-    ) {
+    ) -> bool {
         crate::search::attachment::ensure_attachment_index_started(
             self,
             project_root,
             config_root,
             projects,
-        );
+        )
+    }
+
+    pub(crate) fn ensure_attachment_index_started_with_scanned_files(
+        &self,
+        project_root: &std::path::Path,
+        config_root: &std::path::Path,
+        projects: &[UiProjectConfig],
+        scanned_files: &[ProjectScannedFile],
+    ) -> bool {
+        crate::search::attachment::ensure_attachment_index_started_with_scanned_files(
+            self,
+            project_root,
+            config_root,
+            projects,
+            scanned_files,
+        )
     }
 
     pub(crate) async fn search_attachment_hits(
@@ -93,18 +144,35 @@ impl SearchPlaneService {
         crate::search::local_symbol::autocomplete_local_symbols(self, prefix, limit).await
     }
 
+    #[cfg(test)]
     pub(crate) fn ensure_reference_occurrence_index_started(
         &self,
         project_root: &std::path::Path,
         config_root: &std::path::Path,
         projects: &[UiProjectConfig],
-    ) {
+    ) -> bool {
         crate::search::reference_occurrence::ensure_reference_occurrence_index_started(
             self,
             project_root,
             config_root,
             projects,
-        );
+        )
+    }
+
+    pub(crate) fn ensure_reference_occurrence_index_started_with_scanned_files(
+        &self,
+        project_root: &std::path::Path,
+        config_root: &std::path::Path,
+        projects: &[UiProjectConfig],
+        scanned_files: &[ProjectScannedFile],
+    ) -> bool {
+        crate::search::reference_occurrence::ensure_reference_occurrence_index_started_with_scanned_files(
+            self,
+            project_root,
+            config_root,
+            projects,
+            scanned_files,
+        )
     }
 
     pub(crate) async fn search_reference_occurrences(

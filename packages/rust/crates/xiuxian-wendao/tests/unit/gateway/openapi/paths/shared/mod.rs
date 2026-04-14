@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
 
 use crate::gateway::openapi::paths::{
-    API_HEALTH_OPENAPI_PATH, API_NOTIFY_OPENAPI_PATH, API_REPO_SYNC_OPENAPI_PATH,
-    API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH, WENDAO_GATEWAY_ROUTE_CONTRACTS,
+    API_DOCS_PAGE_INDEX_TREE_OPENAPI_PATH, API_HEALTH_OPENAPI_PATH, API_NOTIFY_OPENAPI_PATH,
+    API_REPO_SYNC_OPENAPI_PATH, API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH,
+    WENDAO_GATEWAY_ROUTE_CONTRACTS,
 };
 
 const RETIRED_SEARCH_AST_OPENAPI_PATH: &str = "/api/search/ast";
@@ -17,6 +18,7 @@ const RETIRED_GRAPH_NEIGHBORS_OPENAPI_PATH: &str = "/api/graph/neighbors/{id}";
 const RETIRED_NODE_NEIGHBORS_OPENAPI_PATH: &str = "/api/neighbors/{id}";
 const RETIRED_ANALYSIS_MARKDOWN_OPENAPI_PATH: &str = "/api/analysis/markdown";
 const RETIRED_ANALYSIS_CODE_AST_OPENAPI_PATH: &str = "/api/analysis/code-ast";
+const RETIRED_UI_CONFIG_OPENAPI_PATH: &str = "/api/ui/config";
 
 #[test]
 fn route_inventory_keeps_core_endpoints() {
@@ -27,6 +29,7 @@ fn route_inventory_keeps_core_endpoints() {
 
     assert!(openapi_paths.contains(API_HEALTH_OPENAPI_PATH));
     assert!(openapi_paths.contains(API_NOTIFY_OPENAPI_PATH));
+    assert!(openapi_paths.contains(API_DOCS_PAGE_INDEX_TREE_OPENAPI_PATH));
     assert!(openapi_paths.contains(API_REPO_SYNC_OPENAPI_PATH));
     assert!(openapi_paths.contains(API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH));
 }
@@ -95,6 +98,10 @@ fn route_inventory_omits_retired_flight_only_http_paths() {
     assert!(
         !openapi_paths.contains(RETIRED_ANALYSIS_CODE_AST_OPENAPI_PATH),
         "stable shared route inventory must not re-expose retired code-AST HTTP analysis path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_UI_CONFIG_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired UI config HTTP path"
     );
 }
 

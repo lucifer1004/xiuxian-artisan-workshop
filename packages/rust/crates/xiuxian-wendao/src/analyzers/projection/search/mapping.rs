@@ -1,8 +1,11 @@
+#[cfg(feature = "repo-lexical-index")]
 use std::collections::HashMap;
 
 use crate::analyzers::{ProjectedPageRecord, ProjectionPageKind};
+#[cfg(feature = "repo-lexical-index")]
 use crate::search::SearchDocumentHit;
 
+#[cfg(feature = "repo-lexical-index")]
 use super::sort::sort_ranked_pages;
 
 pub(super) fn page_matches_kind(
@@ -53,6 +56,7 @@ pub(super) fn fuzzy_match_score(score: f32) -> u8 {
     scaled as u8
 }
 
+#[cfg(feature = "repo-lexical-index")]
 pub(super) fn map_search_documents_to_pages(
     records: Vec<SearchDocumentHit>,
     page_by_id: &HashMap<String, ProjectedPageRecord>,
@@ -79,6 +83,7 @@ pub(super) fn map_search_documents_to_pages(
     pages
 }
 
+#[cfg(feature = "repo-lexical-index")]
 pub(super) fn map_fuzzy_search_documents_to_pages(
     records: Vec<SearchDocumentHit>,
     page_by_id: &HashMap<String, ProjectedPageRecord>,

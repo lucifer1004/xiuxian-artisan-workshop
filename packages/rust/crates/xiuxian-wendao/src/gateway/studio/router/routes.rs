@@ -24,6 +24,7 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::vfs_scan),
         )
         .route(openapi_paths::API_VFS_CAT_AXUM_PATH, get(handlers::vfs_cat))
+        .route("/api/vfs/raw", get(handlers::vfs_raw))
         .route(
             openapi_paths::API_VFS_ENTRY_AXUM_PATH,
             get(handlers::vfs_entry),
@@ -81,6 +82,10 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::docs_page),
         )
         .route(
+            openapi_paths::API_DOCS_PAGE_INDEX_TREE_AXUM_PATH,
+            get(handlers::docs_page_index_tree),
+        )
+        .route(
             openapi_paths::API_DOCS_FAMILY_CONTEXT_AXUM_PATH,
             get(handlers::docs_family_context),
         )
@@ -99,10 +104,6 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
         .route(
             openapi_paths::API_DOCS_NAVIGATION_SEARCH_AXUM_PATH,
             get(handlers::docs_navigation_search),
-        )
-        .route(
-            openapi_paths::API_UI_CONFIG_AXUM_PATH,
-            get(handlers::get_ui_config).post(handlers::set_ui_config),
         )
         .route(
             openapi_paths::API_UI_CAPABILITIES_AXUM_PATH,

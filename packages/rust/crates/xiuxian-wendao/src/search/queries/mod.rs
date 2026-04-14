@@ -10,6 +10,7 @@ pub mod graphql;
 #[cfg(feature = "search-runtime")]
 pub mod rest;
 /// Shared `SQL` adapter surface over the request-scoped query system.
+#[cfg(feature = "search-runtime")]
 pub mod sql;
 
 #[cfg(feature = "search-runtime")]

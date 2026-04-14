@@ -1,4 +1,4 @@
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::{
+use crate::parsers::docs_governance::{
     collect_index_body_links, collect_lines, extract_wikilinks, parse_relations_links_line,
 };
 use crate::zhenfa_router::native::semantic_check::docs_governance::types::STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE;

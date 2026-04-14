@@ -26,6 +26,8 @@ mod test_consensus;
 mod test_context_isolation_and_concurrency;
 #[path = "integration/test_formal_adversarial_audit.rs"]
 mod test_formal_adversarial_audit;
+#[path = "integration/test_invocation_call_mechanisms.rs"]
+mod test_invocation_call_mechanisms;
 #[path = "integration/test_layout_bpmn.rs"]
 mod test_layout_bpmn;
 #[path = "integration/test_memory_promotion_pipeline.rs"]

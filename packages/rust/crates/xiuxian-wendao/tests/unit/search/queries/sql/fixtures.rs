@@ -411,6 +411,7 @@ fn sample_repo_entity_analysis(
         imports: vec![ImportRecord {
             repo_id: repo_id.to_string(),
             module_id: "module:BaseModelica".to_string(),
+            path: "src/BaseModelica.jl".to_string(),
             import_name: symbol_name.to_string(),
             target_package: "SciMLBase".to_string(),
             source_module: "BaseModelica".to_string(),

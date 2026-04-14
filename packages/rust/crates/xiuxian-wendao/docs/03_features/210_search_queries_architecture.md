@@ -250,6 +250,239 @@ So the current local corpus lane should be read as:
 - cache/state: not reassigned to DuckDB
 - protocol: gateway routes and bounded FlightSQL over those publications
 
+Cold-start behavior follows the same ownership split. Gateway startup now
+eagerly activates local background indexing by default across launch paths,
+while `XIUXIAN_WENDAO_GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING=false` keeps the
+older deferred mode when that is intentionally requested. First-query readiness
+is still derived from local publication state, not from repo-index completion.
+When `knowledge_section`, `local_symbol`, `reference_occurrence`, or
+`attachment` has not yet published an active epoch, the Studio search routes
+start the corpus and return an explicit partial/indexing response immediately
+instead of blocking the request path until initial publication finishes.
+The same `/api/search/index/status` surface now also carries
+`coldStartTelemetry`, which records process-local first-index-start,
+first-ready, and first partial/ready search-response observations for those
+local corpora so restart stalls can be attributed without correlating multiple
+status endpoints by hand. `firstIndexStarted` now only records real local
+build starts; warm-start no-op `ensure_*_index_started(...)` calls leave that
+field empty while preserving the earlier ready observation. When a status
+snapshot already exposes
+`buildFinishedAt` for a readable local corpus, `firstReadyObserved` reuses that
+timestamp instead of the later observation time so the telemetry reflects the
+true local publish completion more closely across both search routes and the
+status endpoint. Under that cold-start envelope,
+`coldStartTelemetry.diagnostics.repeatWork` now provides a structured
+repeat-detect view for one process boot:
+
+- `summary`: total file observations, global unique paths, and detection counts
+- `sourceOperations`: per source/operation batches, repeated-path counts, and
+  top repeated paths
+- `hotPaths`: repeated file paths aggregated across operations and corpora
+- `findings`: direct detector output for repeated-within-operation work and
+  cross-operation hot paths
+
+The same cold-start lane now also deduplicates local markdown bootstrap work
+through a process-local snapshot entry cache on `SearchPlaneService`, keyed by
+scanned-file metadata, so `knowledge_section`, `attachment`, and
+markdown-backed `local_symbol` reuse one read/parse/compile pass per note
+during one gateway boot instead of triplicating the same corpus work. In
+addition, local corpus runtime builds now reuse the fingerprint-stage scanned
+file inventory when they enter the plan/build phase, so
+`knowledge_section`, `attachment`, `local_symbol`, and
+`reference_occurrence` no longer rewalk the same configured roots twice during
+one background build. The remaining code-file duplicate work was then reduced
+through a second process-local snapshot entry cache on `SearchPlaneService`,
+keyed by scanned-file metadata, so `local_symbol` and
+`reference_occurrence` now reuse one source read plus one AST extraction pass
+per code file during one gateway boot instead of duplicating that work across
+both corpora. Under `coldStartTelemetry.diagnostics.repeatWork`, that reuse is
+reported through `source_snapshot` operations such as `cache_miss`,
+`read_ast_extract`, and `cache_hit`, while the shared path can still appear as
+a cross-operation hot path because the same file is also observed by the
+bounded fingerprint/scan stages during that boot. This means repeat-detect now
+flags the remaining shared path as a telemetry finding without implying that
+the heavy AST/content extraction is still duplicated. Because runtime config is
+now backend-loaded, the legacy `/api/ui/config` read/write route is retired
+too; capability bootstrap and derived `projects`/`repoProjects` payloads now
+own that client-facing configuration surface. After these cuts, the next
+dominant repeat-detect surface is cross-corpus fingerprint scanning itself:
+`scan_note_project_files`, `scan_symbol_project_files`, and
+`scan_source_project_files` still observe overlapping roots separately when the
+local corpora warm together, even though the heavier parse/extract stages are
+now shared where possible. To reduce that remaining scan duplication when
+multiple local corpora warm together, the eager config-apply bootstrap path
+and the coupled knowledge-intent startup path now build one batch-scoped
+`scan_supported_project_files` inventory and derive note, symbol, and source
+subsets from that shared scan for all local corpora started in the same batch.
+Under `coldStartTelemetry.diagnostics.repeatWork`, those optimized paths now
+report the shared `scan_supported_project_files` operation instead of emitting
+separate per-corpus fingerprint scan operations for the same configured roots.
+The optimization intentionally remains batch-scoped rather than process-wide,
+and the repo-backed corpora now follow the same semantic-incremental rule.
+`repo_entity` fingerprints reuse the analyzer-row semantic `blake3` payload
+already derived from modules, symbols, and examples, while
+`repo_content_chunk` fingerprints now stamp a stable payload hash over the
+document contents before staging. Shared repo staging compares those
+fingerprints with `equivalent_for_incremental(...)` semantics and derives
+versioned repo table names from semantic hashes whenever they are available,
+so metadata-only revision refreshes no longer rewrite unchanged repo-backed
+rows or rotate Parquet table identity.
+That same semantic-incremental rule now reaches Julia repo-index preparation
+one layer earlier too. For a single-plugin safe-incremental Julia repository,
+`prepare_incremental_analysis(...)` now reads the previous revision blob
+through the crate-owned git substrate, requests stable parser-summary file
+fingerprints for both revisions, and reuses the cached analysis whenever those
+fingerprints match. Leaf-file comment-only or formatting-only churn therefore
+stops before incremental analyzer execution instead of being treated as an
+analysis-affecting source edit.
+The same repo-index semantic-reuse rule now also covers the bounded
+single-plugin Modelica case, but only for semantically equivalent `.mo`
+modifications. `prepare_incremental_analysis(...)` now compares previous and
+current Modelica parser-summary file fingerprints and reuses the cached
+analysis when they match, so AST-equivalent comment-only churn can stop before
+full repository analysis. True Modelica semantic changes still fall back to
+full analysis rather than attempting an incomplete file-overlay merge, because
+incremental merge does not yet own Modelica `imports` or repository-level
+module reconstruction.
+That semantic-reuse owner now also includes the file-local Modelica doc
+surface instead of relying on declarations/imports alone. The Modelica
+semantic fingerprint combines parser-summary output with doc-topology markers
+such as `Documentation(...)` presence and synthetic UsersGuide section docs,
+so large `package.mo` or UsersGuide `.mo` files can still short-circuit on
+comment-only churn while doc-surface changes no longer risk being
+misclassified as parser-summary-equivalent reuse.
+That bounded Modelica owner now has its first semantic overlay merge too. For
+single-plugin safe leaf API `.mo` files, `prepare_incremental_analysis(...)`
+now incremental-merges true semantic edits instead of falling back immediately
+to a full repository rebuild. The safe slice is intentionally narrow: the file
+must not be `package.mo`, must stay on the API surface, and must avoid
+documentation annotations. Inside that slice the Modelica plugin now resolves
+repository root context before `analyze_file(...)` emits overlay symbols, so
+qualified names and `module_id` values match the full repository-analysis
+shape and `apply_incremental_plugin_outputs(...)` can replace just the changed
+symbol rows.
+That bounded Modelica overlay owner now also includes import-bearing leaf
+files. `PluginAnalysisOutput` now carries import rows, `ImportRecord` now keeps
+the repository-relative source path, and changed-path incremental merge now
+replaces stale import rows by path together with symbol/doc rows. That keeps
+single-plugin leaf `.mo` edits on the incremental overlay path even when the
+file adds or changes `import` clauses, while documentation-annotation files and
+broader package-shape Modelica edits still return to the conservative
+full-analysis fallback.
+That same incremental lane now also owns one bounded root `package.mo`
+overlay. When the changed file is the repository root `package.mo`, the root
+package identity stays stable, and the file still matches the safe
+import/doc-only overlay contract, `prepare_incremental_analysis(...)` now uses
+a lightweight lexical owner for root package name, import extraction, and
+overlay semantic fingerprinting instead of re-entering Modelica
+parser-summary. This keeps large root `package.mo` files off the heavy
+parser-summary path for comment-only churn and bounded root-local
+import/documentation edits, while root package renames, UsersGuide/support
+`package.mo`, and broader package-shape edits still fall back to full
+repository analysis.
+The same safe root-package owner now also applies during full repository
+analysis. When the repository root `package.mo` stays inside that bounded
+import/doc-only contract, `analyze_repository(...)` reuses lexical root-package
+name and import metadata and skips root-package symbol parser-summary work
+entirely, so large root `package.mo` files no longer need Modelica
+parser-summary just to preserve root-local module/import/doc coverage.
+Root-package files with nested declarations, UsersGuide/support `package.mo`,
+and broader package-shape content still stay on the existing parser-summary
+fallback path.
+That same lexical owner now also extends to safe API-surface nested
+`package.mo` files during both full repository analysis and repo-owned
+`analyze_file(...)`. When a nested package file keeps the package name aligned
+with its directory path, carries only bounded imports and annotation docs, and
+avoids nested declarations, Wendao now skips package-file parser-summary symbol
+work and reuses lexical import metadata there too. Package-name/path mismatch,
+nested declarations, and UsersGuide/support `package.mo` files still stay on
+the parser-summary fallback path.
+That same bounded owner now also extends into repo-index incremental
+preparation for one changed safe API-surface nested `package.mo` file at a
+time. `prepare_incremental_analysis(...)` now admits those package files to the
+same incremental overlay lane, and package-file semantic fingerprints ignore
+import line-number drift so comment-only churn can still reuse cached analysis.
+Nested declarations, package-name/path mismatch, UsersGuide/support
+`package.mo`, and root package rename semantics still stay on the conservative
+fallback path.
+The same Modelica owner now also removes repeated full-analysis repository
+scan/read churn inside one analysis pass. Full repository analysis and
+repo-owned `analyze_file(...)` now build one shared repository snapshot, reuse
+the same sorted file inventory, and reuse preloaded `.mo` contents plus parsed
+`package.order` entries across module, symbol, import, example, and doc
+collection. Large `package.mo` files therefore stop being reread multiple
+times inside the same repository analysis pass, while parser-summary fallback
+and the bounded lexical/incremental admission rules remain unchanged.
+That same cached-analysis reuse now extends to the supported mixed
+`julia+modelica` repository shape too. When every analysis-affecting modified
+file in the diff is a `.jl` or `.mo` file whose parser-summary fingerprint
+matches across revisions, `prepare_incremental_analysis(...)` reuses the
+previous analysis directly instead of falling back just because the repository
+has both plugins enabled. Unknown-plugin mixes still remain out of scope for
+this semantic-reuse fast path.
+The same parser-summary semantic owner now reaches Julia analyzer cache
+identity too. For single-plugin Julia repositories, `RepositoryAnalysisCacheKey`
+now hashes `src/*.jl` files by Julia parser-summary file fingerprint instead of
+raw file bytes, so AST-equivalent source churn can keep the same
+`analysis_identity` before any analyzer execution starts. The cache-key path
+still falls back to raw contents when parser-summary is unavailable, so this
+bounded cut does not force a mandatory process-managed parser-summary boot
+before every repository analysis lookup.
+That same bounded owner now also covers single-plugin Modelica repositories.
+For `.mo` files, `RepositoryAnalysisCacheKey` now prefers Modelica
+parser-summary plus doc-surface semantic fingerprints over raw contents, so
+AST-equivalent source churn, including large `package.mo` files whose
+analysis-visible doc topology stays unchanged, can keep the same analyzer
+cache identity while real declaration/import/doc-surface changes still
+invalidate the key. As with Julia, the cache-key path keeps the raw-contents
+fallback when parser-summary is unavailable, so the semantic upgrade does not
+create a mandatory parser-summary bootstrap dependency for analysis cache
+lookup.
+The same semantic-owner rule now extends to the supported mixed-plugin
+`julia+modelica` repository shape too. When a repository only registers those
+two plugins, `.jl` and `.mo` files now keep using their respective
+parser-summary semantic fingerprints instead of falling back to raw contents
+just because the repository is mixed. Repositories that include unknown plugin
+owners remain on the conservative raw-contents path until a broader capability
+registry lands.
+so standalone corpus builds outside those coordinated startup paths still read
+the current filesystem directly and remain the next scan-duplication audit
+surface if repeat-detect flags reappear there.
+
+For note corpora, the incremental file-fingerprint contract is now semantic
+too. `knowledge_section` stores per-file fingerprints from the effective
+knowledge-row payload, and `attachment` stores per-file fingerprints from the
+effective attachment-hit payload. When a markdown file's `size` or `mtime`
+changes but those derived search payloads stay identical, the planner now
+keeps the previous epoch rows instead of treating that edit as a semantic
+invalidation.
+
+For code corpora, the incremental file-fingerprint contract is now also
+semantic instead of metadata-only. `local_symbol` stores per-file fingerprints
+from the extracted AST-hit payload, and `reference_occurrence` stores
+per-file fingerprints from the extracted reference-hit payload. When a source
+file's `size` or `mtime` changes but the extracted search payload stays
+identical, the planner now keeps the previous epoch rows instead of treating
+that edit as a semantic invalidation. This narrows false-positive incremental
+rebuilds inside one warm process, but it does not by itself remove restart
+cold-start work; restart reuse still depends on warm-start file-fingerprint and
+base-epoch hydration being available when the new process boots. That restart
+gap is now closed for local corpora through a persisted local manifest record:
+on publish, the search plane stores the readable local epoch metadata under the
+project-local runtime surface and mirrors it into the cache keyspace; on the
+next `SearchPlaneService::new(...)`, bootstrap restores that ready status into
+the in-memory coordinator when the published Parquet for the recorded epoch is
+still readable. Because file fingerprints already persist separately, the next
+build planner can then enter incremental reuse immediately after restart
+instead of dropping back to a full rebuild solely because `active_epoch` was
+lost with the old process. Under `coldStartTelemetry`, this warm-start recovery
+now appears as `firstReadyObserved.source = "search_plane_bootstrap"`, so a
+successful bootstrap restore is distinguishable from a fresh config-apply
+bootstrap or first-query-triggered build without adding a second status
+surface.
+`firstIndexStarted` remains empty until a later request or bootstrap pass
+actually begins a new rebuild.
+
 ### Mutable State and Shared Cache Ownership
 
 For mutable state and shared cache, the current code shows this split:

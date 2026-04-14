@@ -1,9 +1,10 @@
 use super::*;
-use crate::zhenfa_router::native::section_create::types::SiblingInfo;
+use crate::parsers::markdown::section_create::InsertionInfo;
+use xiuxian_wendao_parsers::section_create::SiblingInfo;
 
 #[test]
 fn format_sibling_context_renders_both_sides() {
-    let info = section_create::InsertionInfo {
+    let info = InsertionInfo {
         insertion_byte: 12,
         start_level: 2,
         remaining_path: vec!["New".to_string()],

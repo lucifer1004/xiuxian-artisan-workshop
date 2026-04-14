@@ -63,15 +63,14 @@ vocabulary such as `ArrowIpcHttp` or `LocalProcessArrowIpc`.
 
 The current Stage-A classification snapshot is:
 
-| Formal class            | Current live family                                                                                                                                | Current physical transport reality                                                                         | Migration interpretation                                                                                   |
-| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| `Arrow Flight` business | canonical Flight `/search/*` and `/analysis/*`, plus the existing docs/repo/vfs/graph business families                                            | semantic search and analysis are already Flight-only; broader docs/repo/vfs/graph migration remains staged | these families are target business surfaces and should be migrated toward Flight rather than grown as JSON |
-| `JSON` control          | `/api/notify`, `/api/ui/config`, `/api/ui/capabilities`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, `GET /api/search/index/status` | JSON is already the current live contract                                                                  | these stay on the control plane unless a later RFC explicitly promotes them into Flight business scope     |
+| Formal class            | Current live family                                                                                                              | Current physical transport reality                                                                         | Migration interpretation                                                                                   |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `Arrow Flight` business | canonical Flight `/search/*` and `/analysis/*`, plus the existing docs/repo/vfs/graph business families                          | semantic search and analysis are already Flight-only; broader docs/repo/vfs/graph migration remains staged | these families are target business surfaces and should be migrated toward Flight rather than grown as JSON |
+| `JSON` control          | `/api/notify`, `/api/ui/capabilities`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, `GET /api/search/index/status` | JSON is already the current live contract                                                                  | these stay on the control plane unless a later RFC explicitly promotes them into Flight business scope     |
 
-`POST /api/ui/config` is now explicitly runtime-only within that control
-surface. The frontend may synchronize effective UI config into the live
-gateway process for VFS/graph/search bootstrap and retry flows, but that
-control route no longer owns rewriting workspace `wendao.toml` on disk.
+`/api/ui/config` is now retired from that control surface. Studio bootstrap is
+backend-loaded from the effective config imports instead of round-tripping a
+runtime UI-config write through the live gateway process.
 
 Retirement debt ledger:
 

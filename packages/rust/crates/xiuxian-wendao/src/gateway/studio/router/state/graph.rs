@@ -102,6 +102,7 @@ impl StudioState {
 
     pub(crate) async fn search_index_status(&self) -> SearchIndexStatusResponse {
         let snapshot = self.search_plane.status_with_repo_runtime().await;
+        self.record_local_corpus_ready_observations_from_snapshot(&snapshot, "search_index_status");
         SearchIndexStatusResponse::from_snapshot_with_diagnostics(&snapshot).await
     }
 }

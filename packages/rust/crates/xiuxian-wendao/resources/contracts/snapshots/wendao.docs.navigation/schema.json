@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DocsNavigationToolArgs",
+  "description": "Stable tool arguments for docs navigation native-tool execution.",
+  "type": "object",
+  "properties": {
+    "family_kind": {
+      "description": "Optional family cluster expansion kind.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProjectionPageKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "family_limit": {
+      "description": "Optional family-cluster limit override.",
+      "type": ["integer", "null"],
+      "format": "uint",
+      "default": null,
+      "minimum": 0
+    },
+    "node_id": {
+      "description": "Optional stable page-index node identifier.",
+      "type": ["string", "null"],
+      "default": null
+    },
+    "page_id": {
+      "description": "Stable docs-facing page identifier.",
+      "type": "string"
+    },
+    "related_limit": {
+      "description": "Optional related-page limit override.",
+      "type": ["integer", "null"],
+      "format": "uint",
+      "default": null,
+      "minimum": 0
+    }
+  },
+  "required": ["page_id"],
+  "$defs": {
+    "ProjectionPageKind": {
+      "description": "Deterministic projected page family derived from stage-1 repository truth.",
+      "oneOf": [
+        {
+          "description": "Reference-oriented projected page.",
+          "type": "string",
+          "const": "reference"
+        },
+        {
+          "description": "How-to oriented projected page.",
+          "type": "string",
+          "const": "how_to"
+        },
+        {
+          "description": "Tutorial-oriented projected page.",
+          "type": "string",
+          "const": "tutorial"
+        },
+        {
+          "description": "Explanation-oriented projected page.",
+          "type": "string",
+          "const": "explanation"
+        }
+      ]
+    }
+  }
+}

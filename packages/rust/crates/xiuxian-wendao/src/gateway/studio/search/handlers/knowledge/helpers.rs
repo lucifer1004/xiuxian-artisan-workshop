@@ -120,7 +120,3 @@ pub(super) fn is_code_biased_intent(
 pub(super) fn is_index_not_ready(error: &StudioApiError) -> bool {
     error.status() == StatusCode::CONFLICT && error.code() == "INDEX_NOT_READY"
 }
-
-pub(super) fn is_ui_config_required(error: &StudioApiError) -> bool {
-    error.status() == StatusCode::BAD_REQUEST && error.code() == "UI_CONFIG_REQUIRED"
-}

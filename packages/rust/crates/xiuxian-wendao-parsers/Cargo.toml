@@ -13,7 +13,9 @@ serde_yaml = { workspace = true }
 comrak = { workspace = true }
 blake3 = "1"
 regex = "1"
+uuid = { workspace = true }
 xiuxian-testing = { path = "../xiuxian-testing" }
+xiuxian-ast = { path = "../xiuxian-ast" }
 
 [lints]
 workspace = true

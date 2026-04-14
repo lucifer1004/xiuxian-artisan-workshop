@@ -1,3 +1,5 @@
+#[path = "../../support/linked_parser_summary.rs"]
+pub(crate) mod linked_parser_summary;
 #[path = "../../support/repo_fixture.rs"]
 pub(crate) mod repo_fixture;
 #[path = "../../support/repo_intelligence.rs"]

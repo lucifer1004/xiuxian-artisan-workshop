@@ -15,6 +15,7 @@ pub use options::FuzzySearchOptions;
 pub use scoring::{normalized_score, score_candidate};
 pub use types::{FuzzyMatch, FuzzyMatcher, FuzzyScore};
 
+#[cfg(feature = "repo-lexical-index")]
 pub(crate) use scoring::score_candidate_with_query_chars;
 
 #[cfg(test)]

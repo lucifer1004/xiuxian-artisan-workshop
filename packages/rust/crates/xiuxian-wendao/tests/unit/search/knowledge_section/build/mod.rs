@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 use std::time::Duration;
 
 use crate::gateway::studio::types::UiProjectConfig;
@@ -11,6 +12,15 @@ use crate::search::{
 
 use super::orchestration::{ensure_knowledge_section_index_started, plan_knowledge_section_build};
 use super::paths::fingerprint_projects;
+
+fn planning_service(project_root: &Path) -> SearchPlaneService {
+    SearchPlaneService::with_paths(
+        project_root.to_path_buf(),
+        project_root.join(".data/search_plane"),
+        SearchManifestKeyspace::new("xiuxian:test:search_plane:knowledge-section-plan"),
+        SearchMaintenancePolicy::default(),
+    )
+}
 
 #[test]
 fn plan_knowledge_section_build_only_reparses_changed_notes() {
@@ -33,8 +43,10 @@ fn plan_knowledge_section_build_only_reparses_changed_notes() {
         root: ".".to_string(),
         dirs: vec![".".to_string()],
     }];
+    let service = planning_service(project_root);
 
     let first = plan_knowledge_section_build(
+        &service,
         project_root,
         project_root,
         &projects,
@@ -63,6 +75,7 @@ fn plan_knowledge_section_build_only_reparses_changed_notes() {
     .unwrap_or_else(|error| panic!("rewrite alpha note: {error}"));
 
     let second = plan_knowledge_section_build(
+        &service,
         project_root,
         project_root,
         &projects,
@@ -92,6 +105,202 @@ fn plan_knowledge_section_build_only_reparses_changed_notes() {
             .iter()
             .all(|row| !row.path.contains("gamma")),
         "unchanged note rows must not be reparsed into the changed set"
+    );
+}
+
+#[test]
+fn plan_knowledge_section_build_ignores_metadata_only_edits_when_rows_are_unchanged() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+    let project_root = temp_dir.path();
+    std::fs::create_dir_all(project_root.join("notes"))
+        .unwrap_or_else(|error| panic!("create notes: {error}"));
+    std::fs::write(
+        project_root.join("notes/alpha.md"),
+        "# Alpha\n\nAlpha body.\n\n## Overview\n\nAlpha section.\n",
+    )
+    .unwrap_or_else(|error| panic!("write alpha note: {error}"));
+    let projects = vec![UiProjectConfig {
+        name: "notes".to_string(),
+        root: ".".to_string(),
+        dirs: vec![".".to_string()],
+    }];
+    let service = planning_service(project_root);
+
+    let first = plan_knowledge_section_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
+    let first_fingerprint = first
+        .file_fingerprints
+        .get("notes/alpha.md")
+        .unwrap_or_else(|| panic!("initial knowledge fingerprint"));
+
+    std::thread::sleep(Duration::from_millis(5));
+    std::fs::write(
+        project_root.join("notes/alpha.md"),
+        "# Alpha\n\nAlpha body.\n\n## Overview\n\nAlpha section.\n\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite alpha note: {error}"));
+
+    let second = plan_knowledge_section_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        Some(7),
+        &first.file_fingerprints,
+    );
+    let second_fingerprint = second
+        .file_fingerprints
+        .get("notes/alpha.md")
+        .unwrap_or_else(|| panic!("updated knowledge fingerprint"));
+
+    assert_eq!(second.base_epoch, Some(7));
+    assert!(second.replaced_paths.is_empty());
+    assert!(second.changed_rows.is_empty());
+    assert_ne!(first_fingerprint.size_bytes, second_fingerprint.size_bytes);
+    assert_eq!(first_fingerprint.blake3, second_fingerprint.blake3);
+}
+
+#[test]
+fn note_corpora_and_local_symbol_share_markdown_snapshot_entries() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+    let project_root = temp_dir.path();
+    std::fs::create_dir_all(project_root.join("docs"))
+        .unwrap_or_else(|error| panic!("create docs: {error}"));
+    std::fs::write(
+        project_root.join("docs/design.md"),
+        "# Design\n\n:owner: kernel\n\n## Evidence\n\n:OBSERVE: lang:rust \"fn $NAME()\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write design note: {error}"));
+    let projects = vec![UiProjectConfig {
+        name: "kernel".to_string(),
+        root: ".".to_string(),
+        dirs: vec!["docs".to_string()],
+    }];
+    let service = planning_service(project_root);
+
+    let knowledge = plan_knowledge_section_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
+    assert_eq!(service.markdown_snapshot_entry_cache_len(), 1);
+    assert!(
+        knowledge
+            .changed_rows
+            .iter()
+            .any(|row| row.path == "docs/design.md")
+    );
+
+    let attachment = crate::search::attachment::plan_attachment_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
+    assert_eq!(service.markdown_snapshot_entry_cache_len(), 1);
+    assert!(attachment.changed_hits.is_empty());
+
+    let local_symbol = crate::search::local_symbol::plan_local_symbol_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
+    assert_eq!(service.markdown_snapshot_entry_cache_len(), 1);
+    assert!(
+        local_symbol
+            .partitions
+            .values()
+            .flat_map(|partition| partition.changed_hits.iter())
+            .any(|hit| hit.path == "docs/design.md" && hit.language == "markdown")
+    );
+    assert!(
+        local_symbol
+            .partitions
+            .values()
+            .flat_map(|partition| partition.changed_hits.iter())
+            .any(|hit| {
+                hit.path == "docs/design.md"
+                    && hit.node_kind.as_deref() == Some("property")
+                    && hit.name.eq_ignore_ascii_case("owner")
+                    && hit.signature.ends_with(" kernel")
+            }),
+        "markdown snapshot should preserve parser-owned property hits"
+    );
+    assert!(
+        local_symbol
+            .partitions
+            .values()
+            .flat_map(|partition| partition.changed_hits.iter())
+            .any(|hit| {
+                hit.path == "docs/design.md"
+                    && hit.node_kind.as_deref() == Some("observation")
+                    && hit.name == "OBSERVE"
+                    && hit.signature.contains("lang:rust")
+            }),
+        "markdown snapshot should preserve parser-owned observation hits"
+    );
+}
+
+#[tokio::test]
+async fn knowledge_section_runtime_build_reuses_fingerprint_scan_inventory() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+    let project_root = temp_dir.path().join("workspace");
+    let storage_root = temp_dir.path().join("search_plane");
+    std::fs::create_dir_all(project_root.join("notes"))
+        .unwrap_or_else(|error| panic!("create notes: {error}"));
+    std::fs::write(
+        project_root.join("notes/alpha.md"),
+        "# Alpha\n\nAlpha body.\n\n## Overview\n\nAlpha section.\n",
+    )
+    .unwrap_or_else(|error| panic!("write alpha note: {error}"));
+    let projects = vec![UiProjectConfig {
+        name: "notes".to_string(),
+        root: ".".to_string(),
+        dirs: vec![".".to_string()],
+    }];
+    let service = SearchPlaneService::with_paths(
+        project_root.clone(),
+        storage_root,
+        SearchManifestKeyspace::new("xiuxian:test:search_plane:knowledge-section-scan-reuse"),
+        SearchMaintenancePolicy::default(),
+    );
+
+    ensure_knowledge_section_index_started(
+        &service,
+        project_root.as_path(),
+        project_root.as_path(),
+        &projects,
+    );
+    wait_for_knowledge_section_ready(&service, None).await;
+
+    let telemetry = service.repeat_work_telemetry();
+    assert!(
+        telemetry.source_operations.iter().any(|entry| {
+            entry.source == "knowledge_section.fingerprint"
+                && entry.operation == "scan_note_project_files"
+        }),
+        "runtime build should still record the fingerprint scan inventory"
+    );
+    assert!(
+        telemetry.source_operations.iter().all(|entry| {
+            !(entry.source == "knowledge_section.plan"
+                && entry.operation == "scan_note_project_files")
+        }),
+        "runtime build should reuse fingerprint scan inventory instead of rescanning at plan time"
     );
 }
 

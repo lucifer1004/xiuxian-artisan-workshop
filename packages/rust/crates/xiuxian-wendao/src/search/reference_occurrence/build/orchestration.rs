@@ -5,35 +5,93 @@ use tokio::runtime::Handle;
 use crate::gateway::studio::types::UiProjectConfig;
 #[cfg(test)]
 use crate::search::reference_occurrence::build::ReferenceOccurrenceBuildError;
-use crate::search::{BeginBuildDecision, SearchCorpusKind, SearchPlaneService};
-
-use crate::search::reference_occurrence::build::{
-    fingerprint_projects, plan_reference_occurrence_build, write_reference_occurrence_epoch,
+use crate::search::{
+    BeginBuildDecision, ProjectScannedFile, SearchCorpusKind, SearchPlaneService,
+    fingerprint_source_projects_from_scanned_files,
 };
 
+#[cfg(test)]
+use crate::search::reference_occurrence::build::plan_reference_occurrence_build;
+use crate::search::reference_occurrence::build::{
+    plan_reference_occurrence_build_with_scanned_files, write_reference_occurrence_epoch,
+};
+
+#[cfg(test)]
 pub(crate) fn ensure_reference_occurrence_index_started(
     service: &SearchPlaneService,
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) {
+) -> bool {
     if projects.is_empty() {
-        return;
+        return false;
     }
 
-    let fingerprint = fingerprint_projects(project_root, config_root, projects);
+    let (fingerprint, scanned_files) = service
+        .fingerprint_source_projects_with_repeat_work_details(
+            "reference_occurrence.fingerprint",
+            project_root,
+            config_root,
+            projects,
+        );
+    ensure_reference_occurrence_index_started_with_fingerprint_and_scanned_files(
+        service,
+        project_root,
+        config_root,
+        projects,
+        fingerprint,
+        scanned_files,
+    )
+}
+
+pub(crate) fn ensure_reference_occurrence_index_started_with_scanned_files(
+    service: &SearchPlaneService,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    scanned_files: &[ProjectScannedFile],
+) -> bool {
+    if projects.is_empty() {
+        return false;
+    }
+
+    let fingerprint = fingerprint_source_projects_from_scanned_files(
+        project_root,
+        config_root,
+        projects,
+        scanned_files,
+    );
+    ensure_reference_occurrence_index_started_with_fingerprint_and_scanned_files(
+        service,
+        project_root,
+        config_root,
+        projects,
+        fingerprint,
+        scanned_files.to_vec(),
+    )
+}
+
+fn ensure_reference_occurrence_index_started_with_fingerprint_and_scanned_files(
+    service: &SearchPlaneService,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    fingerprint: String,
+    scanned_files: Vec<ProjectScannedFile>,
+) -> bool {
     let decision = service.coordinator().begin_build(
         SearchCorpusKind::ReferenceOccurrence,
         fingerprint,
         SearchCorpusKind::ReferenceOccurrence.schema_version(),
     );
     let BeginBuildDecision::Started(lease) = decision else {
-        return;
+        return false;
     };
 
     let build_projects = projects.to_vec();
     let build_project_root = project_root.to_path_buf();
     let build_config_root = config_root.to_path_buf();
+    let build_scanned_files = scanned_files;
     let active_epoch = service.corpus_active_epoch(SearchCorpusKind::ReferenceOccurrence);
     let service = service.clone();
 
@@ -42,16 +100,20 @@ pub(crate) fn ensure_reference_occurrence_index_started(
             let previous_fingerprints = service
                 .corpus_file_fingerprints(SearchCorpusKind::ReferenceOccurrence)
                 .await;
-            let build: Result<_, tokio::task::JoinError> = tokio::task::spawn_blocking(move || {
-                plan_reference_occurrence_build(
-                    build_project_root.as_path(),
-                    build_config_root.as_path(),
-                    &build_projects,
-                    active_epoch,
-                    &previous_fingerprints,
-                )
-            })
-            .await;
+            let build_service = service.clone();
+            let build: Result<_, tokio::task::JoinError> =
+                tokio::task::spawn_blocking(move || {
+                    plan_reference_occurrence_build_with_scanned_files(
+                        &build_service,
+                        build_project_root.as_path(),
+                        build_config_root.as_path(),
+                        &build_projects,
+                        build_scanned_files.as_slice(),
+                        active_epoch,
+                        &previous_fingerprints,
+                    )
+                })
+                .await;
 
             match build {
                 Ok(plan) => {
@@ -66,11 +128,10 @@ pub(crate) fn ensure_reference_occurrence_index_started(
                     }
                     let write = write.unwrap_or_else(|_| unreachable!());
                     service.coordinator().update_progress(&lease, 0.8);
-                    if service.publish_ready_and_maintain(
-                        &lease,
-                        write.row_count,
-                        write.fragment_count,
-                    ) {
+                    if service
+                        .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                        .await
+                    {
                         service
                             .set_corpus_file_fingerprints(
                                 SearchCorpusKind::ReferenceOccurrence,
@@ -107,6 +168,8 @@ pub(crate) fn ensure_reference_occurrence_index_started(
             "Tokio runtime unavailable for reference occurrence index build",
         );
     }
+
+    true
 }
 
 #[cfg(test)]
@@ -128,6 +191,7 @@ pub(crate) async fn publish_reference_occurrences_from_projects(
         }
     };
     let plan = plan_reference_occurrence_build(
+        service,
         project_root,
         config_root,
         projects,
@@ -140,7 +204,9 @@ pub(crate) async fn publish_reference_occurrences_from_projects(
             service
                 .prewarm_epoch_table(lease.corpus, lease.epoch, &prewarm_columns)
                 .await?;
-            service.publish_ready_and_maintain(&lease, write.row_count, write.fragment_count);
+            service
+                .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                .await;
             Ok(())
         }
         Err(error) => {

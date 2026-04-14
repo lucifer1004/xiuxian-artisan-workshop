@@ -1,5 +1,6 @@
 //! Repository projection functions (projected pages, retrieval, navigation, and gap reports).
 
+mod docs_tool;
 mod family;
 mod gap;
 mod index_tree;
@@ -16,6 +17,9 @@ mod search;
 #[path = "../../../../tests/unit/analyzers/service/projection/mod.rs"]
 mod tests;
 
+pub use docs_tool::*;
+#[cfg(any(test, feature = "zhenfa-router"))]
+pub(crate) use docs_tool::{DocsToolRuntime, DocsToolRuntimeHandle};
 pub use family::*;
 pub use gap::*;
 pub use index_tree::*;

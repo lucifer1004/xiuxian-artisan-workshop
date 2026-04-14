@@ -33,8 +33,10 @@ pub(crate) fn gateway_state_for_project(project_root: &Path) -> Result<Arc<Gatew
         studio: Arc::new(StudioState {
             project_root: project_root.to_path_buf(),
             config_root: config_root.clone(),
-            bootstrap_config_path: None,
             bootstrap_background_indexing: false,
+            cold_start_process_started_at: crate::gateway::studio::symbol_index::timestamp_now(),
+            cold_start_process_started_instant: std::time::Instant::now(),
+            cold_start_telemetry: Arc::new(RwLock::new(Default::default())),
             bootstrap_background_indexing_deferred_activation: Arc::new(RwLock::new(None)),
             ui_config: Arc::new(RwLock::new(ui_config)),
             graph_index: Arc::new(RwLock::new(None)),

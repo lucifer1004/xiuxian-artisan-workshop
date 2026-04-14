@@ -565,7 +565,7 @@ pub trait AttachmentSearchFlightRouteProvider: std::fmt::Debug + Send + Sync {
         ext_filters: &std::collections::HashSet<String>,
         kind_filters: &std::collections::HashSet<String>,
         case_sensitive: bool,
-    ) -> Result<LanceRecordBatch, String>;
+    ) -> Result<SearchFlightRouteResponse, String>;
 }
 
 /// Runtime-owned provider contract for stable AST-search Flight reads.
@@ -581,7 +581,7 @@ pub trait AstSearchFlightRouteProvider: std::fmt::Debug + Send + Sync {
         &self,
         query_text: &str,
         limit: usize,
-    ) -> Result<LanceRecordBatch, String>;
+    ) -> Result<SearchFlightRouteResponse, String>;
 }
 
 /// Runtime-owned provider contract for stable markdown analysis Flight reads.

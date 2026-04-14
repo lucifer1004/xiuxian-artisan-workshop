@@ -1,5 +1,8 @@
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
-use crate::analyzers::records::{ExampleRecord, ModuleRecord, SymbolRecord};
+use crate::analyzers::records::ExampleRecord;
+#[cfg(feature = "repo-lexical-index")]
+use crate::analyzers::records::{ModuleRecord, SymbolRecord};
+#[cfg(feature = "repo-lexical-index")]
 use crate::search::{SearchDocument, SearchDocumentIndex};
 use std::collections::BTreeMap;
 
@@ -14,6 +17,7 @@ pub(crate) struct ExampleSearchMetadata {
     pub(super) related_modules: Vec<String>,
 }
 
+#[cfg(feature = "repo-lexical-index")]
 pub(super) fn build_search_document_index<I>(documents: I) -> Option<SearchDocumentIndex>
 where
     I: IntoIterator<Item = SearchDocument>,
@@ -23,6 +27,7 @@ where
     Some(index)
 }
 
+#[cfg(feature = "repo-lexical-index")]
 pub(super) fn module_search_document(module: &ModuleRecord) -> SearchDocument {
     let namespace = module
         .qualified_name
@@ -41,6 +46,7 @@ pub(super) fn module_search_document(module: &ModuleRecord) -> SearchDocument {
     }
 }
 
+#[cfg(feature = "repo-lexical-index")]
 pub(super) fn symbol_search_document(symbol: &SymbolRecord) -> SearchDocument {
     let mut terms = vec![
         symbol.name.clone(),
@@ -66,6 +72,7 @@ pub(super) fn symbol_search_document(symbol: &SymbolRecord) -> SearchDocument {
     }
 }
 
+#[cfg(feature = "repo-lexical-index")]
 pub(super) fn example_search_document(
     example: &ExampleRecord,
     metadata: &ExampleSearchMetadata,

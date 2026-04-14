@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use serde::Serialize;
 use xiuxian_wendao_core::repo_intelligence::{DocRecord, ImportKind, RepoSymbolKind};
 
 /// Collected documentation record with target IDs.
@@ -12,7 +13,7 @@ pub(crate) struct CollectedDoc {
 }
 
 /// Parsed import statement from Modelica source.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ParsedImport {
     /// Imported package/class name.
     pub(crate) name: String,
@@ -27,7 +28,7 @@ pub(crate) struct ParsedImport {
 }
 
 /// Parsed symbol declaration from Modelica source.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ParsedDeclaration {
     /// Symbol display name.
     pub(crate) name: String,

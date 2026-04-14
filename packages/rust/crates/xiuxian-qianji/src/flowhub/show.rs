@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::contracts::FlowhubGraphContract;
 use crate::error::QianjiError;
 use crate::flowhub::mermaid::parse_mermaid_flowchart;
 use crate::markdown::{MarkdownShowSection, render_show_surface};
@@ -83,7 +84,8 @@ pub struct FlowhubModuleSummary {
 pub struct FlowhubScenarioCaseSummary {
     /// On-disk Mermaid filename.
     pub file_name: String,
-    /// Stable Mermaid graph identity derived from the owning filename stem.
+    /// Stable Mermaid graph identity resolved from `[[graph]].name` or the
+    /// owning filename stem.
     pub merimind_graph_name: String,
 }
 
@@ -164,6 +166,7 @@ pub fn show_flowhub(dir: impl AsRef<Path>) -> Result<FlowhubShow, QianjiError> {
             Ok(FlowhubShow::Module(FlowhubModuleShow {
                 scenario_cases: discover_immediate_scenario_cases(
                     &module.module_dir,
+                    &module.manifest.graph,
                     &known_module_names,
                 )?,
                 summary: module_summary(&module, &known_module_names)?,
@@ -270,7 +273,11 @@ fn module_summary(
                 .collect()
         })
         .unwrap_or_default();
-    let scenario_cases = discover_immediate_scenario_cases(&module.module_dir, known_module_names)?;
+    let scenario_cases = discover_immediate_scenario_cases(
+        &module.module_dir,
+        &module.manifest.graph,
+        known_module_names,
+    )?;
 
     Ok(FlowhubModuleSummary {
         module_ref: module.module_ref.clone(),
@@ -310,6 +317,7 @@ fn resolve_child_module_ref(
 
 fn discover_immediate_scenario_cases(
     module_dir: &Path,
+    graph_contracts: &[FlowhubGraphContract],
     known_module_names: &[String],
 ) -> Result<Vec<FlowhubScenarioCaseSummary>, QianjiError> {
     let mut scenario_cases = std::fs::read_dir(module_dir)
@@ -332,7 +340,7 @@ fn discover_immediate_scenario_cases(
         .into_iter()
         .filter(|path| path.is_file())
         .filter(|path| path.extension().and_then(|extension| extension.to_str()) == Some("mmd"))
-        .filter_map(|path| summarize_scenario_case(&path, known_module_names))
+        .filter_map(|path| summarize_scenario_case(&path, graph_contracts, known_module_names))
         .collect::<Vec<_>>();
     scenario_cases.sort_by(|left, right| left.file_name.cmp(&right.file_name));
     Ok(scenario_cases)
@@ -340,15 +348,20 @@ fn discover_immediate_scenario_cases(
 
 fn summarize_scenario_case(
     path: &Path,
+    graph_contracts: &[FlowhubGraphContract],
     known_module_names: &[String],
 ) -> Option<FlowhubScenarioCaseSummary> {
     let file_name = path.file_name()?.to_str()?.to_string();
     let file_stem = path.file_stem()?.to_str()?.to_string();
+    let declared_graph = graph_contracts.iter().find(|graph| graph.path == file_name);
+    let graph_name = declared_graph.map_or(file_stem.as_str(), |graph| {
+        graph.resolved_name_or(file_stem.as_str())
+    });
     let merimind_graph_name = std::fs::read_to_string(path)
         .ok()
-        .and_then(|source| parse_mermaid_flowchart(&source, &file_stem, known_module_names).ok())
+        .and_then(|source| parse_mermaid_flowchart(&source, graph_name, known_module_names).ok())
         .map_or_else(
-            || file_stem.clone(),
+            || graph_name.to_string(),
             |flowchart| flowchart.merimind_graph_name,
         );
 

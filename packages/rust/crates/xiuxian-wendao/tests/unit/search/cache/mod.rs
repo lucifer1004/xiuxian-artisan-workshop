@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::search::cache::SearchPlaneCache;
 use crate::search::{
-    SearchCorpusKind, SearchFileFingerprint, SearchManifestKeyspace,
+    SearchCorpusKind, SearchFileFingerprint, SearchManifestKeyspace, SearchManifestRecord,
     SearchPublicationStorageFormat, SearchRepoCorpusRecord, SearchRepoCorpusSnapshotRecord,
     SearchRepoPublicationInput, SearchRepoPublicationRecord,
 };
@@ -11,6 +11,7 @@ use crate::search::{
 #[derive(Debug, Default)]
 pub(crate) struct TestCacheShadow {
     pub(crate) generic_json_payloads: BTreeMap<String, String>,
+    pub(crate) corpus_manifests: BTreeMap<SearchCorpusKind, SearchManifestRecord>,
     pub(crate) repo_corpus_records: BTreeMap<(SearchCorpusKind, String), SearchRepoCorpusRecord>,
     pub(crate) repo_corpus_snapshot: Option<SearchRepoCorpusSnapshotRecord>,
     pub(crate) repo_publications_by_revision:
@@ -217,6 +218,36 @@ fn disabled_cache_skips_key_generation() {
                 None,
             )
             .is_none()
+    );
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn corpus_manifest_round_trips_through_test_shadow() {
+    let cache = cache_for_tests();
+    let record = SearchManifestRecord {
+        corpus: SearchCorpusKind::KnowledgeSection,
+        active_epoch: Some(7),
+        schema_version: SearchCorpusKind::KnowledgeSection.schema_version(),
+        storage_format: SearchPublicationStorageFormat::Parquet,
+        fingerprint: Some("fingerprint".to_string()),
+        row_count: Some(9),
+        fragment_count: Some(1),
+        build_finished_at: Some("2026-04-13T21:00:00Z".to_string()),
+        updated_at: Some("2026-04-13T21:00:01Z".to_string()),
+    };
+
+    cache.set_corpus_manifest(&record).await;
+
+    assert_eq!(
+        cache
+            .get_corpus_manifest(SearchCorpusKind::KnowledgeSection)
+            .await,
+        Some(record.clone())
+    );
+    assert_eq!(
+        cache.get_corpus_manifest_blocking(SearchCorpusKind::KnowledgeSection),
+        Some(record)
     );
 }
 

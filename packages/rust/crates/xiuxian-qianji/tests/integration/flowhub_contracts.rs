@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use xiuxian_config_core::resolve_project_root;
 use xiuxian_qianji::{
-    FlowhubGraphNodeKind, FlowhubModuleKind, FlowhubScenarioCaseSummary, FlowhubShow,
-    check_flowhub, classify_flowhub_dir, render_flowhub_check_markdown, render_flowhub_graph_show,
-    render_flowhub_show, show_flowhub, show_flowhub_graph,
+    FlowhubGraphNodeKind, FlowhubGraphTopology, FlowhubModuleKind, FlowhubScenarioCaseSummary,
+    FlowhubShow, check_flowhub, classify_flowhub_dir, render_flowhub_check_markdown,
+    render_flowhub_graph_show, render_flowhub_show, show_flowhub, show_flowhub_graph,
 };
 
 fn repo_root() -> PathBuf {
@@ -306,11 +306,12 @@ flowchart LR
     root
 }
 
-fn create_flowhub_with_missing_registered_mermaid_nodes_case(temp_dir: &TempDir) -> PathBuf {
+fn create_flowhub_with_leaf_local_mermaid_case(temp_dir: &TempDir) -> PathBuf {
     let root = temp_dir.path().join("flowhub");
-    let plan_dir = root.join("plan");
-    fs::create_dir_all(&plan_dir)
-        .unwrap_or_else(|error| panic!("should create plan dir {}: {error}", plan_dir.display()));
+    let wendao_dir = root.join("wendao");
+    fs::create_dir_all(&wendao_dir).unwrap_or_else(|error| {
+        panic!("should create wendao dir {}: {error}", wendao_dir.display())
+    });
     write_file(
         &root.join("qianji.toml"),
         r#"
@@ -320,11 +321,11 @@ version = 1
 name = "test-flowhub"
 
 [contract]
-register = ["coding", "rust", "blueprint", "plan"]
+register = ["coding", "rust", "blueprint", "plan", "wendao"]
 required = ["*/qianji.toml"]
 "#,
     );
-    for module_name in ["coding", "rust", "blueprint"] {
+    for module_name in ["coding", "rust", "blueprint", "plan"] {
         let module_dir = root.join(module_name);
         fs::create_dir_all(&module_dir).unwrap_or_else(|error| {
             panic!("should create module dir {}: {error}", module_dir.display())
@@ -347,28 +348,87 @@ ready = "task.{module_name}-ready"
         );
     }
     write_file(
-        &plan_dir.join("qianji.toml"),
+        &wendao_dir.join("qianji.toml"),
         r#"
 version = 1
 
 [module]
-name = "plan"
-tags = ["planning", "plan"]
+name = "wendao"
+tags = ["planning", "wendao"]
 
 [exports]
-entry = "task.plan-start"
-ready = "task.plan-ready"
+entry = "task.wendao-start"
+ready = "task.wendao-ready"
 
 [contract]
-required = ["codex-plan.mmd"]
+required = ["docs-search.mmd"]
+
+[[graph]]
+path = "docs-search.mmd"
+topology = "dag"
 "#,
     );
     write_file(
-        &plan_dir.join("codex-plan.mmd"),
+        &wendao_dir.join("docs-search.mmd"),
         r#"
 flowchart LR
-  A["coding"] --> B["rust"]
-  B --> C["diagnostics"]
+  A["wendao"] --> B["GET /api/docs/search?repo=<repo>&query=<query>&kind=<kind>&limit=<n>"]
+  B --> C["GET /api/docs/page?repo=<repo>&page_id=<page_id>"]
+  C --> D["done gate"]
+"#,
+    );
+    root
+}
+
+fn create_flowhub_with_topology_mismatch_case(temp_dir: &TempDir) -> PathBuf {
+    let root = temp_dir.path().join("flowhub");
+    let wendao_dir = root.join("wendao");
+    fs::create_dir_all(&wendao_dir).unwrap_or_else(|error| {
+        panic!("should create wendao dir {}: {error}", wendao_dir.display())
+    });
+    write_file(
+        &root.join("qianji.toml"),
+        r#"
+version = 1
+
+[flowhub]
+name = "test-flowhub"
+
+[contract]
+register = ["wendao"]
+required = ["*/qianji.toml"]
+"#,
+    );
+    write_file(
+        &wendao_dir.join("qianji.toml"),
+        r#"
+version = 1
+
+[module]
+name = "wendao"
+tags = ["planning", "wendao"]
+
+[exports]
+entry = "task.wendao-start"
+ready = "task.wendao-ready"
+
+[contract]
+required = ["docs-search.mmd"]
+
+[[graph]]
+path = "docs-search.mmd"
+topology = "dag"
+"#,
+    );
+    write_file(
+        &wendao_dir.join("docs-search.mmd"),
+        r#"
+flowchart LR
+  A["wendao"] --> B["GET /api/docs/search?repo=<repo>&query=<query>&kind=<kind>&limit=<n>"]
+  B --> C["GET /api/docs/page?repo=<repo>&page_id=<page_id>"]
+  C --> D["done gate"]
+  B -- fail --> R["diagnostics"]
+  R --> B
 "#,
     );
     root
@@ -553,7 +613,7 @@ fn show_flowhub_summarizes_real_root() {
     let FlowhubShow::Root(show) = show else {
         panic!("expected Flowhub root summary");
     };
-    assert_eq!(show.modules.len(), 4);
+    assert_eq!(show.modules.len(), 5);
     assert!(
         show.modules
             .iter()
@@ -563,6 +623,11 @@ fn show_flowhub_summarizes_real_root() {
         show.modules
             .iter()
             .any(|module| module.module_ref == "blueprint")
+    );
+    assert!(
+        show.modules
+            .iter()
+            .any(|module| module.module_ref == "wendao")
     );
 
     let rendered = render_flowhub_show(&FlowhubShow::Root(show));
@@ -620,12 +685,45 @@ fn show_flowhub_keeps_required_only_plan_node_as_leaf() {
 }
 
 #[test]
+fn show_flowhub_prefers_declared_graph_name_for_leaf_module_summary() {
+    let show = show_flowhub(flowhub_root().join("wendao"))
+        .unwrap_or_else(|error| panic!("wendao node should show: {error}"));
+
+    let FlowhubShow::Module(show) = show else {
+        panic!("expected Flowhub module summary");
+    };
+    assert_eq!(show.summary.module_ref, "wendao");
+    assert_eq!(show.summary.kind, FlowhubModuleKind::Leaf);
+    assert_eq!(show.registered_child_count, 0);
+    assert_eq!(show.required_contract_count, 1);
+    assert_eq!(
+        show.scenario_cases,
+        vec![FlowhubScenarioCaseSummary {
+            file_name: "docs-search.mmd".to_string(),
+            merimind_graph_name: "DOC_SEARCH".to_string(),
+        }]
+    );
+
+    let rendered = render_flowhub_show(&FlowhubShow::Module(show));
+    assert_common_show_shape(&rendered);
+    assert!(rendered.contains("Required contract entries: 1"));
+    assert!(rendered.contains("## Scenario Cases"));
+    assert!(rendered.contains("Graph name: DOC_SEARCH"));
+    assert!(rendered.contains("Path: ./wendao/docs-search.mmd"));
+}
+
+#[test]
 fn show_flowhub_graph_extracts_live_mermaid_nodes_edges_and_exports() {
     let show = show_flowhub_graph(flowhub_root().join("plan/codex-plan.mmd"))
         .unwrap_or_else(|error| panic!("live Mermaid graph should show: {error}"));
 
     assert_eq!(show.merimind_graph_name, "codex-plan");
     assert_eq!(show.kind, "scenario");
+    assert_eq!(show.topology, FlowhubGraphTopology::BoundedLoop);
+    assert_eq!(
+        show.declared_topology,
+        Some(FlowhubGraphTopology::BoundedLoop)
+    );
     assert_eq!(show.owning_module_ref, "plan");
     assert_eq!(show.direction, "LR");
     assert!(show.mermaid.contains("flowchart LR"));
@@ -649,7 +747,12 @@ fn show_flowhub_graph_extracts_live_mermaid_nodes_edges_and_exports() {
         show.expected_work_surface
             .contains(&"qianji.toml".to_string())
     );
-    assert!(show.local_contract_template.contains("[plan]"));
+    assert!(
+        show.expected_work_surface
+            .contains(&"codex-plan.mmd".to_string())
+    );
+    assert!(show.owning_module_manifest_toml.contains("[module]"));
+    assert!(show.owning_module_manifest_toml.contains("name = \"plan\""));
     assert!(show.missing_registered_modules.is_empty());
     assert!(show.unknown_graph_nodes.is_empty());
 
@@ -657,6 +760,8 @@ fn show_flowhub_graph_extracts_live_mermaid_nodes_edges_and_exports() {
     assert!(rendered.starts_with("# Graph"));
     assert!(rendered.contains("Name: codex-plan"));
     assert!(rendered.contains("Kind: scenario"));
+    assert!(rendered.contains("Topology: bounded_loop"));
+    assert!(rendered.contains("Declared topology: bounded_loop"));
     assert!(rendered.contains("## Mermaid"));
     assert!(rendered.contains("```mermaid"));
     assert!(rendered.contains("## Nodes"));
@@ -664,8 +769,44 @@ fn show_flowhub_graph_extracts_live_mermaid_nodes_edges_and_exports() {
     assert!(rendered.contains("Kind: context"));
     assert!(rendered.contains("### boundary and drift check"));
     assert!(rendered.contains("Kind: guard"));
-    assert!(rendered.contains("## Expected work surface"));
-    assert!(rendered.contains("## Local qianji.toml template"));
+    assert!(rendered.contains("## Module contract"));
+    assert!(rendered.contains("## Owning qianji.toml"));
+}
+
+#[test]
+fn show_flowhub_graph_uses_local_module_contract_for_wendao_leaf_case() {
+    let show = show_flowhub_graph(flowhub_root().join("wendao/docs-search.mmd"))
+        .unwrap_or_else(|error| panic!("wendao Mermaid graph should show: {error}"));
+
+    assert_eq!(show.merimind_graph_name, "DOC_SEARCH");
+    assert_eq!(show.owning_module_ref, "wendao");
+    assert_eq!(show.topology, FlowhubGraphTopology::BoundedLoop);
+    assert_eq!(
+        show.declared_topology,
+        Some(FlowhubGraphTopology::BoundedLoop)
+    );
+    assert_eq!(
+        show.expected_work_surface,
+        vec!["qianji.toml".to_string(), "docs-search.mmd".to_string()]
+    );
+    assert!(
+        show.owning_module_manifest_toml
+            .contains("name = \"wendao\"")
+    );
+    assert!(!show.owning_module_manifest_toml.contains("blueprint"));
+
+    let rendered = render_flowhub_graph_show(&show);
+    assert!(rendered.contains("Name: DOC_SEARCH"));
+    assert!(rendered.contains("Topology: bounded_loop"));
+    assert!(rendered.contains("Declared topology: bounded_loop"));
+    assert!(rendered.contains("## Module contract"));
+    assert!(rendered.contains("- qianji.toml"));
+    assert!(rendered.contains("- docs-search.mmd"));
+    assert!(rendered.contains("## Owning qianji.toml"));
+    assert!(!rendered.contains("## Expected work surface"));
+    assert!(!rendered.contains("## Local qianji.toml template"));
+    assert!(!rendered.contains("blueprint/"));
+    assert!(!rendered.contains("plan/"));
 }
 
 #[test]
@@ -702,6 +843,8 @@ fn show_flowhub_graph_preserves_raw_mermaid_but_ignores_presentation_directives_
         panic!("Mermaid graph with presentation directives should show: {error}")
     });
 
+    assert_eq!(show.topology, FlowhubGraphTopology::BoundedLoop);
+    assert_eq!(show.declared_topology, None);
     assert!(show.mermaid.contains("classDef highlight"));
     assert!(show.mermaid.contains("style C"));
     assert!(show.mermaid.contains("click G"));
@@ -770,23 +913,34 @@ fn check_flowhub_reports_disconnected_mermaid_module_backbone() {
 }
 
 #[test]
-fn check_flowhub_reports_missing_registered_module_nodes_in_mermaid_case() {
+fn check_flowhub_accepts_leaf_local_mermaid_case() {
     let temp_dir =
         TempDir::new().unwrap_or_else(|error| panic!("temp dir should allocate: {error}"));
-    let root = create_flowhub_with_missing_registered_mermaid_nodes_case(&temp_dir);
+    let root = create_flowhub_with_leaf_local_mermaid_case(&temp_dir);
 
-    let report = check_flowhub(&root).unwrap_or_else(|error| {
-        panic!("Mermaid case missing registered modules should still report: {error}")
-    });
+    let report = check_flowhub(&root)
+        .unwrap_or_else(|error| panic!("leaf-local Mermaid case should still report: {error}"));
+
+    assert!(report.is_valid());
+    let rendered = render_flowhub_check_markdown(&report);
+    assert!(rendered.contains("# Validation Passed"));
+}
+
+#[test]
+fn check_flowhub_reports_topology_mismatch_for_declared_graph_contract() {
+    let temp_dir =
+        TempDir::new().unwrap_or_else(|error| panic!("temp dir should allocate: {error}"));
+    let root = create_flowhub_with_topology_mismatch_case(&temp_dir);
+
+    let report = check_flowhub(&root)
+        .unwrap_or_else(|error| panic!("topology-mismatch Flowhub should still report: {error}"));
 
     assert!(!report.is_valid());
     let rendered = render_flowhub_check_markdown(&report);
     assert_common_diagnostic_shape(&rendered);
-    assert!(rendered.contains("Invalid scenario-case graph"));
-    assert!(rendered.contains("missing registered Flowhub module nodes"));
-    assert!(rendered.contains("blueprint"));
-    assert!(rendered.contains("plan"));
-    assert!(rendered.contains("codex-plan.mmd"));
+    assert!(rendered.contains("Invalid scenario-case topology"));
+    assert!(rendered.contains("topology `dag`"));
+    assert!(rendered.contains("resolved `bounded_loop`"));
 }
 
 #[test]

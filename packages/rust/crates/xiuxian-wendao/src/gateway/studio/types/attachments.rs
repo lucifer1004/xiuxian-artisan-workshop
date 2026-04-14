@@ -50,4 +50,13 @@ pub struct AttachmentSearchResponse {
     pub hit_count: usize,
     /// Selected attachment scope label.
     pub selected_scope: String,
+    /// Whether the response is partial because the attachment index is still warming.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub partial: bool,
+    /// Current attachment-index lifecycle state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexing_state: Option<String>,
+    /// Optional attachment-index error surfaced without blocking the request path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_error: Option<String>,
 }

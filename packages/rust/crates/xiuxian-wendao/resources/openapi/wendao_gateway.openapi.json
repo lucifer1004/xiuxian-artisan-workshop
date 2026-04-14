@@ -178,62 +178,6 @@
         }
       }
     },
-    "/api/ui/config": {
-      "get": {
-        "operationId": "studioGetUiConfig",
-        "tags": ["studio-config"],
-        "summary": "Read studio UI config",
-        "description": "Return the current studio UI configuration, including project-scoped explorer settings.",
-        "responses": {
-          "200": {
-            "description": "Current studio UI configuration."
-          },
-          "500": {
-            "description": "Gateway failed to read the current studio UI configuration."
-          }
-        }
-      },
-      "post": {
-        "operationId": "studioSetUiConfig",
-        "tags": ["studio-config"],
-        "summary": "Update studio UI config",
-        "description": "Replace the current studio UI configuration and clear any cached graph or symbol indexes that depend on it.",
-        "requestBody": {
-          "required": true,
-          "description": "Studio UI configuration to persist.",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "projects": {
-                    "type": "array",
-                    "description": "Configured studio project roots and indexed directories."
-                  }
-                }
-              },
-              "example": {
-                "projects": [
-                  {
-                    "name": "main",
-                    "root": "packages/rust/crates/xiuxian-wendao",
-                    "dirs": ["docs", "src"]
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated studio UI configuration."
-          },
-          "400": {
-            "description": "The submitted UI configuration payload was invalid."
-          }
-        }
-      }
-    },
     "/api/ui/capabilities": {
       "get": {
         "operationId": "studioGetUiCapabilities",
@@ -246,9 +190,26 @@
             "content": {
               "application/json": {
                 "example": {
+                  "projects": [
+                    {
+                      "name": "main",
+                      "root": ".",
+                      "dirs": ["docs"]
+                    }
+                  ],
+                  "repoProjects": [
+                    {
+                      "id": "sciml",
+                      "url": "https://github.com/SciML/SciMLBase.jl",
+                      "plugins": ["ast-grep"]
+                    }
+                  ],
                   "supportedLanguages": ["julia", "modelica"],
                   "supportedRepositories": ["sciml", "mcl"],
-                  "supportedKinds": ["function", "method", "module"]
+                  "supportedKinds": ["function", "method", "module"],
+                  "studioBootstrapBackgroundIndexingEnabled": true,
+                  "studioBootstrapBackgroundIndexingMode": "enabled",
+                  "studioBootstrapBackgroundIndexingDeferredActivationObserved": false
                 }
               }
             }
@@ -2937,6 +2898,102 @@
           },
           "500": {
             "description": "The gateway failed while executing the docs page task."
+          }
+        }
+      }
+    },
+    "/api/docs/page-index-tree": {
+      "get": {
+        "operationId": "studioDocsPageIndexTree",
+        "tags": ["docs"],
+        "summary": "Inspect one deterministic projected docs page-index tree",
+        "description": "Run the Wendao deterministic projected page-index tree lookup flow through the docs namespace for one configured repository and return one builder-native projected page-index tree by stable page identifier.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One docs-facing deterministic builder-native projected page-index tree.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "tree": {
+                    "repo_id": "gateway-sync",
+                    "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                    "path": "reference/solve-9b65f0f06f3d.md",
+                    "doc_id": "auto::reference/solve-9b65f0f06f3d.md",
+                    "title": "solve",
+                    "root_count": 1,
+                    "roots": [
+                      {
+                        "node_id": "auto::reference/solve-9b65f0f06f3d.md#overview",
+                        "title": "Overview",
+                        "level": 1,
+                        "structural_path": ["Overview"],
+                        "line_range": [8, 12],
+                        "token_count": 18,
+                        "is_thinned": false,
+                        "text": "Projected reference page for `solve`.",
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs page-index-tree request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected page identifier was not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/missing.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs page-index-tree task."
           }
         }
       }

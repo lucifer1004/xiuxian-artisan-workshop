@@ -6,7 +6,7 @@ use super::matcher::build_project_glob_matcher;
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::search::handlers::queries::SymbolSearchQuery;
 use crate::gateway::studio::types::{SymbolSearchHit, SymbolSearchResponse};
-use crate::search::{SearchCorpusKind, SearchPlanePhase};
+use crate::search::SearchCorpusKind;
 
 pub(crate) async fn load_symbol_search_response(
     state: &GatewayState,
@@ -25,17 +25,19 @@ pub(crate) async fn load_symbol_search_response(
     state.studio.ensure_local_symbol_index_started()?;
     let status = state
         .studio
-        .search_plane
-        .coordinator()
-        .status_for(SearchCorpusKind::LocalSymbol);
-    if status.active_epoch.is_none() {
+        .local_corpus_bootstrap_status(SearchCorpusKind::LocalSymbol, "symbol_search");
+    if !status.active_epoch_ready {
+        state.studio.record_local_corpus_partial_search_response(
+            SearchCorpusKind::LocalSymbol,
+            "symbol_search",
+        );
         return Ok(SymbolSearchResponse {
             query: query_text.to_string(),
             hit_count: 0,
             selected_scope: "project".to_string(),
             partial: true,
-            indexing_state: Some(search_plane_phase_label(status.phase).to_string()),
-            index_error: status.last_error,
+            indexing_state: Some(status.indexing_state.to_string()),
+            index_error: status.index_error,
             hits: Vec::new(),
         });
     }
@@ -69,6 +71,9 @@ pub(crate) async fn load_symbol_search_response(
             .then_with(|| left.line.cmp(&right.line))
     });
 
+    state
+        .studio
+        .record_local_corpus_ready_search_response(SearchCorpusKind::LocalSymbol, "symbol_search");
     Ok(SymbolSearchResponse {
         query: query_text.to_string(),
         hit_count: hits.len(),
@@ -104,14 +109,4 @@ pub(crate) async fn load_symbol_search_flight_response(
                 Some(error),
             )
         })
-}
-
-fn search_plane_phase_label(phase: SearchPlanePhase) -> &'static str {
-    match phase {
-        SearchPlanePhase::Idle => "idle",
-        SearchPlanePhase::Indexing => "indexing",
-        SearchPlanePhase::Ready => "ready",
-        SearchPlanePhase::Degraded => "degraded",
-        SearchPlanePhase::Failed => "failed",
-    }
 }

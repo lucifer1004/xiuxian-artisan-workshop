@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::gateway::studio::pathing::studio_display_path;
 use crate::gateway::studio::router::StudioState;
@@ -7,6 +7,11 @@ use crate::gateway::studio::types::{VfsContentResponse, VfsEntry};
 
 use super::filters::VfsError;
 use super::roots::resolve_all_vfs_roots;
+
+pub(crate) struct RawVfsContent {
+    pub(crate) content: Vec<u8>,
+    pub(crate) content_type: String,
+}
 
 pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, VfsError> {
     let resolved = resolve_vfs_path(state, path)?;
@@ -48,6 +53,21 @@ pub(crate) async fn read_content(
         content_type: "text/plain".to_string(),
         content,
         modified: unix_timestamp_secs(&metadata),
+    })
+}
+
+#[allow(clippy::unused_async)]
+pub(crate) async fn read_raw_content(
+    state: &StudioState,
+    path: &str,
+) -> Result<RawVfsContent, VfsError> {
+    let resolved = resolve_vfs_path(state, path)?;
+    let content = fs::read(&resolved.full_path)
+        .map_err(|error| VfsError::internal("IO_ERROR", error.to_string(), None))?;
+
+    Ok(RawVfsContent {
+        content,
+        content_type: infer_vfs_content_type(path).to_string(),
     })
 }
 
@@ -102,6 +122,45 @@ pub(super) fn unix_timestamp_secs(metadata: &fs::Metadata) -> u64 {
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |duration| duration.as_secs())
+}
+
+fn infer_vfs_content_type(path: &str) -> &'static str {
+    match file_extension(path).as_deref() {
+        Some("aac") => "audio/aac",
+        Some("apng") => "image/apng",
+        Some("avi") => "video/x-msvideo",
+        Some("avif") => "image/avif",
+        Some("bmp") => "image/bmp",
+        Some("flac") => "audio/flac",
+        Some("gif") => "image/gif",
+        Some("heic") => "image/heic",
+        Some("heif") => "image/heif",
+        Some("ico") => "image/x-icon",
+        Some("jpeg" | "jpg") => "image/jpeg",
+        Some("m4a") => "audio/mp4",
+        Some("m4v" | "mp4") => "video/mp4",
+        Some("markdown" | "md") => "text/markdown",
+        Some("mkv") => "video/x-matroska",
+        Some("mov") => "video/quicktime",
+        Some("mp3") => "audio/mpeg",
+        Some("ogg") => "audio/ogg",
+        Some("opus") => "audio/opus",
+        Some("pdf") => "application/pdf",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("tif" | "tiff") => "image/tiff",
+        Some("wav") => "audio/wav",
+        Some("webm") => "video/webm",
+        Some("webp") => "image/webp",
+        _ => "application/octet-stream",
+    }
+}
+
+fn file_extension(path: &str) -> Option<String> {
+    Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
 }
 
 #[cfg(test)]

@@ -1,13 +1,42 @@
 use specta::TypeCollection;
 
-use super::config::{UiPluginArtifact, UiPluginLaunchSpec};
+use super::{
+    ApiError, AstSearchResponse, AttachmentSearchResponse, AutocompleteResponse,
+    CodeAstAnalysisResponse, DefinitionResolveResponse, GraphNeighborsResponse,
+    MarkdownAnalysisResponse, ReferenceSearchResponse, SearchResponse, SymbolSearchResponse,
+    Topology3dPayload, UiConfig, UiPluginArtifact, UiPluginLaunchSpec, VfsContentResponse,
+    VfsEntry, VfsScanEntry, VfsScanResult,
+};
 
-/// Build the Studio Specta type collection used by `export_types`.
+/// Build the plugin-only Studio Specta type collection.
 #[must_use]
 pub fn studio_type_collection() -> TypeCollection {
     TypeCollection::default()
         .register::<UiPluginArtifact>()
         .register::<UiPluginLaunchSpec>()
+}
+
+/// Build the frontend-facing Studio Specta type collection.
+#[must_use]
+pub fn studio_frontend_type_collection() -> TypeCollection {
+    TypeCollection::default()
+        .register::<ApiError>()
+        .register::<VfsEntry>()
+        .register::<VfsScanEntry>()
+        .register::<VfsScanResult>()
+        .register::<VfsContentResponse>()
+        .register::<UiConfig>()
+        .register::<GraphNeighborsResponse>()
+        .register::<Topology3dPayload>()
+        .register::<SearchResponse>()
+        .register::<AttachmentSearchResponse>()
+        .register::<AstSearchResponse>()
+        .register::<DefinitionResolveResponse>()
+        .register::<ReferenceSearchResponse>()
+        .register::<SymbolSearchResponse>()
+        .register::<AutocompleteResponse>()
+        .register::<MarkdownAnalysisResponse>()
+        .register::<CodeAstAnalysisResponse>()
 }
 
 #[cfg(test)]

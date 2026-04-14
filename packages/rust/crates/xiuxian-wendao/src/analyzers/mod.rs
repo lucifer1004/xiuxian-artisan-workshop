@@ -107,9 +107,15 @@ pub use records::{
 pub use registry::PluginRegistry;
 pub(crate) use repo_source::resolve_registered_repository_source;
 pub use service::{
+    DOCS_CONTRACT_IDS, DOCS_NAVIGATION_CONTRACT_ID, DOCS_RETRIEVAL_CONTEXT_CONTRACT_ID,
+    DocsCapabilityContractAssets, DocsCapabilityContractSnapshot, DocsCliContractSnapshot,
+    DocsContractDefaultValue, DocsContractParamSnapshot, DocsHttpContractSnapshot,
+    DocsNavigationOptions, DocsNavigationToolArgs, DocsRetrievalContextOptions,
+    DocsRetrievalContextToolArgs, DocsToolContractSnapshot, DocsToolService,
     JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_EMBEDDING_COLUMN,
     JULIA_ARROW_FINAL_SCORE_COLUMN, JULIA_ARROW_QUERY_EMBEDDING_COLUMN,
-    JULIA_ARROW_TRACE_ID_COLUMN, JULIA_ARROW_VECTOR_SCORE_COLUMN, julia_arrow_request_schema,
+    JULIA_ARROW_TRACE_ID_COLUMN, JULIA_ARROW_VECTOR_SCORE_COLUMN, docs_capability_contract_assets,
+    docs_capability_contract_snapshot, docs_capability_schema_snapshot, julia_arrow_request_schema,
     julia_arrow_response_schema,
 };
 pub use service::{

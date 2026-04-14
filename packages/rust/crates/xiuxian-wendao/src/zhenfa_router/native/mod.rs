@@ -7,10 +7,10 @@ mod agentic_nav;
 pub mod audit;
 mod context;
 mod deployment;
+mod docs;
 mod forwarder;
 mod remediation;
 mod search;
-mod section_create;
 pub mod semantic_check;
 mod semantic_edit;
 mod semantic_read;
@@ -20,10 +20,27 @@ mod xml_lite;
 pub use agentic_nav::WendaoAgenticNavTool;
 pub use audit::{audit_search_payload, evaluate_alignment};
 pub use context::WendaoContextExt;
+pub(crate) use context::resolve_docs_tool_runtime;
 pub use deployment::{
     WendaoPluginArtifactArgs, WendaoPluginArtifactOutputFormat, WendaoPluginArtifactTool,
     export_plugin_artifact, render_plugin_artifact, render_plugin_artifact_json,
     render_plugin_artifact_toml, wendao_plugin_artifact,
+};
+pub use docs::{
+    WendaoDocsGetDocumentArgs, WendaoDocsGetDocumentNodeArgs, WendaoDocsGetDocumentNodeTool,
+    WendaoDocsGetDocumentSegmentArgs, WendaoDocsGetDocumentSegmentTool,
+    WendaoDocsGetDocumentStructureArgs, WendaoDocsGetDocumentStructureCatalogArgs,
+    WendaoDocsGetDocumentStructureCatalogTool, WendaoDocsGetDocumentStructureOutlineArgs,
+    WendaoDocsGetDocumentStructureOutlineTool, WendaoDocsGetDocumentStructureTool,
+    WendaoDocsGetDocumentTool, WendaoDocsGetNavigationArgs, WendaoDocsGetNavigationTool,
+    WendaoDocsGetRetrievalContextArgs, WendaoDocsGetRetrievalContextTool,
+    WendaoDocsGetTocDocumentsArgs, WendaoDocsGetTocDocumentsTool,
+    WendaoDocsSearchDocumentStructureArgs, WendaoDocsSearchDocumentStructureTool,
+    register_wendao_docs_native_tools, wendao_docs_get_document, wendao_docs_get_document_node,
+    wendao_docs_get_document_segment, wendao_docs_get_document_structure,
+    wendao_docs_get_document_structure_catalog, wendao_docs_get_document_structure_outline,
+    wendao_docs_get_navigation, wendao_docs_get_retrieval_context, wendao_docs_get_toc_documents,
+    wendao_docs_search_document_structure,
 };
 pub use forwarder::{
     AffectedDocInfo, ForwardNotification, ForwardNotifier, ForwarderConfig, SuggestedAction,

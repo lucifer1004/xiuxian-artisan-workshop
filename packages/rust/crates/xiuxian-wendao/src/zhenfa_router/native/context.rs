@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError};
 
+use crate::analyzers::DocsToolService;
+use crate::analyzers::service::{DocsToolRuntime, DocsToolRuntimeHandle};
 use crate::{AssetRequest, LinkGraphIndex, SkillVfsResolver, WendaoAssetHandle};
 
 /// Typed extension accessors for Wendao native tools.
@@ -27,6 +29,13 @@ pub trait WendaoContextExt {
         semantic_name: &str,
         relative_path: &str,
     ) -> Result<AssetRequest, ZhenfaError>;
+
+    /// Resolve the injected docs capability service from zhenfa context.
+    ///
+    /// # Errors
+    /// Returns execution error when the docs capability service is not present
+    /// in context.
+    fn docs_tool_service(&self) -> Result<Arc<DocsToolService>, ZhenfaError>;
 }
 
 impl WendaoContextExt for ZhenfaContext {
@@ -53,4 +62,32 @@ impl WendaoContextExt for ZhenfaContext {
             ))
         })
     }
+
+    fn docs_tool_service(&self) -> Result<Arc<DocsToolService>, ZhenfaError> {
+        self.get_extension::<DocsToolService>().ok_or_else(|| {
+            ZhenfaError::execution("missing DocsToolService in zhenfa context extensions")
+        })
+    }
+}
+
+/// Resolve the injected docs capability runtime from zhenfa context.
+///
+/// # Errors
+/// Returns execution error when neither a docs runtime handle nor the concrete
+/// docs capability service is present in context.
+pub(crate) fn resolve_docs_tool_runtime(
+    ctx: &ZhenfaContext,
+) -> Result<Arc<dyn DocsToolRuntime>, ZhenfaError> {
+    if let Some(handle) = ctx.get_extension::<DocsToolRuntimeHandle>() {
+        return Ok(handle.inner());
+    }
+
+    if let Some(service) = ctx.get_extension::<DocsToolService>() {
+        let runtime: Arc<dyn DocsToolRuntime> = service;
+        return Ok(runtime);
+    }
+
+    Err(ZhenfaError::execution(
+        "missing DocsToolRuntimeHandle or DocsToolService in zhenfa context extensions",
+    ))
 }

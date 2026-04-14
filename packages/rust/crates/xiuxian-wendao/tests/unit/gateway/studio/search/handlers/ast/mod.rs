@@ -1,12 +1,13 @@
 use std::fs;
 use std::sync::Arc;
 
+use serde_json::Value;
 use tempfile::tempdir;
 use xiuxian_wendao_runtime::transport::AstSearchFlightRouteProvider;
 
 use super::provider::StudioAstSearchFlightRouteProvider;
+use crate::gateway::studio::build_ast_index;
 use crate::gateway::studio::router::GatewayState;
-use crate::gateway::studio::search::build_symbol_index;
 use crate::gateway::studio::search::handlers::tests::test_studio_state;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
 
@@ -29,7 +30,7 @@ async fn studio_ast_flight_provider_materializes_ast_batches() {
     let mut studio = test_studio_state();
     studio.project_root = temp_dir.path().to_path_buf();
     studio.config_root = temp_dir.path().to_path_buf();
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -37,16 +38,30 @@ async fn studio_ast_flight_provider_materializes_ast_batches() {
         }],
         repo_projects: Vec::new(),
     });
-    let warmed_index = build_symbol_index(
+    let projects = studio.configured_projects();
+    let hits = build_ast_index(
         studio.project_root.as_path(),
         studio.config_root.as_path(),
-        studio.configured_projects().as_slice(),
+        &projects,
     );
-    studio.symbol_index_coordinator.set_ready_index_for_test(
-        studio.configured_projects().as_slice(),
-        Arc::clone(&studio.symbol_index),
-        warmed_index,
+    let fingerprint = format!(
+        "test:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                studio.project_root.display(),
+                studio.config_root.display(),
+                hits.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
     );
+    studio
+        .search_plane
+        .publish_local_symbol_hits(fingerprint.as_str(), &hits)
+        .await
+        .unwrap_or_else(|error| panic!("publish local symbol epoch: {error}"));
 
     let provider = StudioAstSearchFlightRouteProvider::new(Arc::new(GatewayState {
         index: None,
@@ -55,12 +70,17 @@ async fn studio_ast_flight_provider_materializes_ast_batches() {
         studio: Arc::new(studio),
     }));
 
-    let batch = provider
+    let response = provider
         .ast_search_batch("alpha", 5)
         .await
         .unwrap_or_else(|error| {
             panic!("dedicated AST provider should accept AST requests: {error}")
         });
+    let metadata: Value = serde_json::from_slice(&response.app_metadata)
+        .unwrap_or_else(|error| panic!("AST provider app_metadata should decode: {error}"));
+    let batch = response.batch;
 
     assert!(batch.num_rows() >= 1);
+    assert_eq!(metadata["query"], "alpha");
+    assert_eq!(metadata["selectedScope"], "definitions");
 }

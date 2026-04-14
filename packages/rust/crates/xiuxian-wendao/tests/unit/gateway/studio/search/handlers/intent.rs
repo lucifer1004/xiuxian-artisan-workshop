@@ -34,7 +34,7 @@ async fn build_intent_search_response_includes_repo_content_hits_for_debug_looku
     .unwrap_or_else(|error| panic!("write project: {error}"));
 
     let studio = test_studio_state();
-    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+    studio.apply_eager_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
             id: "valid".to_string(),
@@ -119,7 +119,7 @@ async fn load_intent_search_response_reports_repo_content_flight_transport_metad
     .unwrap_or_else(|error| panic!("write project: {error}"));
 
     let studio = test_studio_state();
-    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+    studio.apply_eager_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
             id: "valid".to_string(),
@@ -272,7 +272,7 @@ threads = 2
     .unwrap_or_else(|error| panic!("write project: {error}"));
 
     let studio = test_studio_state();
-    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+    studio.apply_eager_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
             id: "valid".to_string(),
@@ -331,7 +331,7 @@ threads = 2
 #[tokio::test]
 async fn build_intent_search_response_includes_repo_entity_hits_for_debug_lookup() {
     let studio = test_studio_state();
-    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+    studio.apply_eager_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
             id: "valid".to_string(),

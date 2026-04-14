@@ -7,8 +7,9 @@ mod validation;
 pub use contract::FlowhubStructureContract;
 pub use grammar::{TemplateLinkRef, TemplateLinkSpec, TemplateUseSpec};
 pub use manifest::{
-    FlowhubModuleExports, FlowhubModuleManifest, FlowhubModuleMetadata, FlowhubScenarioManifest,
-    FlowhubScenarioPlanning, FlowhubScenarioTemplate, FlowhubTemplateComposition,
+    FlowhubGraphContract, FlowhubGraphTopology, FlowhubModuleExports, FlowhubModuleManifest,
+    FlowhubModuleMetadata, FlowhubScenarioManifest, FlowhubScenarioPlanning,
+    FlowhubScenarioTemplate, FlowhubTemplateComposition,
 };
 pub use root::{FlowhubRootManifest, FlowhubRootMetadata};
 pub use validation::{FlowhubValidationKind, FlowhubValidationRule, FlowhubValidationScope};

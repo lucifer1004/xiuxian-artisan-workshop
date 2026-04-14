@@ -214,7 +214,9 @@ impl WendaoFlightService {
             )
             .await
             .map_err(Status::internal)
-            .and_then(FlightRoutePayload::try_new)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
     }
 
     async fn read_ast_search_payload(
@@ -232,7 +234,9 @@ impl WendaoFlightService {
             .ast_search_batch(query_text.as_str(), limit)
             .await
             .map_err(Status::internal)
-            .and_then(FlightRoutePayload::try_new)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
     }
 
     async fn read_definition_payload(

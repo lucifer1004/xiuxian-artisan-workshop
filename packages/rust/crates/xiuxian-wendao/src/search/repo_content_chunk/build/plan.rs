@@ -4,9 +4,12 @@ use crate::repo_index::RepoCodeDocument;
 use crate::search::repo_content_chunk::build::types::{
     REPO_CONTENT_CHUNK_EXTRACTOR_VERSION, RepoContentChunkBuildPlan,
 };
-use crate::search::repo_staging::{RepoStagedMutationConfig, RepoStagedMutationPayload};
+use crate::search::repo_staging::{
+    RepoStagedMutationConfig, RepoStagedMutationPayload, repo_file_fingerprint_changed,
+};
 use crate::search::{
     SearchCorpusKind, SearchFileFingerprint, SearchPlaneService, plan_repo_staged_mutation,
+    stable_payload_fingerprint,
 };
 
 pub(crate) fn plan_repo_content_chunk_build(
@@ -16,24 +19,20 @@ pub(crate) fn plan_repo_content_chunk_build(
     previous_publication: Option<&crate::search::SearchRepoPublicationRecord>,
     previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
 ) -> RepoContentChunkBuildPlan {
-    let file_fingerprints = documents
-        .iter()
-        .map(|document| {
-            (
-                document.path.clone(),
-                document.to_file_fingerprint(
-                    REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
-                    SearchCorpusKind::RepoContentChunk.schema_version(),
-                ),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
+    let file_fingerprints = repo_content_chunk_file_fingerprints(documents);
 
     let changed_documents = documents
         .iter()
         .filter(|document| {
-            previous_fingerprints.get(document.path.as_str())
-                != file_fingerprints.get(document.path.as_str())
+            file_fingerprints
+                .get(document.path.as_str())
+                .is_some_and(|fingerprint| {
+                    repo_file_fingerprint_changed(
+                        previous_fingerprints,
+                        document.path.as_str(),
+                        fingerprint,
+                    )
+                })
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -65,6 +64,25 @@ pub(crate) fn plan_repo_content_chunk_build(
             deleted_paths,
         },
     )
+}
+
+pub(crate) fn repo_content_chunk_file_fingerprints(
+    documents: &[RepoCodeDocument],
+) -> BTreeMap<String, SearchFileFingerprint> {
+    documents
+        .iter()
+        .map(|document| {
+            let mut fingerprint = document.to_file_fingerprint(
+                REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
+                SearchCorpusKind::RepoContentChunk.schema_version(),
+            );
+            fingerprint.blake3 = Some(stable_payload_fingerprint(
+                "repo_content_chunk_document",
+                document.contents.as_ref(),
+            ));
+            (document.path.clone(), fingerprint)
+        })
+        .collect::<BTreeMap<_, _>>()
 }
 
 #[cfg(test)]

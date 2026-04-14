@@ -297,6 +297,7 @@ fn sample_analysis(
         imports: vec![ImportRecord {
             repo_id: repo_id.to_string(),
             module_id: "module:BaseModelica".to_string(),
+            path: "src/BaseModelica.jl".to_string(),
             import_name: "solve".to_string(),
             target_package: "SciMLBase".to_string(),
             source_module: "BaseModelica".to_string(),
@@ -418,7 +419,7 @@ end
         Arc::clone(&registry),
         temp_dir.path().join("search_plane").join(keyspace),
     );
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: Vec::new(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "sciml/imports".to_string(),
@@ -487,6 +488,7 @@ fn sample_import_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
         imports: vec![ImportRecord {
             repo_id: repo_id.to_string(),
             module_id: "module:ProjectionPkg".to_string(),
+            path: "src/ProjectionPkg.jl".to_string(),
             import_name: "SciMLBase".to_string(),
             target_package: "SciMLBase".to_string(),
             source_module: "SciMLBase".to_string(),

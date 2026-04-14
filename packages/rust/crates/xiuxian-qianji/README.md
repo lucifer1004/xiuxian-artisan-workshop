@@ -152,11 +152,12 @@ through `[contract].required`. `qianji check` now parses those `.mmd` files
 through the mature `merman-core` render-model parser, classifies labels
 matching live Flowhub module names as graph-module nodes, and rejects
 malformed or uncontracted scenario-case graphs. A valid scenario-case graph
-must derive its `merimind_graph_name` from the owning filename stem rather
-than from the Mermaid direction token, must cover every registered Flowhub
-module node required by the current root contract, and must keep one
-connected module backbone across those module nodes. Undeclared graph-node
-labels such as stale semantic-node names now fail validation explicitly, and
+must resolve its `merimind_graph_name` from module-owned `[[graph]].name`
+when declared, otherwise from the owning filename stem rather than from the
+Mermaid direction token, must cover every registered Flowhub module node
+required by the current root contract, and must keep one connected module
+backbone across those module nodes. Undeclared graph-node labels such as
+stale semantic-node names now fail validation explicitly, and
 `qianji show --dir .../plan` now surfaces each immediate Mermaid case through
 explicit `Graph name: <merimind_graph_name>` and `Path: ./plan/<file>.mmd`
 fields in the markdown preview surface. The
@@ -175,10 +176,11 @@ the graph contract surface in five bounded sections only: graph metadata, raw
 Mermaid, node semantics, expected work surface, and the minimal local
 `qianji.toml` template that Codex or any other agent executor should
 materialize. That graph surface still parses node/edge structure through the
-mature Mermaid parser, derives `merimind_graph_name` from the filename stem,
-renders `Path` as the owning Mermaid file with repo-root-relative display when
-the graph lives under the active checkout, and aligns registered module nodes
-back to the Flowhub root contract plus module exports, while
+mature Mermaid parser, resolves `merimind_graph_name` from `[[graph]].name`
+or the filename-stem fallback, renders `Path` as the owning Mermaid file with
+repo-root-relative display when the graph lives under the active checkout,
+and aligns registered module nodes back to the Flowhub root contract plus
+module exports, while
 `qianji check --dir <workdir>` continues to evaluate the localized workdir
 contract materialized for the current bounded slice.
 The current execution model is now explicit in the docs: Codex is the
@@ -197,18 +199,35 @@ visible in `show --graph`, blocking in `qianji check`, and excluded from
 localized contract materialization guidance. Module alignment in the same RFC
 is now also explicit: module nodes are anchored by root `contract.register`,
 and export alignment stays bounded to `entry` and `ready`. The same RFC now
-also freezes the graph path and naming contract: `Name` is the filename-stem
-`merimind_graph_name`, and `Path` is the owning Mermaid file rendered
-repo-root-relative when the graph lives under the active checkout. The same
-RFC now also freezes the Mermaid consumption boundary for `show --graph`: the
+also freezes the graph path and naming contract: `Name` is the resolved
+`merimind_graph_name` from `[[graph]].name` or the filename-stem fallback,
+and `Path` is the owning Mermaid file rendered repo-root-relative when the
+graph lives under the active checkout. The same RFC now also freezes the
+Mermaid consumption boundary for `show --graph`: the
 raw Mermaid block stays verbatim, while graph-contract semantics consume only
 first-order node labels and directed adjacency rather than Mermaid
 presentation directives such as direction, styling, or click metadata. The
-current parser path now code-backs that boundary directly: before extracting
-graph-contract semantics, it strips presentation-only Mermaid directives such
-as `classDef`, `class`, `style`, `click`, and `linkStyle`, while the
-rendered `## Mermaid` block still preserves the original source verbatim.
-This slice does not add a new CLI verb yet.
+current parser path now code-backs that boundary directly by delegating
+flowchart syntax acceptance to `merman-core`, including repeated labels,
+subgraphs, directives, and expanded node-shape syntax, while the Qianji
+projection still only keeps direction plus first-order node and edge
+semantics and the rendered `## Mermaid` block stays verbatim.
+The same Flowhub graph-contract surface now also carries explicit topology
+semantics. Flowhub-owned scenario-case graphs may declare whether they are
+`dag`, `bounded_loop`, or `open_loop` through module-owned `[[graph]]`
+entries, and `qianji check` / `qianji show --graph` now evaluate that declared
+topology through a petgraph-backed analysis layer instead of relying only on
+first-order backbone checks.
+The crate now also exposes one separate LLM-facing contract snapshot surface:
+`qianji show --contract wendao.docs.navigation` or
+`qianji show --contract wendao.docs.retrieval_context`. That bounded display
+renders the checked-in Wendao invocation snapshot as raw `contract.toml` plus
+`schema.json`, keeping the stable HTTP method/path, matching `wendao docs ...`
+CLI form, and tool-input schema separate from the frozen `show --graph`
+output contract. The same slice also lets `qianji.toml` author real
+`http_call` and `cli_call` nodes directly, with the authored invocation fields
+validated against the referenced snapshot contract instead of against
+Wendao-internal structs. This slice does not add a new CLI verb yet.
 The touched CLI and
 integration-test coverage now anchors repo/workspace resolution through the
 shared `PRJ_ROOT`-aware resolver in `xiuxian-config-core` rather than through
@@ -255,6 +274,10 @@ direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji 
 direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
   show \
   --graph "$PRJ_ROOT/qianji-flowhub/plan/codex-plan.mmd"
+
+direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
+  show \
+  --contract wendao.docs.navigation
 
 direnv exec "$PRJ_ROOT" cargo run -p xiuxian-qianji --features llm --bin qianji -- \
   check \

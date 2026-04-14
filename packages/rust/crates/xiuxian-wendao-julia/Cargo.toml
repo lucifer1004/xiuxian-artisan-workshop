@@ -16,6 +16,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "tim
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+blake3 = "1"
 chrono = { workspace = true, features = ["clock"] }
 inventory = "0.3"
 xiuxian-memory-engine = { path = "../xiuxian-memory-engine" }

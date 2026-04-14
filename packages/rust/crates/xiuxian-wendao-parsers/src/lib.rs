@@ -7,6 +7,8 @@ xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs"
 pub mod addressed_target;
 /// Shared Markdown block parsing and parser-owned block contracts.
 pub mod blocks;
+/// Parser-owned Markdown `:OBSERVE:` parsing and scoped-address contract.
+pub mod code_observation;
 /// Parser-owned Markdown document metadata extraction.
 pub mod document;
 /// Markdown frontmatter parsing and parser-owned frontmatter contracts.
@@ -19,12 +21,16 @@ pub mod note;
 pub mod reference_core;
 /// Shared Markdown reference parsing and parser-owned link contracts.
 pub mod references;
+/// Parser-owned Markdown section-create planning and rendering helpers.
+pub mod section_create;
 /// Shared Markdown section parsing and parser-owned section contracts.
 pub mod sections;
 /// Shared source-position helpers used by parser-owned Markdown scans.
 pub mod sourcepos;
 /// Parser-owned raw Markdown target-occurrence extraction.
 pub mod targets;
+/// Parser-owned Markdown table-of-contents aggregation.
+pub mod toc;
 /// Shared Markdown wikilink parsing built on top of reference parsing.
 pub mod wikilinks;
 
@@ -33,6 +39,7 @@ pub use blocks::{
     BlockCore, BlockKindIdentity, MarkdownBlock, MarkdownBlockKind, compute_block_hash,
     extract_blocks, line_col_to_byte_range,
 };
+pub use code_observation::{CodeObservation, extract_observations, path_matches_scope};
 pub use document::{
     DocumentCore, DocumentEnvelope, DocumentFormat, MarkdownDocument, parse_markdown_document,
 };
@@ -43,10 +50,15 @@ pub use reference_core::ReferenceCore;
 pub use references::{
     MarkdownReference, MarkdownReferenceKind, extract_references, parse_reference_literal,
 };
+pub use section_create::{
+    BuildSectionOptions, InsertionInfo, SiblingInfo, build_new_sections_content_with_options,
+    compute_content_hash, find_insertion_point, generate_section_id, parse_heading_line,
+};
 pub use sections::{
     LogbookEntry, MarkdownSection, SectionCore, SectionMetadata, SectionScope, extract_sections,
 };
 pub use targets::{
     MarkdownTargetOccurrence, MarkdownTargetOccurrenceKind, TargetOccurrenceCore, extract_targets,
 };
+pub use toc::{MarkdownTocDocument, TocDocument, parse_markdown_toc};
 pub use wikilinks::{MarkdownWikiLink, extract_wikilinks, parse_wikilink_literal};

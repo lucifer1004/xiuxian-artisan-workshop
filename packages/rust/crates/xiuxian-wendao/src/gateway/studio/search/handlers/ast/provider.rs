@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use xiuxian_wendao_runtime::transport::AstSearchFlightRouteProvider;
+use xiuxian_wendao_runtime::transport::{AstSearchFlightRouteProvider, SearchFlightRouteResponse};
 
 use super::batch::build_ast_hits_flight_batch;
 use super::response::load_ast_search_response;
@@ -32,7 +32,7 @@ impl AstSearchFlightRouteProvider for StudioAstSearchFlightRouteProvider {
         &self,
         query_text: &str,
         limit: usize,
-    ) -> Result<xiuxian_vector_store::LanceRecordBatch, String> {
+    ) -> Result<SearchFlightRouteResponse, String> {
         let response = load_ast_search_response(
             self.state.as_ref(),
             AstSearchQuery {
@@ -48,6 +48,8 @@ impl AstSearchFlightRouteProvider for StudioAstSearchFlightRouteProvider {
                 .clone()
                 .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
         })?;
+        let app_metadata = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
         build_ast_hits_flight_batch(response.hits.as_slice())
+            .map(|batch| SearchFlightRouteResponse::new(batch).with_app_metadata(app_metadata))
     }
 }

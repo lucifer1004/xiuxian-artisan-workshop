@@ -1,7 +1,5 @@
 use crate::link_graph::{PageIndexNode, RegistryIndex};
-use crate::zhenfa_router::native::semantic_check::parsing::{
-    extract_hash_references, extract_id_references,
-};
+use crate::parsers::semantic_check::{extract_hash_references, extract_id_references};
 use crate::zhenfa_router::native::semantic_check::types::{
     IssueLocation, NodeStatus, SemanticIssue, attrs,
 };

@@ -1,4 +1,5 @@
 mod heuristic;
+#[cfg(feature = "repo-lexical-index")]
 mod indexed;
 mod lexical;
 mod mapping;
@@ -6,9 +7,9 @@ mod options;
 mod ranking;
 mod sort;
 
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) use indexed::build_projected_page_search_index;
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) use ranking::build_repo_projected_page_search_with_artifacts;
 pub use ranking::{build_repo_projected_page_search, scored_projected_page_matches};
 

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
@@ -31,7 +31,7 @@ pub fn build_module_search(
 }
 
 #[must_use]
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) fn build_module_search_with_artifacts(
     query: &ModuleSearchQuery,
     analysis: &RepositoryAnalysisOutput,

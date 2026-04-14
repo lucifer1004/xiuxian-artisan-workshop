@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use crate::gateway::studio::analysis::markdown::{CompiledDocument, compile_markdown_ir};
+use crate::gateway::studio::analysis::markdown::{
+    CompiledDocument, build_markdown_document_metadata, compile_markdown_ir,
+};
 use crate::gateway::studio::analysis::projection;
 use crate::gateway::studio::pathing::{normalize_path_like, studio_display_path};
 use crate::gateway::studio::router::StudioState;
@@ -62,11 +64,12 @@ pub(crate) async fn analyze_markdown(
 
     let compiled: CompiledDocument = compile_markdown_ir(path, &content);
 
-    // Optional: add link-graph metadata if index is available
-    let _index = match state.graph_index.read() {
-        Ok(guard) => guard.as_ref().map(std::sync::Arc::clone),
-        Err(_) => None,
-    };
+    let graph_index_guard = state
+        .graph_index
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let graph_index = graph_index_guard.as_ref().map(std::sync::Arc::as_ref);
+    let document_metadata = build_markdown_document_metadata(state, path, &content, graph_index);
 
     let projections = projection::build_mermaid_projections(&compiled.nodes, &compiled.edges);
 
@@ -79,6 +82,7 @@ pub(crate) async fn analyze_markdown(
         edges: compiled.edges,
         projections,
         retrieval_atoms: compiled.retrieval_atoms,
+        document_metadata: Some(document_metadata),
         diagnostics: compiled.diagnostics,
     })
 }

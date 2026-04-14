@@ -37,8 +37,9 @@ use xiuxian_qianji::{
     check_workdir, classify_flowhub_dir, looks_like_flowhub_scenario_dir, looks_like_workdir_dir,
     render_flowhub_check_markdown, render_flowhub_graph_show,
     render_flowhub_scenario_check_markdown, render_flowhub_scenario_show, render_flowhub_show,
-    render_workdir_check_markdown, render_workdir_show, show_flowhub, show_flowhub_graph,
-    show_flowhub_scenario, show_workdir,
+    render_wendao_docs_contract_show, render_workdir_check_markdown, render_workdir_show,
+    show_flowhub, show_flowhub_graph, show_flowhub_scenario, show_wendao_docs_contract,
+    show_workdir,
 };
 use xiuxian_testing::{
     AdvisoryAuditPolicy, CollectionContext, ContractReport, ContractRunConfig, FindingSeverity,
@@ -59,6 +60,7 @@ enum DirCliCommand {
 enum ShowCliTarget {
     Dir(PathBuf),
     Graph(PathBuf),
+    Contract(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -258,6 +260,7 @@ fn run_show_command(target: &ShowCliTarget) -> Result<DirCliOutput, QianjiError>
     match target {
         ShowCliTarget::Dir(dir) => run_show_dir_command(dir),
         ShowCliTarget::Graph(graph) => run_show_graph_command(graph),
+        ShowCliTarget::Contract(contract_name) => run_show_contract_command(contract_name),
     }
 }
 
@@ -302,6 +305,14 @@ fn run_show_graph_command(graph: &Path) -> Result<DirCliOutput, QianjiError> {
     let show = show_flowhub_graph(graph)?;
     Ok(DirCliOutput {
         rendered: render_flowhub_graph_show(&show),
+        exit_code: 0,
+    })
+}
+
+fn run_show_contract_command(contract_name: &str) -> Result<DirCliOutput, QianjiError> {
+    let show = show_wendao_docs_contract(contract_name)?;
+    Ok(DirCliOutput {
+        rendered: render_wendao_docs_contract_show(&show),
         exit_code: 0,
     })
 }
@@ -895,6 +906,7 @@ fn parse_show_target(args: &[String]) -> io::Result<ShowCliTarget> {
     let mut index = 0;
     let mut dir = None;
     let mut graph = None;
+    let mut contract = None;
     while index < args.len() {
         match args[index].as_str() {
             "--dir" => {
@@ -911,6 +923,13 @@ fn parse_show_target(args: &[String]) -> io::Result<ShowCliTarget> {
                     .ok_or_else(|| invalid_input("missing value for --graph in `show` command"))?;
                 graph = Some(PathBuf::from(value));
             }
+            "--contract" => {
+                index += 1;
+                let value = args.get(index).ok_or_else(|| {
+                    invalid_input("missing value for --contract in `show` command")
+                })?;
+                contract = Some(value.clone());
+            }
             other => {
                 return Err(invalid_input(format!(
                     "unsupported `show` option `{other}`"
@@ -920,14 +939,18 @@ fn parse_show_target(args: &[String]) -> io::Result<ShowCliTarget> {
         index += 1;
     }
 
-    match (dir, graph) {
-        (Some(dir), None) => Ok(ShowCliTarget::Dir(dir)),
-        (None, Some(graph)) => Ok(ShowCliTarget::Graph(graph)),
-        (Some(_), Some(_)) => Err(invalid_input(
-            "`show` command requires exactly one of `--dir <path>` or `--graph <path>`",
+    match (dir, graph, contract) {
+        (Some(dir), None, None) => Ok(ShowCliTarget::Dir(dir)),
+        (None, Some(graph), None) => Ok(ShowCliTarget::Graph(graph)),
+        (None, None, Some(contract_name)) => Ok(ShowCliTarget::Contract(contract_name)),
+        (Some(_), Some(_), None)
+        | (Some(_), None, Some(_))
+        | (None, Some(_), Some(_))
+        | (Some(_), Some(_), Some(_)) => Err(invalid_input(
+            "`show` command requires exactly one of `--dir <path>`, `--graph <path>`, or `--contract <name>`",
         )),
-        (None, None) => Err(invalid_input(
-            "missing `--dir <path>` or `--graph <path>` for `show` command",
+        (None, None, None) => Err(invalid_input(
+            "missing `--dir <path>`, `--graph <path>`, or `--contract <name>` for `show` command",
         )),
     }
 }
@@ -975,6 +998,7 @@ fn print_qianji_usage() {
     eprintln!("  Graph:     qianji [-v|--log-verbose] graph <manifest_path> <output_path>");
     eprintln!("  Show:      qianji [-v|--log-verbose] show --dir <path>");
     eprintln!("             qianji [-v|--log-verbose] show --graph <path>");
+    eprintln!("             qianji [-v|--log-verbose] show --contract <id>");
     eprintln!("  Check:     qianji [-v|--log-verbose] check --dir <path>");
     eprintln!(
         "  Contract:  qianji [-v|--log-verbose] contract-feedback rest-docs <openapi_path> [--workspace-root PATH] [--storage-path PATH] [--table-name NAME] [--role ROLE]... [--no-persist] [--live-advisory] [--model MODEL] [--temperature FLOAT] [--cognitive-threshold FLOAT]"

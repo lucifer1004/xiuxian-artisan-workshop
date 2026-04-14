@@ -5,10 +5,13 @@ use globset::Glob;
 use walkdir::WalkDir;
 
 use crate::contracts::{
-    FlowhubStructureContract, FlowhubValidationKind, FlowhubValidationRule, FlowhubValidationScope,
+    FlowhubGraphContract, FlowhubStructureContract, FlowhubValidationKind, FlowhubValidationRule,
+    FlowhubValidationScope,
 };
 use crate::error::QianjiError;
-use crate::flowhub::mermaid::{parse_mermaid_flowchart, validate_mermaid_flowchart};
+use crate::flowhub::mermaid::{
+    analyze_mermaid_flowchart_topology, parse_mermaid_flowchart, validate_mermaid_flowchart,
+};
 use crate::markdown::{MarkdownDiagnostic, render_validation_failed, render_validation_pass};
 use crate::{ResolvedFlowhubModule, resolve_flowhub_module_children};
 
@@ -549,10 +552,14 @@ fn validate_mermaid_case_files(
                 scenario_case.display()
             ))
         })?;
-        let merimind_graph_name = scenario_case
+        let fallback_graph_name = scenario_case
             .file_stem()
             .and_then(|stem| stem.to_str())
             .unwrap_or(file_name);
+        let declared_graph = declared_graph_contract(module, file_name);
+        let merimind_graph_name = declared_graph.map_or(fallback_graph_name, |graph| {
+            graph.resolved_name_or(fallback_graph_name)
+        });
         match parse_mermaid_flowchart(&source, merimind_graph_name, known_module_names) {
             Ok(flowchart) => {
                 if let Err(problem) = validate_mermaid_flowchart(&flowchart, known_module_names) {
@@ -565,6 +572,32 @@ fn validate_mermaid_case_files(
                                 .to_string(),
                         fix: "repair the Mermaid node and edge graph so required module nodes are valid".to_string(),
                     });
+                    continue;
+                }
+
+                let topology = analyze_mermaid_flowchart_topology(&flowchart);
+                if let Some(graph_contract) = declared_graph {
+                    if topology.topology != graph_contract.topology {
+                        diagnostics.push(FlowhubDiagnostic {
+                            title: "Invalid scenario-case topology".to_string(),
+                            location: scenario_case.clone(),
+                            problem: format!(
+                                "module `{}` declares `[[graph]] path = \"{}\"` with topology `{}`, but petgraph analysis resolved `{}`",
+                                module.module_ref,
+                                graph_contract.path,
+                                graph_contract.topology.as_str(),
+                                topology.topology.as_str(),
+                            ),
+                            why_it_blocks:
+                                "Qianji cannot trust the scenario-case graph as a correctly typed Flowhub topology surface"
+                                    .to_string(),
+                            fix: format!(
+                                "repair `{}` so it matches `{}`, or update `[[graph]] topology` to the analyzed graph shape",
+                                graph_contract.path,
+                                graph_contract.topology.as_str(),
+                            ),
+                        });
+                    }
                 }
             }
             Err(error) => diagnostics.push(FlowhubDiagnostic {
@@ -580,6 +613,17 @@ fn validate_mermaid_case_files(
     }
 
     Ok(())
+}
+
+fn declared_graph_contract<'a>(
+    module: &'a FlowhubDiscoveredModule,
+    file_name: &str,
+) -> Option<&'a FlowhubGraphContract> {
+    module
+        .manifest
+        .graph
+        .iter()
+        .find(|graph| graph.path == file_name)
 }
 
 fn discover_immediate_child_directories(module_dir: &Path) -> Result<Vec<String>, QianjiError> {

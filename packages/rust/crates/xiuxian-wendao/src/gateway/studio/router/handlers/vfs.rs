@@ -5,6 +5,8 @@ use std::sync::Arc;
 use axum::{
     Json,
     extract::{Path as AxumPath, Query, State},
+    http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
+    response::{IntoResponse, Response},
 };
 use serde::Deserialize;
 
@@ -74,4 +76,37 @@ pub async fn cat(
         .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
     let payload = vfs::read_content(&state.studio, path).await?;
     Ok(Json(payload))
+}
+
+/// Streams raw file bytes for multimodal preview surfaces.
+///
+/// # Errors
+///
+/// Returns an error when `path` is missing or when the VFS payload cannot be
+/// resolved.
+pub async fn raw(
+    Query(query): Query<VfsCatQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Response, StudioApiError> {
+    let path = query
+        .path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
+    let payload = vfs::read_raw_content(&state.studio, path).await?;
+    let content_type = HeaderValue::from_str(payload.content_type.as_str()).map_err(|error| {
+        StudioApiError::internal(
+            "INVALID_CONTENT_TYPE",
+            "Failed to render VFS raw content type header",
+            Some(error.to_string()),
+        )
+    })?;
+
+    Ok((
+        StatusCode::OK,
+        [(CONTENT_TYPE, content_type)],
+        payload.content,
+    )
+        .into_response())
 }

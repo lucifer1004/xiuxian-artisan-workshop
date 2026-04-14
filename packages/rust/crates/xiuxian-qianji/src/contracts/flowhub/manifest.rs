@@ -2,6 +2,53 @@ use serde::{Deserialize, Serialize};
 
 use super::{FlowhubStructureContract, FlowhubValidationRule, TemplateLinkSpec, TemplateUseSpec};
 
+/// Supported Flowhub scenario-case topology classifications.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlowhubGraphTopology {
+    /// A graph with no directed cycles.
+    Dag,
+    /// A graph with at least one cycle and at least one acyclic exit path.
+    BoundedLoop,
+    /// A graph with at least one cycle but no acyclic exit path.
+    OpenLoop,
+}
+
+impl FlowhubGraphTopology {
+    /// Return the stable manifest/display spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dag => "dag",
+            Self::BoundedLoop => "bounded_loop",
+            Self::OpenLoop => "open_loop",
+        }
+    }
+}
+
+/// One immediate Mermaid scenario-case contract owned by a Flowhub module.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FlowhubGraphContract {
+    /// Immediate `.mmd` file owned by the module.
+    pub path: String,
+    /// Optional stable graph identity when the filename stem is not the desired
+    /// LLM-facing graph name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Declared topology classification for the graph.
+    pub topology: FlowhubGraphTopology,
+}
+
+impl FlowhubGraphContract {
+    /// Resolve the graph name declared by contract, falling back to the owning
+    /// filename stem when no explicit name is present.
+    #[must_use]
+    pub fn resolved_name_or<'a>(&'a self, fallback: &'a str) -> &'a str {
+        self.name.as_deref().unwrap_or(fallback)
+    }
+}
+
 /// Flowhub module metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -49,6 +96,9 @@ pub struct FlowhubModuleManifest {
     /// Optional child-node filesystem contract for owned subgraphs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contract: Option<FlowhubStructureContract>,
+    /// Optional immediate Mermaid scenario-case graph contracts.
+    #[serde(default)]
+    pub graph: Vec<FlowhubGraphContract>,
     /// Optional internal child-module composition for composite modules.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<FlowhubTemplateComposition>,

@@ -6,6 +6,7 @@ use std::path::Path;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::{PageIndexNode, RegistryIndex};
+use crate::parsers::docs_governance::is_package_local_crate_doc;
 use crate::zhenfa_router::native::WendaoContextExt;
 use crate::zhenfa_router::native::audit::{SourceFile, resolve_source_files};
 
@@ -189,7 +190,7 @@ pub fn run_audit_core(
         && let Some(explicit_doc) = args.doc.as_deref()
         && explicit_doc != "."
         && !explicit_doc.is_empty()
-        && !docs_governance::is_package_local_crate_doc(explicit_doc)
+        && !is_package_local_crate_doc(explicit_doc)
         && !docs_to_check.iter().any(|doc_id| doc_id == explicit_doc)
         && let Some(content) = resolve_explicit_doc_content(explicit_doc, &file_contents)
     {

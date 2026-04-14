@@ -42,6 +42,10 @@ pub const API_DOCS_RETRIEVAL_HIT_OPENAPI_PATH: &str = "/api/docs/retrieval-hit";
 pub const API_DOCS_PAGE_AXUM_PATH: &str = "/api/docs/page";
 /// `OpenAPI` path for the docs page endpoint.
 pub const API_DOCS_PAGE_OPENAPI_PATH: &str = "/api/docs/page";
+/// Axum runtime path for the docs page-index-tree endpoint.
+pub const API_DOCS_PAGE_INDEX_TREE_AXUM_PATH: &str = "/api/docs/page-index-tree";
+/// `OpenAPI` path for the docs page-index-tree endpoint.
+pub const API_DOCS_PAGE_INDEX_TREE_OPENAPI_PATH: &str = "/api/docs/page-index-tree";
 /// Axum runtime path for the docs family-context endpoint.
 pub const API_DOCS_FAMILY_CONTEXT_AXUM_PATH: &str = "/api/docs/family-context";
 /// `OpenAPI` path for the docs family-context endpoint.

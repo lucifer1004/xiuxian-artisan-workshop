@@ -245,9 +245,9 @@ the old `capabilities_exports.rs` forwarding hop is gone, and
 `handlers/mod.rs` re-exports `get_ui_capabilities` and `get_plugin_artifact`
 directly from the `capabilities` feature folder.
 
-The same is now true for UI config: `ui_config_exports.rs` is gone, and
-`handlers/mod.rs` re-exports `get_ui_config` / `set_ui_config` directly from
-the `ui_config` handler module without changing the outward route names.
+The old UI-config handler hop is now retired entirely. The runtime still
+bootstraps `UiConfig` from backend-owned config imports, but `/api/ui/config`
+is no longer part of the outward Studio route surface.
 
 The same cleanup now also covers VFS: `vfs_exports.rs` is gone, and
 `handlers/mod.rs` re-exports `vfs_root_entries`, `vfs_scan`, `vfs_cat`,

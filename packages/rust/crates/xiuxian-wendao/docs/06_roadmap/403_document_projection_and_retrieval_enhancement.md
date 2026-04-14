@@ -388,6 +388,16 @@ inspection lane, so docs search hits can open one stable projected page without
 introducing a second docs-page schema or depending on repo-prefixed
 navigation-only consumers.
 
+The next docs-facing structure refinement above docs page should also stay
+deterministic:
+
+- `GET /api/docs/page-index-tree?repo=<id>&page_id=<stable-id>`
+
+This route should reuse the same `RepoProjectedPageIndexTreeResult` payload as
+the repo inspection lane, so docs consumers can inspect one stable page-index
+tree directly without dropping back to repo-prefixed tree routes or inflating
+the page payload with an always-on structural tree.
+
 The next docs-facing family refinement above docs page should also stay
 deterministic:
 
@@ -437,6 +447,120 @@ This route should reuse the same `RepoProjectedPageNavigationSearchResult`
 payload as the repo inspection lane, so the docs namespace can search stable
 center pages and receive full page-centric navigation bundles without
 introducing a docs-only navigation-search schema.
+
+The in-process Rust ownership split should stay equally explicit:
+
+- shared query access belongs to `SearchQueryService` under `src/search/queries/`
+- docs/page-index capability access belongs to `DocsToolService` under
+  `src/analyzers/service/projection/`
+
+That keeps SQL, FlightSQL, GraphQL, REST, and CLI `wendao query ...` scoped to
+the shared query system, while `wendao docs ...` and future planner/tool
+callers consume the docs capability surface directly instead of SQL-ifying
+page-index access or routing same-process calls through gateway adapters.
+
+The same owner path now also exposes repository-scoped markdown TOC/page-index
+documents without widening gateway ownership:
+
+- `DocsToolService::get_toc_documents()`
+- `wendao docs toc --repo <repo>`
+- `wendao.docs.get_toc_documents`
+
+The same owner path now also exposes one stable page-index node opener without
+widening gateway ownership:
+
+- `DocsToolService::get_document_node(page_id, node_id)`
+- `wendao docs node --repo <repo> --page-id <page-id> --node-id <node-id>`
+- `wendao.docs.get_document_node`
+
+The same owner path now also exposes one deterministic structure-search
+capability without widening gateway ownership:
+
+- `DocsToolService::search_document_structure(query, kind, limit)`
+- `wendao docs search-structure --repo <repo> --query <query> [--kind <kind>] [--limit <n>]`
+- `wendao.docs.search_document_structure`
+
+The same owner path now also exposes one lightweight structure opener without
+widening gateway ownership:
+
+- `DocsToolService::get_document_structure_outline(page_id)`
+- `wendao docs tree-outline --repo <repo> --page-id <page-id>`
+- `wendao.docs.get_document_structure_outline`
+
+The same owner path now also exposes one repo-scoped lightweight structure
+catalog without widening gateway ownership:
+
+- `DocsToolService::get_document_structure_catalog()`
+- `wendao docs structure-catalog --repo <repo>`
+- `wendao.docs.get_document_structure_catalog`
+
+The same owner path now also exposes one precise document-segment opener
+without widening gateway ownership:
+
+- `DocsToolService::get_document_segment(page_id, line_start, line_end)`
+- `wendao docs segment --repo <repo> --page-id <page-id> --line-start <n> --line-end <n>`
+- `wendao.docs.get_document_segment`
+
+These pageindex-only capabilities intentionally remain crate-local in this
+slice. The gateway still exposes only the 4 core page-opening routes below.
+The underlying Markdown TOC parsing owner is now
+`xiuxian_wendao_parsers::parse_markdown_toc`; `DocsToolService` remains the
+repo-scoped opener over projected page-index documents, nodes, bounded
+structure-search candidate generation, token-thinned outline reopening, and
+repo-scoped lightweight structure catalog reopening. The new segment opener
+also stays on that owner path by reusing projected markdown plus stable
+`line_range` coordinates rather than introducing a new parser or gateway
+owner.
+
+The first gateway adapter cutover of that rule is now bounded to the same core
+4 capability calls:
+
+- `GET /api/docs/page`
+- `GET /api/docs/page-index-tree`
+- `GET /api/docs/navigation`
+- `GET /api/docs/retrieval-context`
+
+These routes now reuse `DocsToolService` while still preserving Studio-owned
+registered repository resolution, managed-remote sync permits, plugin-registry
+reuse, and in-memory repo state. The gateway adapter therefore does not need a
+persisted `wendao.toml` file just to reopen those core docs capability calls
+after Studio has already booted.
+
+The crate-local CLI stays aligned to the same bounded surface. The canonical
+HTTP to CLI mapping for the 4 core docs openers now lives in
+[`207_gateway_openapi_contract_surface.md`](../03_features/207_gateway_openapi_contract_surface.md#core-docs-mapping):
+
+- `GET /api/docs/page` <-> `wendao docs page --repo <repo> --page-id <page-id>`
+- `GET /api/docs/page-index-tree` <-> `wendao docs tree --repo <repo> --page-id <page-id>`
+- `GET /api/docs/navigation` <-> `wendao docs navigation --repo <repo> --page-id <page-id> [--node-id <node-id>] [--family-kind <kind>] [--related-limit <n>] [--family-limit <n>]`
+- `GET /api/docs/retrieval-context` <-> `wendao docs context --repo <repo> --page-id <page-id> [--node-id <node-id>] [--related-limit <n>]`
+
+The same owner path now also serves planner-facing native tools. Wendao ships
+`wendao.docs.get_document`, `wendao.docs.get_document_structure`,
+`wendao.docs.get_document_segment`,
+`wendao.docs.get_document_structure_catalog`,
+`wendao.docs.get_document_structure_outline`,
+`wendao.docs.get_document_node`, `wendao.docs.get_navigation`,
+`wendao.docs.get_retrieval_context`, `wendao.docs.get_toc_documents`, and
+`wendao.docs.search_document_structure` as native zhenfa tools backed by the
+same crate-local docs runtime surface, with `DocsToolService` as the default
+injected owner, so future planner or MCP-style adapters can reuse the docs
+capability surface without going through gateway HTTP or folding page-index
+access into the shared query system.
+
+The proof surface is now intentionally split:
+
+- `zhenfa_router::native::docs::registry::tests::get_document_tool_returns_serialized_page_payload`
+  is a fast wrapper proof that injects a fake docs runtime and validates
+  argument handling plus serialized payload shape.
+- `docs_tool_service::docs_tool_service_opens_page_tree_search_navigation_node_and_context`
+  remains the real docs capability integration proof over the owner service.
+
+The integration fixture now also reuses the shared linked parser-summary test
+helper. In that mode, `RUN_PROCESS_MANAGED_WENDAOSEARCH_TEST=1` keeps the
+owner-service proof on the real docs capability path while allowing hot reruns
+to reuse the process-managed parser-summary service instead of spawning a fresh
+linked transport in every cargo process.
 
 ### Projection Rules
 

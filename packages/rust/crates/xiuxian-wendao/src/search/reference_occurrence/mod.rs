@@ -2,7 +2,9 @@ mod build;
 mod query;
 mod schema;
 
+#[cfg(test)]
 pub(crate) use build::ensure_reference_occurrence_index_started;
+pub(crate) use build::ensure_reference_occurrence_index_started_with_scanned_files;
 #[cfg(test)]
 pub(crate) use build::{
     ReferenceOccurrenceBuildError, publish_reference_occurrences_from_projects,

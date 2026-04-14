@@ -8,9 +8,13 @@ mod write;
 #[path = "../../../../tests/unit/search/local_symbol/build/mod.rs"]
 mod tests;
 
+#[cfg(test)]
 pub(crate) use orchestration::ensure_local_symbol_index_started;
+pub(crate) use orchestration::ensure_local_symbol_index_started_with_scanned_files;
 #[cfg(test)]
 pub(crate) use orchestration::publish_local_symbol_hits;
+pub(crate) use plan::plan_local_symbol_build_with_scanned_files;
+#[cfg(test)]
 pub(crate) use plan::{fingerprint_projects, plan_local_symbol_build};
 #[cfg(test)]
 pub(crate) use types::LocalSymbolBuildError;

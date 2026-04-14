@@ -2,7 +2,9 @@ use redis::Commands;
 use serde::de::DeserializeOwned;
 
 use crate::search::cache::SearchPlaneCache;
-use crate::search::{SearchCorpusKind, SearchRepoCorpusRecord, SearchRepoCorpusSnapshotRecord};
+use crate::search::{
+    SearchCorpusKind, SearchManifestRecord, SearchRepoCorpusRecord, SearchRepoCorpusSnapshotRecord,
+};
 
 impl SearchPlaneCache {
     fn blocking_connection(&self) -> Option<redis::Connection> {
@@ -58,6 +60,25 @@ impl SearchPlaneCache {
             return Some(record);
         }
         let key = self.keyspace.repo_corpus_snapshot_key();
+        self.get_json_blocking(key.as_str())
+    }
+
+    pub(crate) fn get_corpus_manifest_blocking(
+        &self,
+        corpus: SearchCorpusKind,
+    ) -> Option<SearchManifestRecord> {
+        #[cfg(test)]
+        if let Some(record) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .corpus_manifests
+            .get(&corpus)
+            .cloned()
+        {
+            return Some(record);
+        }
+        let key = self.keyspace.corpus_manifest_key(corpus);
         self.get_json_blocking(key.as_str())
     }
 }

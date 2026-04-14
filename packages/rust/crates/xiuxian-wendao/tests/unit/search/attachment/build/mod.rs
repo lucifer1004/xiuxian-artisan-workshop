@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 use std::time::Duration;
 
 use crate::gateway::studio::types::UiProjectConfig;
@@ -10,6 +11,15 @@ use crate::search::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlanePhase,
     SearchPlaneService,
 };
+
+fn planning_service(project_root: &Path) -> SearchPlaneService {
+    SearchPlaneService::with_paths(
+        project_root.to_path_buf(),
+        project_root.join(".data/search_plane"),
+        SearchManifestKeyspace::new("xiuxian:test:search_plane:attachment-plan"),
+        SearchMaintenancePolicy::default(),
+    )
+}
 
 #[test]
 fn plan_attachment_build_only_reparses_changed_notes() {
@@ -32,8 +42,10 @@ fn plan_attachment_build_only_reparses_changed_notes() {
         root: ".".to_string(),
         dirs: vec!["docs".to_string()],
     }];
+    let service = planning_service(project_root);
 
     let first = plan_attachment_build(
+        &service,
         project_root,
         project_root,
         &projects,
@@ -62,6 +74,7 @@ fn plan_attachment_build_only_reparses_changed_notes() {
     .unwrap_or_else(|error| panic!("rewrite alpha note: {error}"));
 
     let second = plan_attachment_build(
+        &service,
         project_root,
         project_root,
         &projects,
@@ -92,6 +105,64 @@ fn plan_attachment_build_only_reparses_changed_notes() {
             .all(|hit| hit.attachment_name != "avatar.jpg"),
         "unchanged note attachments must not be reparsed into the changed set"
     );
+}
+
+#[test]
+fn plan_attachment_build_ignores_metadata_only_edits_when_hits_are_unchanged() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+    let project_root = temp_dir.path();
+    std::fs::create_dir_all(project_root.join("docs"))
+        .unwrap_or_else(|error| panic!("create docs: {error}"));
+    std::fs::write(
+        project_root.join("docs/alpha.md"),
+        "# Alpha\n\n![Topology](assets/topology.png)\n",
+    )
+    .unwrap_or_else(|error| panic!("write alpha note: {error}"));
+    let projects = vec![UiProjectConfig {
+        name: "kernel".to_string(),
+        root: ".".to_string(),
+        dirs: vec!["docs".to_string()],
+    }];
+    let service = planning_service(project_root);
+
+    let first = plan_attachment_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
+    let first_fingerprint = first
+        .file_fingerprints
+        .get("docs/alpha.md")
+        .unwrap_or_else(|| panic!("initial attachment fingerprint"));
+
+    std::thread::sleep(Duration::from_millis(5));
+    std::fs::write(
+        project_root.join("docs/alpha.md"),
+        "# Alpha\n\n![Topology](assets/topology.png)\n\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite alpha note: {error}"));
+
+    let second = plan_attachment_build(
+        &service,
+        project_root,
+        project_root,
+        &projects,
+        Some(7),
+        &first.file_fingerprints,
+    );
+    let second_fingerprint = second
+        .file_fingerprints
+        .get("docs/alpha.md")
+        .unwrap_or_else(|| panic!("updated attachment fingerprint"));
+
+    assert_eq!(second.base_epoch, Some(7));
+    assert!(second.replaced_paths.is_empty());
+    assert!(second.changed_hits.is_empty());
+    assert_ne!(first_fingerprint.size_bytes, second_fingerprint.size_bytes);
+    assert_eq!(first_fingerprint.blake3, second_fingerprint.blake3);
 }
 
 #[tokio::test]

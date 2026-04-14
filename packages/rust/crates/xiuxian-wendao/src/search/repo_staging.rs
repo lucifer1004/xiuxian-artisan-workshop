@@ -85,7 +85,7 @@ pub(crate) fn plan_repo_staged_mutation<T>(
         };
     };
 
-    if previous_fingerprints == &file_fingerprints {
+    if repo_file_fingerprint_maps_equivalent(previous_fingerprints, &file_fingerprints) {
         return RepoStagedMutationPlan {
             file_fingerprints,
             action: if previous_publication.source_revision.as_deref() == source_revision {
@@ -119,6 +119,29 @@ pub(crate) fn plan_repo_staged_mutation<T>(
 }
 
 #[must_use]
+pub(crate) fn repo_file_fingerprint_changed(
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+    path: &str,
+    current: &SearchFileFingerprint,
+) -> bool {
+    match previous_fingerprints.get(path) {
+        Some(previous) => !previous.equivalent_for_incremental(current),
+        None => true,
+    }
+}
+
+#[must_use]
+pub(crate) fn repo_file_fingerprint_maps_equivalent(
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+    file_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+) -> bool {
+    previous_fingerprints.len() == file_fingerprints.len()
+        && file_fingerprints.iter().all(|(path, fingerprint)| {
+            !repo_file_fingerprint_changed(previous_fingerprints, path.as_str(), fingerprint)
+        })
+}
+
+#[must_use]
 pub(crate) fn versioned_repo_table_name(
     table_name_prefix: &str,
     repo_id: &str,
@@ -140,11 +163,20 @@ pub(crate) fn versioned_repo_table_name(
         payload.push('|');
         payload.push_str(path.as_str());
         payload.push(':');
-        payload.push_str(fingerprint.size_bytes.to_string().as_str());
+        payload.push_str(fingerprint.partition_id.as_deref().unwrap_or_default());
         payload.push(':');
-        payload.push_str(fingerprint.modified_unix_ms.to_string().as_str());
-        payload.push(':');
-        payload.push_str(fingerprint.blake3.as_deref().unwrap_or_default());
+        match fingerprint.blake3.as_deref() {
+            Some(blake3) => {
+                payload.push_str("semantic:");
+                payload.push_str(blake3);
+            }
+            None => {
+                payload.push_str("metadata:");
+                payload.push_str(fingerprint.size_bytes.to_string().as_str());
+                payload.push(':');
+                payload.push_str(fingerprint.modified_unix_ms.to_string().as_str());
+            }
+        }
     }
     let token = blake3::hash(payload.as_bytes()).to_hex().to_string();
     format!("{table_name_prefix}_{}", &token[..16])

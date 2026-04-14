@@ -1,37 +1,38 @@
 //! Test-facing bridge for semantic check helpers.
 
 use crate::link_graph::PageIndexNode;
+pub use crate::parsers::semantic_check::HashReference;
 pub use crate::zhenfa_router::native::audit::SourceFile;
 
 pub use super::types::{
-    CheckType, FileAuditReport, FuzzySuggestionData, HashReference, IssueLocation, NodeStatus,
+    CheckType, FileAuditReport, FuzzySuggestionData, IssueLocation, NodeStatus,
     SemanticCheckResult, SemanticIssue, WendaoSemanticCheckArgs,
 };
 pub use super::{run_audit_core, wendao_semantic_check};
 
 #[must_use]
 pub fn extract_id_references(text: &str) -> Vec<String> {
-    super::parsing::extract_id_references(text)
+    crate::parsers::semantic_check::extract_id_references(text)
 }
 
 #[must_use]
 pub fn extract_hash_references(text: &str) -> Vec<HashReference> {
-    super::parsing::extract_hash_references(text)
+    crate::parsers::semantic_check::extract_hash_references(text)
 }
 
 #[must_use]
 pub fn validate_contract(contract: &str, content: &str) -> Option<String> {
-    super::parsing::validate_contract(contract, content)
+    crate::parsers::semantic_check::validate_contract(contract, content)
 }
 
 #[must_use]
 pub fn extract_function_args<'a>(contract: &'a str, function_name: &str) -> Option<&'a str> {
-    super::parsing::extract_function_args(contract, function_name)
+    crate::parsers::semantic_check::extract_function_args(contract, function_name)
 }
 
 #[must_use]
 pub fn generate_suggested_id(title: &str) -> String {
-    super::parsing::generate_suggested_id(title)
+    crate::parsers::semantic_check::generate_suggested_id(title)
 }
 
 #[must_use]

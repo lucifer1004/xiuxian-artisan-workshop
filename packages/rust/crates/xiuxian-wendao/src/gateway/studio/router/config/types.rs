@@ -73,16 +73,6 @@ impl WendaoTomlPluginEntry {
             Self::Config(config) => normalize_plugin_id(config.id.as_str()),
         }
     }
-
-    pub(crate) fn into_normalized(self) -> Option<Self> {
-        match self {
-            Self::Id(id) => normalize_plugin_id(id.as_str()).map(Self::Id),
-            Self::Config(mut config) => {
-                config.id = normalize_plugin_id(config.id.as_str())?;
-                Some(Self::Config(config))
-            }
-        }
-    }
 }
 
 fn normalize_plugin_id(raw: &str) -> Option<String> {

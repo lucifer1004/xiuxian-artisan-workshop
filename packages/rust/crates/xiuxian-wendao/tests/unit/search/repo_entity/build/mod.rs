@@ -376,6 +376,86 @@ async fn repo_entity_incremental_refresh_reuses_unchanged_rows() {
     );
 }
 
+#[test]
+fn plan_repo_entity_build_ignores_metadata_only_edits_when_rows_are_unchanged() {
+    let analysis = sample_analysis("alpha/repo", "reexport", "Shows reexport");
+    let first_documents = sample_documents("reexport", 10);
+    let rows =
+        rows_from_analysis("alpha/repo", &analysis).unwrap_or_else(|error| panic!("rows: {error}"));
+    let first_plan = plan_repo_entity_build(
+        "alpha/repo",
+        &rows,
+        &first_documents,
+        Some("rev-1"),
+        None,
+        &BTreeMap::new(),
+    );
+    let previous_publication = match first_plan.action {
+        RepoEntityBuildAction::ReplaceAll { ref table_name, .. } => {
+            SearchRepoPublicationRecord::new(
+                SearchCorpusKind::RepoEntity,
+                "alpha/repo",
+                SearchRepoPublicationInput {
+                    table_name: table_name.clone(),
+                    schema_version: SearchCorpusKind::RepoEntity.schema_version(),
+                    source_revision: Some("rev-1".to_string()),
+                    table_version_id: 1,
+                    row_count: rows.len() as u64,
+                    fragment_count: 1,
+                    published_at: "2026-03-24T12:00:00Z".to_string(),
+                },
+            )
+        }
+        other => panic!("unexpected first build action: {other:?}"),
+    };
+
+    let second_documents = sample_documents("reexport", 20);
+    let second_plan = plan_repo_entity_build(
+        "alpha/repo",
+        &rows,
+        &second_documents,
+        Some("rev-2"),
+        Some(&previous_publication),
+        &first_plan.file_fingerprints,
+    );
+
+    let first_table_name = versioned_repo_entity_table_name(
+        "alpha/repo",
+        &first_plan.file_fingerprints,
+        Some("rev-2"),
+    );
+    let second_table_name = versioned_repo_entity_table_name(
+        "alpha/repo",
+        &second_plan.file_fingerprints,
+        Some("rev-2"),
+    );
+    assert_eq!(first_table_name, second_table_name);
+    assert_eq!(
+        first_plan
+            .file_fingerprints
+            .get("src/BaseModelica.jl")
+            .and_then(|fingerprint| fingerprint.blake3.as_deref()),
+        second_plan
+            .file_fingerprints
+            .get("src/BaseModelica.jl")
+            .and_then(|fingerprint| fingerprint.blake3.as_deref())
+    );
+    assert_eq!(
+        second_plan
+            .file_fingerprints
+            .get("src/BaseModelica.jl")
+            .map(|fingerprint| fingerprint.modified_unix_ms),
+        Some(20)
+    );
+
+    match second_plan.action {
+        RepoEntityBuildAction::RefreshPublication { table_name } => {
+            assert_eq!(table_name, previous_publication.table_name);
+        }
+        other => panic!("unexpected second build action: {other:?}"),
+    }
+}
+
 fn versioned_repo_entity_table_name(
     repo_id: &str,
     file_fingerprints: &BTreeMap<String, crate::search::SearchFileFingerprint>,

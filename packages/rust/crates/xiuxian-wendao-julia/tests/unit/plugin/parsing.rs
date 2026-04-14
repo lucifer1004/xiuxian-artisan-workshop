@@ -3,7 +3,10 @@ use std::fs;
 use serde_json::json;
 use xiuxian_wendao_core::repo_intelligence::{RegisteredRepository, RepositoryPluginConfig};
 
-use super::{parse_imports_for_repository, parse_symbol_declarations_for_repository};
+use super::{
+    parse_imports_for_repository, parse_package_name_lexical, parse_safe_package_overlay_metadata,
+    parse_safe_root_package_overlay_metadata, parse_symbol_declarations_for_repository,
+};
 use crate::julia_plugin_test_support::common::{
     ensure_linked_modelica_parser_summary_service, repo_root,
 };
@@ -93,6 +96,106 @@ end Blocks;
         payload
     );
     Ok(())
+}
+
+#[test]
+fn parse_package_name_lexical_ignores_comments_and_modifiers() {
+    let package_name = parse_package_name_lexical(
+        r"
+// comment
+within ;
+/* block comment */
+final package DemoLib
+end DemoLib;
+",
+    );
+
+    assert_eq!(package_name.as_deref(), Some("DemoLib"));
+}
+
+#[test]
+fn parse_safe_root_package_overlay_metadata_extracts_imports_without_parser_summary() {
+    let metadata = parse_safe_root_package_overlay_metadata(
+        r#"
+within ;
+package DemoLib
+  import SI = Modelica.Units.SI;
+  import Modelica.Math;
+  import Modelica.Math.*;
+  annotation(Documentation(info = "<p>docs</p>"));
+end DemoLib;
+"#,
+    )
+    .unwrap_or_else(|| panic!("expected safe root package overlay metadata"));
+
+    let payload = metadata
+        .imports
+        .into_iter()
+        .map(|import| {
+            json!({
+                "name": import.name,
+                "alias": import.alias,
+                "kind": format!("{:?}", import.kind),
+                "line_start": import.line_start,
+                "attributes": import.attributes,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(metadata.package_name, "DemoLib");
+    assert!(metadata.has_documentation_annotation);
+    insta::assert_json_snapshot!(
+        "parse_safe_root_package_overlay_metadata_extracts_imports_without_parser_summary",
+        payload
+    );
+}
+
+#[test]
+fn parse_safe_root_package_overlay_metadata_rejects_nested_declarations() {
+    let metadata = parse_safe_root_package_overlay_metadata(
+        r"
+within ;
+package DemoLib
+  model Controller
+  end Controller;
+end DemoLib;
+",
+    );
+
+    assert!(metadata.is_none());
+}
+
+#[test]
+fn parse_safe_package_overlay_metadata_accepts_matching_nested_package_name() {
+    let metadata = parse_safe_package_overlay_metadata(
+        r"
+within DemoLib;
+package Blocks
+  import Modelica.Math;
+end Blocks;
+",
+        "Blocks",
+    )
+    .unwrap_or_else(|| panic!("expected safe nested package overlay metadata"));
+
+    assert_eq!(metadata.package_name, "Blocks");
+    assert_eq!(metadata.imports.len(), 1);
+    assert_eq!(metadata.imports[0].name, "Modelica.Math");
+}
+
+#[test]
+fn parse_safe_package_overlay_metadata_rejects_package_name_path_mismatch() {
+    let metadata = parse_safe_package_overlay_metadata(
+        r"
+within DemoLib;
+package WrongName
+  import Modelica.Math;
+end WrongName;
+",
+        "Blocks",
+    );
+
+    assert!(metadata.is_none());
 }
 
 #[test]

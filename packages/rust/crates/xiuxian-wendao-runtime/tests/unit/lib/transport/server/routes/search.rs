@@ -239,8 +239,11 @@ async fn wendao_flight_service_get_flight_info_uses_attachment_search_provider()
         &flight_info,
         "attachment-search route should emit one ticket",
     );
+    let app_metadata = parse_json(&flight_info.app_metadata, "app_metadata should decode");
 
     assert_eq!(ticket, SEARCH_ATTACHMENTS_ROUTE);
+    assert_eq!(app_metadata["query"], "image");
+    assert_eq!(app_metadata["selectedScope"], "attachments");
     assert_eq!(
         provider.recorded_request(),
         Some((
@@ -295,8 +298,11 @@ async fn wendao_flight_service_get_flight_info_uses_ast_search_provider() {
     )
     .into_inner();
     let ticket = ticket_string(&flight_info, "AST route should emit one ticket");
+    let app_metadata = parse_json(&flight_info.app_metadata, "app_metadata should decode");
 
     assert_eq!(ticket, SEARCH_AST_ROUTE);
+    assert_eq!(app_metadata["query"], "symbol");
+    assert_eq!(app_metadata["selectedScope"], "definitions");
     assert_eq!(provider.recorded_request(), Some(("symbol".to_string(), 6)));
 }
 

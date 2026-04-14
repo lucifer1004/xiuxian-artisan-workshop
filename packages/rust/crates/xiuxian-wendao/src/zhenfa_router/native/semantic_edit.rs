@@ -5,9 +5,9 @@ use serde::Deserialize;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::{Address, ModificationError, replace_byte_range, resolve_node};
+use crate::parsers::markdown::section_create;
 
 use super::context::WendaoContextExt;
-use super::section_create;
 
 /// Arguments for semantic section editing via Triple-A addressing.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]

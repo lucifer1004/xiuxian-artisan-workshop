@@ -226,6 +226,9 @@ pub struct ImportRecord {
     pub repo_id: String,
     /// Module identifier where the import occurs.
     pub module_id: String,
+    /// Repository-relative source path where the import occurs.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
     /// Name of the imported symbol or module.
     pub import_name: String,
     /// Target package being imported from.

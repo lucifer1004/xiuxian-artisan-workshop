@@ -4,10 +4,14 @@
 pub mod annotation;
 /// Adversarial calibration mechanism (Synapse-Audit).
 pub mod calibration;
+/// Direct CLI invocation mechanism guarded by a Wendao contract snapshot.
+pub mod cli_call;
 /// Local shell command executor.
 pub mod command;
 /// Formal LTL audit mechanism.
 pub mod formal_audit;
+/// Direct HTTP invocation mechanism guarded by a Wendao contract snapshot.
+pub mod http_call;
 /// Wendao knowledge retrieval mechanism.
 pub mod knowledge;
 /// Mock mechanism for testing.

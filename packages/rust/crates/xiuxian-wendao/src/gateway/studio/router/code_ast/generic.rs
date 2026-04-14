@@ -40,7 +40,8 @@ pub(crate) fn build_generic_code_ast_analysis_response(
             label: item.label.clone(),
             kind: item.kind,
             path: Some(path.clone()),
-            line: Some(item.line_start),
+            line_start: Some(item.line_start),
+            line_end: Some(item.line_end),
         });
 
         let semantic_type = generic_ast_semantic_type(item.kind);
@@ -97,6 +98,8 @@ pub(crate) fn build_generic_code_ast_analysis_response(
         repo_id,
         path,
         language: lang.as_str().to_string(),
+        node_count: nodes.len(),
+        edge_count: 0,
         projections: vec![
             CodeAstProjection {
                 kind: CodeAstProjectionKind::Contains,

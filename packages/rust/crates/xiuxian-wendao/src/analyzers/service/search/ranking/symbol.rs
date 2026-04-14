@@ -1,37 +1,53 @@
-use std::collections::{BTreeMap, HashSet};
+#[cfg(feature = "repo-lexical-index")]
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 
 use crate::analyzers::records::SymbolRecord;
 use crate::analyzers::service::helpers::normalized_rank_score;
+#[cfg(feature = "repo-lexical-index")]
 use crate::search::SearchDocumentIndex;
 
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::documents::{
     build_search_document_index, symbol_search_document,
 };
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::indexed_exact::{
     indexed_symbol_exact_matches, indexed_symbol_prefix_matches,
 };
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::indexed_fuzzy::indexed_symbol_fuzzy_matches;
 use crate::analyzers::service::search::legacy::legacy_symbol_matches;
 
-use super::{RankedSearchRecord, SYMBOL_SEARCH_BUCKETS, search_candidate_limit};
+#[cfg(feature = "repo-lexical-index")]
+use super::search_candidate_limit;
+use super::{RankedSearchRecord, SYMBOL_SEARCH_BUCKETS};
 
 pub(crate) fn ranked_symbol_matches(
     query: &str,
     symbols: &[SymbolRecord],
     limit: usize,
 ) -> Vec<RankedSearchRecord<SymbolRecord>> {
-    let lookup = symbols
-        .iter()
-        .map(|symbol| (symbol.symbol_id.clone(), symbol.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let Some(index) = build_search_document_index(symbols.iter().map(symbol_search_document))
-    else {
-        return ranked_symbol_matches_without_index(query, symbols, limit);
-    };
-    ranked_symbol_matches_from_index(query, symbols, &lookup, &index, limit)
+    #[cfg(feature = "repo-lexical-index")]
+    {
+        let lookup = symbols
+            .iter()
+            .map(|symbol| (symbol.symbol_id.clone(), symbol.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let Some(index) = build_search_document_index(symbols.iter().map(symbol_search_document))
+        else {
+            return ranked_symbol_matches_without_index(query, symbols, limit);
+        };
+        ranked_symbol_matches_from_index(query, symbols, &lookup, &index, limit)
+    }
+
+    #[cfg(not(feature = "repo-lexical-index"))]
+    {
+        ranked_symbol_matches_without_index(query, symbols, limit)
+    }
 }
 
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) fn ranked_symbol_matches_with_artifacts(
     query: &str,
     symbols: &[SymbolRecord],
@@ -42,6 +58,7 @@ pub(crate) fn ranked_symbol_matches_with_artifacts(
     ranked_symbol_matches_from_index(query, symbols, lookup, index, limit)
 }
 
+#[cfg(feature = "repo-lexical-index")]
 fn ranked_symbol_matches_from_index(
     query: &str,
     symbols: &[SymbolRecord],

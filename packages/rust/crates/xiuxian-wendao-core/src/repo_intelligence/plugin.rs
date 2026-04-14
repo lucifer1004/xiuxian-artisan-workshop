@@ -52,6 +52,9 @@ pub struct PluginAnalysisOutput {
     pub modules: Vec<ModuleRecord>,
     /// Symbol records extracted from the file.
     pub symbols: Vec<SymbolRecord>,
+    /// Import records extracted from the file.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<ImportRecord>,
     /// Example records extracted from the file.
     pub examples: Vec<ExampleRecord>,
     /// Documentation records extracted from the file.

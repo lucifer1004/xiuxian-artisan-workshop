@@ -18,6 +18,8 @@ pub(super) fn replace_records_for_paths(
         .retain(|record| !matches_record_path(record.path.as_str(), &replaced_paths));
     base.symbols
         .retain(|record| !matches_record_path(record.path.as_str(), &replaced_paths));
+    base.imports
+        .retain(|record| !matches_record_path(record.path.as_str(), &replaced_paths));
     base.examples
         .retain(|record| !matches_record_path(record.path.as_str(), &replaced_paths));
     base.docs
@@ -27,6 +29,7 @@ pub(super) fn replace_records_for_paths(
 
     base.modules.append(&mut overlay.modules);
     base.symbols.append(&mut overlay.symbols);
+    base.imports.append(&mut overlay.imports);
     base.examples.append(&mut overlay.examples);
     base.docs.append(&mut overlay.docs);
     base.diagnostics.append(&mut overlay.diagnostics);

@@ -1,16 +1,13 @@
+use std::fs;
 use std::sync::Arc;
 
-use axum::Json;
 use axum::body::to_bytes;
-use axum::extract::State;
-use axum::extract::{Path, Query};
+use axum::extract::{Path, Query, State};
 
 use crate::analyzers::bootstrap_builtin_registry;
 use crate::analyzers::registry::PluginRegistry;
 use crate::gateway::studio::router::tests::repo_project;
-use crate::gateway::studio::router::{
-    GatewayState, StudioState, load_ui_config_from_wendao_toml, studio_wendao_overlay_toml_path,
-};
+use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
 use crate::gateway::studio::types::UiPluginArtifact;
 use crate::gateway::studio::types::{
@@ -22,7 +19,6 @@ use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
 use chrono::DateTime;
 use serial_test::serial;
-use std::fs;
 use xiuxian_wendao_builtin::{
     linked_builtin_julia_gateway_artifact_base_url,
     linked_builtin_julia_gateway_artifact_expected_toml_fragments,
@@ -34,7 +30,7 @@ use xiuxian_wendao_builtin::{
 };
 
 #[test]
-fn set_ui_config_preserves_cached_state_when_effectively_unchanged() {
+fn apply_eager_ui_config_preserves_cached_state_when_effectively_unchanged() {
     let studio = StudioState::new();
     let config = UiConfig {
         projects: vec![UiProjectConfig {
@@ -44,7 +40,7 @@ fn set_ui_config_preserves_cached_state_when_effectively_unchanged() {
         }],
         repo_projects: vec![repo_project("sciml")],
     };
-    studio.set_ui_config(config.clone());
+    studio.apply_eager_ui_config(config.clone());
 
     *studio
         .symbol_index
@@ -61,7 +57,7 @@ fn set_ui_config_preserves_cached_state_when_effectively_unchanged() {
         scan_duration_ms: 0,
     });
 
-    studio.set_ui_config(config);
+    studio.apply_eager_ui_config(config);
 
     assert!(
         studio
@@ -105,10 +101,10 @@ fn apply_ui_config_without_eager_background_indexing_keeps_indexes_idle() {
 }
 
 #[tokio::test]
-async fn set_ui_config_still_eagerly_enqueues_background_indexes() {
+async fn apply_eager_ui_config_still_eagerly_enqueues_background_indexes() {
     let studio = StudioState::new();
 
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -124,136 +120,6 @@ async fn set_ui_config_still_eagerly_enqueues_background_indexes() {
         studio.symbol_index_coordinator.status().phase,
         SymbolIndexPhase::Idle
     );
-}
-
-#[tokio::test]
-async fn set_ui_config_handler_persists_base_wendao_toml_and_clears_legacy_overlay() {
-    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
-    let project_root = temp.path().join("project");
-    let config_root = temp.path().join("config");
-    fs::create_dir_all(project_root.as_path())
-        .unwrap_or_else(|error| panic!("create project root: {error}"));
-    fs::create_dir_all(config_root.as_path())
-        .unwrap_or_else(|error| panic!("create config root: {error}"));
-
-    let config_path = config_root.join("wendao.toml");
-    let original_toml = r#"[gateway]
-bind = "127.0.0.1:9517"
-runtime_note = "keep-me"
-
-[link_graph.projects.kernel]
-root = "."
-dirs = ["docs"]
-"#;
-    fs::write(&config_path, original_toml).unwrap_or_else(|error| panic!("write config: {error}"));
-    fs::write(
-        studio_wendao_overlay_toml_path(config_root.as_path()),
-        r#"imports = ["wendao.toml"]
-
-[link_graph.projects.stale]
-root = "."
-dirs = ["legacy"]
-"#,
-    )
-    .unwrap_or_else(|error| panic!("write overlay config: {error}"));
-
-    let studio = StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane(
-        Arc::new(PluginRegistry::new()),
-        project_root.clone(),
-        config_root.clone(),
-        SearchPlaneService::new(project_root),
-    );
-    let state = Arc::new(GatewayState {
-        index: None,
-        signal_tx: None,
-        webhook_url: None,
-        studio: Arc::new(studio),
-    });
-    let pushed_config = UiConfig {
-        projects: vec![UiProjectConfig {
-            name: "main".to_string(),
-            root: ".".to_string(),
-            dirs: vec!["docs".to_string(), "src".to_string()],
-        }],
-        repo_projects: Vec::new(),
-    };
-
-    let response = crate::gateway::studio::router::handlers::set_ui_config(
-        State(Arc::clone(&state)),
-        Json(pushed_config.clone()),
-    )
-    .await
-    .unwrap_or_else(|error| panic!("set_ui_config should persist base config: {error:?}"));
-
-    assert_eq!(response.0, pushed_config);
-    assert_eq!(state.studio.ui_config(), pushed_config);
-    let overlay_path = studio_wendao_overlay_toml_path(config_root.as_path());
-    assert!(
-        !overlay_path.exists(),
-        "legacy overlay should be removed after persisting base config"
-    );
-    let persisted = load_toml_value(config_path.as_path());
-    assert_eq!(
-        persisted
-            .get("gateway")
-            .and_then(toml::Value::as_table)
-            .and_then(|gateway| gateway.get("runtime_note")),
-        Some(&toml::Value::String("keep-me".to_string())),
-        "base gateway settings should remain intact"
-    );
-    let Some(project) = persisted_project_table(&persisted, "main") else {
-        panic!("persisted config should contain the new UI project");
-    };
-    assert_eq!(
-        persisted_project_dirs(project),
-        Some(vec!["docs".to_string(), "src".to_string()]),
-        "persisted config should contain the new UI dirs"
-    );
-    let kernel_dirs = persisted_project_table(&persisted, "kernel")
-        .and_then(persisted_project_dirs)
-        .map_or(0, |dirs| dirs.len());
-    assert_eq!(
-        kernel_dirs, 0,
-        "stale UI-owned base projects should be tombstoned in the rewritten base config"
-    );
-
-    let Some(effective_config) = load_ui_config_from_wendao_toml(config_root.as_path()) else {
-        panic!("effective UI config should reload from the persisted base config");
-    };
-    assert_eq!(effective_config, pushed_config);
-}
-
-fn load_toml_value(path: &std::path::Path) -> toml::Value {
-    toml::from_str(
-        &fs::read_to_string(path)
-            .unwrap_or_else(|error| panic!("read `{}`: {error}", path.display())),
-    )
-    .unwrap_or_else(|error| panic!("parse `{}`: {error}", path.display()))
-}
-
-fn persisted_project_table<'a>(
-    persisted: &'a toml::Value,
-    project_name: &str,
-) -> Option<&'a toml::Table> {
-    persisted
-        .get("link_graph")
-        .and_then(toml::Value::as_table)
-        .and_then(|link_graph| link_graph.get("projects"))
-        .and_then(toml::Value::as_table)
-        .and_then(|projects| projects.get(project_name))
-        .and_then(toml::Value::as_table)
-}
-
-fn persisted_project_dirs(project: &toml::Table) -> Option<Vec<String>> {
-    project
-        .get("dirs")
-        .and_then(toml::Value::as_array)
-        .map(|dirs| {
-            dirs.iter()
-                .filter_map(toml::Value::as_str)
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-        })
 }
 
 #[test]
@@ -460,6 +326,11 @@ async fn ui_capabilities_reports_builtin_plugin_languages() {
             .unwrap_or_else(|error| panic!("ui capabilities should resolve: {error:?}"))
             .0;
 
+    assert_eq!(response.projects.len(), 0);
+    assert_eq!(
+        response.repo_projects,
+        vec![repo_project("kernel"), repo_project("sciml")]
+    );
     assert_eq!(response.languages, expected);
     assert_eq!(response.repositories, vec!["kernel", "sciml"]);
     assert_eq!(

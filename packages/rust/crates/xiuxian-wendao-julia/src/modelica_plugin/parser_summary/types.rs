@@ -1,7 +1,8 @@
 use crate::modelica_plugin::types::{ParsedDeclaration, ParsedImport};
+use serde::Serialize;
 
 /// Native Modelica file summary consumed by the transitional Rust plugin.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ModelicaParserFileSummary {
     /// Primary top-level class or package declared in the file.
     pub(crate) class_name: Option<String>,

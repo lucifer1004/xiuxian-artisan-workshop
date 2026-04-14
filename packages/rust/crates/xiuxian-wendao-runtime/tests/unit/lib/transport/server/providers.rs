@@ -534,7 +534,7 @@ impl AttachmentSearchFlightRouteProvider for RecordingAttachmentSearchProvider {
         ext_filters: &std::collections::HashSet<String>,
         kind_filters: &std::collections::HashSet<String>,
         case_sensitive: bool,
-    ) -> Result<LanceRecordBatch, String> {
+    ) -> Result<SearchFlightRouteResponse, String> {
         let mut ext_filters = ext_filters.iter().cloned().collect::<Vec<_>>();
         ext_filters.sort();
         let mut kind_filters = kind_filters.iter().cloned().collect::<Vec<_>>();
@@ -549,7 +549,7 @@ impl AttachmentSearchFlightRouteProvider for RecordingAttachmentSearchProvider {
             kind_filters,
             case_sensitive,
         ));
-        LanceRecordBatch::try_new(
+        let batch = LanceRecordBatch::try_new(
             Arc::new(LanceSchema::new(vec![
                 LanceField::new("doc_id", LanceDataType::Utf8, false),
                 LanceField::new("query_text", LanceDataType::Utf8, false),
@@ -563,7 +563,17 @@ impl AttachmentSearchFlightRouteProvider for RecordingAttachmentSearchProvider {
                 Arc::new(LanceFloat64Array::from(vec![0.77_f64])),
             ],
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+        Ok(SearchFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "query": query_text,
+                "hitCount": 1,
+                "selectedScope": "attachments",
+                "partial": false,
+            })
+            .to_string()
+            .into_bytes(),
+        ))
     }
 }
 
@@ -584,10 +594,10 @@ impl AstSearchFlightRouteProvider for RecordingAstSearchProvider {
         &self,
         query_text: &str,
         limit: usize,
-    ) -> Result<LanceRecordBatch, String> {
+    ) -> Result<SearchFlightRouteResponse, String> {
         *lock_or_panic(&self.request, "AST-search provider record should lock") =
             Some((query_text.to_string(), limit));
-        LanceRecordBatch::try_new(
+        let batch = LanceRecordBatch::try_new(
             Arc::new(LanceSchema::new(vec![
                 LanceField::new("doc_id", LanceDataType::Utf8, false),
                 LanceField::new("query_text", LanceDataType::Utf8, false),
@@ -599,7 +609,17 @@ impl AstSearchFlightRouteProvider for RecordingAstSearchProvider {
                 Arc::new(LanceFloat64Array::from(vec![0.81_f64])),
             ],
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+        Ok(SearchFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "query": query_text,
+                "hitCount": 1,
+                "selectedScope": "definitions",
+                "partial": false,
+            })
+            .to_string()
+            .into_bytes(),
+        ))
     }
 }
 

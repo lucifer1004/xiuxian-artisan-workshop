@@ -1,10 +1,12 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
 
 use serde_json::json;
+use tempfile::TempDir;
 
 use super::{
-    RepositorySurface, doc_format_hint, doc_sort_key, doc_title,
+    RepositorySnapshot, RepositorySurface, doc_format_hint, doc_sort_key, doc_title,
     documented_nested_users_guide_topics, documented_release_notes_topics, example_sort_key,
     is_supported_users_guide_doc_path, module_sort_key, repository_surface,
     synthetic_section_title,
@@ -17,6 +19,56 @@ fn surface_name(surface: RepositorySurface) -> &'static str {
         RepositorySurface::Documentation => "documentation",
         RepositorySurface::Support => "support",
     }
+}
+
+#[test]
+fn repository_snapshot_preloads_modelica_entries_and_package_orders() {
+    let tempdir = TempDir::new().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    fs::create_dir_all(tempdir.path().join("Blocks"))
+        .unwrap_or_else(|error| panic!("create Blocks dir: {error}"));
+    fs::write(
+        tempdir.path().join("Blocks/package.mo"),
+        "within DemoLib;\npackage Blocks\nend Blocks;\n",
+    )
+    .unwrap_or_else(|error| panic!("write nested package: {error}"));
+    fs::write(
+        tempdir.path().join("Blocks/package.order"),
+        "Interfaces\nUtilities\n",
+    )
+    .unwrap_or_else(|error| panic!("write package.order: {error}"));
+    fs::write(tempdir.path().join("README.md"), "# Demo\n")
+        .unwrap_or_else(|error| panic!("write readme: {error}"));
+
+    let snapshot = RepositorySnapshot::load(tempdir.path())
+        .unwrap_or_else(|error| panic!("load snapshot: {error}"));
+    let payload = json!({
+        "entries": snapshot
+            .entries()
+            .iter()
+            .map(|entry| json!({
+                "relative_path": entry.relative_path,
+                "surface": surface_name(entry.surface),
+                "has_modelica_contents": entry.modelica_contents.is_some(),
+            }))
+            .collect::<Vec<_>>(),
+        "package_orders": snapshot.package_orders(),
+        "package_files": snapshot
+            .package_files()
+            .unwrap_or_else(|error| panic!("package files: {error}"))
+            .into_iter()
+            .map(|entry| entry.relative_path.clone())
+            .collect::<Vec<_>>(),
+    });
+
+    insta::assert_json_snapshot!(
+        "repository_snapshot_preloads_modelica_entries_and_package_orders",
+        payload
+    );
 }
 
 #[test]

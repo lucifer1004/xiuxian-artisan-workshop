@@ -1,5 +1,5 @@
 use crate::link_graph::PageIndexNode;
-use crate::zhenfa_router::native::semantic_check::parsing::generate_suggested_id;
+use crate::parsers::semantic_check::generate_suggested_id;
 use crate::zhenfa_router::native::semantic_check::types::{IssueLocation, SemanticIssue, attrs};
 
 /// Check for missing mandatory :ID: property drawer (Blueprint v2.2).

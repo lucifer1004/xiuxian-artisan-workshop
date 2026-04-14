@@ -10,6 +10,8 @@ mod agentic;
 mod attachments;
 #[path = "execute/audit.rs"]
 mod audit;
+#[path = "execute/docs.rs"]
+mod docs;
 #[path = "execute/fix.rs"]
 mod fix;
 #[cfg(feature = "zhenfa-router")]
@@ -55,6 +57,7 @@ pub(crate) async fn execute(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result
         Command::Hmas { .. } => hmas::handle(cli),
         Command::Agentic { .. } => agentic::handle(cli, index),
         Command::Repo { .. } => repo::handle(cli),
+        Command::Docs { .. } => docs::handle(cli),
         #[cfg(feature = "zhenfa-router")]
         Command::Query { .. } => query::handle(cli).await,
         Command::Fix(args) => fix::handle(cli, args, index),

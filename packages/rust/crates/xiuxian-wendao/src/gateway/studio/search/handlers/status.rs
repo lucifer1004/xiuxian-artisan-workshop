@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::gateway::studio::router::{
     GatewayState, StudioApiError, StudioBootstrapBackgroundIndexingTelemetry,
+    StudioSearchColdStartTelemetry,
 };
 use crate::gateway::studio::types::SearchIndexStatusResponse;
 
@@ -16,6 +17,7 @@ pub struct SearchIndexStatusEnvelope {
     status: SearchIndexStatusResponse,
     #[serde(flatten)]
     telemetry: StudioBootstrapBackgroundIndexingTelemetry,
+    cold_start_telemetry: StudioSearchColdStartTelemetry,
 }
 
 /// Studio search-plane status endpoint.
@@ -27,8 +29,10 @@ pub async fn search_index_status(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<SearchIndexStatusEnvelope>, StudioApiError> {
     let telemetry = state.studio.bootstrap_background_indexing_telemetry();
+    let status = state.studio.search_index_status().await;
     Ok(Json(SearchIndexStatusEnvelope {
-        status: state.studio.search_index_status().await,
+        status,
         telemetry,
+        cold_start_telemetry: state.studio.search_cold_start_telemetry(),
     }))
 }

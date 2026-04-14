@@ -3,7 +3,7 @@ use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
 
 pub(crate) fn studio_with_repo_projects(repo_projects: Vec<UiRepoProjectConfig>) -> StudioState {
     let studio = StudioState::new();
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: Vec::new(),
         repo_projects,
     });

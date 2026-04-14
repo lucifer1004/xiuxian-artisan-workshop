@@ -6,6 +6,7 @@ use crate::parsers::markdown::{CodeObservation, LogbookEntry, ParsedSection};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use xiuxian_wendao_parsers::sections::MarkdownSection;
 
 /// A virtual node synthesized from collapsed dense clusters during knowledge distillation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +63,25 @@ impl IndexedSection {
             attributes: value.attributes.clone(),
             logbook: value.logbook.clone(),
             observations: value.observations.clone(),
+        }
+    }
+
+    pub(crate) fn from_markdown_section(value: &MarkdownSection) -> Self {
+        Self {
+            heading_title: value.scope.heading_title.clone(),
+            heading_path: value.scope.heading_path.clone(),
+            heading_path_lower: value.scope.heading_path_lower.clone(),
+            heading_level: value.scope.heading_level,
+            line_start: value.scope.line_start,
+            line_end: value.scope.line_end,
+            byte_start: value.scope.byte_start,
+            byte_end: value.scope.byte_end,
+            section_text: value.section_text.clone(),
+            section_text_lower: value.section_text_lower.clone(),
+            entities: Vec::new(),
+            attributes: value.metadata.attributes.clone(),
+            logbook: value.metadata.logbook.clone(),
+            observations: Vec::new(),
         }
     }
 }

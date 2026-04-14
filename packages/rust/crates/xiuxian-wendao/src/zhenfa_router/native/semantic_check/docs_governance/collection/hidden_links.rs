@@ -3,7 +3,7 @@ use std::path::Path;
 
 use walkdir::WalkDir;
 
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::{
+use crate::parsers::docs_governance::{
     extract_hidden_path_links, is_canonical_repo_doc, is_package_local_crate_doc,
 };
 use crate::zhenfa_router::native::semantic_check::docs_governance::scope::scope_matches_path;

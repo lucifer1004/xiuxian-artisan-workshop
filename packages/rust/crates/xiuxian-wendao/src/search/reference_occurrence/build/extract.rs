@@ -6,10 +6,9 @@ use regex::Regex;
 use xiuxian_ast::Lang;
 
 use crate::gateway::studio::search::project_scope::project_metadata_for_path;
-use crate::gateway::studio::search::source_index::build_ast_hits_for_file;
 use crate::gateway::studio::search::support::infer_crate_name;
 use crate::gateway::studio::types::{ReferenceSearchHit, StudioNavigationTarget, UiProjectConfig};
-use crate::search::ProjectScannedFile;
+use crate::search::{ProjectScannedFile, SearchPlaneService};
 
 static REFERENCE_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap_or_else(|error| {
@@ -17,25 +16,8 @@ static REFERENCE_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     })
 });
 
-pub(crate) fn build_reference_occurrences_for_files(
-    project_root: &Path,
-    config_root: &Path,
-    projects: &[UiProjectConfig],
-    files: &[ProjectScannedFile],
-) -> Vec<ReferenceSearchHit> {
-    let mut hits = Vec::new();
-    for file in files {
-        hits.extend(build_reference_occurrences_for_file(
-            project_root,
-            config_root,
-            projects,
-            file,
-        ));
-    }
-    hits
-}
-
 pub(crate) fn build_reference_occurrences_for_file(
+    service: &SearchPlaneService,
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
@@ -52,20 +34,16 @@ pub(crate) fn build_reference_occurrences_for_file(
         file.normalized_path.as_str(),
     );
     let crate_name = infer_crate_name(normalized_path_ref);
-    let definition_locations = build_ast_hits_for_file(
-        project_root,
-        file.scan_root.as_path(),
-        file.absolute_path.as_path(),
-    )
-    .into_iter()
-    .map(|hit| (hit.name.to_ascii_lowercase(), hit.path, hit.line_start))
-    .collect::<HashSet<_>>();
+    let snapshot = service.shared_source_snapshot_entry(project_root, file);
+    let definition_locations = snapshot
+        .ast_hits
+        .iter()
+        .cloned()
+        .map(|hit| (hit.name.to_ascii_lowercase(), hit.path, hit.line_start))
+        .collect::<HashSet<_>>();
 
-    let Ok(content) = std::fs::read_to_string(file.absolute_path.as_path()) else {
-        return Vec::new();
-    };
     let mut hits = Vec::new();
-    for (line_idx, line_text) in content.lines().enumerate() {
+    for (line_idx, line_text) in snapshot.content.lines().enumerate() {
         let line_number = line_idx + 1;
         let mut seen_tokens = HashSet::new();
         for mat in REFERENCE_TOKEN_PATTERN.find_iter(line_text) {

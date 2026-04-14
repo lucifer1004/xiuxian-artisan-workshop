@@ -1,18 +1,89 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+assertion_line: 17
 expression: value
 ---
 {
   "diagnostics": [],
-  "documentHash": "82096e6c66111f65b2e74ec66af2afb6b53cf02bf70616f101a2090c59fe9abd",
-  "edgeCount": 7,
+  "documentHash": "75894be6879c93868872974f49f9a1bbaa2e3ff75beb9a87083ea94e4a274bf5",
+  "documentMetadata": {
+    "backlinks": [
+      {
+        "docId": "docs/guide",
+        "kind": "backlink",
+        "label": "Guide",
+        "path": "main/docs/guide.md",
+        "title": "Guide"
+      },
+      {
+        "docId": "docs/index",
+        "kind": "backlink",
+        "label": "Index",
+        "path": "main/docs/index.md",
+        "title": "Index"
+      }
+    ],
+    "docId": "docs/deepwiki",
+    "docType": null,
+    "outgoingLinks": [
+      {
+        "docId": "docs/guide",
+        "kind": "relation",
+        "label": "Guide",
+        "literal": "[[guide]]",
+        "metadataOwner": "#DeepWikiKernel",
+        "path": "main/docs/guide.md",
+        "relationType": "RELATED_TO",
+        "targetAddress": null,
+        "title": "Guide"
+      },
+      {
+        "docId": "docs/guide",
+        "kind": "index",
+        "label": "Guide",
+        "literal": "[[guide]]",
+        "metadataOwner": "Index Relations",
+        "path": "main/docs/guide.md",
+        "relationType": null,
+        "targetAddress": null,
+        "title": "Guide"
+      },
+      {
+        "docId": "docs/index",
+        "kind": "index",
+        "label": "Index",
+        "literal": "[[index]]",
+        "metadataOwner": "Index Relations",
+        "path": "main/docs/index.md",
+        "relationType": null,
+        "targetAddress": null,
+        "title": "Index"
+      }
+    ],
+    "parent": {
+      "docId": "docs/index",
+      "kind": "parent",
+      "label": "Index",
+      "literal": "[[index]]",
+      "path": "main/docs/index.md",
+      "targetAddress": null,
+      "title": "Index"
+    },
+    "tags": [
+      "docs",
+      "feature"
+    ],
+    "title": "DeepWiki Kernel",
+    "updated": null
+  },
+  "edgeCount": 3,
   "edges": [
     {
       "evidence": {
         "confidence": 1.0,
         "lineEnd": 1,
         "lineStart": 1,
-        "path": "main/docs/analysis.md"
+        "path": "main/docs/deepwiki.md"
       },
       "id": "edge:1",
       "kind": "contains",
@@ -23,90 +94,38 @@ expression: value
     {
       "evidence": {
         "confidence": 1.0,
-        "lineEnd": 3,
-        "lineStart": 3,
-        "path": "main/docs/analysis.md"
+        "lineEnd": 8,
+        "lineStart": 8,
+        "path": "main/docs/deepwiki.md"
       },
       "id": "edge:2",
       "kind": "contains",
       "label": "contains",
       "sourceId": "sec:1",
-      "targetId": "sec:3"
+      "targetId": "sec:8"
     },
     {
       "evidence": {
         "confidence": 1.0,
-        "lineEnd": 4,
-        "lineStart": 4,
-        "path": "main/docs/analysis.md"
+        "lineEnd": 11,
+        "lineStart": 11,
+        "path": "main/docs/deepwiki.md"
       },
       "id": "edge:3",
       "kind": "contains",
       "label": "contains",
-      "sourceId": "sec:3",
-      "targetId": "task:4"
-    },
-    {
-      "evidence": {
-        "confidence": 1.0,
-        "lineEnd": 5,
-        "lineStart": 5,
-        "path": "main/docs/analysis.md"
-      },
-      "id": "edge:4",
-      "kind": "contains",
-      "label": "contains",
-      "sourceId": "sec:3",
-      "targetId": "task:5"
-    },
-    {
-      "evidence": {
-        "confidence": 0.9,
-        "lineEnd": 5,
-        "lineStart": 5,
-        "path": "main/docs/analysis.md"
-      },
-      "id": "edge:5",
-      "kind": "nextstep",
-      "label": "next",
-      "sourceId": "task:4",
-      "targetId": "task:5"
-    },
-    {
-      "evidence": {
-        "confidence": 1.0,
-        "lineEnd": 7,
-        "lineStart": 7,
-        "path": "main/docs/analysis.md"
-      },
-      "id": "edge:6",
-      "kind": "contains",
-      "label": "contains",
       "sourceId": "sec:1",
-      "targetId": "sec:7"
-    },
-    {
-      "evidence": {
-        "confidence": 1.0,
-        "lineEnd": 17,
-        "lineStart": 15,
-        "path": "main/docs/analysis.md"
-      },
-      "id": "edge:7",
-      "kind": "contains",
-      "label": "contains",
-      "sourceId": "sec:7",
-      "targetId": "code:15"
+      "targetId": "sec:11"
     }
   ],
-  "nodeCount": 7,
+  "nodeCount": 4,
   "nodes": [
     {
       "depth": 0,
       "id": "doc:0",
       "kind": "document",
-      "label": "main/docs/analysis.md",
-      "lineEnd": 17,
+      "label": "main/docs/deepwiki.md",
+      "lineEnd": 22,
       "lineStart": 1,
       "parentId": null
     },
@@ -114,70 +133,43 @@ expression: value
       "depth": 1,
       "id": "sec:1",
       "kind": "section",
-      "label": "Analysis Kernel",
-      "lineEnd": 2,
+      "label": "DeepWiki Kernel",
+      "lineEnd": 7,
       "lineStart": 1,
       "parentId": "doc:0"
     },
     {
       "depth": 2,
-      "id": "sec:3",
+      "id": "sec:8",
       "kind": "section",
-      "label": "Inputs",
-      "lineEnd": 6,
-      "lineStart": 3,
+      "label": "Overview",
+      "lineEnd": 10,
+      "lineStart": 8,
       "parentId": "sec:1"
-    },
-    {
-      "depth": 3,
-      "id": "task:4",
-      "kind": "task",
-      "label": "Parse markdown",
-      "lineEnd": 4,
-      "lineStart": 4,
-      "parentId": "sec:3"
-    },
-    {
-      "depth": 3,
-      "id": "task:5",
-      "kind": "task",
-      "label": "Build IR",
-      "lineEnd": 5,
-      "lineStart": 5,
-      "parentId": "sec:3"
     },
     {
       "depth": 2,
-      "id": "sec:7",
+      "id": "sec:11",
       "kind": "section",
-      "label": "Links",
-      "lineEnd": 17,
-      "lineStart": 7,
+      "label": "References",
+      "lineEnd": 22,
+      "lineStart": 11,
       "parentId": "sec:1"
-    },
-    {
-      "depth": 3,
-      "id": "code:15",
-      "kind": "codeblock",
-      "label": "code block (rust)",
-      "lineEnd": 17,
-      "lineStart": 15,
-      "parentId": "sec:7"
     }
   ],
-  "path": "main/docs/analysis.md",
+  "path": "main/docs/deepwiki.md",
   "projections": [
     {
-      "edgeCount": 6,
+      "edgeCount": 3,
       "kind": "outline",
       "nodeCount": 3,
-      "source": "graph TD\n  sec_1[\"Analysis Kernel\"]\n  sec_3[\"Inputs\"]\n  sec_7[\"Links\"]\n  doc_0 --> sec_1\n  sec_1 --> sec_3\n  sec_3 --> task_4\n  sec_3 --> task_5\n  sec_1 --> sec_7\n  sec_7 --> code_15\n"
+      "source": "graph TD\n  sec_1[\"DeepWiki Kernel\"]\n  sec_8[\"Overview\"]\n  sec_11[\"References\"]\n  doc_0 --> sec_1\n  sec_1 --> sec_8\n  sec_1 --> sec_11\n"
     },
     {
-      "edgeCount": 1,
+      "edgeCount": 0,
       "kind": "tasks",
-      "nodeCount": 2,
-      "source": "graph LR\n  task_4[\"Parse markdown\"]\n  task_5[\"Build IR\"]\n  task_4 --> task_5\n"
+      "nodeCount": 0,
+      "source": "graph LR\n"
     }
   ]
 }

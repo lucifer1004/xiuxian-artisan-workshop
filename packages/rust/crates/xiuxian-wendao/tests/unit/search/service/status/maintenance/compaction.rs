@@ -1,7 +1,7 @@
 use crate::search::service::tests::support::*;
 
-#[test]
-fn status_keeps_ready_local_corpus_out_of_compaction_reason() {
+#[tokio::test]
+async fn status_keeps_ready_local_corpus_out_of_compaction_reason() {
     let temp_dir = temp_dir();
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
@@ -21,7 +21,7 @@ fn status_keeps_ready_local_corpus_out_of_compaction_reason() {
         other => panic!("unexpected begin result: {other:?}"),
     };
 
-    assert!(service.publish_ready_and_maintain(&lease, 10, 3));
+    assert!(service.publish_ready_and_maintain(&lease, 10, 3).await);
 
     let snapshot = service.status();
     let status = corpus_status(

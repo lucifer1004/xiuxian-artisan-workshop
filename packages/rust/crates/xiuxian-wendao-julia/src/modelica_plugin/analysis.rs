@@ -4,90 +4,71 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use xiuxian_wendao_core::repo_intelligence::{
-    AnalysisContext, DiagnosticRecord, RepoIntelligenceError, RepositoryAnalysisOutput,
-    RepositoryRecord,
+    AnalysisContext, DiagnosticRecord, RegisteredRepository, RepoIntelligenceError,
+    RepositoryAnalysisOutput, RepositoryRecord,
 };
 
 use super::discovery::{
-    collect_doc_records, collect_example_records, collect_import_records, collect_module_records,
-    collect_symbol_records, discover_package_files, discover_package_orders,
-    modules_by_qualified_name,
+    RepositorySnapshot, collect_doc_records, collect_example_records, collect_import_records,
+    collect_module_records, collect_symbol_records, modules_by_qualified_name,
 };
 use super::parser_summary::validate_modelica_parser_summary_preflight_for_repository;
-use super::parsing::parse_package_name_for_repository;
+use super::parsing::{parse_package_name_for_repository, parse_package_name_lexical};
 use super::relations::collect_relation_records;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ModelicaRepositoryContext {
+    pub(crate) package_root: PathBuf,
+    pub(crate) root_package_name: String,
+    pub(crate) path_prefix: Option<String>,
+}
 
 pub(crate) fn analyze_repository(
     context: &AnalysisContext,
     repository_root: &Path,
 ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
-    let resolved_root = resolve_modelica_root(context, repository_root)?;
-    let root_package_path = resolved_root.package_root.join("package.mo");
-
-    let root_package_contents = std::fs::read_to_string(&root_package_path).map_err(|error| {
-        RepoIntelligenceError::AnalysisFailed {
-            message: format!(
-                "failed to read Modelica root package `{}`: {error}",
-                root_package_path.display()
-            ),
-        }
-    })?;
-    let root_package_source_id = relative_path(repository_root, &root_package_path)
-        .unwrap_or_else(|| "package.mo".to_string());
-    let root_package_name = parse_package_name_for_repository(
-        &context.repository,
-        root_package_source_id.as_str(),
-        &root_package_contents,
-    )?
-    .ok_or_else(|| RepoIntelligenceError::UnsupportedRepositoryLayout {
-        repo_id: context.repository.id.clone(),
-        message: "failed to parse root Modelica package name".to_string(),
-    })?;
-
-    let package_files = discover_package_files(&resolved_root.package_root)?;
-    let package_orders = discover_package_orders(&resolved_root.package_root)?;
+    let repository_context =
+        load_modelica_repository_context(&context.repository, repository_root)?;
+    let snapshot = RepositorySnapshot::load(&repository_context.package_root)?;
+    let package_files = snapshot.package_files()?;
     let modules = collect_module_records(
         &context.repository.id,
-        &resolved_root.package_root,
-        root_package_name.as_str(),
-        &package_files,
-        &package_orders,
+        repository_context.root_package_name.as_str(),
+        package_files.as_slice(),
+        snapshot.package_orders(),
     );
     let module_lookup = modules_by_qualified_name(&modules);
     let symbols = collect_symbol_records(
         &context.repository,
         &context.repository.id,
-        &resolved_root.package_root,
-        root_package_name.as_str(),
+        &snapshot,
+        repository_context.root_package_name.as_str(),
         &module_lookup,
     )?;
     let imports = collect_import_records(
         &context.repository,
         &context.repository.id,
-        &resolved_root.package_root,
-        root_package_name.as_str(),
+        &snapshot,
+        repository_context.root_package_name.as_str(),
         &module_lookup,
     )?;
-    let examples = collect_example_records(
-        &context.repository.id,
-        &resolved_root.package_root,
-        &package_orders,
-    );
+    let examples =
+        collect_example_records(&context.repository.id, &snapshot, snapshot.package_orders());
     let collected_docs = collect_doc_records(
         &context.repository.id,
-        &resolved_root.package_root,
-        root_package_name.as_str(),
+        &snapshot,
+        repository_context.root_package_name.as_str(),
         &module_lookup,
         &symbols,
-        &package_orders,
-    )?;
+        snapshot.package_orders(),
+    );
     let docs = collected_docs
         .iter()
         .map(|doc| doc.record.clone())
         .collect::<Vec<_>>();
     let relations = collect_relation_records(
         &context.repository.id,
-        root_package_name.as_str(),
+        repository_context.root_package_name.as_str(),
         &modules,
         &module_lookup,
         &symbols,
@@ -98,7 +79,7 @@ pub(crate) fn analyze_repository(
     let mut output = RepositoryAnalysisOutput {
         repository: Some(RepositoryRecord {
             repo_id: context.repository.id.clone(),
-            name: root_package_name,
+            name: repository_context.root_package_name,
             path: repository_root.display().to_string(),
             url: context.repository.url.clone(),
             revision: None,
@@ -120,8 +101,63 @@ pub(crate) fn analyze_repository(
             severity: "info".to_string(),
         }],
     };
-    prefix_output_paths(&mut output, resolved_root.path_prefix.as_deref());
+    prefix_output_paths(&mut output, repository_context.path_prefix.as_deref());
     Ok(output)
+}
+
+pub(crate) fn load_modelica_repository_context(
+    repository: &RegisteredRepository,
+    repository_root: &Path,
+) -> Result<ModelicaRepositoryContext, RepoIntelligenceError> {
+    let context = AnalysisContext {
+        repository: repository.clone(),
+        repository_root: repository_root.to_path_buf(),
+    };
+    let resolved_root = resolve_modelica_root(&context, repository_root)?;
+    let root_package_path = resolved_root.package_root.join("package.mo");
+    let root_package_contents = std::fs::read_to_string(&root_package_path).map_err(|error| {
+        RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "failed to read Modelica root package `{}`: {error}",
+                root_package_path.display()
+            ),
+        }
+    })?;
+    let root_package_source_id = relative_path(repository_root, &root_package_path)
+        .unwrap_or_else(|| "package.mo".to_string());
+    let root_package_name = parse_package_name_lexical(&root_package_contents)
+        .or(parse_package_name_for_repository(
+            repository,
+            root_package_source_id.as_str(),
+            &root_package_contents,
+        )?)
+        .ok_or_else(|| RepoIntelligenceError::UnsupportedRepositoryLayout {
+            repo_id: repository.id.clone(),
+            message: "failed to parse root Modelica package name".to_string(),
+        })?;
+
+    Ok(ModelicaRepositoryContext {
+        package_root: resolved_root.package_root,
+        root_package_name,
+        path_prefix: resolved_root.path_prefix,
+    })
+}
+
+pub(crate) fn modelica_root_relative_source_path(
+    source_id: &str,
+    path_prefix: Option<&str>,
+) -> Option<String> {
+    let normalized = source_id.replace('\\', "/");
+    let Some(prefix) = path_prefix.filter(|prefix| !prefix.is_empty()) else {
+        return Some(normalized);
+    };
+    let relative = normalized.strip_prefix(prefix)?;
+    let relative = relative.strip_prefix('/').unwrap_or(relative);
+    if relative.is_empty() {
+        None
+    } else {
+        Some(relative.to_string())
+    }
 }
 
 pub(crate) fn preflight_repository(
@@ -249,6 +285,9 @@ fn prefix_output_paths(output: &mut RepositoryAnalysisOutput, prefix: Option<&st
     }
     for example in &mut output.examples {
         example.path = prefixed_relative_path(prefix, example.path.as_str());
+    }
+    for import in &mut output.imports {
+        import.path = prefixed_relative_path(prefix, import.path.as_str());
     }
     for doc in &mut output.docs {
         doc.path = prefixed_relative_path(prefix, doc.path.as_str());

@@ -39,6 +39,24 @@ The tool produces a structured XML response optimized for Agent parsing:
 </agentic_nav_result>
 ```
 
+## Studio Reader Payload
+
+The Studio markdown-analysis payload now carries a backend-owned
+`documentMetadata` block for reader-facing DeepWiki identity:
+
+1. `title`, `tags`, and `docType` come from parser-owned document metadata,
+   with docs-kernel `:PROPERTIES:` acting as the bounded fallback for document
+   tags and type.
+2. `parent` comes from the explicit docs-kernel `:PARENT:` declaration rather
+   than frontend frontmatter heuristics.
+3. `outgoingLinks` materialize explicit property-drawer relations plus
+   docs-kernel `:RELATIONS: :LINKS:` rows.
+4. `backlinks` come from the link-graph reverse index when the Studio runtime
+   has a live graph index.
+
+This keeps the reader as a projection over parser and index truth sources
+instead of a second wikilink parser.
+
 :RELATIONS:
 :LINKS: [[01_core/101_triple_a_protocol]], [[05_research/302_search_as_reasoning]]
 :END:

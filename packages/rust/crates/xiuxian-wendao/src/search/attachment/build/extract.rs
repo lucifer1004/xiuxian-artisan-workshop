@@ -1,56 +1,21 @@
-use std::collections::HashSet;
 use std::path::Path;
 
-use crate::gateway::studio::search::project_scope::project_metadata_for_path;
-use crate::gateway::studio::types::{AttachmentSearchHit, StudioNavigationTarget, UiProjectConfig};
+use crate::gateway::studio::types::{AttachmentSearchHit, StudioNavigationTarget};
 use crate::link_graph::LinkGraphAttachmentKind;
-use crate::parsers::markdown::{ParsedNote, is_supported_note, parse_note};
-use crate::search::ProjectScannedFile;
+use crate::parsers::markdown::ParsedNote;
+use crate::search::MarkdownSnapshotEntry;
+use std::collections::HashSet;
 
-pub(crate) fn build_attachment_hits_for_files(
-    project_root: &Path,
-    config_root: &Path,
-    projects: &[UiProjectConfig],
-    files: &[ProjectScannedFile],
+pub(crate) fn build_attachment_hits_for_entry(
+    entry: &MarkdownSnapshotEntry,
 ) -> Vec<AttachmentSearchHit> {
-    let mut hits = Vec::new();
-    for file in files {
-        hits.extend(build_attachment_hits_for_file(
-            project_root,
-            config_root,
-            projects,
-            file,
-        ));
-    }
-    hits
-}
-
-pub(crate) fn build_attachment_hits_for_file(
-    project_root: &Path,
-    config_root: &Path,
-    projects: &[UiProjectConfig],
-    file: &ProjectScannedFile,
-) -> Vec<AttachmentSearchHit> {
-    if !is_supported_note(file.absolute_path.as_path()) {
-        return Vec::new();
-    }
-
-    let Ok(content) = std::fs::read_to_string(file.absolute_path.as_path()) else {
+    let Some(parsed) = entry.parsed_note.as_ref() else {
         return Vec::new();
     };
-    let Some(parsed) = parse_note(file.absolute_path.as_path(), project_root, &content) else {
-        return Vec::new();
-    };
-    let metadata = project_metadata_for_path(
-        project_root,
-        config_root,
-        projects,
-        parsed.doc.path.as_str(),
-    );
     attachment_hits_for_parsed_note(
-        &parsed,
-        metadata.project_name.as_deref(),
-        metadata.root_label.as_deref(),
+        parsed,
+        entry.file.project_name.as_deref(),
+        entry.file.root_label.as_deref(),
     )
 }
 

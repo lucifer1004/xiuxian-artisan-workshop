@@ -8,7 +8,9 @@ use xiuxian_wendao_core::repo_intelligence::{
 };
 
 use super::analysis;
+use super::incremental::analyze_repo_owned_modelica_file_for_repository;
 use super::parser_summary::fetch_modelica_parser_file_summary_blocking_for_repository;
+use super::relations::build_incremental_doc_relations;
 
 const MODELICA_PLUGIN_ID: &str = "modelica";
 
@@ -50,6 +52,10 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
         context: &AnalysisContext,
         file: &RepoSourceFile,
     ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
+        if let Some(output) = analyze_repo_owned_modelica_file_for_repository(context, file)? {
+            return Ok(output);
+        }
+
         let summary = fetch_modelica_parser_file_summary_blocking_for_repository(
             &context.repository,
             file.path.as_str(),
@@ -97,6 +103,7 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
                 path: file.path.clone(),
             }],
             symbols,
+            imports: Vec::new(),
             examples: Vec::new(),
             docs: Vec::new(),
             diagnostics: Vec::new(),
@@ -121,9 +128,14 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
 
     fn enrich_relations(
         &self,
-        _context: &PluginLinkContext,
+        context: &PluginLinkContext,
     ) -> Result<Vec<RelationRecord>, RepoIntelligenceError> {
-        Ok(Vec::new())
+        Ok(build_incremental_doc_relations(
+            context.repository.id.as_str(),
+            &context.modules,
+            &context.symbols,
+            &context.docs,
+        ))
     }
 }
 

@@ -8,7 +8,9 @@ mod write;
 #[path = "../../../../tests/unit/search/knowledge_section/build/mod.rs"]
 mod tests;
 
+#[cfg(test)]
 pub(crate) use orchestration::ensure_knowledge_section_index_started;
+pub(crate) use orchestration::ensure_knowledge_section_index_started_with_scanned_files;
 #[cfg(test)]
 pub(crate) use types::KnowledgeSectionBuildError;
 #[cfg(test)]

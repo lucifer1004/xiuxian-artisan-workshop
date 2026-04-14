@@ -61,8 +61,9 @@ pub use contract_feedback::{
     run_and_persist_contract_feedback_flow,
 };
 pub use contracts::{
-    FlowInstruction, NodeQianhuanExecutionMode, NodeStatus, QianjiManifest, QianjiMechanism,
-    QianjiOutput,
+    FlowInstruction, FlowhubGraphTopology, NodeQianhuanExecutionMode, NodeStatus, QianjiManifest,
+    QianjiMechanism, QianjiOutput, WendaoDocsContractShow, render_wendao_docs_contract_show,
+    show_wendao_docs_contract,
 };
 pub use engine::QianjiEngine;
 pub use engine::compiler::QianjiCompiler;

@@ -14,7 +14,7 @@ mod scan;
 #[path = "../../../../tests/unit/gateway/studio/vfs/mod.rs"]
 mod tests;
 
-pub(crate) use content::{get_entry, read_content, resolve_vfs_file_path};
+pub(crate) use content::{get_entry, read_content, read_raw_content, resolve_vfs_file_path};
 pub(crate) use flight::StudioVfsResolveFlightRouteProvider;
 pub(crate) use flight_content::StudioVfsContentFlightRouteProvider;
 pub(crate) use flight_scan::StudioVfsScanFlightRouteProvider;

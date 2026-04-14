@@ -139,6 +139,73 @@ fn synchronize_repo_runtime_replaces_previous_snapshot_entries() {
 }
 
 #[tokio::test]
+async fn local_corpus_ready_status_bootstraps_from_persisted_manifest_after_restart() {
+    let temp_dir = temp_dir();
+    let project_root = temp_dir.path().join("workspace");
+    let storage_root = temp_dir.path().join("search_plane");
+    std::fs::create_dir_all(project_root.join("docs"))
+        .unwrap_or_else(|error| panic!("create docs dir: {error}"));
+    std::fs::write(
+        project_root.join("docs/intro.md"),
+        "# Warm Start\n\nRestart should reuse the local publication.\n",
+    )
+    .unwrap_or_else(|error| panic!("write note: {error}"));
+    let projects = vec![crate::gateway::studio::types::UiProjectConfig {
+        name: "docs".to_string(),
+        root: ".".to_string(),
+        dirs: vec!["docs".to_string()],
+    }];
+
+    let writer = SearchPlaneService::with_paths(
+        project_root.clone(),
+        storage_root.clone(),
+        unique_test_manifest_keyspace("local-bootstrap-writer"),
+        SearchMaintenancePolicy::default(),
+    );
+    ok_or_panic(
+        writer
+            .publish_knowledge_sections_from_projects(
+                project_root.as_path(),
+                project_root.as_path(),
+                &projects,
+                "warm-start-fingerprint",
+            )
+            .await,
+        "publish knowledge sections",
+    );
+    let written_status = writer
+        .coordinator()
+        .status_for(SearchCorpusKind::KnowledgeSection);
+    let written_epoch = some_or_panic(
+        written_status.active_epoch,
+        "writer should publish a knowledge-section epoch",
+    );
+
+    let reader = SearchPlaneService::with_paths(
+        project_root.clone(),
+        storage_root,
+        unique_test_manifest_keyspace("local-bootstrap-reader"),
+        SearchMaintenancePolicy::default(),
+    );
+    let restored_status = reader
+        .coordinator()
+        .status_for(SearchCorpusKind::KnowledgeSection);
+
+    assert_eq!(restored_status.phase, SearchPlanePhase::Ready);
+    assert_eq!(restored_status.active_epoch, Some(written_epoch));
+    assert_eq!(restored_status.row_count, written_status.row_count);
+    assert_eq!(
+        restored_status.fragment_count,
+        written_status.fragment_count
+    );
+    assert_eq!(restored_status.fingerprint, written_status.fingerprint);
+    assert_eq!(
+        restored_status.build_finished_at,
+        written_status.build_finished_at
+    );
+}
+
+#[tokio::test]
 async fn stale_repo_runtime_refresh_does_not_override_newer_generation() {
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),

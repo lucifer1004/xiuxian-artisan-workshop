@@ -15,7 +15,14 @@ xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs"
 pub(crate) use plugin::test_support as julia_plugin_test_support;
 
 pub use modelica_plugin::{
-    ModelicaRepoIntelligencePlugin, register_modelica_into,
+    ModelicaRepoIntelligencePlugin,
+    modelica_package_incremental_semantic_fingerprint_for_repository,
+    modelica_parser_summary_allows_safe_incremental_file_for_repository,
+    modelica_parser_summary_allows_safe_package_incremental_file_for_repository,
+    modelica_parser_summary_allows_safe_root_package_incremental_file_for_repository,
+    modelica_parser_summary_file_semantic_fingerprint_for_repository,
+    modelica_parser_summary_root_package_name_matches_repository_context,
+    modelica_root_package_incremental_semantic_fingerprint_for_repository, register_modelica_into,
     set_linked_modelica_parser_summary_base_url_for_tests,
 };
 pub use plugin::{
@@ -119,6 +126,7 @@ pub use plugin::{
     fetch_plugin_arrow_score_rows_for_repository, graph_structural_pair_candidate_id,
     graph_structural_route_kind, graph_structural_shared_tag_anchors, is_graph_structural_route,
     julia_parser_summary_allows_safe_incremental_file_for_repository,
+    julia_parser_summary_file_semantic_fingerprint_for_repository,
     process_graph_structural_flight_batches,
     process_graph_structural_flight_batches_for_repository,
     process_julia_capability_manifest_flight_batches,

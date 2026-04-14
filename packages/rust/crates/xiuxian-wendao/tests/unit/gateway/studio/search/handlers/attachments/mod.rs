@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use serde_json::Value;
 use xiuxian_wendao_runtime::transport::AttachmentSearchFlightRouteProvider;
 
 use super::provider::StudioAttachmentSearchFlightRouteProvider;
@@ -22,7 +23,7 @@ async fn studio_attachment_search_flight_provider_uses_attachment_contract() {
     let mut studio = crate::gateway::studio::search::handlers::tests::test_studio_state();
     studio.project_root = project_root.path().to_path_buf();
     studio.config_root = project_root.path().to_path_buf();
-    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+    studio.apply_eager_ui_config(crate::gateway::studio::types::UiConfig {
         projects: vec![crate::gateway::studio::types::UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
@@ -57,7 +58,7 @@ async fn studio_attachment_search_flight_provider_uses_attachment_contract() {
 
     let provider = StudioAttachmentSearchFlightRouteProvider::new(studio);
 
-    let batch = provider
+    let response = provider
         .attachment_search_batch(
             "topology",
             5,
@@ -67,8 +68,13 @@ async fn studio_attachment_search_flight_provider_uses_attachment_contract() {
         )
         .await
         .unwrap_or_else(|error| panic!("attachment provider should build a batch: {error}"));
+    let metadata: Value = serde_json::from_slice(&response.app_metadata)
+        .unwrap_or_else(|error| panic!("attachment provider app_metadata should decode: {error}"));
+    let batch = response.batch;
 
     assert_eq!(batch.num_rows(), 1);
     assert!(batch.column_by_name("attachmentPath").is_some());
     assert!(batch.column_by_name("navigationTargetJson").is_some());
+    assert_eq!(metadata["query"], "topology");
+    assert_eq!(metadata["selectedScope"], "attachments");
 }

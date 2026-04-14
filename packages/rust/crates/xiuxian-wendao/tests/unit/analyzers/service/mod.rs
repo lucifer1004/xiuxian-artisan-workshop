@@ -180,6 +180,7 @@ impl RepoIntelligencePlugin for CountingJuliaPlugin {
                 verification_state: None,
                 attributes: BTreeMap::new(),
             }],
+            imports: Vec::new(),
             examples: Vec::new(),
             docs: Vec::new(),
             diagnostics: Vec::new(),
@@ -275,6 +276,7 @@ impl RepoIntelligencePlugin for CachedTargetFilePlugin {
             imports: vec![ImportRecord {
                 repo_id: context.repository.id.clone(),
                 module_id: format!("repo:{}:module:FixturePkg", context.repository.id),
+                path: "src/FixturePkg.jl".to_string(),
                 import_name: "LinearAlgebra".to_string(),
                 target_package: "LinearAlgebra".to_string(),
                 source_module: "LinearAlgebra".to_string(),

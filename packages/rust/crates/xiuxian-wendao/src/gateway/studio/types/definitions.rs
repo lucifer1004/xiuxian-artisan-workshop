@@ -101,6 +101,15 @@ pub struct AstSearchResponse {
     pub hit_count: usize,
     /// Selected AST scope.
     pub selected_scope: String,
+    /// Whether the response is partial because the AST index is still warming.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub partial: bool,
+    /// Current AST-index lifecycle state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexing_state: Option<String>,
+    /// Optional AST-index error surfaced without blocking the request path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_error: Option<String>,
 }
 
 /// Response for native studio definition resolution.
@@ -173,4 +182,13 @@ pub struct ReferenceSearchResponse {
     pub hit_count: usize,
     /// Selected reference scope label.
     pub selected_scope: String,
+    /// Whether the response is partial because the reference index is still warming.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub partial: bool,
+    /// Current reference-index lifecycle state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexing_state: Option<String>,
+    /// Optional reference-index error surfaced without blocking the request path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_error: Option<String>,
 }

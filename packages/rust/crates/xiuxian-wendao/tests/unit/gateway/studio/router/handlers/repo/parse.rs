@@ -15,7 +15,7 @@ fn import_search_filters_require_package_or_module() {
 #[test]
 fn required_registered_repo_id_uses_toml_configured_repository_seed() {
     let state = StudioState::new();
-    state.set_ui_config(UiConfig {
+    state.apply_eager_ui_config(UiConfig {
         projects: Vec::new(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "lance".to_string(),

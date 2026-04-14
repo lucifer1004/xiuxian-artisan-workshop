@@ -2,19 +2,22 @@ use std::sync::Arc;
 
 use crate::analyzers::{
     DocsFamilyClusterQuery, DocsFamilyClusterResult, DocsFamilyContextQuery,
-    DocsFamilyContextResult, DocsFamilySearchQuery, DocsFamilySearchResult, DocsNavigationQuery,
-    DocsNavigationResult, DocsNavigationSearchQuery, DocsNavigationSearchResult, DocsPageQuery,
+    DocsFamilyContextResult, DocsFamilySearchQuery, DocsFamilySearchResult, DocsNavigationOptions,
+    DocsNavigationQuery, DocsNavigationResult, DocsNavigationSearchQuery,
+    DocsNavigationSearchResult, DocsPageIndexTreeQuery, DocsPageIndexTreeResult, DocsPageQuery,
     DocsPageResult, DocsProjectedGapReportQuery, DocsProjectedGapReportResult,
-    DocsRetrievalContextQuery, DocsRetrievalContextResult, DocsRetrievalHitQuery,
-    DocsRetrievalHitResult, DocsRetrievalQuery, DocsRetrievalResult, DocsSearchQuery,
-    DocsSearchResult, RepoIntelligenceError, build_docs_family_cluster, build_docs_family_context,
-    build_docs_family_search, build_docs_navigation, build_docs_navigation_search, build_docs_page,
-    build_docs_projected_gap_report, build_docs_retrieval, build_docs_retrieval_context,
-    build_docs_retrieval_hit, build_docs_search,
+    DocsRetrievalContextOptions, DocsRetrievalContextQuery, DocsRetrievalContextResult,
+    DocsRetrievalHitQuery, DocsRetrievalHitResult, DocsRetrievalQuery, DocsRetrievalResult,
+    DocsSearchQuery, DocsSearchResult, RepoIntelligenceError, build_docs_family_cluster,
+    build_docs_family_context, build_docs_family_search, build_docs_navigation_search,
+    build_docs_projected_gap_report, build_docs_retrieval, build_docs_retrieval_hit,
+    build_docs_search,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError, map_repo_intelligence_error};
 
-use crate::gateway::studio::router::handlers::docs::service::runtime::run_docs_analysis;
+use crate::gateway::studio::router::handlers::docs::service::runtime::{
+    run_docs_analysis, run_docs_tool_service,
+};
 
 pub(crate) async fn run_docs_search(
     state: Arc<GatewayState>,
@@ -48,12 +51,22 @@ pub(crate) async fn run_docs_retrieval_context(
     state: Arc<GatewayState>,
     query: DocsRetrievalContextQuery,
 ) -> Result<DocsRetrievalContextResult, StudioApiError> {
-    run_docs_analysis(
+    run_docs_tool_service(
         Arc::clone(&state),
         query.repo_id.clone(),
         "DOCS_RETRIEVAL_CONTEXT_PANIC",
         "Docs retrieval context task failed unexpectedly",
-        move |analysis| build_docs_retrieval_context(&query, &analysis),
+        move |service, repository, registry| {
+            service.get_retrieval_context_with_options_for_registered_repository(
+                &query.page_id,
+                &repository,
+                registry,
+                DocsRetrievalContextOptions {
+                    node_id: query.node_id,
+                    related_limit: query.related_limit,
+                },
+            )
+        },
     )
     .await
 }
@@ -77,12 +90,34 @@ pub(crate) async fn run_docs_page(
     state: Arc<GatewayState>,
     query: DocsPageQuery,
 ) -> Result<DocsPageResult, StudioApiError> {
-    run_docs_analysis(
+    run_docs_tool_service(
         Arc::clone(&state),
         query.repo_id.clone(),
         "DOCS_PAGE_PANIC",
         "Docs page task failed unexpectedly",
-        move |analysis| build_docs_page(&query, &analysis),
+        move |service, repository, registry| {
+            service.get_document_for_registered_repository(&query.page_id, &repository, registry)
+        },
+    )
+    .await
+}
+
+pub(crate) async fn run_docs_page_index_tree(
+    state: Arc<GatewayState>,
+    query: DocsPageIndexTreeQuery,
+) -> Result<DocsPageIndexTreeResult, StudioApiError> {
+    run_docs_tool_service(
+        Arc::clone(&state),
+        query.repo_id.clone(),
+        "DOCS_PAGE_INDEX_TREE_PANIC",
+        "Docs page-index tree task failed unexpectedly",
+        move |service, repository, registry| {
+            service.get_document_structure_for_registered_repository(
+                &query.page_id,
+                &repository,
+                registry,
+            )
+        },
     )
     .await
 }
@@ -133,12 +168,24 @@ pub(crate) async fn run_docs_navigation(
     state: Arc<GatewayState>,
     query: DocsNavigationQuery,
 ) -> Result<DocsNavigationResult, StudioApiError> {
-    run_docs_analysis(
+    run_docs_tool_service(
         Arc::clone(&state),
         query.repo_id.clone(),
         "DOCS_NAVIGATION_PANIC",
         "Docs navigation task failed unexpectedly",
-        move |analysis| build_docs_navigation(&query, &analysis),
+        move |service, repository, registry| {
+            service.get_navigation_with_options_for_registered_repository(
+                &query.page_id,
+                &repository,
+                registry,
+                DocsNavigationOptions {
+                    node_id: query.node_id,
+                    family_kind: query.family_kind,
+                    related_limit: query.related_limit,
+                    family_limit: query.family_limit,
+                },
+            )
+        },
     )
     .await
 }

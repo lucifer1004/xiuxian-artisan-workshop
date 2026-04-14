@@ -16,16 +16,18 @@ pub(crate) const ALLOWED_SCENARIO_GRAPH_NODE_LABELS: &[&str] = &[
     "diagnostics",
 ];
 
+const ALLOWED_HTTP_METHOD_LABELS: &[&str] = &["GET", "POST", "PUT", "PATCH", "DELETE"];
+
 pub(crate) fn validate_mermaid_flowchart(
     flowchart: &MermaidFlowchart,
-    registered_module_names: &[String],
+    _registered_module_names: &[String],
 ) -> Result<(), String> {
     validate_has_edges(flowchart)?;
     let nodes_by_id = node_labels_by_id(flowchart);
     validate_edge_endpoints(flowchart, &nodes_by_id)?;
     validate_allowed_graph_nodes(flowchart)?;
     let module_nodes = collect_module_nodes(flowchart);
-    validate_registered_module_labels(flowchart, &module_nodes, registered_module_names)?;
+    validate_has_module_nodes(&module_nodes)?;
     let module_edges = collect_module_backbone_edges(flowchart, &module_nodes);
     validate_module_backbone(flowchart, &module_nodes, &module_edges)?;
     validate_connected_module_backbone(flowchart, &module_nodes, &module_edges)?;
@@ -69,7 +71,7 @@ fn validate_allowed_graph_nodes(flowchart: &MermaidFlowchart) -> Result<(), Stri
         .nodes
         .iter()
         .filter(|node| node.kind != MermaidNodeKind::Module)
-        .filter(|node| !ALLOWED_SCENARIO_GRAPH_NODE_LABELS.contains(&node.label.as_str()))
+        .filter(|node| !scenario_graph_label_is_allowed(node.label.as_str()))
         .map(|node| node.label.as_str())
         .collect::<Vec<_>>();
     if undeclared_graph_node_labels.is_empty() {
@@ -82,6 +84,29 @@ fn validate_allowed_graph_nodes(flowchart: &MermaidFlowchart) -> Result<(), Stri
     ))
 }
 
+pub(crate) fn scenario_graph_label_is_allowed(label: &str) -> bool {
+    ALLOWED_SCENARIO_GRAPH_NODE_LABELS.contains(&label) || is_exact_http_request_label(label)
+}
+
+fn is_exact_http_request_label(label: &str) -> bool {
+    let Some((method, target)) = label.split_once(' ') else {
+        return false;
+    };
+    if !ALLOWED_HTTP_METHOD_LABELS.contains(&method) {
+        return false;
+    }
+    if target.is_empty() || !target.starts_with('/') || target.contains(' ') {
+        return false;
+    }
+    target.chars().all(|ch| {
+        ch.is_ascii_alphanumeric()
+            || matches!(
+                ch,
+                '/' | '?' | '&' | '=' | '<' | '>' | '_' | '-' | '.' | ':' | '%'
+            )
+    })
+}
+
 fn collect_module_nodes(flowchart: &MermaidFlowchart) -> Vec<&MermaidNode> {
     flowchart
         .nodes
@@ -90,28 +115,11 @@ fn collect_module_nodes(flowchart: &MermaidFlowchart) -> Vec<&MermaidNode> {
         .collect::<Vec<_>>()
 }
 
-fn validate_registered_module_labels(
-    flowchart: &MermaidFlowchart,
-    module_nodes: &[&MermaidNode],
-    registered_module_names: &[String],
-) -> Result<(), String> {
-    let declared_module_labels = module_nodes
-        .iter()
-        .map(|node| node.label.as_str())
-        .collect::<BTreeSet<_>>();
-    let missing_registered_module_labels = registered_module_names
-        .iter()
-        .filter(|module_name| !declared_module_labels.contains(module_name.as_str()))
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    if missing_registered_module_labels.is_empty() {
-        return Ok(());
+fn validate_has_module_nodes(module_nodes: &[&MermaidNode]) -> Result<(), String> {
+    if module_nodes.is_empty() {
+        return Err("scenario-case graph must expose at least one Flowhub module node".to_string());
     }
-    Err(format!(
-        "scenario-case graph `{}` is missing registered Flowhub module nodes: {}",
-        flowchart.merimind_graph_name,
-        missing_registered_module_labels.join(", ")
-    ))
+    Ok(())
 }
 
 fn collect_module_backbone_edges<'a>(
@@ -138,10 +146,8 @@ fn validate_module_backbone(
     module_nodes: &[&MermaidNode],
     module_edges: &[(&str, &str)],
 ) -> Result<(), String> {
-    if module_nodes.len() < 2 {
-        return Err(
-            "scenario-case graph must expose at least two Flowhub module nodes".to_string(),
-        );
+    if module_nodes.len() == 1 {
+        return Ok(());
     }
     if module_edges.is_empty() {
         return Err(
@@ -174,6 +180,10 @@ fn validate_connected_module_backbone(
     module_nodes: &[&MermaidNode],
     module_edges: &[(&str, &str)],
 ) -> Result<(), String> {
+    if module_nodes.len() == 1 {
+        return Ok(());
+    }
+
     let mut adjacency = BTreeMap::<&str, BTreeSet<&str>>::new();
     for (from, to) in module_edges {
         adjacency.entry(*from).or_default().insert(*to);

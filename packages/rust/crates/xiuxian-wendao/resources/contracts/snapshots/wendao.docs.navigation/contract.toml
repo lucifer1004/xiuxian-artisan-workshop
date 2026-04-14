@@ -1,0 +1,70 @@
+id = "wendao.docs.navigation"
+version = 1
+task_types = [
+    "http_call",
+    "cli_call",
+]
+
+[http]
+method = "GET"
+path = "/api/docs/navigation"
+query = [
+    "repo",
+    "page_id",
+    "node_id",
+    "family_kind",
+    "related_limit",
+    "family_limit",
+]
+
+[cli]
+argv = [
+    "wendao",
+    "docs",
+    "navigation",
+]
+
+[cli.flags]
+family_kind = "--family-kind"
+family_limit = "--family-limit"
+node_id = "--node-id"
+page_id = "--page-id"
+related_limit = "--related-limit"
+repo = "--repo"
+
+[tool]
+name = "wendao.docs.get_navigation"
+schema = "schema.json"
+runtime_injected = ["repo"]
+
+[[params]]
+name = "repo"
+type = "string"
+required = true
+
+[[params]]
+name = "page_id"
+type = "string"
+required = true
+
+[[params]]
+name = "node_id"
+type = "string"
+required = false
+
+[[params]]
+name = "family_kind"
+type = "string"
+required = false
+
+[[params]]
+name = "related_limit"
+type = "integer"
+required = false
+default = 5
+
+[[params]]
+name = "family_limit"
+type = "integer"
+required = false
+default = 3

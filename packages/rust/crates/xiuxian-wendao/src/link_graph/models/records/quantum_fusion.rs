@@ -91,6 +91,7 @@ impl QuantumContext {
     }
 
     /// Build a traceability label from a semantic path.
+    #[cfg(feature = "vector-store")]
     #[must_use]
     pub(crate) fn trace_label_from_semantic_path(semantic_path: &[String]) -> Option<String> {
         if semantic_path.is_empty() {

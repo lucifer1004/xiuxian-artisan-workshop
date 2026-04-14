@@ -7,7 +7,6 @@ pub mod capabilities;
 pub mod docs;
 pub mod graph;
 pub mod repo;
-pub mod ui_config;
 pub mod vfs;
 
 pub use capabilities::{get as get_ui_capabilities, get_plugin_artifact};
@@ -20,9 +19,9 @@ pub use docs::projection::{
     family_cluster as docs_family_cluster, family_context as docs_family_context,
     family_search as docs_family_search, navigation as docs_navigation,
     navigation_search as docs_navigation_search, page as docs_page,
-    projected_gap_report as docs_projected_gap_report, retrieval as docs_retrieval,
-    retrieval_context as docs_retrieval_context, retrieval_hit as docs_retrieval_hit,
-    search as docs_search,
+    page_index_tree as docs_page_index_tree, projected_gap_report as docs_projected_gap_report,
+    retrieval as docs_retrieval, retrieval_context as docs_retrieval_context,
+    retrieval_hit as docs_retrieval_hit, search as docs_search,
 };
 pub use graph::topology_3d;
 pub use repo::{
@@ -33,7 +32,7 @@ pub use repo::{
     projected_page_search, projected_pages, projected_retrieval, projected_retrieval_context,
     projected_retrieval_hit, refine_entity_doc, repo_index, repo_index_status, symbol_search, sync,
 };
-pub use ui_config::{get as get_ui_config, set as set_ui_config};
 pub use vfs::{
-    cat as vfs_cat, entry as vfs_entry, root_entries as vfs_root_entries, scan as vfs_scan,
+    cat as vfs_cat, entry as vfs_entry, raw as vfs_raw, root_entries as vfs_root_entries,
+    scan as vfs_scan,
 };

@@ -141,6 +141,7 @@ pub use graph_structural_transport::{
     validate_graph_structural_request_batches, validate_graph_structural_response_batches,
 };
 pub use parser_summary::julia_parser_summary_allows_safe_incremental_file_for_repository;
+pub use parser_summary::julia_parser_summary_file_semantic_fingerprint_for_repository;
 pub use parser_summary::set_linked_julia_parser_summary_base_url_for_tests;
 pub use rerank_exchange::{
     fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,

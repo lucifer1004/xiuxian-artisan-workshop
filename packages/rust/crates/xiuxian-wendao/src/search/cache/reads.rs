@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use redis::AsyncCommands;
 use serde::de::DeserializeOwned;
 
+#[cfg(test)]
+use crate::search::SearchManifestRecord;
 use crate::search::cache::SearchPlaneCache;
 use crate::search::{
     SearchCorpusKind, SearchFileFingerprint, SearchRepoCorpusRecord,
@@ -145,6 +147,26 @@ impl SearchPlaneCache {
             return Some(fingerprints);
         }
         let key = self.keyspace.corpus_file_fingerprints_key(corpus);
+        self.get_json(key.as_str()).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn get_corpus_manifest(
+        &self,
+        corpus: SearchCorpusKind,
+    ) -> Option<SearchManifestRecord> {
+        #[cfg(test)]
+        if let Some(record) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .corpus_manifests
+            .get(&corpus)
+            .cloned()
+        {
+            return Some(record);
+        }
+        let key = self.keyspace.corpus_manifest_key(corpus);
         self.get_json(key.as_str()).await
     }
 

@@ -7,10 +7,13 @@ mod content;
 mod links;
 mod paths;
 mod relations;
+pub(crate) mod section_create;
 mod sections;
 mod time;
 mod types;
 
+#[cfg(feature = "search-runtime")]
+pub(crate) use self::api::adapt_markdown_note;
 pub use self::api::parse_note;
 pub use self::code_observation::{CodeObservation, extract_observations};
 pub use self::paths::{is_supported_note, normalize_alias};

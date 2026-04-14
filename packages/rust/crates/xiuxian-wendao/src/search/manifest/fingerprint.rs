@@ -19,3 +19,43 @@ pub struct SearchFileFingerprint {
     /// Optional content hash used when metadata is insufficient.
     pub blake3: Option<String>,
 }
+
+impl SearchFileFingerprint {
+    /// Returns whether the stored scan metadata still matches the current file snapshot.
+    #[must_use]
+    pub fn matches_scan_metadata(
+        &self,
+        partition_id: Option<&str>,
+        size_bytes: u64,
+        modified_unix_ms: u64,
+        extractor_version: u32,
+        schema_version: u32,
+    ) -> bool {
+        self.partition_id.as_deref() == partition_id
+            && self.size_bytes == size_bytes
+            && self.modified_unix_ms == modified_unix_ms
+            && self.extractor_version == extractor_version
+            && self.schema_version == schema_version
+    }
+
+    /// Returns whether two fingerprints represent the same incremental search payload.
+    #[must_use]
+    pub fn equivalent_for_incremental(&self, other: &Self) -> bool {
+        if self.relative_path != other.relative_path
+            || self.partition_id != other.partition_id
+            || self.extractor_version != other.extractor_version
+            || self.schema_version != other.schema_version
+        {
+            return false;
+        }
+
+        match (&self.blake3, &other.blake3) {
+            (Some(left), Some(right)) => left == right,
+            _ => {
+                self.size_bytes == other.size_bytes
+                    && self.modified_unix_ms == other.modified_unix_ms
+                    && self.blake3 == other.blake3
+            }
+        }
+    }
+}

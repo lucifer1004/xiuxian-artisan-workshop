@@ -23,9 +23,10 @@ use xiuxian_wendao::analyzers::cache::{
 use xiuxian_wendao::analyzers::resolve_registered_repository_source;
 use xiuxian_wendao::analyzers::{
     DocRecord, DocsProjectedGapReportQuery, ExampleRecord, ProjectedPageIndexNode,
-    ProjectionPageKind, RefineEntityDocRequest, RepoProjectedPageIndexTreesQuery,
-    RepoProjectedPagesQuery, RepoSymbolKind, RepositoryAnalysisOutput, RepositoryRecord,
-    SymbolRecord, analyze_registered_repository_with_registry,
+    ProjectionPageKind, RefineEntityDocRequest, RegisteredRepository,
+    RepoProjectedPageIndexTreesQuery, RepoProjectedPagesQuery, RepoSymbolKind,
+    RepositoryAnalysisOutput, RepositoryPluginConfig, RepositoryRecord, RepositoryRefreshPolicy,
+    SymbolRecord, analyze_registered_repository_with_registry, build_projected_pages,
     docs_projected_gap_report_from_config, load_repo_intelligence_config,
     repo_projected_page_index_trees_from_config, repo_projected_pages_from_config,
 };
@@ -34,6 +35,7 @@ use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::{
     add_git_remote, assert_studio_json_snapshot, commit_all, init_git_repository,
 };
+use xiuxian_wendao::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
 use xiuxian_wendao::repo_index::RepoCodeDocument;
 use xiuxian_wendao::repo_index::{RepoIndexCoordinator, RepoIndexRequest};
@@ -1405,6 +1407,34 @@ async fn docs_page_endpoint_returns_projection_payload() -> TestResult {
 }
 
 #[tokio::test]
+async fn docs_page_index_tree_endpoint_returns_tree_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/page-index-tree?repo=gateway-sync&page_id=repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_page_index_tree_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
 async fn docs_page_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
     let temp = tempfile::tempdir()?;
     let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
@@ -1468,6 +1498,64 @@ plugins = ["modelica"]
         "docs-page endpoint should reopen the requested Modelica projected page title"
     );
     assert_studio_json_snapshot("docs_page_endpoint_modelica_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_page_endpoint_uses_studio_state_without_persisted_config_file() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+
+    let plugin_registry = Arc::new(
+        xiuxian_wendao::analyzers::bootstrap_builtin_registry()
+            .unwrap_or_else(|error| panic!("bootstrap builtin plugin registry: {error}")),
+    );
+    let repository = RegisteredRepository {
+        id: "gateway-sync".to_string(),
+        path: Some(repo_dir.clone()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("modelica".to_string())],
+    };
+    let analysis =
+        analyze_registered_repository_with_registry(&repository, temp.path(), &plugin_registry)?;
+    let page_id = build_projected_pages(&analysis)
+        .into_iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .map(|page| page.page_id)
+        .ok_or("expected a projected symbol-backed page for `Projectionica.Controllers.PI`")?;
+
+    let router = studio_router(gateway_state_for_ui_config(
+        temp.path(),
+        UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![UiRepoProjectConfig {
+                id: "gateway-sync".to_string(),
+                root: Some(repo_dir.display().to_string()),
+                url: None,
+                git_ref: None,
+                refresh: None,
+                plugins: vec!["modelica".to_string()],
+            }],
+        },
+        plugin_registry,
+    ));
+
+    let (status, payload) = request_json(
+        router,
+        &format!("/api/docs/page?repo=gateway-sync&page_id={page_id}"),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload["page"]["title"].as_str(),
+        Some("Projectionica.Controllers.PI")
+    );
     Ok(())
 }
 
@@ -3235,6 +3323,7 @@ async fn repo_gateway_returns_missing_repo_error() -> TestResult {
     let router = studio_router(gateway_state_for_project(temp.path()));
 
     for uri in [
+        "/api/docs/page-index-tree?page_id=repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
         "/api/repo/overview",
         "/api/repo/module-search?query=solve",
         "/api/repo/symbol-search?query=solve",
@@ -3292,6 +3381,7 @@ async fn repo_projected_page_endpoint_requires_page_id() -> TestResult {
     let router = studio_router(gateway_state_for_project(temp.path()));
 
     for uri in [
+        "/api/docs/page-index-tree?repo=gateway-sync",
         "/api/repo/projected-page?repo=gateway-sync",
         "/api/repo/projected-page-index-node?repo=gateway-sync&node_id=reference/solve-69592caeddee%23anchors",
         "/api/repo/projected-retrieval-hit?repo=gateway-sync",
@@ -3658,6 +3748,46 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
     gateway_state_for_project_with_options(project_root, true, true)
 }
 
+fn gateway_state_for_ui_config(
+    project_root: &Path,
+    ui_config: UiConfig,
+    plugin_registry: Arc<xiuxian_wendao::analyzers::PluginRegistry>,
+) -> Arc<GatewayState> {
+    let repo_index = Arc::new(RepoIndexCoordinator::new(
+        project_root.to_path_buf(),
+        Arc::clone(&plugin_registry),
+        xiuxian_wendao::search::SearchPlaneService::new(project_root.to_path_buf()),
+    ));
+    repo_index.start();
+
+    Arc::new(GatewayState {
+        index: None,
+        signal_tx: None,
+        webhook_url: None,
+        studio: Arc::new(StudioState {
+            project_root: project_root.to_path_buf(),
+            config_root: project_root.to_path_buf(),
+            bootstrap_background_indexing: false,
+            cold_start_process_started_at:
+                xiuxian_wendao::gateway::studio::symbol_index::timestamp_now(),
+            cold_start_process_started_instant: std::time::Instant::now(),
+            cold_start_telemetry: Arc::new(RwLock::new(Default::default())),
+            bootstrap_background_indexing_deferred_activation: Arc::new(RwLock::new(None)),
+            ui_config: Arc::new(RwLock::new(ui_config)),
+            graph_index: Arc::new(RwLock::new(None)),
+            symbol_index: Arc::new(RwLock::new(None)),
+            symbol_index_coordinator: Arc::new(SymbolIndexCoordinator::new(
+                project_root.to_path_buf(),
+                project_root.to_path_buf(),
+            )),
+            search_plane: SearchPlaneService::new(project_root.to_path_buf()),
+            vfs_scan: Arc::new(RwLock::new(None)),
+            repo_index,
+            plugin_registry,
+        }),
+    })
+}
+
 async fn publish_repo_entity_search_plane(
     state: &GatewayState,
     project_root: &Path,
@@ -3771,8 +3901,11 @@ fn gateway_state_for_project_with_options(
         studio: Arc::new(StudioState {
             project_root: project_root.to_path_buf(),
             config_root,
-            bootstrap_config_path: None,
             bootstrap_background_indexing: false,
+            cold_start_process_started_at:
+                xiuxian_wendao::gateway::studio::symbol_index::timestamp_now(),
+            cold_start_process_started_instant: std::time::Instant::now(),
+            cold_start_telemetry: Arc::new(RwLock::new(Default::default())),
             bootstrap_background_indexing_deferred_activation: Arc::new(RwLock::new(None)),
             ui_config: Arc::new(RwLock::new(ui_config)),
             graph_index: Arc::new(RwLock::new(None)),

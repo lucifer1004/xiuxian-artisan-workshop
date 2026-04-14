@@ -93,6 +93,7 @@ pub(crate) fn import_record(
     ImportRecord {
         repo_id: repo_id.to_string(),
         module_id: module_id.to_string(),
+        path: String::new(),
         import_name: import_name.to_string(),
         target_package: target_package.to_string(),
         source_module: source_module.to_string(),

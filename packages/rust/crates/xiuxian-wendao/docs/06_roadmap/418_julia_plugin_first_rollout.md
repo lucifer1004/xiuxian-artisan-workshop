@@ -1177,6 +1177,27 @@ The landed changes are:
 3. kept Rust plugin and host tests on self-spawned Julia services so those
    bounded live proofs still use isolated ports and deterministic cleanup
 
+## Landed Slice: Plugin-Owned Modelica Parser-Summary Transport Reuse
+
+This slice kept another runtime concern on the plugin side instead of letting
+gateway or host wrappers absorb parser-summary execution policy. The remaining
+live Modelica code-AST timeout came from the Modelica parser-summary owner
+seam: blocking file-summary fetches created a fresh tokio runtime per request,
+and the transport layer rebuilt a fresh negotiated Flight client for every
+call.
+
+The landed changes are:
+
+1. `xiuxian-wendao-julia` now reuses one process-local tokio runtime for
+   blocking Modelica parser-summary fetches instead of spinning up a new
+   runtime on every request
+2. the Modelica parser-summary transport now caches one negotiated Flight
+   client per transport identity inside the plugin crate, so the existing lazy
+   Arrow Flight connection survives across repo-owned file-analysis calls
+3. focused plugin proofs cover transport-slot reuse and shared-runtime blocking
+   fetch behavior, and the live frontend gateway proof now passes again on the
+   unchanged same-origin code-AST contract
+
 :RELATIONS:
 :LINKS: [[index]], [[01_core/103_package_layering]], [[06_roadmap/412_core_runtime_plugin_program]], [[06_roadmap/415_m4_julia_externalization_package_list]], [[06_roadmap/417_wendao_package_boundary_matrix]]
 :END:

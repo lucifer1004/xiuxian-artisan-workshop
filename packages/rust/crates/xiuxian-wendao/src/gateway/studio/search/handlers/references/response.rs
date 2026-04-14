@@ -6,6 +6,7 @@ use super::batch::build_reference_hits_flight_batch;
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::search::handlers::queries::ReferenceSearchQuery;
 use crate::gateway::studio::types::ReferenceSearchResponse;
+use crate::search::SearchCorpusKind;
 
 pub(crate) async fn load_reference_search_response(
     state: &GatewayState,
@@ -19,20 +20,42 @@ pub(crate) async fn load_reference_search_response(
             "Reference search requires a non-empty query",
         ));
     }
-    state
+    state.studio.ensure_reference_occurrence_index_started()?;
+    let status = state
         .studio
-        .ensure_reference_occurrence_index_ready()
-        .await?;
+        .local_corpus_bootstrap_status(SearchCorpusKind::ReferenceOccurrence, "reference_search");
+    if !status.active_epoch_ready {
+        state.studio.record_local_corpus_partial_search_response(
+            SearchCorpusKind::ReferenceOccurrence,
+            "reference_search",
+        );
+        return Ok(ReferenceSearchResponse {
+            query: query_text.to_string(),
+            hit_count: 0,
+            hits: Vec::new(),
+            selected_scope: "references".to_string(),
+            partial: true,
+            indexing_state: Some(status.indexing_state.to_string()),
+            index_error: status.index_error,
+        });
+    }
     let hits = state
         .studio
         .search_reference_occurrences(query_text, query.limit.unwrap_or(20).max(1))
         .await?;
 
+    state.studio.record_local_corpus_ready_search_response(
+        SearchCorpusKind::ReferenceOccurrence,
+        "reference_search",
+    );
     Ok(ReferenceSearchResponse {
         query: query_text.to_string(),
         hit_count: hits.len(),
         hits,
         selected_scope: "references".to_string(),
+        partial: false,
+        indexing_state: Some("ready".to_string()),
+        index_error: None,
     })
 }
 

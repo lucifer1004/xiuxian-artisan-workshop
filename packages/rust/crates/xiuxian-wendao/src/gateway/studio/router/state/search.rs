@@ -11,8 +11,114 @@ use crate::search::{SearchCorpusKind, SearchPlanePhase};
 const LOCAL_CORPUS_READY_WAIT_ENV: &str = "XIUXIAN_WENDAO_LOCAL_CORPUS_READY_WAIT_MS";
 const DEFAULT_LOCAL_CORPUS_READY_WAIT_MS: u64 = 15_000;
 const LOCAL_CORPUS_READY_POLL_INTERVAL: Duration = Duration::from_millis(25);
+const NOTE_SEARCH_BUNDLE_SOURCE: &str = "note_search_bundle";
+const CODE_SEARCH_BUNDLE_SOURCE: &str = "code_search_bundle";
+
+#[derive(Debug, Clone)]
+pub(crate) struct LocalCorpusBootstrapStatus {
+    pub(crate) active_epoch_ready: bool,
+    pub(crate) indexing_state: &'static str,
+    pub(crate) index_error: Option<String>,
+}
 
 impl StudioState {
+    fn local_corpus_bundle_active_or_inflight(&self, corpora: &[SearchCorpusKind]) -> bool {
+        corpora.iter().copied().all(|corpus| {
+            let status = self.search_plane.coordinator().status_for(corpus);
+            status.active_epoch.is_some() || matches!(status.phase, SearchPlanePhase::Indexing)
+        })
+    }
+
+    fn ensure_note_search_indexes_started(
+        &self,
+        configured_projects: &[crate::gateway::studio::types::UiProjectConfig],
+        source: &'static str,
+    ) {
+        if self.local_corpus_bundle_active_or_inflight(&[
+            SearchCorpusKind::KnowledgeSection,
+            SearchCorpusKind::Attachment,
+        ]) {
+            return;
+        }
+
+        let scan_inventory = self
+            .search_plane
+            .scan_supported_projects_with_repeat_work_details(
+                NOTE_SEARCH_BUNDLE_SOURCE,
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                configured_projects,
+            );
+        let note_files = scan_inventory.note_files();
+        if self
+            .search_plane
+            .ensure_knowledge_section_index_started_with_scanned_files(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                configured_projects,
+                note_files.as_slice(),
+            )
+        {
+            self.record_local_corpus_index_started(SearchCorpusKind::KnowledgeSection, source);
+        }
+        if self
+            .search_plane
+            .ensure_attachment_index_started_with_scanned_files(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                configured_projects,
+                note_files.as_slice(),
+            )
+        {
+            self.record_local_corpus_index_started(SearchCorpusKind::Attachment, source);
+        }
+    }
+
+    fn ensure_code_search_indexes_started(
+        &self,
+        configured_projects: &[crate::gateway::studio::types::UiProjectConfig],
+        source: &'static str,
+    ) {
+        if self.local_corpus_bundle_active_or_inflight(&[
+            SearchCorpusKind::LocalSymbol,
+            SearchCorpusKind::ReferenceOccurrence,
+        ]) {
+            return;
+        }
+
+        let scan_inventory = self
+            .search_plane
+            .scan_supported_projects_with_repeat_work_details(
+                CODE_SEARCH_BUNDLE_SOURCE,
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                configured_projects,
+            );
+        let source_files = scan_inventory.source_files();
+        if self
+            .search_plane
+            .ensure_local_symbol_index_started_with_scanned_files(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                configured_projects,
+                scan_inventory.symbol_files(),
+            )
+        {
+            self.record_local_corpus_index_started(SearchCorpusKind::LocalSymbol, source);
+        }
+        if self
+            .search_plane
+            .ensure_reference_occurrence_index_started_with_scanned_files(
+                self.project_root.as_path(),
+                self.config_root.as_path(),
+                configured_projects,
+                source_files.as_slice(),
+            )
+        {
+            self.record_local_corpus_index_started(SearchCorpusKind::ReferenceOccurrence, source);
+        }
+    }
+
     async fn wait_for_initial_local_corpus_ready(
         &self,
         corpus: SearchCorpusKind,
@@ -46,11 +152,7 @@ impl StudioState {
                 "Studio AST search requires configured link_graph.projects",
             ));
         }
-        self.search_plane.ensure_local_symbol_index_started(
-            self.project_root.as_path(),
-            self.config_root.as_path(),
-            configured_projects.as_slice(),
-        );
+        self.ensure_code_search_indexes_started(configured_projects.as_slice(), "symbol_search");
         Ok(())
     }
 
@@ -68,18 +170,33 @@ impl StudioState {
                 "Studio knowledge search requires configured link_graph.projects",
             ));
         }
-        self.search_plane.ensure_knowledge_section_index_started(
-            self.project_root.as_path(),
-            self.config_root.as_path(),
-            configured_projects.as_slice(),
-        );
+        self.ensure_note_search_indexes_started(configured_projects.as_slice(), "knowledge_search");
         Ok(())
     }
 
-    pub(crate) async fn ensure_knowledge_section_index_ready(&self) -> Result<(), StudioApiError> {
-        self.ensure_knowledge_section_index_started()?;
-        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::KnowledgeSection)
-            .await
+    #[must_use]
+    pub(crate) fn local_corpus_bootstrap_status(
+        &self,
+        corpus: SearchCorpusKind,
+        source: &'static str,
+    ) -> LocalCorpusBootstrapStatus {
+        let status = self.search_plane.coordinator().status_for(corpus);
+        if status.active_epoch.is_some() {
+            if let Some(build_finished_at) = status.build_finished_at.as_deref() {
+                self.record_local_corpus_ready_observed_with_recorded_at(
+                    corpus,
+                    build_finished_at,
+                    source,
+                );
+            } else {
+                self.record_local_corpus_ready_observed(corpus, source);
+            }
+        }
+        LocalCorpusBootstrapStatus {
+            active_epoch_ready: status.active_epoch.is_some(),
+            indexing_state: search_plane_phase_label(status.phase),
+            index_error: status.last_error,
+        }
     }
 
     pub(crate) async fn search_knowledge_sections(
@@ -152,18 +269,11 @@ impl StudioState {
                 "Studio attachment search requires configured link_graph.projects",
             ));
         }
-        self.search_plane.ensure_attachment_index_started(
-            self.project_root.as_path(),
-            self.config_root.as_path(),
+        self.ensure_note_search_indexes_started(
             configured_projects.as_slice(),
+            "attachment_search",
         );
         Ok(())
-    }
-
-    pub(crate) async fn ensure_attachment_index_ready(&self) -> Result<(), StudioApiError> {
-        self.ensure_attachment_index_started()?;
-        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::Attachment)
-            .await
     }
 
     pub(crate) async fn search_attachment_hits(
@@ -199,20 +309,8 @@ impl StudioState {
                 "Studio reference search requires configured link_graph.projects",
             ));
         }
-        self.search_plane.ensure_reference_occurrence_index_started(
-            self.project_root.as_path(),
-            self.config_root.as_path(),
-            configured_projects.as_slice(),
-        );
+        self.ensure_code_search_indexes_started(configured_projects.as_slice(), "reference_search");
         Ok(())
-    }
-
-    pub(crate) async fn ensure_reference_occurrence_index_ready(
-        &self,
-    ) -> Result<(), StudioApiError> {
-        self.ensure_reference_occurrence_index_started()?;
-        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::ReferenceOccurrence)
-            .await
     }
 
     pub(crate) async fn search_reference_occurrences(
@@ -244,4 +342,15 @@ fn local_corpus_ready_wait_duration() -> Duration {
         .and_then(|raw| raw.trim().parse::<u64>().ok())
         .filter(|value| *value > 0);
     Duration::from_millis(parsed.unwrap_or(DEFAULT_LOCAL_CORPUS_READY_WAIT_MS))
+}
+
+#[must_use]
+pub(crate) fn search_plane_phase_label(phase: SearchPlanePhase) -> &'static str {
+    match phase {
+        SearchPlanePhase::Idle => "idle",
+        SearchPlanePhase::Indexing => "indexing",
+        SearchPlanePhase::Ready => "ready",
+        SearchPlanePhase::Degraded => "degraded",
+        SearchPlanePhase::Failed => "failed",
+    }
 }

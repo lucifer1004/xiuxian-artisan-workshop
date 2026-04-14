@@ -10,7 +10,6 @@
 
 mod checks;
 mod core;
-mod parsing;
 mod report;
 mod types;
 

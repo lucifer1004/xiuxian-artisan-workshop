@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
 use crate::contracts::{
-    FlowhubModuleManifest, FlowhubRootManifest, FlowhubScenarioManifest, FlowhubStructureContract,
-    FlowhubTemplateComposition, FlowhubValidationKind, TemplateLinkRef,
+    FlowhubGraphContract, FlowhubModuleManifest, FlowhubRootManifest, FlowhubScenarioManifest,
+    FlowhubStructureContract, FlowhubTemplateComposition, FlowhubValidationKind, TemplateLinkRef,
 };
 use crate::error::QianjiError;
 
@@ -60,6 +60,8 @@ pub(super) fn validate_flowhub_module_manifest(
         }
     }
 
+    validate_graph_contracts(manifest)?;
+
     for rule in &manifest.validation {
         if rule.path.trim().is_empty() {
             return Err(QianjiError::Topology(
@@ -72,6 +74,43 @@ pub(super) fn validate_flowhub_module_manifest(
             return Err(QianjiError::Topology(format!(
                 "Flowhub module validation path `{}` uses `min_matches`, but only `kind = \"glob\"` supports it",
                 rule.path
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_graph_contracts(manifest: &FlowhubModuleManifest) -> Result<(), QianjiError> {
+    if manifest.graph.is_empty() {
+        return Ok(());
+    }
+
+    let Some(contract) = &manifest.contract else {
+        return Err(QianjiError::Topology(
+            "Flowhub module manifest requires `[contract]` when `[[graph]]` entries are declared"
+                .to_string(),
+        ));
+    };
+
+    let required_entries = contract
+        .required
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut graph_paths = BTreeSet::new();
+    for graph in &manifest.graph {
+        validate_graph_contract_path(graph)?;
+        validate_graph_contract_name(graph)?;
+        let path = graph.path.as_str();
+        if !graph_paths.insert(path) {
+            return Err(QianjiError::Topology(format!(
+                "Flowhub module manifest contains duplicate `[[graph]]` path `{path}`"
+            )));
+        }
+        if !required_entries.contains(path) {
+            return Err(QianjiError::Topology(format!(
+                "Flowhub module manifest `[[graph]] path = \"{path}\"` must also be declared in `contract.required`"
             )));
         }
     }
@@ -264,6 +303,65 @@ fn validate_required_pattern(entry: &str, context: &str) -> Result<(), QianjiErr
                 "{context} `contract.required` entry `{entry}` must stay inside the graph node directory"
             )));
         }
+    }
+
+    Ok(())
+}
+
+fn validate_graph_contract_path(graph: &FlowhubGraphContract) -> Result<(), QianjiError> {
+    let path = graph.path.trim();
+    if path.is_empty() {
+        return Err(QianjiError::Topology(
+            "Flowhub module manifest contains a `[[graph]]` entry with an empty `path`".to_string(),
+        ));
+    }
+    if path.starts_with('/') {
+        return Err(QianjiError::Topology(format!(
+            "Flowhub module manifest `[[graph]] path = \"{}\"` must stay relative",
+            graph.path
+        )));
+    }
+    if path.contains('/') {
+        return Err(QianjiError::Topology(format!(
+            "Flowhub module manifest `[[graph]] path = \"{}\"` must target an immediate module-owned Mermaid file",
+            graph.path
+        )));
+    }
+    if !path.ends_with(".mmd") {
+        return Err(QianjiError::Topology(format!(
+            "Flowhub module manifest `[[graph]] path = \"{}\"` must target a `.mmd` file",
+            graph.path
+        )));
+    }
+    if path
+        .chars()
+        .any(|character| matches!(character, '*' | '?' | '[' | ']'))
+    {
+        return Err(QianjiError::Topology(format!(
+            "Flowhub module manifest `[[graph]] path = \"{}\"` must not contain glob syntax",
+            graph.path
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_graph_contract_name(graph: &FlowhubGraphContract) -> Result<(), QianjiError> {
+    let Some(name) = graph.name.as_deref() else {
+        return Ok(());
+    };
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(QianjiError::Topology(format!(
+            "Flowhub module manifest `[[graph]].name` must be non-empty for path `{}`",
+            graph.path
+        )));
+    }
+    if trimmed.contains('\n') || trimmed.contains('\r') {
+        return Err(QianjiError::Topology(format!(
+            "Flowhub module manifest `[[graph]].name` must stay on one line for path `{}`",
+            graph.path
+        )));
     }
 
     Ok(())

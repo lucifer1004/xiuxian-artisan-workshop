@@ -1,3 +1,4 @@
+use crate::search::repo_content_chunk_file_fingerprints;
 use crate::search::repo_staging::versioned_repo_table_name;
 use crate::search::service::core::RepoMaintenanceTaskKind;
 use crate::search::service::tests::support::*;
@@ -80,16 +81,7 @@ async fn repo_publication_does_not_skip_prewarm_when_slot_is_already_claimed() {
     let repo_id = "alpha/repo";
     let revision = Some("rev-1");
     let documents = sample_repo_documents();
-    let file_fingerprints = documents
-        .iter()
-        .map(|document| {
-            (
-                document.path.clone(),
-                document
-                    .to_file_fingerprint(1, SearchCorpusKind::RepoContentChunk.schema_version()),
-            )
-        })
-        .collect::<std::collections::BTreeMap<_, _>>();
+    let file_fingerprints = repo_content_chunk_file_fingerprints(&documents);
     let table_name = versioned_repo_table_name(
         SearchPlaneService::repo_content_chunk_table_name(repo_id).as_str(),
         repo_id,

@@ -1,5 +1,5 @@
+use crate::parsers::docs_governance::collect_lines;
 use crate::zhenfa_router::native::semantic_check::IssueLocation;
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::collect_lines;
 use crate::zhenfa_router::native::semantic_check::docs_governance::rendering::footer::render_index_footer_with_values;
 use crate::zhenfa_router::native::semantic_check::docs_governance::rendering::shared::matches_section_heading;
 use crate::zhenfa_router::native::semantic_check::docs_governance::types::SectionSpec;

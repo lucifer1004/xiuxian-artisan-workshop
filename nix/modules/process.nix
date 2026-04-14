@@ -135,6 +135,7 @@ in
         managed_cleanup_listener "$PORT" wendao-gateway "$ROOT_DIR/target/debug/wendao" " gateway start"
         rm -f "$ROOT_DIR/${gatewayPidFile}"
         export VALKEY_URL=redis://127.0.0.1:6379/0
+        export XIUXIAN_WENDAO_GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING=1
         export WENDAO_GATEWAY_PIDFILE="$ROOT_DIR/${gatewayPidFile}"
         cd "$ROOT_DIR"
         cargo build -p xiuxian-wendao --bin wendao --locked

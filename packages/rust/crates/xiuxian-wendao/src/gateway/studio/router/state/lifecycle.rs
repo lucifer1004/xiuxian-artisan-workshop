@@ -19,6 +19,8 @@ use crate::search::{SearchMaintenancePolicy, SearchManifestKeyspace};
 
 const GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING_ENV: &str =
     "XIUXIAN_WENDAO_GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING";
+const DEFAULT_STUDIO_BOOTSTRAP_BACKGROUND_INDEXING: bool = false;
+const DEFAULT_GATEWAY_START_BOOTSTRAP_BACKGROUND_INDEXING: bool = true;
 
 impl Drop for StudioState {
     fn drop(&mut self) {
@@ -75,6 +77,29 @@ impl GatewayState {
             )),
         }
     }
+
+    /// Create gateway state for the real `gateway start` runtime, with the
+    /// launch-path bootstrap policy resolved from the runtime env.
+    #[must_use]
+    pub fn new_for_gateway_start(
+        index: Option<Arc<LinkGraphIndex>>,
+        signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+        webhook_url: Option<String>,
+        bootstrap_config_path: Option<&std::path::Path>,
+        plugin_registry: Arc<PluginRegistry>,
+    ) -> Self {
+        Self {
+            index,
+            signal_tx,
+            webhook_url,
+            studio: Arc::new(
+                StudioState::new_for_gateway_start_with_bootstrap_ui_config_from_path(
+                    plugin_registry,
+                    bootstrap_config_path,
+                ),
+            ),
+        }
+    }
 }
 
 impl StudioState {
@@ -82,10 +107,10 @@ impl StudioState {
         plugin_registry: Arc<PluginRegistry>,
         project_root: std::path::PathBuf,
         config_root: std::path::PathBuf,
-        bootstrap_config_path: Option<std::path::PathBuf>,
         search_plane: SearchPlaneService,
         bootstrap_background_indexing: bool,
     ) -> Self {
+        let bootstrap_snapshot = search_plane.status();
         let repo_index = start_repo_index_coordinator(
             project_root.clone(),
             Arc::clone(&plugin_registry),
@@ -95,11 +120,13 @@ impl StudioState {
             project_root.clone(),
             config_root.clone(),
         ));
-        Self {
+        let state = Self {
             project_root,
             config_root,
-            bootstrap_config_path,
             bootstrap_background_indexing,
+            cold_start_process_started_at: crate::gateway::studio::symbol_index::timestamp_now(),
+            cold_start_process_started_instant: std::time::Instant::now(),
+            cold_start_telemetry: Arc::new(std::sync::RwLock::new(Default::default())),
             bootstrap_background_indexing_deferred_activation: Arc::new(std::sync::RwLock::new(
                 None,
             )),
@@ -114,7 +141,12 @@ impl StudioState {
             vfs_scan: Arc::new(std::sync::RwLock::new(None)),
             repo_index,
             plugin_registry,
-        }
+        };
+        state.record_local_corpus_ready_observations_from_snapshot(
+            &bootstrap_snapshot,
+            "search_plane_bootstrap",
+        );
+        state
     }
 
     /// Create a new `StudioState` with default configuration.
@@ -153,6 +185,31 @@ impl StudioState {
         )
     }
 
+    /// Create a new `StudioState` for the real gateway runtime and bootstrap
+    /// UI config from one explicit gateway config path when available.
+    #[must_use]
+    pub fn new_for_gateway_start_with_bootstrap_ui_config_from_path(
+        plugin_registry: Arc<PluginRegistry>,
+        bootstrap_config_path: Option<&std::path::Path>,
+    ) -> Self {
+        let project_root = xiuxian_io::PrjDirs::project_root();
+        let config_root = bootstrap_config_path
+            .and_then(std::path::Path::parent)
+            .map_or_else(
+                || resolve_studio_config_root(project_root.as_path()),
+                std::path::Path::to_path_buf,
+            );
+        let search_plane = SearchPlaneService::new(project_root.clone());
+        Self::new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path_and_background_indexing(
+            plugin_registry,
+            project_root,
+            config_root,
+            bootstrap_config_path,
+            search_plane,
+            gateway_start_bootstrap_background_indexing(),
+        )
+    }
+
     /// Create a new `StudioState` with explicit project/config roots and search-plane state.
     #[must_use]
     pub(crate) fn new_with_bootstrap_ui_config_for_roots_and_search_plane(
@@ -180,12 +237,32 @@ impl StudioState {
         bootstrap_config_path: Option<&std::path::Path>,
         search_plane: SearchPlaneService,
     ) -> Self {
-        let eager_background_indexing = gateway_bootstrap_background_indexing();
+        Self::new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path_and_background_indexing(
+            plugin_registry,
+            project_root,
+            config_root,
+            bootstrap_config_path,
+            search_plane,
+            gateway_bootstrap_background_indexing(),
+        )
+    }
+
+    /// Create a new `StudioState` with explicit project/config roots, an
+    /// optional boot config path, search-plane state, and a resolved bootstrap
+    /// indexing policy.
+    #[must_use]
+    pub(crate) fn new_with_bootstrap_ui_config_for_roots_and_search_plane_and_path_and_background_indexing(
+        plugin_registry: Arc<PluginRegistry>,
+        project_root: std::path::PathBuf,
+        config_root: std::path::PathBuf,
+        bootstrap_config_path: Option<&std::path::Path>,
+        search_plane: SearchPlaneService,
+        eager_background_indexing: bool,
+    ) -> Self {
         let state = Self::build_runtime_state(
             plugin_registry,
             project_root,
             config_root,
-            bootstrap_config_path.map(std::path::Path::to_path_buf),
             search_plane,
             eager_background_indexing,
         );
@@ -230,7 +307,6 @@ impl StudioState {
             plugin_registry,
             project_root,
             config_root,
-            None,
             search_plane,
             false,
         )
@@ -253,16 +329,51 @@ fn gateway_bootstrap_background_indexing() -> bool {
     gateway_bootstrap_background_indexing_with_lookup(&|key| std::env::var(key).ok())
 }
 
+fn gateway_start_bootstrap_background_indexing() -> bool {
+    gateway_start_bootstrap_background_indexing_with_lookup(&|key| std::env::var(key).ok())
+}
+
 pub(crate) fn gateway_bootstrap_background_indexing_with_lookup(
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> bool {
+    bootstrap_background_indexing_with_lookup(DEFAULT_STUDIO_BOOTSTRAP_BACKGROUND_INDEXING, lookup)
+}
+
+pub(crate) fn gateway_start_bootstrap_background_indexing_with_lookup(
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> bool {
+    bootstrap_background_indexing_with_lookup(
+        DEFAULT_GATEWAY_START_BOOTSTRAP_BACKGROUND_INDEXING,
+        lookup,
+    )
+}
+
+fn bootstrap_background_indexing_with_lookup(
+    default_enabled: bool,
     lookup: &dyn Fn(&str) -> Option<String>,
 ) -> bool {
     lookup(GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING_ENV)
         .as_deref()
         .map(str::trim)
-        .is_some_and(|raw| {
-            raw == "1"
-                || raw.eq_ignore_ascii_case("true")
-                || raw.eq_ignore_ascii_case("yes")
-                || raw.eq_ignore_ascii_case("on")
-        })
+        .filter(|raw| !raw.is_empty())
+        .and_then(parse_bootstrap_background_indexing_override)
+        .unwrap_or(default_enabled)
+}
+
+fn parse_bootstrap_background_indexing_override(raw: &str) -> Option<bool> {
+    if raw == "1"
+        || raw.eq_ignore_ascii_case("true")
+        || raw.eq_ignore_ascii_case("yes")
+        || raw.eq_ignore_ascii_case("on")
+    {
+        return Some(true);
+    }
+    if raw == "0"
+        || raw.eq_ignore_ascii_case("false")
+        || raw.eq_ignore_ascii_case("no")
+        || raw.eq_ignore_ascii_case("off")
+    {
+        return Some(false);
+    }
+    None
 }

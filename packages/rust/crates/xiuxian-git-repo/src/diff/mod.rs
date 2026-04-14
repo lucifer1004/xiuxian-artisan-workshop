@@ -108,6 +108,33 @@ pub fn diff_checkout_revisions(
     diff_repository_revisions(&repository, previous_revision, revision)
 }
 
+/// Read one repository-relative file blob from a target revision in a local
+/// checkout.
+///
+/// Returns `Ok(None)` when the path does not exist at the requested revision or
+/// does not resolve to a blob.
+///
+/// # Errors
+///
+/// Returns [`RepoError`] when the checkout cannot be opened or the revision
+/// cannot be resolved.
+pub fn read_checkout_file_bytes_at_revision(
+    checkout_root: &Path,
+    revision: &str,
+    relative_path: &str,
+) -> Result<Option<Vec<u8>>, RepoError> {
+    let repository = open_checkout_with_retry(checkout_root).map_err(|error| {
+        RepoError::new(
+            RepoErrorKind::InvalidPath,
+            format!(
+                "failed to open checkout `{}` for revision file read: {error}",
+                checkout_root.display()
+            ),
+        )
+    })?;
+    read_repository_file_bytes_at_revision(&repository, revision, relative_path)
+}
+
 fn diff_repository_revisions(
     repository: &RepositoryHandle,
     previous_revision: &str,
@@ -131,6 +158,38 @@ fn diff_repository_revisions(
         revision: revision.to_string(),
         changes: changes.into_iter().map(map_change).collect(),
     })
+}
+
+fn read_repository_file_bytes_at_revision(
+    repository: &RepositoryHandle,
+    revision: &str,
+    relative_path: &str,
+) -> Result<Option<Vec<u8>>, RepoError> {
+    let tree = resolve_revision_tree(repository, revision)?;
+    let Some(entry) = tree.lookup_entry_by_path(relative_path).map_err(|error| {
+        RepoError::new(
+            RepoError::classify_message(error.to_string().as_str()),
+            format!("failed to look up `{relative_path}` in revision `{revision}`: {error}"),
+        )
+    })?
+    else {
+        return Ok(None);
+    };
+    let object = entry.object().map_err(|error| {
+        RepoError::new(
+            RepoError::classify_message(error.to_string().as_str()),
+            format!("failed to load `{relative_path}` object in revision `{revision}`: {error}"),
+        )
+    })?;
+    let blob = object.try_into_blob().map_err(|error| {
+        RepoError::new(
+            RepoErrorKind::RepositoryCorrupt,
+            format!(
+                "expected `{relative_path}` at revision `{revision}` to resolve to a blob: {error}"
+            ),
+        )
+    })?;
+    Ok(Some(blob.data.clone()))
 }
 
 fn resolve_revision_tree<'repo>(

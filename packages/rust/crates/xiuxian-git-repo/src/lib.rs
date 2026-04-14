@@ -13,6 +13,7 @@ mod sync;
 
 pub use diff::{
     RevisionChangeKind, RevisionDiffSummary, RevisionPathChange, diff_checkout_revisions,
+    read_checkout_file_bytes_at_revision,
 };
 pub use error::{RepoError, RepoErrorKind};
 pub use layout::{managed_checkout_root_for, managed_mirror_root_for, sanitize_repo_id};

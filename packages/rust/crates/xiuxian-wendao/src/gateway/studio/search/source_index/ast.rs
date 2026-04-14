@@ -9,13 +9,11 @@ use crate::gateway::studio::types::AstSearchHit;
 #[cfg(test)]
 use crate::gateway::studio::types::UiProjectConfig;
 
-use super::filters::is_markdown_path;
 #[cfg(test)]
-use super::filters::should_skip_entry;
+use super::filters::{is_markdown_path, should_skip_entry};
+#[cfg(test)]
 use super::markdown::{build_markdown_ast_hits, markdown_scope_name};
 use super::navigation::ast_navigation_target;
-#[cfg(not(test))]
-use crate::gateway::studio::search::project_scope::index_path_for_entry;
 #[cfg(test)]
 use crate::gateway::studio::search::project_scope::{
     configured_project_scan_roots, index_path_for_entry,
@@ -56,44 +54,63 @@ pub(crate) fn build_ast_index(
     hits
 }
 
+#[cfg(test)]
 pub(crate) fn build_ast_hits_for_file(
     project_root: &Path,
     scan_root: &Path,
     source_path: &Path,
 ) -> Vec<AstSearchHit> {
     let normalized_path = index_path_for_entry(project_root, source_path);
-    build_ast_hits_for_normalized_path(scan_root, source_path, normalized_path.as_str())
-}
-
-fn build_ast_hits_for_normalized_path(
-    scan_root: &Path,
-    source_path: &Path,
-    normalized_path: &str,
-) -> Vec<AstSearchHit> {
-    let normalized_path_ref = Path::new(normalized_path);
+    let normalized_path_ref = Path::new(normalized_path.as_str());
     let Ok(content) = std::fs::read_to_string(source_path) else {
         return Vec::new();
     };
     if is_markdown_path(normalized_path_ref) {
-        let crate_name = markdown_scope_name(normalized_path_ref);
-        let mut seen = HashSet::new();
-        return build_markdown_ast_hits(
+        return build_markdown_ast_hits_for_content(
             scan_root,
             source_path,
-            normalized_path,
-            content.as_str(),
-            crate_name.as_str(),
-        )
-        .into_iter()
-        .filter(|hit| {
-            seen.insert(format!(
-                "{}:{}:{}:{}",
-                hit.path, hit.line_start, hit.line_end, hit.name
-            ))
-        })
-        .collect();
+            normalized_path.as_str(),
+            &content,
+        );
     }
+    build_code_ast_hits_from_content(normalized_path.as_str(), &content)
+}
 
+#[cfg(test)]
+fn build_markdown_ast_hits_for_content(
+    scan_root: &Path,
+    source_path: &Path,
+    normalized_path: &str,
+    content: &str,
+) -> Vec<AstSearchHit> {
+    let normalized_path_ref = Path::new(normalized_path);
+    if !is_markdown_path(normalized_path_ref) {
+        return Vec::new();
+    }
+    let crate_name = markdown_scope_name(normalized_path_ref);
+    let mut seen = HashSet::new();
+    build_markdown_ast_hits(
+        scan_root,
+        source_path,
+        normalized_path,
+        content,
+        crate_name.as_str(),
+    )
+    .into_iter()
+    .filter(|hit| {
+        seen.insert(format!(
+            "{}:{}:{}:{}",
+            hit.path, hit.line_start, hit.line_end, hit.name
+        ))
+    })
+    .collect()
+}
+
+pub(crate) fn build_code_ast_hits_from_content(
+    normalized_path: &str,
+    content: &str,
+) -> Vec<AstSearchHit> {
+    let normalized_path_ref = Path::new(normalized_path);
     let Some(lang) = ast_search_lang(normalized_path_ref) else {
         return Vec::new();
     };
@@ -101,7 +118,7 @@ fn build_ast_hits_for_normalized_path(
     let mut hits = Vec::new();
     let mut seen = HashSet::new();
     for pattern in get_skeleton_patterns(lang) {
-        for result in extract_items(content.as_str(), pattern, lang, Some(vec!["NAME"])) {
+        for result in extract_items(content, pattern, lang, Some(vec!["NAME"])) {
             let name = result
                 .captures
                 .get("NAME")

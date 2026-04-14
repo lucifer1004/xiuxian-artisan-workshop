@@ -11,6 +11,8 @@ pub(super) fn build(
     } = context;
     match task_type {
         task_type::TaskType::Command => Some(Ok(task_mechanisms::command(node_def))),
+        task_type::TaskType::HttpCall => Some(task_mechanisms::http_call(node_def)),
+        task_type::TaskType::CliCall => Some(task_mechanisms::cli_call(node_def)),
         task_type::TaskType::WriteFile => Some(Ok(task_mechanisms::write_file(node_def))),
         task_type::TaskType::Suspend => Some(Ok(task_mechanisms::suspend(node_def))),
         _ => None,

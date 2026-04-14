@@ -268,6 +268,29 @@ fn parse_show_graph_command_requires_graph_flag() {
 }
 
 #[test]
+fn parse_show_contract_target() {
+    let command = must_some(
+        must_ok(
+            parse_dir_command(&to_args(&[
+                "qianji",
+                "show",
+                "--contract",
+                "wendao.docs.navigation",
+            ])),
+            "show contract parse should succeed",
+        ),
+        "show contract command should be detected",
+    );
+
+    assert_eq!(
+        command,
+        DirCliCommand::Show {
+            target: ShowCliTarget::Contract("wendao.docs.navigation".to_string())
+        }
+    );
+}
+
+#[test]
 fn parse_check_workdir_command_requires_dir_flag() {
     let command = must_some(
         must_ok(
@@ -426,13 +449,63 @@ fn run_show_graph_command_renders_flowhub_mermaid_graph() {
     assert!(output.rendered.contains("Kind: artifact"));
     assert!(output.rendered.contains("### domain validators"));
     assert!(output.rendered.contains("Kind: validator"));
-    assert!(output.rendered.contains("## Expected work surface"));
-    assert!(output.rendered.contains("<plan-workdir>/"));
-    assert!(output.rendered.contains("  qianji.toml"));
-    assert!(output.rendered.contains("  flowchart.mmd"));
-    assert!(output.rendered.contains("## Local qianji.toml template"));
-    assert!(output.rendered.contains("[plan]"));
-    assert!(output.rendered.contains("[check]"));
+    assert!(output.rendered.contains("## Module contract"));
+    assert!(output.rendered.contains("- qianji.toml"));
+    assert!(output.rendered.contains("- codex-plan.mmd"));
+    assert!(output.rendered.contains("## Owning qianji.toml"));
+    assert!(output.rendered.contains("[module]"));
+    assert!(output.rendered.contains("name = \"plan\""));
+}
+
+#[test]
+fn run_show_graph_command_prefers_declared_graph_name_override() {
+    let output = must_ok(
+        run_dir_command(DirCliCommand::Show {
+            target: ShowCliTarget::Graph(flowhub_root().join("wendao/docs-search.mmd")),
+        }),
+        "show graph command should respect the local Flowhub graph name override",
+    );
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.rendered.starts_with("# Graph"));
+    assert!(output.rendered.contains("Name: DOC_SEARCH"));
+    assert!(
+        output
+            .rendered
+            .contains("Path: ./qianji-flowhub/wendao/docs-search.mmd")
+    );
+    assert!(output.rendered.contains("Declared topology: bounded_loop"));
+    assert!(output.rendered.contains("## Owning qianji.toml"));
+    assert!(output.rendered.contains("name = \"DOC_SEARCH\""));
+}
+
+#[test]
+fn run_show_contract_command_renders_wendao_docs_contract_snapshot() {
+    let output = must_ok(
+        run_dir_command(DirCliCommand::Show {
+            target: ShowCliTarget::Contract("wendao.docs.navigation".to_string()),
+        }),
+        "show contract command should render Wendao docs contract snapshot",
+    );
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.rendered.starts_with("# Contract"));
+    assert!(output.rendered.contains("Name: wendao.docs.navigation"));
+    assert!(
+        output
+            .rendered
+            .contains("Kind: wendao-docs-invocation-contract")
+    );
+    assert!(output.rendered.contains("## Contract TOML"));
+    assert!(output.rendered.contains("task_types = ["));
+    assert!(output.rendered.contains("path = \"/api/docs/navigation\""));
+    assert!(output.rendered.contains("## Schema JSON"));
+    assert!(
+        output
+            .rendered
+            .contains("\"title\": \"DocsNavigationToolArgs\"")
+    );
+    assert!(output.rendered.contains("\"page_id\""));
 }
 
 #[test]

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::parsers::markdown::parse_note;
+use xiuxian_wendao_parsers::parse_markdown_toc;
 
 use super::discovery::DiscoveredMarkdownFile;
 use super::skeleton::render_markdown_skeleton;
@@ -27,7 +27,7 @@ pub struct BoundedWorkMarkdownRow {
 }
 
 pub(crate) fn build_rows_for_file(
-    root: &Path,
+    _root: &Path,
     file: &DiscoveredMarkdownFile,
 ) -> Result<Vec<BoundedWorkMarkdownRow>, String> {
     let body = fs::read_to_string(&file.absolute_path).map_err(|error| {
@@ -36,37 +36,38 @@ pub(crate) fn build_rows_for_file(
             file.absolute_path.display()
         )
     })?;
-    let parsed = parse_note(&file.absolute_path, root, &body).ok_or_else(|| {
-        format!(
-            "failed to parse bounded work markdown file `{}`",
-            file.absolute_path.display()
-        )
-    })?;
+    let fallback_title = file
+        .absolute_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or("page");
+    let parsed = parse_markdown_toc(&body, fallback_title);
 
     let mut rows = Vec::with_capacity(parsed.sections.len() + 1);
     rows.push(BoundedWorkMarkdownRow {
         path: file.relative_path.clone(),
         surface: file.surface.clone(),
         heading_path: String::new(),
-        title: parsed.doc.title.clone(),
+        title: parsed.document.core.title.clone(),
         level: 0,
-        skeleton: render_markdown_skeleton(&parsed.doc.title, 1, &HashMap::new(), &body),
+        skeleton: render_markdown_skeleton(&parsed.document.core.title, 1, &HashMap::new(), &body),
         body: body.trim().to_string(),
     });
 
     rows.extend(parsed.sections.iter().map(|section| {
-        let heading_path = normalize_heading_path(section.heading_path.as_str());
-        let title = effective_title(heading_path.as_str(), section.heading_title.as_str());
+        let heading_path = normalize_heading_path(section.scope.heading_path.as_str());
+        let title = effective_title(heading_path.as_str(), section.scope.heading_title.as_str());
         BoundedWorkMarkdownRow {
             path: file.relative_path.clone(),
             surface: file.surface.clone(),
             heading_path,
             title: title.clone(),
-            level: i64::try_from(section.heading_level).unwrap_or(i64::MAX),
+            level: i64::try_from(section.scope.heading_level).unwrap_or(i64::MAX),
             skeleton: render_markdown_skeleton(
                 title.as_str(),
-                section.heading_level.max(1),
-                &section.attributes,
+                section.scope.heading_level.max(1),
+                &section.metadata.attributes,
                 section.section_text.as_str(),
             ),
             body: section.section_text.trim().to_string(),

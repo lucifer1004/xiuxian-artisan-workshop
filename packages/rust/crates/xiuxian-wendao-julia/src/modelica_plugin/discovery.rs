@@ -10,6 +10,7 @@ use xiuxian_wendao_core::repo_intelligence::{
 
 use super::parsing::{
     contains_documentation_annotation, parse_imports_for_repository,
+    parse_safe_package_overlay_metadata, parse_safe_root_package_overlay_metadata,
     parse_symbol_declarations_for_repository,
 };
 use super::relations::{
@@ -18,7 +19,7 @@ use super::relations::{
 use super::types::CollectedDoc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RepositorySurface {
+pub(crate) enum RepositorySurface {
     Api,
     Example,
     Documentation,
@@ -51,73 +52,126 @@ const RELEASE_NOTES_SECTION_TOPICS: [NestedUsersGuideTopic; 1] = [NestedUsersGui
     format: "modelica_users_guide_release_notes_version_management",
 }];
 
-pub(crate) fn discover_package_files(
-    repository_root: &Path,
-) -> Result<Vec<PathBuf>, RepoIntelligenceError> {
-    let package_files = repository_file_paths(repository_root)
-        .into_iter()
-        .filter(|path| path.file_name().and_then(std::ffi::OsStr::to_str) == Some("package.mo"))
-        .collect::<Vec<_>>();
-    if package_files.is_empty() {
-        return Err(RepoIntelligenceError::AnalysisFailed {
-            message: "no package.mo files discovered during Modelica analysis".to_string(),
-        });
-    }
-    Ok(package_files)
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct RepositorySnapshot {
+    entries: Vec<RepositoryFileEntry>,
+    package_orders: BTreeMap<String, Vec<String>>,
 }
 
-pub(crate) fn discover_package_orders(
-    repository_root: &Path,
-) -> Result<BTreeMap<String, Vec<String>>, RepoIntelligenceError> {
-    let mut orders = BTreeMap::new();
-    for path in repository_file_paths(repository_root) {
-        if path.file_name().and_then(std::ffi::OsStr::to_str) != Some("package.order") {
-            continue;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct RepositoryFileEntry {
+    pub(crate) absolute_path: PathBuf,
+    pub(crate) relative_path: String,
+    pub(crate) surface: RepositorySurface,
+    pub(crate) modelica_contents: Option<String>,
+}
+
+impl RepositorySnapshot {
+    pub(crate) fn load(repository_root: &Path) -> Result<Self, RepoIntelligenceError> {
+        let mut entries = Vec::new();
+        let mut package_orders = BTreeMap::new();
+
+        for absolute_path in repository_file_paths(repository_root) {
+            let Some(relative_file_path) = relative_path(repository_root, absolute_path.as_path())
+            else {
+                continue;
+            };
+            let file_name = absolute_path.file_name().and_then(std::ffi::OsStr::to_str);
+            let extension = absolute_path.extension().and_then(std::ffi::OsStr::to_str);
+            let modelica_contents = if extension == Some("mo") {
+                Some(read_repository_text_file(absolute_path.as_path())?)
+            } else {
+                None
+            };
+
+            if file_name == Some("package.order") {
+                let parent_relative = absolute_path
+                    .parent()
+                    .and_then(|parent| relative_path(repository_root, parent))
+                    .unwrap_or_default();
+                let order_entries = read_repository_text_file(absolute_path.as_path())?
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .filter(|line| !line.starts_with("//"))
+                    .map(str::to_string)
+                    .collect::<Vec<_>>();
+                if !order_entries.is_empty() {
+                    package_orders.insert(parent_relative, order_entries);
+                }
+            }
+
+            entries.push(RepositoryFileEntry {
+                surface: repository_surface(relative_file_path.as_str()),
+                absolute_path,
+                relative_path: relative_file_path,
+                modelica_contents,
+            });
         }
-        let parent_relative = path
-            .parent()
-            .and_then(|parent| relative_path(repository_root, parent))
-            .unwrap_or_default();
-        let contents =
-            fs::read_to_string(&path).map_err(|error| RepoIntelligenceError::AnalysisFailed {
-                message: format!("failed to read package.order `{}`: {error}", path.display()),
-            })?;
-        let entries = contents
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .filter(|line| !line.starts_with("//"))
-            .map(str::to_string)
-            .collect::<Vec<_>>();
-        if !entries.is_empty() {
-            orders.insert(parent_relative, entries);
-        }
+
+        Ok(Self {
+            entries,
+            package_orders,
+        })
     }
-    Ok(orders)
+
+    pub(crate) fn entries(&self) -> &[RepositoryFileEntry] {
+        &self.entries
+    }
+
+    pub(crate) fn package_orders(&self) -> &BTreeMap<String, Vec<String>> {
+        &self.package_orders
+    }
+
+    pub(crate) fn package_files(&self) -> Result<Vec<&RepositoryFileEntry>, RepoIntelligenceError> {
+        let package_files = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .absolute_path
+                    .file_name()
+                    .and_then(std::ffi::OsStr::to_str)
+                    == Some("package.mo")
+            })
+            .collect::<Vec<_>>();
+        if package_files.is_empty() {
+            return Err(RepoIntelligenceError::AnalysisFailed {
+                message: "no package.mo files discovered during Modelica analysis".to_string(),
+            });
+        }
+        Ok(package_files)
+    }
+}
+
+fn read_repository_text_file(path: &Path) -> Result<String, RepoIntelligenceError> {
+    fs::read_to_string(path).map_err(|error| RepoIntelligenceError::AnalysisFailed {
+        message: format!(
+            "failed to read repository file `{}`: {error}",
+            path.display()
+        ),
+    })
 }
 
 pub(crate) fn collect_module_records(
     repo_id: &str,
-    repository_root: &Path,
     root_package_name: &str,
-    package_files: &[PathBuf],
+    package_files: &[&RepositoryFileEntry],
     package_orders: &BTreeMap<String, Vec<String>>,
 ) -> Vec<ModuleRecord> {
     let mut modules = package_files
         .iter()
-        .filter_map(|path| {
-            let relative = relative_path(repository_root, path)?;
-            if relative != "package.mo"
-                && repository_surface(relative.as_str()) == RepositorySurface::Support
-            {
+        .filter_map(|entry| {
+            let relative = entry.relative_path.as_str();
+            if relative != "package.mo" && entry.surface == RepositorySurface::Support {
                 return None;
             }
-            let qualified_name = qualified_module_name(root_package_name, relative.as_str())?;
+            let qualified_name = qualified_module_name(root_package_name, relative)?;
             Some(ModuleRecord {
                 repo_id: repo_id.to_string(),
                 module_id: module_id(repo_id, qualified_name.as_str()),
                 qualified_name,
-                path: relative,
+                path: relative.to_string(),
             })
         })
         .collect::<Vec<_>>();
@@ -143,39 +197,43 @@ pub(crate) fn modules_by_qualified_name(
 pub(crate) fn collect_symbol_records(
     repository: &RegisteredRepository,
     repo_id: &str,
-    repository_root: &Path,
+    snapshot: &RepositorySnapshot,
     root_package_name: &str,
     modules: &BTreeMap<String, ModuleRecord>,
 ) -> Result<Vec<SymbolRecord>, RepoIntelligenceError> {
     let mut symbols = Vec::new();
     let mut seen = BTreeSet::new();
 
-    for path in repository_file_paths(repository_root) {
-        if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
-            continue;
-        }
-        let Some(relative) = relative_path(repository_root, &path) else {
+    for entry in snapshot.entries() {
+        let Some(contents) = entry.modelica_contents.as_deref() else {
             continue;
         };
-        if repository_surface(relative.as_str()) != RepositorySurface::Api {
+        if entry.surface != RepositorySurface::Api {
             continue;
         }
         let Some(module_qualified_name) =
-            containing_module_name(root_package_name, relative.as_str())
+            containing_module_name(root_package_name, entry.relative_path.as_str())
         else {
             continue;
         };
         let module_id = modules
             .get(module_qualified_name.as_str())
             .map(|module| module.module_id.clone());
-        let contents =
-            fs::read_to_string(&path).map_err(|error| RepoIntelligenceError::AnalysisFailed {
-                message: format!("failed to read Modelica file `{}`: {error}", path.display()),
-            })?;
-
-        for declaration in
-            parse_symbol_declarations_for_repository(repository, relative.as_str(), &contents)?
+        if safe_package_overlay_metadata_for_relative_path(
+            entry.relative_path.as_str(),
+            contents,
+            root_package_name,
+        )
+        .is_some()
         {
+            continue;
+        }
+
+        for declaration in parse_symbol_declarations_for_repository(
+            repository,
+            entry.relative_path.as_str(),
+            contents,
+        )? {
             let qualified_name = format!("{module_qualified_name}.{}", declaration.name);
             let symbol_id = format!("repo:{repo_id}:symbol:{qualified_name}");
             if !seen.insert(symbol_id.clone()) {
@@ -188,7 +246,7 @@ pub(crate) fn collect_symbol_records(
                 name: declaration.name,
                 qualified_name,
                 kind: declaration.kind,
-                path: relative.clone(),
+                path: entry.relative_path.clone(),
                 line_start: declaration.line_start,
                 line_end: declaration.line_end,
                 signature: Some(declaration.signature),
@@ -206,79 +264,121 @@ pub(crate) fn collect_symbol_records(
 pub(crate) fn collect_import_records(
     repository: &RegisteredRepository,
     repo_id: &str,
-    repository_root: &Path,
+    snapshot: &RepositorySnapshot,
     root_package_name: &str,
     modules: &BTreeMap<String, ModuleRecord>,
 ) -> Result<Vec<ImportRecord>, RepoIntelligenceError> {
     let mut imports = Vec::new();
-    let mut seen = BTreeSet::new();
 
-    for path in repository_file_paths(repository_root) {
-        if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
-            continue;
-        }
-        let Some(relative) = relative_path(repository_root, &path) else {
+    for entry in snapshot.entries() {
+        let Some(contents) = entry.modelica_contents.as_deref() else {
             continue;
         };
-        if repository_surface(relative.as_str()) == RepositorySurface::Support {
+        if entry.surface == RepositorySurface::Support {
             continue;
         }
-        let Some(module_qualified_name) =
-            containing_module_name(root_package_name, relative.as_str())
-        else {
-            continue;
-        };
-        let source_module_id = modules.get(module_qualified_name.as_str()).map_or_else(
-            || module_id(repo_id, module_qualified_name.as_str()),
-            |module| module.module_id.clone(),
-        );
-
-        let contents =
-            fs::read_to_string(&path).map_err(|error| RepoIntelligenceError::AnalysisFailed {
-                message: format!("failed to read Modelica file `{}`: {error}", path.display()),
-            })?;
-
-        for parsed_import in parse_imports_for_repository(repository, relative.as_str(), &contents)?
-        {
-            let source_module = parsed_import.name.clone();
-            let import_name = parsed_import
-                .alias
-                .clone()
-                .unwrap_or_else(|| import_leaf_name(source_module.as_str()));
-            let target_package = source_module
-                .split('.')
-                .next()
-                .unwrap_or(source_module.as_str())
-                .to_string();
-            let resolved_id = modules
-                .get(source_module.as_str())
-                .map(|module| module.module_id.clone());
-            let kind_key = match parsed_import.kind {
-                xiuxian_wendao_core::repo_intelligence::ImportKind::Symbol => "symbol",
-                xiuxian_wendao_core::repo_intelligence::ImportKind::Module => "module",
-                xiuxian_wendao_core::repo_intelligence::ImportKind::Reexport => "reexport",
-            };
-            let import_key = (source_module.clone(), import_name.clone(), kind_key);
-            if !seen.insert(import_key) {
-                continue;
-            }
-            imports.push(ImportRecord {
-                repo_id: repo_id.to_string(),
-                module_id: source_module_id.clone(),
-                import_name,
-                target_package,
-                source_module,
-                kind: parsed_import.kind,
-                line_start: parsed_import.line_start,
-                resolved_id,
-                attributes: parsed_import.attributes,
-            });
-        }
+        imports.extend(collect_import_records_for_file(
+            repository,
+            repo_id,
+            entry.relative_path.as_str(),
+            entry.relative_path.as_str(),
+            contents,
+            root_package_name,
+            modules,
+        )?);
     }
 
     imports.sort_by(|left, right| {
-        left.source_module
-            .cmp(&right.source_module)
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.source_module.cmp(&right.source_module))
+            .then_with(|| left.import_name.cmp(&right.import_name))
+            .then_with(|| left.target_package.cmp(&right.target_package))
+    });
+    Ok(imports)
+}
+
+pub(crate) fn collect_import_records_for_file(
+    repository: &RegisteredRepository,
+    repo_id: &str,
+    relative_within_root: &str,
+    record_path: &str,
+    contents: &str,
+    root_package_name: &str,
+    modules: &BTreeMap<String, ModuleRecord>,
+) -> Result<Vec<ImportRecord>, RepoIntelligenceError> {
+    let Some(module_qualified_name) =
+        containing_module_name(root_package_name, relative_within_root)
+    else {
+        return Ok(Vec::new());
+    };
+    let source_module_id = modules.get(module_qualified_name.as_str()).map_or_else(
+        || module_id(repo_id, module_qualified_name.as_str()),
+        |module| module.module_id.clone(),
+    );
+    let mut imports = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    let parsed_imports = if is_api_surface_path(relative_within_root) {
+        if let Some(metadata) = safe_package_overlay_metadata_for_relative_path(
+            relative_within_root,
+            contents,
+            root_package_name,
+        ) {
+            metadata.imports
+        } else {
+            parse_imports_for_repository(repository, relative_within_root, contents)?
+        }
+    } else {
+        parse_imports_for_repository(repository, relative_within_root, contents)?
+    };
+
+    for parsed_import in parsed_imports {
+        let source_module = parsed_import.name.clone();
+        let import_name = parsed_import
+            .alias
+            .clone()
+            .unwrap_or_else(|| import_leaf_name(source_module.as_str()));
+        let target_package = source_module
+            .split('.')
+            .next()
+            .unwrap_or(source_module.as_str())
+            .to_string();
+        let resolved_id = modules
+            .get(source_module.as_str())
+            .map(|module| module.module_id.clone());
+        let kind_key = match parsed_import.kind {
+            xiuxian_wendao_core::repo_intelligence::ImportKind::Symbol => "symbol",
+            xiuxian_wendao_core::repo_intelligence::ImportKind::Module => "module",
+            xiuxian_wendao_core::repo_intelligence::ImportKind::Reexport => "reexport",
+        };
+        let import_key = (
+            record_path.to_string(),
+            source_module.clone(),
+            import_name.clone(),
+            kind_key,
+        );
+        if !seen.insert(import_key) {
+            continue;
+        }
+        imports.push(ImportRecord {
+            repo_id: repo_id.to_string(),
+            module_id: source_module_id.clone(),
+            path: record_path.to_string(),
+            import_name,
+            target_package,
+            source_module,
+            kind: parsed_import.kind,
+            line_start: parsed_import.line_start,
+            resolved_id,
+            attributes: parsed_import.attributes,
+        });
+    }
+
+    imports.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.source_module.cmp(&right.source_module))
             .then_with(|| left.import_name.cmp(&right.import_name))
             .then_with(|| left.target_package.cmp(&right.target_package))
     });
@@ -296,33 +396,36 @@ fn import_leaf_name(import_path: &str) -> String {
 
 pub(crate) fn collect_example_records(
     repo_id: &str,
-    repository_root: &Path,
+    snapshot: &RepositorySnapshot,
     package_orders: &BTreeMap<String, Vec<String>>,
 ) -> Vec<ExampleRecord> {
     let mut examples = Vec::new();
-    for path in repository_file_paths(repository_root) {
-        if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
+    for entry in snapshot.entries() {
+        if entry.modelica_contents.is_none() {
             continue;
         }
-        let Some(relative) = relative_path(repository_root, &path) else {
-            continue;
-        };
-        if repository_surface(relative.as_str()) != RepositorySurface::Example {
+        if entry.surface != RepositorySurface::Example {
             continue;
         }
-        if path.file_name().and_then(std::ffi::OsStr::to_str) == Some("package.mo") {
+        if entry
+            .absolute_path
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            == Some("package.mo")
+        {
             continue;
         }
-        let title = path
+        let title = entry
+            .absolute_path
             .file_stem()
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("example")
             .to_string();
         examples.push(ExampleRecord {
             repo_id: repo_id.to_string(),
-            example_id: format!("repo:{repo_id}:example:{relative}"),
+            example_id: format!("repo:{repo_id}:example:{}", entry.relative_path),
             title,
-            path: relative,
+            path: entry.relative_path.clone(),
             summary: None,
         });
     }
@@ -357,6 +460,45 @@ fn repository_surface(relative_path: &str) -> RepositorySurface {
         return RepositorySurface::Example;
     }
     RepositorySurface::Api
+}
+
+pub(crate) fn is_api_surface_path(relative_path: &str) -> bool {
+    repository_surface(relative_path) == RepositorySurface::Api
+}
+
+pub(crate) fn modelica_doc_surface_semantic_markers(
+    relative_path: &str,
+    contents: &str,
+) -> Vec<String> {
+    let mut markers = Vec::new();
+    if contains_documentation_annotation(contents) {
+        markers.push("annotation.documentation".to_string());
+    }
+
+    if repository_surface(relative_path) == RepositorySurface::Documentation
+        && is_supported_users_guide_doc_path(Path::new(relative_path))
+    {
+        let file_stem = Path::new(relative_path)
+            .file_stem()
+            .and_then(std::ffi::OsStr::to_str)
+            .unwrap_or_default();
+        if file_stem.eq_ignore_ascii_case("Conventions") {
+            markers.extend(
+                documented_nested_users_guide_topics(contents)
+                    .into_iter()
+                    .map(|topic| format!("users_guide.section.{}", topic.title)),
+            );
+        } else if file_stem.eq_ignore_ascii_case("ReleaseNotes") {
+            markers.extend(
+                documented_release_notes_topics(contents)
+                    .into_iter()
+                    .map(|topic| format!("users_guide.section.{}", topic.title)),
+            );
+        }
+    }
+
+    markers.sort();
+    markers
 }
 
 fn doc_format_hint(relative_path: &str, is_annotation: bool) -> Option<String> {
@@ -450,45 +592,32 @@ fn doc_title(path: &Path) -> String {
 
 pub(crate) fn collect_doc_records(
     repo_id: &str,
-    repository_root: &Path,
+    snapshot: &RepositorySnapshot,
     root_package_name: &str,
     module_lookup: &BTreeMap<String, ModuleRecord>,
     symbols: &[SymbolRecord],
     package_orders: &BTreeMap<String, Vec<String>>,
-) -> Result<Vec<CollectedDoc>, RepoIntelligenceError> {
+) -> Vec<CollectedDoc> {
     let root_module_id = module_lookup
         .get(root_package_name)
         .map(|module| module.module_id.clone());
     let mut docs = Vec::new();
-    for path in repository_file_paths(repository_root) {
-        if !path.is_file() {
-            continue;
-        }
-        let Some(relative) = relative_path(repository_root, &path) else {
-            continue;
-        };
+    for entry in snapshot.entries() {
+        let path = entry.absolute_path.as_path();
+        let relative = entry.relative_path.as_str();
         let is_readme = path
             .file_name()
             .and_then(std::ffi::OsStr::to_str)
             .is_some_and(|name| name.to_ascii_lowercase().starts_with("readme"));
-        let surface = repository_surface(relative.as_str());
+        let surface = entry.surface;
         let is_users_guide_doc =
-            surface == RepositorySurface::Documentation && is_supported_users_guide_doc_path(&path);
-        let modelica_contents = if path.extension().and_then(std::ffi::OsStr::to_str) == Some("mo")
-        {
-            Some(fs::read_to_string(&path).map_err(|error| {
-                RepoIntelligenceError::AnalysisFailed {
-                    message: format!("failed to read Modelica file `{}`: {error}", path.display()),
-                }
-            })?)
-        } else {
-            None
-        };
+            surface == RepositorySurface::Documentation && is_supported_users_guide_doc_path(path);
+        let modelica_contents = entry.modelica_contents.as_deref();
         if is_readme || is_users_guide_doc {
-            let title = doc_title(&path);
-            let format = doc_format_hint(relative.as_str(), false);
+            let title = doc_title(path);
+            let format = doc_format_hint(relative, false);
             let target_ids = doc_targets_for_file_doc(
-                relative.as_str(),
+                relative,
                 root_package_name,
                 module_lookup,
                 root_module_id.as_deref(),
@@ -498,7 +627,7 @@ pub(crate) fn collect_doc_records(
                     repo_id: repo_id.to_string(),
                     doc_id: format!("repo:{repo_id}:doc:{relative}"),
                     title,
-                    path: relative.clone(),
+                    path: relative.to_string(),
                     format,
                     doc_target: None,
                 },
@@ -506,20 +635,20 @@ pub(crate) fn collect_doc_records(
             });
             docs.extend(collect_nested_users_guide_section_docs(
                 repo_id,
-                relative.as_str(),
-                modelica_contents.as_deref(),
+                relative,
+                modelica_contents,
                 &target_ids,
             ));
         }
 
-        let Some(contents) = modelica_contents.as_deref() else {
+        let Some(contents) = modelica_contents else {
             continue;
         };
         if !contains_documentation_annotation(contents) {
             continue;
         }
         let target_ids = doc_targets_for_annotation_doc(
-            relative.as_str(),
+            relative,
             root_package_name,
             module_lookup,
             symbols,
@@ -532,9 +661,9 @@ pub(crate) fn collect_doc_records(
             record: DocRecord {
                 repo_id: repo_id.to_string(),
                 doc_id: format!("repo:{repo_id}:doc:{relative}#annotation.documentation"),
-                title: annotation_doc_title(relative.as_str(), symbols),
+                title: annotation_doc_title(relative, symbols),
                 path: format!("{relative}#annotation.documentation"),
-                format: doc_format_hint(relative.as_str(), true),
+                format: doc_format_hint(relative, true),
                 doc_target: None,
             },
             target_ids,
@@ -545,13 +674,46 @@ pub(crate) fn collect_doc_records(
             .cmp(&doc_sort_key(right.record.path.as_str(), package_orders))
             .then_with(|| left.record.path.cmp(&right.record.path))
     });
-    Ok(docs)
+    docs
 }
 
 pub(crate) fn relative_path(repository_root: &Path, path: &Path) -> Option<String> {
     path.strip_prefix(repository_root)
         .ok()
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+}
+
+pub(crate) fn package_overlay_expected_name(
+    root_package_name: &str,
+    relative_package_path: &str,
+) -> Option<String> {
+    if relative_package_path == "package.mo" {
+        return Some(root_package_name.to_string());
+    }
+    Path::new(relative_package_path)
+        .parent()?
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(str::to_string)
+}
+
+pub(crate) fn safe_package_overlay_metadata_for_relative_path(
+    relative_package_path: &str,
+    contents: &str,
+    root_package_name: &str,
+) -> Option<super::parsing::PackageOverlayMetadata> {
+    if !relative_package_path.ends_with("package.mo") {
+        return None;
+    }
+    let expected_package_name =
+        package_overlay_expected_name(root_package_name, relative_package_path)?;
+    parse_safe_package_overlay_metadata(contents, expected_package_name.as_str()).or_else(|| {
+        if relative_package_path == "package.mo" {
+            parse_safe_root_package_overlay_metadata(contents)
+        } else {
+            None
+        }
+    })
 }
 
 pub(crate) fn qualified_module_name(

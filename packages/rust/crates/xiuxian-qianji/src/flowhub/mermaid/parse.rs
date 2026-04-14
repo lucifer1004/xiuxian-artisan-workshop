@@ -1,13 +1,8 @@
-use std::collections::BTreeMap;
 use std::fmt;
 
 use merman_core::{Engine, ParseOptions, RenderSemanticModel};
-use regex::Regex;
 
 use super::model::{MermaidEdge, MermaidFlowchart, MermaidNode, MermaidNodeKind};
-
-const PRESENTATION_ONLY_DIRECTIVE_PREFIXES: &[&str] =
-    &["classDef ", "class ", "style ", "click ", "linkStyle "];
 
 /// One Mermaid parse error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,16 +26,16 @@ impl fmt::Display for MermaidParseError {
 
 impl std::error::Error for MermaidParseError {}
 
+/// Parse one Mermaid flowchart using a graph identity that has already been
+/// resolved by the caller. Syntax acceptance is delegated to `merman-core`, and
+/// Qianji only projects the first-order graph semantics it needs.
 pub(crate) fn parse_mermaid_flowchart(
     source: &str,
-    merimind_graph_name: &str,
+    resolved_graph_name: &str,
     registered_module_names: &[String],
 ) -> Result<MermaidFlowchart, MermaidParseError> {
-    let semantic_source = sanitize_mermaid_first_order_semantics_source(source);
-    validate_explicit_node_labels(&semantic_source)?;
-
     let parsed = Engine::new()
-        .parse_diagram_for_render_model_sync(&semantic_source, ParseOptions::strict())
+        .parse_diagram_for_render_model_sync(source, ParseOptions::strict())
         .map_err(|error| MermaidParseError::new(error.to_string()))?
         .ok_or_else(|| MermaidParseError::new("mermaid flowchart is empty"))?;
 
@@ -86,57 +81,11 @@ pub(crate) fn parse_mermaid_flowchart(
         .collect();
 
     Ok(MermaidFlowchart {
-        merimind_graph_name: merimind_graph_name.to_string(),
-        direction: flowchart.direction.unwrap_or_else(|| "LR".to_string()),
+        merimind_graph_name: resolved_graph_name.to_string(),
+        direction: flowchart.direction.unwrap_or_else(|| "TB".to_string()),
         nodes,
         edges,
     })
-}
-
-fn sanitize_mermaid_first_order_semantics_source(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim_start();
-            !PRESENTATION_ONLY_DIRECTIVE_PREFIXES
-                .iter()
-                .any(|prefix| trimmed.starts_with(prefix))
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn validate_explicit_node_labels(source: &str) -> Result<(), MermaidParseError> {
-    let explicit_node_pattern = Regex::new(
-        r#"(?m)\b(?P<id>[A-Za-z][A-Za-z0-9_]*)\[(?:"(?P<quoted>[^"\n]+)"|(?P<plain>[^\]\n]+))\]"#,
-    )
-    .map_err(|error| MermaidParseError::new(error.to_string()))?;
-    let mut labels_by_id = BTreeMap::<String, String>::new();
-
-    for captures in explicit_node_pattern.captures_iter(source) {
-        let node_id = captures["id"].trim();
-        let label = captures
-            .name("quoted")
-            .or_else(|| captures.name("plain"))
-            .map_or("", |value| value.as_str().trim());
-        if label.is_empty() {
-            continue;
-        }
-
-        match labels_by_id.get(node_id) {
-            Some(previous_label) if previous_label != label => {
-                return Err(MermaidParseError::new(format!(
-                    "conflicting labels for Mermaid node `{node_id}`: `{previous_label}` vs `{label}`"
-                )));
-            }
-            Some(_) => {}
-            None => {
-                labels_by_id.insert(node_id.to_string(), label.to_string());
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

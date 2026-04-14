@@ -52,6 +52,13 @@ fn projected_page_index_tree_batch_preserves_tree_payload() {
         page_ids.value(0),
         "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md"
     );
+    let Some(kind_column) = batch.column_by_name("kind") else {
+        panic!("kind column");
+    };
+    let Some(kinds) = kind_column.as_any().downcast_ref::<LanceStringArray>() else {
+        panic!("kind column type");
+    };
+    assert_eq!(kinds.value(0), "reference");
 
     let Some(roots_json_column) = batch.column_by_name("rootsJson") else {
         panic!("rootsJson column");
@@ -79,6 +86,7 @@ fn projected_page_index_tree_metadata_preserves_summary_fields() {
     let payload: serde_json::Value = serde_json::from_slice(&metadata)
         .unwrap_or_else(|error| panic!("metadata should decode: {error}"));
     assert_eq!(payload["repoId"], "gateway-sync");
+    assert_eq!(payload["kind"], "reference");
     assert_eq!(payload["path"], "docs/solve.md");
     assert_eq!(payload["rootCount"], 1);
 }

@@ -13,7 +13,7 @@ fn rejects_flowchart_without_module_nodes() {
     let error = validate_mermaid_flowchart(&parsed, &[])
         .err()
         .unwrap_or_else(|| panic!("missing module nodes should fail"));
-    assert!(error.contains("at least two Flowhub module nodes"));
+    assert!(error.contains("at least one Flowhub module node"));
 }
 
 #[test]
@@ -61,30 +61,6 @@ fn rejects_disconnected_module_backbone() {
 }
 
 #[test]
-fn rejects_flowchart_missing_registered_module_nodes() {
-    let registered_module_names = vec![
-        "coding".to_string(),
-        "rust".to_string(),
-        "blueprint".to_string(),
-        "plan".to_string(),
-    ];
-    let parsed = parse_mermaid_flowchart(
-        "flowchart LR\n  A[\"coding\"] --> B[\"rust\"]\n  B --> C[\"diagnostics\"]\n",
-        "codex-plan",
-        &registered_module_names,
-    )
-    .unwrap_or_else(|error| panic!("flowchart should parse: {error}"));
-
-    let error = validate_mermaid_flowchart(&parsed, &registered_module_names)
-        .err()
-        .unwrap_or_else(|| panic!("missing registered module nodes should fail"));
-    assert!(error.contains("codex-plan"));
-    assert!(error.contains("missing registered Flowhub module nodes"));
-    assert!(error.contains("blueprint"));
-    assert!(error.contains("plan"));
-}
-
-#[test]
 fn rejects_flowchart_with_undeclared_graph_nodes() {
     let registered_module_names = vec![
         "coding".to_string(),
@@ -125,4 +101,18 @@ fn accepts_flowchart_with_presentation_directives() {
     validate_mermaid_flowchart(&parsed, &registered_module_names).unwrap_or_else(|error| {
         panic!("presentation directives should not break validation: {error}")
     });
+}
+
+#[test]
+fn accepts_flowchart_with_exact_http_request_labels() {
+    let registered_module_names = vec!["wendao".to_string()];
+    let parsed = parse_mermaid_flowchart(
+        "flowchart LR\n  A[\"wendao\"] --> B[\"GET /api/docs/search?repo=<repo>&query=<query>&kind=<kind>&limit=<n>\"]\n  B --> C[\"GET /api/docs/page?repo=<repo>&page_id=<page_id>\"]\n  C --> D[\"done gate\"]\n",
+        "wendao-search",
+        &registered_module_names,
+    )
+    .unwrap_or_else(|error| panic!("http request labels should parse: {error}"));
+
+    validate_mermaid_flowchart(&parsed, &registered_module_names)
+        .unwrap_or_else(|error| panic!("http request labels should validate: {error}"));
 }

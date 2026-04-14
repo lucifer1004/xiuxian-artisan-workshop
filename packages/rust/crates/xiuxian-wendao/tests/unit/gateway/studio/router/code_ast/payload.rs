@@ -108,6 +108,7 @@ fn sample_analysis() -> RepositoryAnalysisOutput {
         imports: vec![ImportRecord {
             repo_id: "sciml".to_string(),
             module_id: "module:BaseModelica".to_string(),
+            path: "src/BaseModelica.jl".to_string(),
             import_name: "LinearAlgebra".to_string(),
             target_package: "LinearAlgebra".to_string(),
             source_module: "LinearAlgebra".to_string(),

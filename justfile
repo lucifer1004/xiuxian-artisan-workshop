@@ -1719,8 +1719,8 @@ update:
     @echo "Updated"
 
 [group('dev')]
-sync-wendao-julia-locks:
-    @bash scripts/sync_wendao_julia_locks.sh
+julia-search mode="dev":
+    @python scripts/sync_wendao_julia_locks.py --mode "{{mode}}"
 
 [group('dev')]
 info:

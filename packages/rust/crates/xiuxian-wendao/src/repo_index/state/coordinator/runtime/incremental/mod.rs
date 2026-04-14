@@ -4,8 +4,19 @@ use std::path::{Path, PathBuf};
 use xiuxian_git_repo::{
     MaterializedRepo, RepoDriftState, RepoLifecycleState, RepoSourceKind as GitRepoSourceKind,
     RevisionChangeKind, RevisionPathChange, diff_checkout_revisions, discover_checkout_metadata,
+    read_checkout_file_bytes_at_revision,
 };
-use xiuxian_wendao_julia::julia_parser_summary_allows_safe_incremental_file_for_repository;
+use xiuxian_wendao_julia::{
+    julia_parser_summary_allows_safe_incremental_file_for_repository,
+    julia_parser_summary_file_semantic_fingerprint_for_repository,
+    modelica_package_incremental_semantic_fingerprint_for_repository,
+    modelica_parser_summary_allows_safe_incremental_file_for_repository,
+    modelica_parser_summary_allows_safe_package_incremental_file_for_repository,
+    modelica_parser_summary_allows_safe_root_package_incremental_file_for_repository,
+    modelica_parser_summary_file_semantic_fingerprint_for_repository,
+    modelica_parser_summary_root_package_name_matches_repository_context,
+    modelica_root_package_incremental_semantic_fingerprint_for_repository,
+};
 
 use crate::analyzers::cache::{
     FingerprintMode, ValkeyAnalysisCache, analysis_fingerprint_mode,
@@ -75,6 +86,26 @@ impl RepoIndexCoordinator {
             );
         }
 
+        if let Some(prepared) = Self::prepare_semantically_equivalent_parser_summary_incremental(
+            repository,
+            sync_result,
+            previous_revision,
+            plugin_ids.as_slice(),
+            analysis_changes.as_slice(),
+        )? {
+            return Ok(Some(prepared));
+        }
+
+        if let Some(prepared) = self.prepare_safe_modelica_incremental(
+            repository,
+            sync_result,
+            previous_revision,
+            plugin_ids.as_slice(),
+            analysis_changes.as_slice(),
+        )? {
+            return Ok(Some(prepared));
+        }
+
         self.prepare_safe_julia_incremental(
             repository,
             sync_result,
@@ -139,11 +170,21 @@ impl RepoIndexCoordinator {
         let Some(changed_files) = collect_safe_incremental_julia_files(
             repository,
             Path::new(sync_result.checkout_path.as_str()),
+            previous_revision,
             analysis_changes,
         )?
         else {
             return Ok(None);
         };
+        if changed_files.is_empty() {
+            return Self::prepare_non_analysis_incremental(
+                repository,
+                sync_result,
+                previous_revision,
+                plugin_ids,
+                analysis_changes,
+            );
+        }
 
         let Some(mut analysis) = Self::load_previous_analysis_for_revision(
             repository,
@@ -184,6 +225,118 @@ impl RepoIndexCoordinator {
         Ok(Some(PreparedIncrementalAnalysis::Analysis(Box::new(
             analysis,
         ))))
+    }
+
+    fn prepare_safe_modelica_incremental(
+        &self,
+        repository: &RegisteredRepository,
+        sync_result: &RepoSyncResult,
+        previous_revision: &str,
+        plugin_ids: &[String],
+        analysis_changes: &[RevisionPathChange],
+    ) -> Result<Option<PreparedIncrementalAnalysis>, RepoIntelligenceError> {
+        let plugins = self.plugin_registry.resolve_for_repository(repository)?;
+        if plugins.len() != 1 || plugins[0].id() != "modelica" {
+            return Ok(None);
+        }
+
+        let deleted_paths = analysis_changes
+            .iter()
+            .filter(|change| matches!(change.kind, RevisionChangeKind::Deleted))
+            .map(|change| change.path.clone())
+            .collect::<BTreeSet<_>>();
+        if !deleted_paths.is_empty() {
+            return Ok(None);
+        }
+
+        let Some(changed_files) = collect_safe_incremental_modelica_files(
+            repository,
+            Path::new(sync_result.checkout_path.as_str()),
+            previous_revision,
+            analysis_changes,
+        )?
+        else {
+            return Ok(None);
+        };
+        if changed_files.is_empty() {
+            return Self::prepare_non_analysis_incremental(
+                repository,
+                sync_result,
+                previous_revision,
+                plugin_ids,
+                analysis_changes,
+            );
+        }
+
+        let Some(mut analysis) = Self::load_previous_analysis_for_revision(
+            repository,
+            sync_result,
+            plugin_ids,
+            previous_revision,
+        )?
+        else {
+            return Ok(None);
+        };
+
+        let analysis_context = AnalysisContext {
+            repository: repository.clone(),
+            repository_root: PathBuf::from(sync_result.checkout_path.as_str()),
+        };
+        let overlays =
+            analyze_changed_files(&analysis_context, &plugins[0], changed_files.as_slice())?;
+        let checkout_metadata =
+            discover_checkout_metadata(Path::new(sync_result.checkout_path.as_str()));
+        let changed_paths = analysis_changes
+            .iter()
+            .map(|change| change.path.clone())
+            .collect::<BTreeSet<_>>();
+        apply_incremental_plugin_outputs(
+            &IncrementalApplyContext {
+                repository,
+                repository_root: Path::new(sync_result.checkout_path.as_str()),
+                checkout_metadata: checkout_metadata.as_ref(),
+                plugins: plugins.as_slice(),
+            },
+            &mut analysis,
+            overlays,
+            &changed_paths,
+            &deleted_paths,
+        )?;
+        Self::store_current_analysis(repository, sync_result, &analysis)?;
+
+        Ok(Some(PreparedIncrementalAnalysis::Analysis(Box::new(
+            analysis,
+        ))))
+    }
+
+    fn prepare_semantically_equivalent_parser_summary_incremental(
+        repository: &RegisteredRepository,
+        sync_result: &RepoSyncResult,
+        previous_revision: &str,
+        plugin_ids: &[String],
+        analysis_changes: &[RevisionPathChange],
+    ) -> Result<Option<PreparedIncrementalAnalysis>, RepoIntelligenceError> {
+        if !supports_parser_summary_semantic_reuse(plugin_ids) {
+            return Ok(None);
+        }
+
+        if !analysis_changes_are_semantically_equivalent_parser_summary_files(
+            repository,
+            Path::new(sync_result.checkout_path.as_str()),
+            previous_revision,
+            analysis_changes,
+            plugin_ids,
+        )? {
+            return Ok(None);
+        }
+
+        Self::prepare_non_analysis_incremental(
+            repository,
+            sync_result,
+            previous_revision,
+            plugin_ids,
+            analysis_changes,
+        )
     }
 
     fn load_previous_analysis_for_revision(
@@ -293,6 +446,7 @@ fn touches_supported_code_paths(changes: &[RevisionPathChange]) -> bool {
 fn collect_safe_incremental_julia_files(
     repository: &RegisteredRepository,
     checkout_root: &Path,
+    previous_revision: &str,
     changes: &[RevisionPathChange],
 ) -> Result<Option<Vec<RepoSourceFile>>, RepoIntelligenceError> {
     let mut files = Vec::new();
@@ -331,6 +485,68 @@ fn collect_safe_incremental_julia_files(
         )? {
             return Ok(None);
         }
+        if matches!(change.kind, RevisionChangeKind::Modified) {
+            let Some(previous_bytes) = read_checkout_file_bytes_at_revision(
+                checkout_root,
+                previous_revision,
+                change
+                    .previous_path
+                    .as_deref()
+                    .unwrap_or(change.path.as_str()),
+            )
+            .map_err(|error| RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` failed to read previous revision source `{}` at `{previous_revision}`: {error}",
+                    repository.id,
+                    change
+                        .previous_path
+                        .as_deref()
+                        .unwrap_or(change.path.as_str())
+                ),
+            })? else {
+                return Ok(None);
+            };
+            let previous_contents = String::from_utf8(previous_bytes).map_err(|error| {
+                RepoIntelligenceError::AnalysisFailed {
+                    message: format!(
+                        "repo `{}` previous revision source `{}` is not utf8: {error}",
+                        repository.id,
+                        change
+                            .previous_path
+                            .as_deref()
+                            .unwrap_or(change.path.as_str())
+                    ),
+                }
+            })?;
+            if !julia_parser_summary_allows_safe_incremental_file_for_repository(
+                repository,
+                change
+                    .previous_path
+                    .as_deref()
+                    .unwrap_or(change.path.as_str()),
+                &previous_contents,
+            )? {
+                return Ok(None);
+            }
+            let previous_fingerprint =
+                julia_parser_summary_file_semantic_fingerprint_for_repository(
+                    repository,
+                    change
+                        .previous_path
+                        .as_deref()
+                        .unwrap_or(change.path.as_str()),
+                    &previous_contents,
+                )?;
+            let current_fingerprint =
+                julia_parser_summary_file_semantic_fingerprint_for_repository(
+                    repository,
+                    change.path.as_str(),
+                    &contents,
+                )?;
+            if previous_fingerprint == current_fingerprint {
+                continue;
+            }
+        }
         files.push(RepoSourceFile {
             path: change.path.clone(),
             contents,
@@ -338,4 +554,327 @@ fn collect_safe_incremental_julia_files(
     }
 
     Ok(Some(files))
+}
+
+fn collect_safe_incremental_modelica_files(
+    repository: &RegisteredRepository,
+    checkout_root: &Path,
+    previous_revision: &str,
+    changes: &[RevisionPathChange],
+) -> Result<Option<Vec<RepoSourceFile>>, RepoIntelligenceError> {
+    let mut files = Vec::new();
+    let allow_package_overlay = changes.len() == 1;
+
+    for change in changes {
+        if !matches!(change.kind, RevisionChangeKind::Modified) {
+            return Ok(None);
+        }
+        if !change.path.ends_with(".mo") {
+            return Ok(None);
+        }
+        if !matches!(
+            analysis_fingerprint_mode(change.path.as_str(), &sorted_plugin_ids(repository)),
+            Some(FingerprintMode::Contents)
+        ) {
+            return Ok(None);
+        }
+
+        let file_path = checkout_root.join(change.path.as_str());
+        let contents = std::fs::read_to_string(&file_path).map_err(|error| {
+            RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` failed to read changed source `{}`: {error}",
+                    repository.id,
+                    file_path.display()
+                ),
+            }
+        })?;
+        let current_is_safe_leaf =
+            modelica_parser_summary_allows_safe_incremental_file_for_repository(
+                repository,
+                checkout_root,
+                change.path.as_str(),
+                &contents,
+            )?;
+        let current_is_safe_root_package = allow_package_overlay
+            && modelica_parser_summary_allows_safe_root_package_incremental_file_for_repository(
+                repository,
+                checkout_root,
+                change.path.as_str(),
+                &contents,
+            )?;
+        let current_is_safe_package_file = allow_package_overlay
+            && modelica_parser_summary_allows_safe_package_incremental_file_for_repository(
+                repository,
+                checkout_root,
+                change.path.as_str(),
+                &contents,
+            )?;
+        let current_is_safe_nested_package =
+            current_is_safe_package_file && !current_is_safe_root_package;
+        if !current_is_safe_leaf && !current_is_safe_root_package && !current_is_safe_nested_package
+        {
+            return Ok(None);
+        }
+
+        let previous_path = change
+            .previous_path
+            .as_deref()
+            .unwrap_or(change.path.as_str());
+        let Some(previous_bytes) =
+            read_checkout_file_bytes_at_revision(checkout_root, previous_revision, previous_path)
+                .map_err(|error| RepoIntelligenceError::AnalysisFailed {
+                    message: format!(
+                        "repo `{}` failed to read previous revision source `{previous_path}` at `{previous_revision}`: {error}",
+                        repository.id,
+                    ),
+                })?
+        else {
+            return Ok(None);
+        };
+        let previous_contents = String::from_utf8(previous_bytes).map_err(|error| {
+            RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` previous revision source `{previous_path}` is not utf8: {error}",
+                    repository.id,
+                ),
+            }
+        })?;
+        let previous_is_safe_leaf =
+            modelica_parser_summary_allows_safe_incremental_file_for_repository(
+                repository,
+                checkout_root,
+                previous_path,
+                &previous_contents,
+            )?;
+        let previous_is_safe_root_package = allow_package_overlay
+            && modelica_parser_summary_allows_safe_root_package_incremental_file_for_repository(
+                repository,
+                checkout_root,
+                previous_path,
+                &previous_contents,
+            )?;
+        let previous_is_safe_package_file = allow_package_overlay
+            && modelica_parser_summary_allows_safe_package_incremental_file_for_repository(
+                repository,
+                checkout_root,
+                previous_path,
+                &previous_contents,
+            )?;
+        let previous_is_safe_nested_package =
+            previous_is_safe_package_file && !previous_is_safe_root_package;
+        if !previous_is_safe_leaf
+            && !previous_is_safe_root_package
+            && !previous_is_safe_nested_package
+        {
+            return Ok(None);
+        }
+        if current_is_safe_root_package || previous_is_safe_root_package {
+            if !(current_is_safe_root_package && previous_is_safe_root_package) {
+                return Ok(None);
+            }
+            if !modelica_parser_summary_root_package_name_matches_repository_context(
+                repository,
+                checkout_root,
+                change.path.as_str(),
+                &contents,
+            )? || !modelica_parser_summary_root_package_name_matches_repository_context(
+                repository,
+                checkout_root,
+                previous_path,
+                &previous_contents,
+            )? {
+                return Ok(None);
+            }
+        } else if current_is_safe_nested_package || previous_is_safe_nested_package {
+            if !(current_is_safe_nested_package && previous_is_safe_nested_package) {
+                return Ok(None);
+            }
+        } else if !previous_is_safe_leaf {
+            return Ok(None);
+        }
+        let previous_fingerprint = if current_is_safe_root_package {
+            modelica_root_package_incremental_semantic_fingerprint_for_repository(
+                repository,
+                checkout_root,
+                previous_path,
+                &previous_contents,
+            )?
+            .ok_or_else(|| RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` safe root Modelica overlay fingerprint missing for `{previous_path}`",
+                    repository.id
+                ),
+            })?
+        } else if current_is_safe_nested_package {
+            modelica_package_incremental_semantic_fingerprint_for_repository(
+                repository,
+                checkout_root,
+                previous_path,
+                &previous_contents,
+            )?
+            .ok_or_else(|| RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` safe Modelica package overlay fingerprint missing for `{previous_path}`",
+                    repository.id
+                ),
+            })?
+        } else {
+            modelica_parser_summary_file_semantic_fingerprint_for_repository(
+                repository,
+                previous_path,
+                &previous_contents,
+            )?
+        };
+        let current_fingerprint = if current_is_safe_root_package {
+            modelica_root_package_incremental_semantic_fingerprint_for_repository(
+                repository,
+                checkout_root,
+                change.path.as_str(),
+                &contents,
+            )?
+            .ok_or_else(|| RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` safe root Modelica overlay fingerprint missing for `{}`",
+                    repository.id, change.path
+                ),
+            })?
+        } else if current_is_safe_nested_package {
+            modelica_package_incremental_semantic_fingerprint_for_repository(
+                repository,
+                checkout_root,
+                change.path.as_str(),
+                &contents,
+            )?
+            .ok_or_else(|| RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` safe Modelica package overlay fingerprint missing for `{}`",
+                    repository.id, change.path
+                ),
+            })?
+        } else {
+            modelica_parser_summary_file_semantic_fingerprint_for_repository(
+                repository,
+                change.path.as_str(),
+                &contents,
+            )?
+        };
+        if previous_fingerprint == current_fingerprint {
+            continue;
+        }
+
+        files.push(RepoSourceFile {
+            path: change.path.clone(),
+            contents,
+        });
+    }
+
+    Ok(Some(files))
+}
+
+fn analysis_changes_are_semantically_equivalent_parser_summary_files(
+    repository: &RegisteredRepository,
+    checkout_root: &Path,
+    previous_revision: &str,
+    changes: &[RevisionPathChange],
+    plugin_ids: &[String],
+) -> Result<bool, RepoIntelligenceError> {
+    for change in changes {
+        if !matches!(change.kind, RevisionChangeKind::Modified) {
+            return Ok(false);
+        }
+        if !matches!(
+            analysis_fingerprint_mode(change.path.as_str(), plugin_ids),
+            Some(FingerprintMode::Contents)
+        ) {
+            return Ok(false);
+        }
+
+        let file_path = checkout_root.join(change.path.as_str());
+        let current_contents = std::fs::read_to_string(&file_path).map_err(|error| {
+            RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` failed to read changed source `{}`: {error}",
+                    repository.id,
+                    file_path.display()
+                ),
+            }
+        })?;
+        let previous_path = change
+            .previous_path
+            .as_deref()
+            .unwrap_or(change.path.as_str());
+        let Some(previous_bytes) = read_checkout_file_bytes_at_revision(
+            checkout_root,
+            previous_revision,
+            previous_path,
+        )
+        .map_err(|error| RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "repo `{}` failed to read previous source `{}` at `{previous_revision}`: {error}",
+                repository.id, previous_path,
+            ),
+        })?
+        else {
+            return Ok(false);
+        };
+        let previous_contents = String::from_utf8(previous_bytes).map_err(|error| {
+            RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{}` previous source `{}` is not utf8: {error}",
+                    repository.id, previous_path,
+                ),
+            }
+        })?;
+
+        let previous_fingerprint = semantic_parser_summary_fingerprint_for_path(
+            repository,
+            plugin_ids,
+            previous_path,
+            &previous_contents,
+        )?;
+        let current_fingerprint = semantic_parser_summary_fingerprint_for_path(
+            repository,
+            plugin_ids,
+            change.path.as_str(),
+            &current_contents,
+        )?;
+        if previous_fingerprint != current_fingerprint {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+fn supports_parser_summary_semantic_reuse(plugin_ids: &[String]) -> bool {
+    !plugin_ids.is_empty()
+        && plugin_ids
+            .iter()
+            .all(|plugin_id| matches!(plugin_id.as_str(), "julia" | "modelica"))
+}
+
+fn semantic_parser_summary_fingerprint_for_path(
+    repository: &RegisteredRepository,
+    plugin_ids: &[String],
+    path: &str,
+    contents: &str,
+) -> Result<String, RepoIntelligenceError> {
+    if path.ends_with(".jl") && plugin_ids.iter().any(|plugin_id| plugin_id == "julia") {
+        return julia_parser_summary_file_semantic_fingerprint_for_repository(
+            repository, path, contents,
+        );
+    }
+    if path.ends_with(".mo") && plugin_ids.iter().any(|plugin_id| plugin_id == "modelica") {
+        return modelica_parser_summary_file_semantic_fingerprint_for_repository(
+            repository, path, contents,
+        );
+    }
+
+    Err(RepoIntelligenceError::AnalysisFailed {
+        message: format!(
+            "repo `{}` cannot build parser-summary semantic fingerprint for unsupported path `{path}`",
+            repository.id,
+        ),
+    })
 }

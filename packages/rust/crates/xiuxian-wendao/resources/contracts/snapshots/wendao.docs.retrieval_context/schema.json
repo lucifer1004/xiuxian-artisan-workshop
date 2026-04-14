@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DocsRetrievalContextToolArgs",
+  "description": "Stable tool arguments for docs retrieval-context native-tool execution.",
+  "type": "object",
+  "properties": {
+    "node_id": {
+      "description": "Optional stable page-index node identifier.",
+      "type": ["string", "null"],
+      "default": null
+    },
+    "page_id": {
+      "description": "Stable docs-facing page identifier.",
+      "type": "string"
+    },
+    "related_limit": {
+      "description": "Optional related-page limit override.",
+      "type": ["integer", "null"],
+      "format": "uint",
+      "default": null,
+      "minimum": 0
+    }
+  },
+  "required": ["page_id"]
+}

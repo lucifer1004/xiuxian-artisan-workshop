@@ -6,33 +6,89 @@ use crate::gateway::studio::types::UiProjectConfig;
 #[cfg(test)]
 use crate::search::local_symbol::build::LocalSymbolBuildError;
 use crate::search::local_symbol::build::{
-    fingerprint_projects, plan_local_symbol_build, write_local_symbol_epoch,
+    plan_local_symbol_build_with_scanned_files, write_local_symbol_epoch,
 };
-use crate::search::{BeginBuildDecision, SearchCorpusKind, SearchPlaneService};
+use crate::search::{
+    BeginBuildDecision, ProjectScannedFile, SearchCorpusKind, SearchPlaneService,
+    fingerprint_symbol_projects_from_scanned_files,
+};
 
+#[cfg(test)]
 pub(crate) fn ensure_local_symbol_index_started(
     service: &SearchPlaneService,
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) {
+) -> bool {
     if projects.is_empty() {
-        return;
+        return false;
     }
 
-    let fingerprint = fingerprint_projects(project_root, config_root, projects);
+    let (fingerprint, scanned_files) = service
+        .fingerprint_symbol_projects_with_repeat_work_details(
+            "local_symbol.fingerprint",
+            project_root,
+            config_root,
+            projects,
+        );
+    ensure_local_symbol_index_started_with_fingerprint_and_scanned_files(
+        service,
+        project_root,
+        config_root,
+        projects,
+        fingerprint,
+        scanned_files,
+    )
+}
+
+pub(crate) fn ensure_local_symbol_index_started_with_scanned_files(
+    service: &SearchPlaneService,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    scanned_files: &[ProjectScannedFile],
+) -> bool {
+    if projects.is_empty() {
+        return false;
+    }
+
+    let fingerprint = fingerprint_symbol_projects_from_scanned_files(
+        project_root,
+        config_root,
+        projects,
+        scanned_files,
+    );
+    ensure_local_symbol_index_started_with_fingerprint_and_scanned_files(
+        service,
+        project_root,
+        config_root,
+        projects,
+        fingerprint,
+        scanned_files.to_vec(),
+    )
+}
+
+fn ensure_local_symbol_index_started_with_fingerprint_and_scanned_files(
+    service: &SearchPlaneService,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    fingerprint: String,
+    scanned_files: Vec<ProjectScannedFile>,
+) -> bool {
     let decision = service.coordinator().begin_build(
         SearchCorpusKind::LocalSymbol,
         fingerprint,
         SearchCorpusKind::LocalSymbol.schema_version(),
     );
     let BeginBuildDecision::Started(lease) = decision else {
-        return;
+        return false;
     };
 
     let build_projects = projects.to_vec();
     let build_project_root = project_root.to_path_buf();
     let build_config_root = config_root.to_path_buf();
+    let build_scanned_files = scanned_files;
     let active_epoch = service
         .corpus_active_epoch(SearchCorpusKind::LocalSymbol)
         .filter(|epoch| {
@@ -45,11 +101,14 @@ pub(crate) fn ensure_local_symbol_index_started(
             let previous_fingerprints = service
                 .corpus_file_fingerprints(SearchCorpusKind::LocalSymbol)
                 .await;
+            let build_service = service.clone();
             let build: Result<_, tokio::task::JoinError> = tokio::task::spawn_blocking(move || {
-                plan_local_symbol_build(
+                plan_local_symbol_build_with_scanned_files(
+                    &build_service,
                     build_project_root.as_path(),
                     build_config_root.as_path(),
                     &build_projects,
+                    build_scanned_files.as_slice(),
                     active_epoch,
                     &previous_fingerprints,
                 )
@@ -69,11 +128,10 @@ pub(crate) fn ensure_local_symbol_index_started(
                     }
                     let write = write.unwrap_or_else(|_| unreachable!());
                     service.coordinator().update_progress(&lease, 0.8);
-                    if service.publish_ready_and_maintain(
-                        &lease,
-                        write.row_count,
-                        write.fragment_count,
-                    ) {
+                    if service
+                        .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                        .await
+                    {
                         service
                             .set_corpus_file_fingerprints(
                                 SearchCorpusKind::LocalSymbol,
@@ -109,6 +167,8 @@ pub(crate) fn ensure_local_symbol_index_started(
             "Tokio runtime unavailable for local symbol index build",
         );
     }
+
+    true
 }
 
 #[cfg(test)]
@@ -148,7 +208,9 @@ pub(crate) async fn publish_local_symbol_hits(
             service
                 .prewarm_epoch_table(lease.corpus, lease.epoch, &prewarm_columns)
                 .await?;
-            service.publish_ready_and_maintain(&lease, write.row_count, write.fragment_count);
+            service
+                .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                .await;
             Ok(())
         }
         Err(error) => {

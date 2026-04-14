@@ -22,7 +22,29 @@ pub(crate) async fn build_knowledge_search_response(
             "Knowledge search requires a non-empty query",
         ));
     }
-    studio.ensure_knowledge_section_index_ready().await?;
+    studio.ensure_knowledge_section_index_started()?;
+    let status = studio
+        .local_corpus_bootstrap_status(SearchCorpusKind::KnowledgeSection, "knowledge_search");
+    if !status.active_epoch_ready {
+        studio.record_local_corpus_partial_search_response(
+            SearchCorpusKind::KnowledgeSection,
+            "knowledge_search",
+        );
+        return Ok(SearchResponse {
+            query: query_text.to_string(),
+            hit_count: 0,
+            hits: Vec::new(),
+            graph_confidence_score: None,
+            selected_mode: None,
+            intent,
+            intent_confidence: None,
+            search_mode: None,
+            partial: true,
+            indexing_state: Some(status.indexing_state.to_string()),
+            pending_repos: Vec::new(),
+            skipped_repos: Vec::new(),
+        });
+    }
     let cache_key = studio.search_plane.search_query_cache_key(
         "knowledge",
         &[SearchCorpusKind::KnowledgeSection],
@@ -57,10 +79,14 @@ pub(crate) async fn build_knowledge_search_response(
         intent_confidence: Some(graph_confidence_score),
         search_mode: Some(selected_mode),
         partial: false,
-        indexing_state: None,
+        indexing_state: Some("ready".to_string()),
         pending_repos: Vec::new(),
         skipped_repos: Vec::new(),
     };
+    studio.record_local_corpus_ready_search_response(
+        SearchCorpusKind::KnowledgeSection,
+        "knowledge_search",
+    );
     if let Some(cache_key) = cache_key.as_ref() {
         studio
             .search_plane

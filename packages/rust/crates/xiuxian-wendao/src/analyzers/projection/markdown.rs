@@ -6,15 +6,13 @@ use crate::link_graph::{
     DEFAULT_PAGE_INDEX_THINNING_TOKEN_THRESHOLD, IndexedSection, PageIndexNode,
     build_page_index_tree, thin_page_index_tree,
 };
-use crate::parsers::markdown::parse_note;
+use xiuxian_wendao_parsers::parse_markdown_toc;
 
 use super::contracts::{
     ProjectedMarkdownDocument, ProjectedPageIndexDocument, ProjectedPageIndexNode,
     ProjectedPageIndexSection, ProjectedPageIndexTree, ProjectionPageKind,
 };
 use super::pages::build_projected_pages;
-
-const PROJECTION_ROOT: &str = "/virtual/repo-intelligence/projection";
 
 struct ParsedProjectedDocument {
     document: ProjectedMarkdownDocument,
@@ -112,40 +110,41 @@ fn projected_markdown_path(kind: ProjectionPageKind, title: &str, page_id: &str)
 fn parse_projected_documents(
     analysis: &RepositoryAnalysisOutput,
 ) -> Result<Vec<ParsedProjectedDocument>, RepoIntelligenceError> {
-    let root = Path::new(PROJECTION_ROOT);
     render_projected_markdown_documents(analysis)
         .into_iter()
         .map(|document| {
-            let full_path = root.join(document.path.as_str());
-            let parsed =
-                parse_note(&full_path, root, document.markdown.as_str()).ok_or_else(|| {
-                    RepoIntelligenceError::AnalysisFailed {
-                        message: format!(
-                            "failed to parse projected markdown document `{}` for `{}`",
-                            document.path, document.page_id
-                        ),
-                    }
-                })?;
-            let section_summaries = parsed
+            let toc = parse_markdown_toc(
+                document.markdown.as_str(),
+                projected_fallback_title(document.path.as_str()),
+            );
+            let doc_id = projected_doc_id(document.path.as_str()).ok_or_else(|| {
+                RepoIntelligenceError::AnalysisFailed {
+                    message: format!(
+                        "failed to derive projected markdown doc id `{}` for `{}`",
+                        document.path, document.page_id
+                    ),
+                }
+            })?;
+            let section_summaries = toc
                 .sections
                 .iter()
                 .map(|section| ProjectedPageIndexSection {
-                    heading_path: section.heading_path.clone(),
-                    title: section.heading_title.clone(),
-                    level: section.heading_level,
-                    line_range: (section.line_start, section.line_end),
-                    attributes: sorted_attributes(section.attributes.clone()),
+                    heading_path: section.scope.heading_path.clone(),
+                    title: section.scope.heading_title.clone(),
+                    level: section.scope.heading_level,
+                    line_range: (section.scope.line_start, section.scope.line_end),
+                    attributes: sorted_attributes(section.metadata.attributes.clone()),
                 })
                 .collect();
-            let indexed_sections = parsed
+            let indexed_sections = toc
                 .sections
                 .iter()
-                .map(IndexedSection::from_parsed)
+                .map(IndexedSection::from_markdown_section)
                 .collect::<Vec<_>>();
             Ok(ParsedProjectedDocument {
                 document,
-                doc_id: parsed.doc.id,
-                title: parsed.doc.title,
+                doc_id,
+                title: toc.document.core.title,
                 indexed_sections,
                 section_summaries,
             })
@@ -213,6 +212,29 @@ fn projection_kind_token(kind: ProjectionPageKind) -> &'static str {
         ProjectionPageKind::Tutorial => "tutorial",
         ProjectionPageKind::Explanation => "explanation",
     }
+}
+
+fn projected_doc_id(path: &str) -> Option<String> {
+    let normalized = path.replace('\\', "/");
+    let lower = normalized.to_ascii_lowercase();
+    let without_ext = [".markdown", ".mdx", ".md"]
+        .into_iter()
+        .find_map(|ext| {
+            lower
+                .ends_with(ext)
+                .then(|| normalized[..normalized.len() - ext.len()].to_string())
+        })
+        .unwrap_or(normalized);
+    let out = without_ext.trim_matches('/').to_string();
+    if out.is_empty() { None } else { Some(out) }
+}
+
+fn projected_fallback_title(path: &str) -> &str {
+    Path::new(path)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or("page")
 }
 
 fn slugify(raw: &str) -> String {

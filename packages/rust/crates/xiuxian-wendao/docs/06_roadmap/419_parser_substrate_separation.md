@@ -20,7 +20,7 @@ The answer is not "leave parsers under Wendao forever," and it is also not
 independent parser crate, tentatively `xiuxian-wendao-parsers`, achieved
 through contract refactoring rather than a directory lift.
 
-As of 2026-04-12, twenty-one bounded implementation slices are already landed:
+As of 2026-04-14, twenty-five bounded implementation slices are already landed:
 frontmatter parsing, cross-format block-core extraction, cross-format
 addressed-target extraction, cross-format literal-addressed-target
 extraction, cross-format reference-core extraction, cross-format document core
@@ -31,10 +31,19 @@ cross-format target-occurrence core extraction, Markdown link syntax,
 parser-owned Markdown section structure, cross-format section-scope
 extraction, cross-format section-core extraction, cross-format
 section-metadata extraction, target-occurrence range cutover, and the parser
-crate consumption cutovers that follow those contracts now live in
-`xiuxian-wendao-parsers`, while
-`xiuxian-wendao` keeps Wendao-owned adapters, domain-side Markdown note
-adaptation, and enrichments without re-owning parser-only syntax surfaces.
+crate consumption cutovers that follow those contracts, plus the mixed
+`markdown_snapshot` cutover that now reuses one parser-owned note parse for AST
+hits and Wendao note adaptation, plus the local
+`src/parsers/docs_governance/` cutover that removes docs-governance parsing
+ownership from `zhenfa_router`, plus the local
+`src/parsers/semantic_check/` cutover that removes semantic-check grammar
+ownership from `zhenfa_router`, plus the parser-owned
+`xiuxian-wendao-parsers::section_create` cutover that removes Markdown
+section-create parsing and rendering ownership from `zhenfa_router`.
+Parser-only contracts that are already proven
+cross-crate now live in `xiuxian-wendao-parsers`, while `xiuxian-wendao`
+keeps Wendao-owned adapters, domain-side Markdown note adaptation, and local
+parser-owner surfaces that are not yet proven reusable outside Wendao.
 
 ## One-Sentence Rule
 
@@ -351,42 +360,50 @@ cutover slices:
 7. Wendao adapters such as `link_graph_refs`, docs-governance parsing, and
    internal-skill authority now consume parser-owned Markdown link syntax
    directly
-8. `MarkdownTargetOccurrence` is now the Markdown-local naming surface over
+8. docs-governance line/path parsing now lives under
+   `xiuxian-wendao::parsers::docs_governance`, so `zhenfa_router` no longer
+   serves as the ownership home for parser grammar that gateway and semantic
+   checks both consume
+9. `MarkdownTargetOccurrence` is now the Markdown-local naming surface over
    `TargetOccurrenceCore<MarkdownTargetOccurrenceKind>`, so future Org support
    can add its own occurrence-kind enum without inheriting Markdown-only type
    ownership
-9. `TargetOccurrenceCore<Kind>` now preserves parser-visible occurrence byte
-   and line ranges, so Wendao can partition note-level occurrences without a
-   second syntax pass
-10. `MarkdownWikiLink` is now the Markdown-local naming surface over
+10. `TargetOccurrenceCore<Kind>` now preserves parser-visible occurrence byte
+    and line ranges, so Wendao can partition note-level occurrences without a
+    second syntax pass
+11. `MarkdownWikiLink` is now the Markdown-local naming surface over
     `LiteralAddressedTarget`, so future Org support can reuse one
     source-preserved addressed-target contract without inheriting Markdown-only
     wrapper ownership
-11. `MarkdownReference` is now the Markdown-local naming surface over
+12. `MarkdownReference` is now the Markdown-local naming surface over
     `ReferenceCore<MarkdownReferenceKind>`, so future Org support can add its
     own reference-kind enum without inheriting Markdown-only wrapper ownership
-12. `MarkdownNote` is now the Markdown-local naming surface over
+13. `MarkdownNote` is now the Markdown-local naming surface over
     `NoteAggregate<MarkdownDocument, MarkdownReference, MarkdownTargetOccurrence, MarkdownSection>`,
     so future Org support can reuse one neutral top-level note aggregate
     without inheriting Markdown-only wrapper ownership
-13. `MarkdownDocument` is now the Markdown-local naming surface over
+14. `MarkdownDocument` is now the Markdown-local naming surface over
     `DocumentEnvelope<serde_yaml::Value>`, so future Org support can reuse one
     neutral top-level document wrapper without inheriting Markdown-only
     wrapper ownership
-14. `ParsedSection` entity enrichment now filters parser-owned note-level
+15. `ParsedSection` entity enrichment now filters parser-owned note-level
     target occurrences by section byte range before workspace-aware
     normalization, so Wendao no longer re-parses section bodies to find note
     links
-15. embedded wikilinks remain ignored on the current parser-owned target
+16. embedded wikilinks remain ignored on the current parser-owned target
     path, matching the old Wendao note-level behavior
-16. note-to-`LinkGraphDocument` assembly, workspace-aware link reduction,
+17. note-to-`LinkGraphDocument` assembly, workspace-aware link reduction,
     link-graph query, and persistence decoding remain Wendao-owned adapters
     and have not moved
-17. `MarkdownBlock` is now the Markdown-local naming surface over
+18. `MarkdownBlock` is now the Markdown-local naming surface over
     `BlockCore<MarkdownBlockKind>`, so future Org support can add its own
     block-kind enum without inheriting Markdown-only payload ownership, while
     Wendao keeps block-address matching and page-index addressing grammar
-18. Org remains a documented placeholder boundary only; no Org parser
+19. parser-owned Markdown section-create insertion planning and heading-chain
+    rendering now live under `xiuxian_wendao_parsers::section_create`, so
+    `semantic_edit` consumes the parser helper surface without
+    `zhenfa_router` owning it
+20. Org remains a documented placeholder boundary only; no Org parser
     implementation slice is active until a direct consumer or explicit parser
     requirement appears
 
@@ -409,5 +426,5 @@ Optimize for these outcomes:
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-12
+:LAST_SYNC: 2026-04-14
 :END:

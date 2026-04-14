@@ -4,6 +4,7 @@ use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::search::handlers::queries::AstSearchQuery;
 use crate::gateway::studio::search::project_scope::project_metadata_for_path;
 use crate::gateway::studio::types::{AstSearchHit, AstSearchResponse, UiProjectConfig};
+use crate::search::SearchCorpusKind;
 
 pub(crate) async fn load_ast_search_response(
     state: &GatewayState,
@@ -19,7 +20,25 @@ pub(crate) async fn load_ast_search_response(
     }
 
     let limit = query.limit.unwrap_or(20).max(1);
-    state.studio.ensure_local_symbol_index_ready().await?;
+    state.studio.ensure_local_symbol_index_started()?;
+    let status = state
+        .studio
+        .local_corpus_bootstrap_status(SearchCorpusKind::LocalSymbol, "ast_search");
+    if !status.active_epoch_ready {
+        state.studio.record_local_corpus_partial_search_response(
+            SearchCorpusKind::LocalSymbol,
+            "ast_search",
+        );
+        return Ok(AstSearchResponse {
+            query: query_text.to_string(),
+            hit_count: 0,
+            hits: Vec::new(),
+            selected_scope: "definitions".to_string(),
+            partial: true,
+            indexing_state: Some(status.indexing_state.to_string()),
+            index_error: status.index_error,
+        });
+    }
     let ast_hits = state
         .studio
         .search_local_symbol_hits(query_text, limit)
@@ -47,11 +66,17 @@ pub(crate) async fn load_ast_search_response(
     });
     hits.truncate(limit);
 
+    state
+        .studio
+        .record_local_corpus_ready_search_response(SearchCorpusKind::LocalSymbol, "ast_search");
     Ok(AstSearchResponse {
         query: query_text.to_string(),
         hit_count: hits.len(),
         hits,
         selected_scope: "definitions".to_string(),
+        partial: false,
+        indexing_state: Some("ready".to_string()),
+        index_error: None,
     })
 }
 

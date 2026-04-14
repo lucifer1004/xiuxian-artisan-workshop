@@ -1,5 +1,5 @@
 use crate::link_graph::PageIndexNode;
-use crate::zhenfa_router::native::semantic_check::parsing::validate_contract;
+use crate::parsers::semantic_check::validate_contract;
 use crate::zhenfa_router::native::semantic_check::types::{IssueLocation, SemanticIssue, attrs};
 
 /// Check contract constraints.

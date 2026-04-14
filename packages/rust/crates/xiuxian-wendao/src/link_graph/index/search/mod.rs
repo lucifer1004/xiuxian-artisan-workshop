@@ -4,6 +4,7 @@ mod graph_state_filters;
 mod path_tag_filters;
 pub mod pipeline;
 pub mod plan;
+#[cfg(feature = "vector-store")]
 pub mod quantum_fusion;
 mod row_evaluator;
 mod score;

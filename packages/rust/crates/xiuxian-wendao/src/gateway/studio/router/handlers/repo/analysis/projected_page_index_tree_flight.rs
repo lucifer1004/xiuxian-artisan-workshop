@@ -74,6 +74,7 @@ pub(crate) fn repo_projected_page_index_tree_batch(
         Arc::new(LanceSchema::new(vec![
             LanceField::new("repoId", LanceDataType::Utf8, false),
             LanceField::new("pageId", LanceDataType::Utf8, false),
+            LanceField::new("kind", LanceDataType::Utf8, false),
             LanceField::new("path", LanceDataType::Utf8, false),
             LanceField::new("docId", LanceDataType::Utf8, false),
             LanceField::new("title", LanceDataType::Utf8, false),
@@ -83,6 +84,9 @@ pub(crate) fn repo_projected_page_index_tree_batch(
         vec![
             Arc::new(LanceStringArray::from(vec![tree.repo_id.as_str()])),
             Arc::new(LanceStringArray::from(vec![tree.page_id.as_str()])),
+            Arc::new(LanceStringArray::from(vec![projection_page_kind_token(
+                tree.kind,
+            )])),
             Arc::new(LanceStringArray::from(vec![tree.path.as_str()])),
             Arc::new(LanceStringArray::from(vec![tree.doc_id.as_str()])),
             Arc::new(LanceStringArray::from(vec![tree.title.as_str()])),
@@ -103,6 +107,7 @@ pub(crate) fn repo_projected_page_index_tree_metadata(
     serde_json::to_vec(&serde_json::json!({
         "repoId": tree.repo_id,
         "pageId": tree.page_id,
+        "kind": projection_page_kind_token(tree.kind),
         "path": tree.path,
         "docId": tree.doc_id,
         "title": tree.title,
@@ -117,6 +122,15 @@ fn studio_api_error_to_tonic_status(error: StudioApiError) -> Status {
         axum::http::StatusCode::NOT_FOUND => Status::not_found(error.error.message),
         axum::http::StatusCode::CONFLICT => Status::failed_precondition(error.error.message),
         _ => Status::internal(error.error.message),
+    }
+}
+
+fn projection_page_kind_token(kind: crate::analyzers::ProjectionPageKind) -> &'static str {
+    match kind {
+        crate::analyzers::ProjectionPageKind::Reference => "reference",
+        crate::analyzers::ProjectionPageKind::HowTo => "howto",
+        crate::analyzers::ProjectionPageKind::Tutorial => "tutorial",
+        crate::analyzers::ProjectionPageKind::Explanation => "explanation",
     }
 }
 

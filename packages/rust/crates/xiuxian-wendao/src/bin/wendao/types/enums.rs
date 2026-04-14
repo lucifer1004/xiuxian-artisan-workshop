@@ -1,6 +1,7 @@
 use clap::ValueEnum;
 use xiuxian_wendao::{
     LinkGraphAttachmentKind, LinkGraphPprSubgraphMode, LinkGraphScope, LinkGraphSuggestedLinkState,
+    analyzers::ProjectionPageKind,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -75,6 +76,25 @@ pub(crate) enum AttachmentKindArg {
     Audio,
     Video,
     Other,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(crate) enum ProjectionPageKindArg {
+    Reference,
+    HowTo,
+    Tutorial,
+    Explanation,
+}
+
+impl From<ProjectionPageKindArg> for ProjectionPageKind {
+    fn from(value: ProjectionPageKindArg) -> Self {
+        match value {
+            ProjectionPageKindArg::Reference => Self::Reference,
+            ProjectionPageKindArg::HowTo => Self::HowTo,
+            ProjectionPageKindArg::Tutorial => Self::Tutorial,
+            ProjectionPageKindArg::Explanation => Self::Explanation,
+        }
+    }
 }
 
 impl From<AttachmentKindArg> for LinkGraphAttachmentKind {

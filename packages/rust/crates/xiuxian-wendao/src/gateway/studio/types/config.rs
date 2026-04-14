@@ -19,6 +19,10 @@ pub struct UiConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiCapabilities {
+    /// Local project roots available to the current Studio runtime.
+    pub projects: Vec<UiProjectConfig>,
+    /// External repository projects available to the current Studio runtime.
+    pub repo_projects: Vec<UiRepoProjectConfig>,
     /// Supported language identifiers reported by the gateway capability surface.
     #[serde(rename = "supportedLanguages")]
     pub languages: Vec<String>,

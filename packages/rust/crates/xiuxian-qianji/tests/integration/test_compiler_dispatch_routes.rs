@@ -26,6 +26,50 @@ weight = 1.0
 params = { cmd = "echo hi", output_key = "stdout" }
 "#;
 
+const HTTP_CALL_MANIFEST: &str = r#"
+name = "HttpCallDispatch"
+
+[[nodes]]
+id = "OpenNavigation"
+kind = "http_call"
+contract = "wendao.docs.navigation"
+method = "GET"
+path = "/api/docs/navigation"
+query = { repo = "$repo", page_id = "$page_id", related_limit = 5, family_limit = 3 }
+"#;
+
+const CLI_CALL_MANIFEST: &str = r#"
+name = "CliCallDispatch"
+
+[[nodes]]
+id = "OpenNavigationCli"
+kind = "cli_call"
+contract = "wendao.docs.navigation"
+argv = ["wendao", "docs", "navigation", "--repo", "$repo", "--page-id", "$page_id", "--related-limit", "5", "--family-limit", "3"]
+"#;
+
+const HTTP_CALL_INVALID_PATH_MANIFEST: &str = r#"
+name = "HttpCallInvalidPathDispatch"
+
+[[nodes]]
+id = "OpenNavigation"
+kind = "http_call"
+contract = "wendao.docs.navigation"
+method = "GET"
+path = "/api/docs/not-navigation"
+query = { repo = "$repo", page_id = "$page_id", related_limit = 5, family_limit = 3 }
+"#;
+
+const CLI_CALL_UNKNOWN_FLAG_MANIFEST: &str = r#"
+name = "CliCallInvalidFlagDispatch"
+
+[[nodes]]
+id = "OpenNavigationCli"
+kind = "cli_call"
+contract = "wendao.docs.navigation"
+argv = ["wendao", "docs", "navigation", "--repo", "$repo", "--page-id", "$page_id", "--nope", "3"]
+"#;
+
 const WRITE_FILE_MANIFEST: &str = r#"
 name = "WriteFileDispatch"
 
@@ -251,6 +295,49 @@ fn compiler_dispatches_command_task_via_leaf_lane() -> Result<(), Box<dyn std::e
     let compiler = build_compiler(temp.path())?;
     let engine = compiler.compile(COMMAND_MANIFEST)?;
     assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_dispatches_http_call_task_via_leaf_lane() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let engine = compiler.compile(HTTP_CALL_MANIFEST)?;
+    assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_dispatches_cli_call_task_via_leaf_lane() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let engine = compiler.compile(CLI_CALL_MANIFEST)?;
+    assert_eq!(engine.graph.node_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn compiler_rejects_http_call_when_contract_path_drifts() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let error = match compiler.compile(HTTP_CALL_INVALID_PATH_MANIFEST) {
+        Ok(_) => panic!("invalid HTTP path should fail contract validation"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("/api/docs/navigation"));
+    Ok(())
+}
+
+#[test]
+fn compiler_rejects_cli_call_when_flag_is_unknown() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let compiler = build_compiler(temp.path())?;
+    let error = match compiler.compile(CLI_CALL_UNKNOWN_FLAG_MANIFEST) {
+        Ok(_) => panic!("unknown CLI flag should fail contract validation"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("--nope"));
     Ok(())
 }
 

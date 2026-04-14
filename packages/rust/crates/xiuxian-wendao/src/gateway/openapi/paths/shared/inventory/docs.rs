@@ -77,6 +77,13 @@ pub(super) const DOCS_PAGE: RouteContract = RouteContract {
     path_params: &[],
 };
 
+pub(super) const DOCS_PAGE_INDEX_TREE: RouteContract = RouteContract {
+    axum_path: openapi_paths::API_DOCS_PAGE_INDEX_TREE_AXUM_PATH,
+    openapi_path: openapi_paths::API_DOCS_PAGE_INDEX_TREE_OPENAPI_PATH,
+    methods: &["get"],
+    path_params: &[],
+};
+
 pub(super) const DOCS_FAMILY_CONTEXT: RouteContract = RouteContract {
     axum_path: openapi_paths::API_DOCS_FAMILY_CONTEXT_AXUM_PATH,
     openapi_path: openapi_paths::API_DOCS_FAMILY_CONTEXT_OPENAPI_PATH,

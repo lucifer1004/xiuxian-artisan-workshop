@@ -5,8 +5,9 @@ use super::GatewayArgs;
 #[cfg(feature = "zhenfa-router")]
 use super::QueryCommand;
 use super::{
-    AgenticCommand, AttachmentsArgs, AuditArgs, FixArgs, HmasCommand, MetadataArgs, NeighborsArgs,
-    RelatedArgs, RepoCommand, ResolveArgs, SaliencyCommand, SearchArgs, SentinelArgs, TocArgs,
+    AgenticCommand, AttachmentsArgs, AuditArgs, DocsCommand, FixArgs, HmasCommand, MetadataArgs,
+    NeighborsArgs, RelatedArgs, RepoCommand, ResolveArgs, SaliencyCommand, SearchArgs,
+    SentinelArgs, TocArgs,
 };
 
 #[derive(Subcommand, Debug)]
@@ -48,6 +49,11 @@ pub(crate) enum Command {
     Repo {
         #[command(subcommand)]
         command: RepoCommand,
+    },
+    /// Open docs/page-index capability surfaces directly from the crate.
+    Docs {
+        #[command(subcommand)]
+        command: DocsCommand,
     },
     /// Execute one query-language adapter against the shared search query system.
     #[cfg(feature = "zhenfa-router")]

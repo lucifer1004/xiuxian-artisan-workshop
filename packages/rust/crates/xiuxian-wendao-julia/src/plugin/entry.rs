@@ -91,6 +91,7 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
                 .into_iter()
                 .collect(),
             symbols: symbols.clone(),
+            imports: Vec::new(),
             docs: build_docstring_records(
                 &context.repository.id,
                 &file.path,

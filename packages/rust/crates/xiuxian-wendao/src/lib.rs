@@ -103,12 +103,14 @@ pub mod analyzers;
 pub mod contract_feedback;
 pub mod dependency_indexer;
 /// Bounded local relation-engine seam and DuckDB host bridge.
+#[cfg(feature = "search-runtime")]
 pub mod duckdb;
 pub mod enhancer;
 pub mod gateway;
 pub mod ingress;
 pub mod link_graph_refs;
 pub mod skill_vfs;
+#[cfg(feature = "repo-lexical-index")]
 pub mod unified_symbol;
 /// High-level search router for integrating multiple backends.
 #[cfg(feature = "zhenfa-router")]
@@ -165,8 +167,14 @@ pub use ingress::{
     SpiderWendaoBridge, WebAssimilationSink, WebIngestionSignal, canonical_web_uri,
     web_namespace_from_url,
 };
+#[cfg(feature = "vector-store")]
 pub use link_graph::{
-    BatchQuantumScorer, BatchQuantumScorerError,
+    BatchQuantumScorer, BatchQuantumScorerError, OpenAiCompatibleSemanticIgnition,
+    OpenAiCompatibleSemanticIgnitionError, QUANTUM_SALIENCY_COLUMN, QuantumContextBuildError,
+    QuantumSemanticIgnition, QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture,
+    VectorStoreSemanticIgnition,
+};
+pub use link_graph::{
     LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_SCHEMA_VERSION, LINK_GRAPH_RETRIEVAL_PLAN_SCHEMA_VERSION,
     LINK_GRAPH_SALIENCY_SCHEMA_VERSION, LINK_GRAPH_SUGGESTED_LINK_DECISION_SCHEMA_VERSION,
     LINK_GRAPH_SUGGESTED_LINK_SCHEMA_VERSION, LinkGraphAgenticCandidatePair,
@@ -185,11 +193,10 @@ pub use link_graph::{
     LinkGraphSortField, LinkGraphSortOrder, LinkGraphSortTerm, LinkGraphStats,
     LinkGraphSuggestedLink, LinkGraphSuggestedLinkDecision, LinkGraphSuggestedLinkDecisionRequest,
     LinkGraphSuggestedLinkDecisionResult, LinkGraphSuggestedLinkRequest,
-    LinkGraphSuggestedLinkState, LinkGraphTagFilter, QUANTUM_SALIENCY_COLUMN, QuantumAnchorHit,
-    QuantumContext, QuantumContextBuildError, QuantumContextSnapshot, QuantumFusionOptions,
-    QuantumFusionTelemetry, QuantumSemanticIgnition, QuantumSemanticIgnitionError,
-    QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest, compute_link_graph_saliency,
-    narrate_subgraph, quantum_context_snapshot_id, resolve_link_graph_index_runtime,
+    LinkGraphSuggestedLinkState, LinkGraphTagFilter, QuantumAnchorHit, QuantumContext,
+    QuantumContextSnapshot, QuantumFusionOptions, QuantumFusionTelemetry,
+    QuantumSemanticSearchRequest, compute_link_graph_saliency, narrate_subgraph,
+    quantum_context_snapshot_id, resolve_link_graph_index_runtime,
     set_link_graph_config_home_override, set_link_graph_wendao_config_override,
     valkey_quantum_context_snapshot_drop, valkey_quantum_context_snapshot_get,
     valkey_quantum_context_snapshot_get_with_valkey, valkey_quantum_context_snapshot_rollback,
@@ -203,11 +210,6 @@ pub use link_graph::{
     valkey_suggested_link_recent_latest, valkey_suggested_link_recent_latest_with_valkey,
     valkey_suggested_link_recent_with_valkey,
 };
-#[cfg(feature = "vector-store")]
-pub use link_graph::{
-    OpenAiCompatibleSemanticIgnition, OpenAiCompatibleSemanticIgnitionError,
-    VectorStoreSemanticIgnition,
-};
 pub use link_graph_refs::{
     LinkGraphEntityRef, LinkGraphRefStats, count_entity_refs, extract_entity_refs,
     extract_entity_refs_batch, find_notes_referencing_entity, get_ref_stats, is_valid_entity_ref,
@@ -215,9 +217,12 @@ pub use link_graph_refs::{
 };
 pub use parsers::link_graph::query::{ParsedLinkGraphQuery, parse_search_query};
 pub use search::{
-    FuzzyMatch, FuzzyMatcher, FuzzyScore, FuzzySearchOptions, LexicalMatcher, SearchDocument,
-    SearchDocumentFields, SearchDocumentIndex, TantivyDocumentMatch, TantivyMatcher, edit_distance,
+    FuzzyMatch, FuzzyMatcher, FuzzyScore, FuzzySearchOptions, LexicalMatcher, edit_distance,
     levenshtein_distance, normalized_score, passes_prefix_requirement, shared_prefix_len,
+};
+#[cfg(feature = "repo-lexical-index")]
+pub use search::{
+    SearchDocument, SearchDocumentFields, SearchDocumentIndex, TantivyDocumentMatch, TantivyMatcher,
 };
 pub use skill_vfs::{
     ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_REMINDED, ATTR_TIMER_SCHEDULED, AssetRequest,
@@ -234,6 +239,7 @@ pub use sync::{
     extract_extensions_from_glob_patterns,
 };
 pub use types::{KnowledgeCategory, KnowledgeEntry, KnowledgeSearchQuery, KnowledgeStats};
+#[cfg(feature = "repo-lexical-index")]
 pub use unified_symbol::{SymbolSource, UnifiedIndexStats, UnifiedSymbol, UnifiedSymbolIndex};
 pub use xiuxian_wendao_core::{WENDAO_URI_SCHEME, WendaoResourceUri, WendaoResourceUriError};
 

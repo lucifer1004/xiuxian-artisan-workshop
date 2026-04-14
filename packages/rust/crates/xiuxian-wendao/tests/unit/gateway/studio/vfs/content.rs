@@ -2,7 +2,7 @@ use std::fs;
 
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
-use crate::gateway::studio::vfs::content::resolve_vfs_file_path;
+use crate::gateway::studio::vfs::content::{read_raw_content, resolve_vfs_file_path};
 
 fn build_state_for_nested_frontend_config() -> (tempfile::TempDir, StudioState) {
     let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
@@ -15,11 +15,13 @@ fn build_state_for_nested_frontend_config() -> (tempfile::TempDir, StudioState) 
         .unwrap_or_else(|error| panic!("frontend root: {error}"));
     fs::write(docs_dir.join("HANDBOOK.md"), "# handbook\n")
         .unwrap_or_else(|error| panic!("handbook: {error}"));
+    fs::write(docs_dir.join("ARCHITECTURE.pdf"), b"%PDF-1.7\nmultimodal\n")
+        .unwrap_or_else(|error| panic!("pdf: {error}"));
 
     let mut state = StudioState::new();
     state.project_root = repo_root;
     state.config_root = frontend_root;
-    state.set_ui_config(UiConfig {
+    state.apply_eager_ui_config(UiConfig {
         projects: vec![
             UiProjectConfig {
                 name: "kernel".to_string(),
@@ -56,4 +58,16 @@ fn resolve_vfs_file_path_keeps_explicit_project_prefix_working() {
         .unwrap_or_else(|error| panic!("resolve vfs path: {error:?}"));
 
     assert!(resolved.ends_with("repo/docs/02_dev/HANDBOOK.md"));
+}
+
+#[tokio::test]
+async fn read_raw_content_preserves_binary_payload_and_inferrs_pdf_content_type() {
+    let (_temp_dir, state) = build_state_for_nested_frontend_config();
+
+    let payload = read_raw_content(&state, "docs/02_dev/ARCHITECTURE.pdf")
+        .await
+        .unwrap_or_else(|error| panic!("read raw content: {error:?}"));
+
+    assert_eq!(payload.content_type, "application/pdf");
+    assert_eq!(payload.content, b"%PDF-1.7\nmultimodal\n");
 }

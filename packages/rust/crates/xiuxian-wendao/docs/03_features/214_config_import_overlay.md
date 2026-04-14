@@ -101,21 +101,12 @@ imports = ["${PRJ_ROOT}/packages/rust/crates/xiuxian-wendao/resources/config/wen
 This support is intentionally limited to import paths. Wendao does not treat
 arbitrary string values in TOML as general environment-template fields.
 
-## Studio UI Persistence
+## Studio Bootstrap Ownership
 
-`POST /api/ui/config` now persists the live Studio state back into the base
-`wendao.toml` instead of generating a new `wendao.studio.overlay.toml`.
-
-The persistence path still loads any legacy overlay to preserve effective UI
-state during migration, then writes the merged result back into the base file
-and removes the old overlay.
-
-UI-owned entries that disappear from the live state are tombstoned in the base
-file by clearing the UI-owned arrays that would otherwise keep them visible in
-the effective Studio config.
-
-That keeps restart behavior aligned with the effective UI state while leaving
-non-UI base sections such as `[gateway]` untouched.
+Studio UI state is now backend-loaded from the effective `wendao.toml` import
+graph at startup. The runtime still understands legacy overlay composition
+while reading config, but it no longer exposes `/api/ui/config` as a live
+rewrite surface for mutating `wendao.toml` from the Studio process.
 
 ## Ownership Boundary
 

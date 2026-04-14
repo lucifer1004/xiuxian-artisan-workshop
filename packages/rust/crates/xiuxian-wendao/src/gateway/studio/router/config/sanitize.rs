@@ -3,8 +3,6 @@ use std::collections::HashSet;
 use crate::gateway::studio::pathing;
 use crate::gateway::studio::types::{UiProjectConfig, UiRepoProjectConfig};
 
-use super::types::WendaoTomlPluginEntry;
-
 pub(crate) fn sanitize_projects(raw: Vec<UiProjectConfig>) -> Vec<UiProjectConfig> {
     let mut seen = HashSet::<String>::new();
     let mut out = Vec::new();
@@ -46,48 +44,6 @@ pub(crate) fn sanitize_path_list(raw: &[String]) -> Vec<String> {
 
 pub(crate) fn sanitize_path_like(raw: &str) -> Option<String> {
     pathing::normalize_path_like(raw)
-}
-
-pub(crate) fn merge_repo_plugins(
-    existing: Vec<WendaoTomlPluginEntry>,
-    plugin_ids: &[String],
-) -> Vec<WendaoTomlPluginEntry> {
-    let desired = sanitize_plugin_ids(plugin_ids);
-    if desired.is_empty() {
-        return Vec::new();
-    }
-
-    let allowed = desired.iter().cloned().collect::<HashSet<_>>();
-    let mut preserved = Vec::new();
-    let mut seen = HashSet::<String>::new();
-    for entry in existing
-        .into_iter()
-        .filter_map(WendaoTomlPluginEntry::into_normalized)
-    {
-        let Some(id) = entry.normalized_id() else {
-            continue;
-        };
-        if allowed.contains(id.as_str()) {
-            seen.insert(id);
-            preserved.push(entry);
-        }
-    }
-
-    for plugin in desired {
-        if seen.insert(plugin.clone()) {
-            preserved.push(WendaoTomlPluginEntry::Id(plugin));
-        }
-    }
-
-    preserved
-}
-
-pub(crate) fn sanitize_plugin_ids(raw: &[String]) -> Vec<String> {
-    let mut seen = HashSet::<String>::new();
-    raw.iter()
-        .filter_map(|plugin| normalize_plugin_id(plugin))
-        .filter(|plugin| seen.insert(plugin.clone()))
-        .collect()
 }
 
 pub(crate) fn sanitize_repo_projects(raw: Vec<UiRepoProjectConfig>) -> Vec<UiRepoProjectConfig> {

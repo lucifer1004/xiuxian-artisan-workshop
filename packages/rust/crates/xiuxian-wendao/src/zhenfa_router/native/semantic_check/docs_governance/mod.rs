@@ -5,13 +5,11 @@
 //! and relation tracking.
 
 pub mod collection;
-pub mod parsing;
 pub mod rendering;
 mod scope;
 pub mod types;
 
 pub use collection::{collect_doc_governance_issues, collect_workspace_doc_governance_issues};
-pub use parsing::is_package_local_crate_doc;
 pub use types::{
     CANONICAL_DOC_HIDDEN_PATH_LINK_ISSUE_TYPE, DOC_IDENTITY_PROTOCOL_ISSUE_TYPE,
     INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE,

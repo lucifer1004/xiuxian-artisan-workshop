@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 
 use super::hidden_links::collect_workspace_canonical_doc_issues;
 use super::package_docs::collect_doc_governance_issues;
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::{
+use crate::parsers::docs_governance::{
     collect_index_body_links, collect_lines, parse_footer_block, parse_relations_links_line,
 };
 use crate::zhenfa_router::native::semantic_check::docs_governance::rendering::{

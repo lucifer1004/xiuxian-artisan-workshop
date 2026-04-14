@@ -30,7 +30,8 @@ pub(crate) struct MermaidEdge {
 /// Minimal parsed Mermaid flowchart.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MermaidFlowchart {
-    /// Mermaid graph identity, derived from the owning Mermaid filename stem.
+    /// Mermaid graph identity resolved by the caller from `[[graph]].name` or
+    /// the owning filename-stem fallback.
     pub(crate) merimind_graph_name: String,
     /// Declared Mermaid direction, for example `LR`.
     pub(crate) direction: String,

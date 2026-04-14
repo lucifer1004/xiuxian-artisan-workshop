@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 use crate::search::manifest::SearchRepoPublicationInput;
-use crate::search::{SearchCorpusKind, SearchCorpusStatus, SearchMaintenanceStatus};
+use crate::search::{
+    SearchCorpusKind, SearchCorpusStatus, SearchMaintenanceStatus, SearchPlanePhase,
+};
 
 /// Persisted storage format for a published search-plane dataset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -29,6 +31,15 @@ pub struct SearchManifestRecord {
     pub storage_format: SearchPublicationStorageFormat,
     /// Current published or in-flight fingerprint.
     pub fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Published row count for the active epoch, when known.
+    pub row_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Published fragment count for the active epoch, when known.
+    pub fragment_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// RFC3339 timestamp for the latest completed build attempt.
+    pub build_finished_at: Option<String>,
     /// RFC3339 time when the manifest was updated.
     pub updated_at: Option<String>,
 }
@@ -41,10 +52,36 @@ impl SearchManifestRecord {
             corpus: status.corpus,
             active_epoch: status.active_epoch,
             schema_version: status.schema_version,
-            storage_format: SearchPublicationStorageFormat::Lance,
+            storage_format: SearchPublicationStorageFormat::Parquet,
             fingerprint: status.fingerprint.clone(),
+            row_count: status.row_count,
+            fragment_count: status.fragment_count,
+            build_finished_at: status.build_finished_at.clone(),
             updated_at: status.updated_at.clone(),
         }
+    }
+
+    /// Recover a readable ready status row from the persisted local manifest.
+    #[must_use]
+    pub fn to_status(&self) -> Option<SearchCorpusStatus> {
+        let active_epoch = self.active_epoch?;
+        if self.schema_version != self.corpus.schema_version() {
+            return None;
+        }
+
+        let mut status = SearchCorpusStatus::new(self.corpus);
+        status.phase = SearchPlanePhase::Ready;
+        status.active_epoch = Some(active_epoch);
+        status.schema_version = self.schema_version;
+        status.fingerprint = self.fingerprint.clone();
+        status.row_count = self.row_count;
+        status.fragment_count = self.fragment_count;
+        status.build_finished_at = self.build_finished_at.clone();
+        status.updated_at = self
+            .updated_at
+            .clone()
+            .or_else(|| self.build_finished_at.clone());
+        Some(status)
     }
 }
 

@@ -29,3 +29,6 @@ pub enum IoError {
     #[error("UTF-8 decoding error")]
     Encoding,
 }
+
+/// Canonical result alias for `xiuxian-io` operations.
+pub type Result<T> = std::result::Result<T, IoError>;

@@ -5,7 +5,7 @@ use super::retrieval::{RetrievalChunk, RetrievalChunkSurface};
 
 /// Kind of a code-AST node.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum CodeAstNodeKind {
     /// Module/namespace container.
     Module,
@@ -65,9 +65,12 @@ pub struct CodeAstNode {
     /// Optional source path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    /// Optional 1-based source line.
+    /// Optional 1-based source start line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub line: Option<usize>,
+    pub line_start: Option<usize>,
+    /// Optional 1-based source end line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
 }
 
 /// A single AST edge entry for diagram rendering.
@@ -112,6 +115,10 @@ pub struct CodeAstAnalysisResponse {
     pub path: String,
     /// Source language.
     pub language: String,
+    /// Total number of AST nodes.
+    pub node_count: usize,
+    /// Total number of AST edges.
+    pub edge_count: usize,
     /// AST nodes.
     pub nodes: Vec<CodeAstNode>,
     /// AST edges.

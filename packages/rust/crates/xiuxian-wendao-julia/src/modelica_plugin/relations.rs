@@ -2,10 +2,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use xiuxian_wendao_core::repo_intelligence::{
-    ExampleRecord, ModuleRecord, RelationKind, RelationRecord, SymbolRecord,
+    DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, SymbolRecord,
 };
 
-use super::discovery::{containing_module_name, path_components, qualified_module_name};
+use super::discovery::{
+    containing_module_name, modules_by_qualified_name, path_components, qualified_module_name,
+};
 use super::types::CollectedDoc;
 
 pub(crate) fn collect_relation_records(
@@ -87,6 +89,68 @@ pub(crate) fn collect_relation_records(
                     repo_id: repo_id.to_string(),
                     source_id: doc.record.doc_id.clone(),
                     target_id: target_id.clone(),
+                    kind: RelationKind::Documents,
+                },
+            );
+        }
+    }
+
+    relations
+}
+
+pub(crate) fn build_incremental_doc_relations(
+    repo_id: &str,
+    modules: &[ModuleRecord],
+    symbols: &[SymbolRecord],
+    docs: &[DocRecord],
+) -> Vec<RelationRecord> {
+    let Some(root_module) = modules
+        .iter()
+        .filter(|module| module.path.ends_with("package.mo"))
+        .min_by_key(|module| path_components(module.path.as_str()).len())
+    else {
+        return Vec::new();
+    };
+
+    let module_lookup = modules_by_qualified_name(modules);
+    let root_package_name = root_module.qualified_name.as_str();
+    let root_module_id = Some(root_module.module_id.as_str());
+
+    let mut relation_keys = BTreeSet::new();
+    let mut relations = Vec::new();
+    for doc in docs {
+        let (source_path, suffix) = match doc.path.split_once('#') {
+            Some((source_path, suffix)) => (source_path, Some(suffix)),
+            None => (doc.path.as_str(), None),
+        };
+        if source_path.ends_with(".jl") || doc.format.as_deref() == Some("julia_docstring") {
+            continue;
+        }
+
+        let target_ids = if matches!(suffix, Some("annotation.documentation")) {
+            doc_targets_for_annotation_doc(
+                source_path,
+                root_package_name,
+                &module_lookup,
+                symbols,
+                root_module_id,
+            )
+        } else {
+            doc_targets_for_file_doc(
+                source_path,
+                root_package_name,
+                &module_lookup,
+                root_module_id,
+            )
+        };
+        for target_id in target_ids {
+            push_relation(
+                &mut relations,
+                &mut relation_keys,
+                RelationRecord {
+                    repo_id: repo_id.to_string(),
+                    source_id: doc.doc_id.clone(),
+                    target_id,
                     kind: RelationKind::Documents,
                 },
             );

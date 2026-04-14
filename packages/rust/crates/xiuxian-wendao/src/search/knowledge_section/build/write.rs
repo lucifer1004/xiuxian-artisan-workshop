@@ -77,15 +77,23 @@ pub(crate) async fn publish_knowledge_sections_from_projects(
             return Ok(());
         }
     };
-    let plan =
-        plan_knowledge_section_build(project_root, config_root, projects, None, &BTreeMap::new());
+    let plan = plan_knowledge_section_build(
+        service,
+        project_root,
+        config_root,
+        projects,
+        None,
+        &BTreeMap::new(),
+    );
     match write_knowledge_section_epoch(service, &lease, &plan).await {
         Ok(write) => {
             let prewarm_columns = projected_columns();
             service
                 .prewarm_epoch_table(lease.corpus, lease.epoch, &prewarm_columns)
                 .await?;
-            service.publish_ready_and_maintain(&lease, write.row_count, write.fragment_count);
+            service
+                .publish_ready_and_maintain(&lease, write.row_count, write.fragment_count)
+                .await;
             Ok(())
         }
         Err(error) => {

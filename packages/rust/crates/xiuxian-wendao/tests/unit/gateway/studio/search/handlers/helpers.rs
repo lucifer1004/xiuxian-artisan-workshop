@@ -37,7 +37,7 @@ pub(crate) fn configure_local_workspace(
 ) {
     studio.project_root = root.to_path_buf();
     studio.config_root = root.to_path_buf();
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),

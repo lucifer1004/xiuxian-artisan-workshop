@@ -48,15 +48,17 @@ pub(crate) use index::IndexedSection;
 pub use index::search::quantum_fusion::openai_ignition::{
     OpenAiCompatibleSemanticIgnition, OpenAiCompatibleSemanticIgnitionError,
 };
+#[cfg(feature = "vector-store")]
 pub use index::search::quantum_fusion::scoring::{
     BatchQuantumScorer, BatchQuantumScorerError, QUANTUM_SALIENCY_COLUMN,
 };
 #[cfg(feature = "vector-store")]
 pub use index::search::quantum_fusion::vector_ignition::VectorStoreSemanticIgnition;
+pub use index::{LinkGraphCacheBuildMeta, LinkGraphIndex, LinkGraphRefreshMode, SymbolRef};
+#[cfg(feature = "vector-store")]
 pub use index::{
-    LinkGraphCacheBuildMeta, LinkGraphIndex, LinkGraphRefreshMode, QuantumContextBuildError,
-    QuantumSemanticIgnition, QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture,
-    SymbolRef,
+    QuantumContextBuildError, QuantumSemanticIgnition, QuantumSemanticIgnitionError,
+    QuantumSemanticIgnitionFuture,
 };
 pub use models::{
     CognitiveTraceRecord, LINK_GRAPH_POLICY_REASON_VOCAB, LINK_GRAPH_REASON_BACKEND_UNAVAILABLE,

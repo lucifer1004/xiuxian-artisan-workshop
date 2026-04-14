@@ -95,14 +95,8 @@ pub enum CheckType {
     DocGovernance,
 }
 
-/// A reference with an optional expected hash.
-#[derive(Debug, Clone)]
-pub struct HashReference {
-    /// Target ID (without # prefix).
-    pub target_id: String,
-    /// Expected content hash (if specified via @hash suffix).
-    pub expect_hash: Option<String>,
-}
+/// Parser-owned hash-aligned reference extracted from semantic-check wiki-link syntax.
+pub use crate::parsers::semantic_check::HashReference;
 
 /// Result of a semantic check operation.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

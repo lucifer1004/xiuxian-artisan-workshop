@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use xiuxian_wendao_runtime::transport::AttachmentSearchFlightRouteProvider;
+use xiuxian_wendao_runtime::transport::{
+    AttachmentSearchFlightRouteProvider, SearchFlightRouteResponse,
+};
 
 use super::batch::build_attachment_hits_flight_batch;
 use super::response::load_attachment_search_response_from_studio;
@@ -36,7 +38,7 @@ impl AttachmentSearchFlightRouteProvider for StudioAttachmentSearchFlightRoutePr
         ext_filters: &std::collections::HashSet<String>,
         kind_filters: &std::collections::HashSet<String>,
         case_sensitive: bool,
-    ) -> Result<xiuxian_vector_store::LanceRecordBatch, String> {
+    ) -> Result<SearchFlightRouteResponse, String> {
         let mut ext = ext_filters.iter().cloned().collect::<Vec<_>>();
         ext.sort();
         let mut kind = kind_filters.iter().cloned().collect::<Vec<_>>();
@@ -59,6 +61,8 @@ impl AttachmentSearchFlightRouteProvider for StudioAttachmentSearchFlightRoutePr
                 .clone()
                 .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
         })?;
+        let app_metadata = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
         build_attachment_hits_flight_batch(&response.hits)
+            .map(|batch| SearchFlightRouteResponse::new(batch).with_app_metadata(app_metadata))
     }
 }

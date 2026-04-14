@@ -41,7 +41,7 @@ async fn search_intent_routes_code_search_to_plain_julia_plugin_repository()
         &registry,
     )?;
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: fixture.state.studio.configured_projects(),
         repo_projects: vec![UiRepoProjectConfig {
             id: repository.id.clone(),
@@ -113,7 +113,7 @@ async fn search_intent_routes_code_search_to_plain_modelica_plugin_repository()
         &registry,
     )?;
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: fixture.state.studio.configured_projects(),
         repo_projects: vec![UiRepoProjectConfig {
             id: repository.id.clone(),
@@ -169,7 +169,7 @@ async fn search_intent_routes_code_search_to_search_only_rust_repo_from_plain_se
     let fixture = make_state_with_docs(Vec::new());
     let repo_dir = create_sample_rust_repo(fixture.temp_dir.path(), "SearchRust")?;
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: fixture.state.studio.configured_projects(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "lance".to_string(),
@@ -219,7 +219,7 @@ async fn search_intent_routes_code_search_to_search_only_rust_and_toml_hits()
     let fixture = make_state_with_docs(Vec::new());
     let repo_dir = create_sample_rust_repo(fixture.temp_dir.path(), "SearchRust")?;
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: fixture.state.studio.configured_projects(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "lance".to_string(),
@@ -296,7 +296,7 @@ async fn search_intent_snapshots_search_only_ast_grep_query_payloads()
     let fixture = make_state_with_docs(Vec::new());
     let repo_dir = create_sample_rust_repo(fixture.temp_dir.path(), "SearchRust")?;
 
-    fixture.state.studio.set_ui_config(UiConfig {
+    fixture.state.studio.apply_eager_ui_config(UiConfig {
         projects: fixture.state.studio.configured_projects(),
         repo_projects: vec![UiRepoProjectConfig {
             id: "lance".to_string(),

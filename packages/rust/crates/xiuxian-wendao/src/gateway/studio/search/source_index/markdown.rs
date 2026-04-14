@@ -1,12 +1,16 @@
 use std::path::{Component, Path};
 
+#[cfg(test)]
 use crate::gateway::studio::analysis;
-use crate::gateway::studio::types::{AnalysisNodeKind, AstSearchHit};
-use crate::parsers::markdown::{ParsedSection, parse_note};
+use crate::gateway::studio::types::{AnalysisNode, AnalysisNodeKind, AstSearchHit};
+use crate::parsers::markdown::extract_observations;
+#[cfg(test)]
+use xiuxian_wendao_parsers::parse_markdown_toc;
+use xiuxian_wendao_parsers::sections::MarkdownSection;
 
 use super::navigation::ast_navigation_target;
 
-pub(super) fn markdown_scope_name(path: &Path) -> String {
+pub(crate) fn markdown_scope_name(path: &Path) -> String {
     path.components()
         .find_map(|component| match component {
             Component::Normal(segment) => segment.to_str().map(ToString::to_string),
@@ -16,19 +20,53 @@ pub(super) fn markdown_scope_name(path: &Path) -> String {
         .unwrap_or_else(|| "docs".to_string())
 }
 
-pub(super) fn build_markdown_ast_hits(
-    root: &Path,
+#[cfg(test)]
+pub(crate) fn build_markdown_ast_hits(
+    _root: &Path,
     source_path: &Path,
     path: &str,
     content: &str,
     crate_name: &str,
 ) -> Vec<AstSearchHit> {
-    let mut hits = analysis::compile_markdown_nodes(path, content)
-        .into_iter()
+    let nodes = analysis::compile_markdown_nodes(path, content);
+    let fallback_title = source_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or("page");
+    let parsed = parse_markdown_toc(content, fallback_title);
+    build_markdown_ast_hits_from_sections(path, crate_name, &nodes, parsed.sections.as_slice())
+}
+
+pub(crate) fn build_markdown_ast_hits_from_sections(
+    path: &str,
+    crate_name: &str,
+    nodes: &[AnalysisNode],
+    sections: &[MarkdownSection],
+) -> Vec<AstSearchHit> {
+    let mut hits = build_markdown_node_hits(path, crate_name, nodes);
+    for section in sections {
+        hits.extend(build_markdown_property_hits_from_toc_section(
+            path, crate_name, section,
+        ));
+        hits.extend(build_markdown_observation_hits_from_toc_section(
+            path, crate_name, section,
+        ));
+    }
+    hits
+}
+
+fn build_markdown_node_hits(
+    path: &str,
+    crate_name: &str,
+    nodes: &[AnalysisNode],
+) -> Vec<AstSearchHit> {
+    nodes
+        .iter()
         .filter_map(|node| {
             let signature = markdown_signature(node.kind, node.depth, node.label.as_str())?;
             Some(AstSearchHit {
-                name: node.label,
+                name: node.label.clone(),
                 signature,
                 path: path.to_string(),
                 language: "markdown".to_string(),
@@ -50,16 +88,7 @@ pub(super) fn build_markdown_ast_hits(
                 score: 0.0,
             })
         })
-        .collect::<Vec<_>>();
-
-    if let Some(parsed) = parse_note(source_path, root, content) {
-        for section in &parsed.sections {
-            hits.extend(build_markdown_property_hits(path, crate_name, section));
-            hits.extend(build_markdown_observation_hits(path, crate_name, section));
-        }
-    }
-
-    hits
+        .collect()
 }
 
 fn markdown_signature(kind: AnalysisNodeKind, depth: usize, label: &str) -> Option<String> {
@@ -78,14 +107,14 @@ fn markdown_node_kind(kind: AnalysisNodeKind) -> Option<&'static str> {
     }
 }
 
-fn build_markdown_property_hits(
+fn build_markdown_property_hits_from_toc_section(
     path: &str,
     crate_name: &str,
-    section: &ParsedSection,
+    section: &MarkdownSection,
 ) -> Vec<AstSearchHit> {
-    let owner_title = markdown_owner_title(section);
+    let owner_title = markdown_owner_title_from_toc_section(section);
     section
-        .attributes
+        .attributes()
         .iter()
         .filter(|(key, _)| !is_observation_attribute(key.as_str()))
         .map(|(key, value)| AstSearchHit {
@@ -103,25 +132,24 @@ fn build_markdown_property_hits(
                 crate_name,
                 None,
                 None,
-                section.line_start,
-                section.line_end,
+                section.line_start(),
+                section.line_end(),
             ),
-            line_start: section.line_start,
-            line_end: section.line_end,
+            line_start: section.line_start(),
+            line_end: section.line_end(),
             score: 0.0,
         })
         .collect()
 }
 
-fn build_markdown_observation_hits(
+fn build_markdown_observation_hits_from_toc_section(
     path: &str,
     crate_name: &str,
-    section: &ParsedSection,
+    section: &MarkdownSection,
 ) -> Vec<AstSearchHit> {
-    let owner_title = markdown_owner_title(section);
-    section
-        .observations
-        .iter()
+    let owner_title = markdown_owner_title_from_toc_section(section);
+    extract_observations(section.attributes())
+        .into_iter()
         .map(|observation| AstSearchHit {
             name: "OBSERVE".to_string(),
             signature: format!(":OBSERVE: {}", observation.raw_value),
@@ -137,21 +165,21 @@ fn build_markdown_observation_hits(
                 crate_name,
                 None,
                 None,
-                section.line_start,
-                section.line_end,
+                section.line_start(),
+                section.line_end(),
             ),
-            line_start: section.line_start,
-            line_end: section.line_end,
+            line_start: section.line_start(),
+            line_end: section.line_end(),
             score: 0.0,
         })
         .collect()
 }
 
-fn markdown_owner_title(section: &ParsedSection) -> Option<String> {
-    if !section.heading_path.trim().is_empty() {
-        Some(section.heading_path.clone())
-    } else if !section.heading_title.trim().is_empty() {
-        Some(section.heading_title.clone())
+fn markdown_owner_title_from_toc_section(section: &MarkdownSection) -> Option<String> {
+    if !section.heading_path().trim().is_empty() {
+        Some(section.heading_path().to_string())
+    } else if !section.heading_title().trim().is_empty() {
+        Some(section.heading_title().to_string())
     } else {
         None
     }

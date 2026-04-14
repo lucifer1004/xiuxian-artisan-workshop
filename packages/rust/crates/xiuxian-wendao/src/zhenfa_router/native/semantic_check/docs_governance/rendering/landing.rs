@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::derive_opaque_doc_id;
+use crate::parsers::docs_governance::derive_opaque_doc_id;
 use crate::zhenfa_router::native::semantic_check::docs_governance::rendering::shared::{
     render_section_prompt, render_section_summary,
 };

@@ -2,18 +2,25 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::analyzers::records::ExampleRecord;
 use crate::analyzers::service::helpers::normalized_rank_score;
+#[cfg(feature = "repo-lexical-index")]
 use crate::search::SearchDocumentIndex;
 
+use crate::analyzers::service::search::documents::ExampleSearchMetadata;
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::documents::{
-    ExampleSearchMetadata, build_search_document_index, example_search_document,
+    build_search_document_index, example_search_document,
 };
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::indexed_exact::{
     indexed_example_exact_matches, indexed_example_prefix_matches,
 };
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::indexed_fuzzy::indexed_example_fuzzy_matches;
 use crate::analyzers::service::search::legacy::legacy_example_matches;
 
-use super::{EXAMPLE_SEARCH_BUCKETS, RankedSearchRecord, search_candidate_limit};
+#[cfg(feature = "repo-lexical-index")]
+use super::search_candidate_limit;
+use super::{EXAMPLE_SEARCH_BUCKETS, RankedSearchRecord};
 
 pub(crate) fn ranked_example_matches(
     query: &str,
@@ -21,23 +28,31 @@ pub(crate) fn ranked_example_matches(
     metadata_lookup: &BTreeMap<String, ExampleSearchMetadata>,
     limit: usize,
 ) -> Vec<RankedSearchRecord<ExampleRecord>> {
-    let lookup = examples
-        .iter()
-        .map(|example| (example.example_id.clone(), example.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let Some(index) = build_search_document_index(examples.iter().map(|example| {
-        let metadata = metadata_lookup
-            .get(example.example_id.as_str())
-            .cloned()
-            .unwrap_or_default();
-        example_search_document(example, &metadata)
-    })) else {
-        return ranked_example_matches_without_index(query, examples, metadata_lookup, limit);
-    };
-    ranked_example_matches_from_index(query, examples, metadata_lookup, &lookup, &index, limit)
+    #[cfg(feature = "repo-lexical-index")]
+    {
+        let lookup = examples
+            .iter()
+            .map(|example| (example.example_id.clone(), example.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let Some(index) = build_search_document_index(examples.iter().map(|example| {
+            let metadata = metadata_lookup
+                .get(example.example_id.as_str())
+                .cloned()
+                .unwrap_or_default();
+            example_search_document(example, &metadata)
+        })) else {
+            return ranked_example_matches_without_index(query, examples, metadata_lookup, limit);
+        };
+        ranked_example_matches_from_index(query, examples, metadata_lookup, &lookup, &index, limit)
+    }
+
+    #[cfg(not(feature = "repo-lexical-index"))]
+    {
+        ranked_example_matches_without_index(query, examples, metadata_lookup, limit)
+    }
 }
 
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) fn ranked_example_matches_with_artifacts(
     query: &str,
     examples: &[ExampleRecord],
@@ -49,6 +64,7 @@ pub(crate) fn ranked_example_matches_with_artifacts(
     ranked_example_matches_from_index(query, examples, metadata_lookup, lookup, index, limit)
 }
 
+#[cfg(feature = "repo-lexical-index")]
 fn ranked_example_matches_from_index(
     query: &str,
     examples: &[ExampleRecord],

@@ -1,54 +1,26 @@
 use std::path::Path;
 
-use crate::gateway::studio::search::project_scope::{
-    SearchProjectMetadata, project_metadata_for_path,
-};
+use crate::gateway::studio::search::project_scope::SearchProjectMetadata;
 use crate::gateway::studio::types::{SearchHit, StudioNavigationTarget, UiProjectConfig};
-use crate::parsers::markdown::{ParsedNote, ParsedSection, is_supported_note, parse_note};
-use crate::search::ProjectScannedFile;
+use crate::parsers::markdown::{ParsedNote, ParsedSection};
+use crate::search::MarkdownSnapshotEntry;
 use crate::search::knowledge_section::build::paths::studio_display_path;
 use crate::search::knowledge_section::schema::KnowledgeSectionRow;
 
-pub(super) fn build_knowledge_section_rows_for_files(
+pub(super) fn build_knowledge_section_rows_for_entry(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-    files: &[ProjectScannedFile],
+    entry: &MarkdownSnapshotEntry,
 ) -> Vec<KnowledgeSectionRow> {
-    let mut rows = Vec::new();
-    for file in files {
-        rows.extend(build_knowledge_section_rows_for_file(
-            project_root,
-            config_root,
-            projects,
-            file,
-        ));
-    }
-    rows
-}
-
-pub(super) fn build_knowledge_section_rows_for_file(
-    project_root: &Path,
-    config_root: &Path,
-    projects: &[UiProjectConfig],
-    file: &ProjectScannedFile,
-) -> Vec<KnowledgeSectionRow> {
-    if !is_supported_note(file.absolute_path.as_path()) {
-        return Vec::new();
-    }
-    let Ok(content) = std::fs::read_to_string(file.absolute_path.as_path()) else {
+    let Some(parsed) = entry.parsed_note.as_ref() else {
         return Vec::new();
     };
-    let Some(parsed) = parse_note(file.absolute_path.as_path(), project_root, &content) else {
-        return Vec::new();
+    let metadata = SearchProjectMetadata {
+        project_name: entry.file.project_name.clone(),
+        root_label: entry.file.root_label.clone(),
     };
-    let metadata = project_metadata_for_path(
-        project_root,
-        config_root,
-        projects,
-        parsed.doc.path.as_str(),
-    );
-    knowledge_rows_for_note(project_root, config_root, projects, &parsed, &metadata)
+    knowledge_rows_for_note(project_root, config_root, projects, parsed, &metadata)
 }
 
 fn knowledge_rows_for_note(

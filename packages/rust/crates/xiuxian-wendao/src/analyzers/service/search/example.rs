@@ -1,6 +1,6 @@
 use std::path::Path;
 
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
@@ -14,7 +14,7 @@ use super::super::helpers::{
 };
 use super::super::{analyze_repository_from_config_with_registry, bootstrap_builtin_registry};
 use super::documents::build_example_metadata_lookup;
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 use super::ranking::ranked_example_matches_with_artifacts;
 use super::ranking::{RankedSearchRecord, ranked_example_matches};
 
@@ -38,7 +38,7 @@ pub fn build_example_search(
 }
 
 #[must_use]
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) fn build_example_search_with_artifacts(
     query: &ExampleSearchQuery,
     analysis: &RepositoryAnalysisOutput,

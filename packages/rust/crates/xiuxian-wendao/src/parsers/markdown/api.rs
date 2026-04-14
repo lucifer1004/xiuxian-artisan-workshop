@@ -6,12 +6,14 @@ use super::time::resolve_note_timestamps;
 use super::types::ParsedNote;
 use crate::link_graph::LinkGraphDocument;
 use std::path::Path;
-use xiuxian_wendao_parsers::note::MarkdownNoteCore;
-use xiuxian_wendao_parsers::note::parse_markdown_note;
+use xiuxian_wendao_parsers::note::{MarkdownNote, MarkdownNoteCore, parse_markdown_note};
 
-/// Parse one note file into structured document row plus outgoing link targets.
 #[must_use]
-pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote> {
+pub(crate) fn adapt_markdown_note(
+    path: &Path,
+    root: &Path,
+    parser_note: MarkdownNote,
+) -> Option<ParsedNote> {
     let doc_id = relative_doc_id(path, root)?;
     let stem = path.file_stem()?.to_string_lossy().to_string();
     if stem.is_empty() {
@@ -26,7 +28,6 @@ pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote>
             )
             .as_str(),
     );
-    let parser_note = parse_markdown_note(content, &stem);
     let parsed_document = parser_note.document;
     let frontmatter = parsed_document.raw_metadata;
     let core = parsed_document.core;
@@ -72,4 +73,14 @@ pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote>
         attachment_targets: extracted.attachments,
         sections,
     })
+}
+
+/// Parse one note file into structured document row plus outgoing link targets.
+#[must_use]
+pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote> {
+    let stem = path.file_stem()?.to_string_lossy().to_string();
+    if stem.is_empty() {
+        return None;
+    }
+    adapt_markdown_note(path, root, parse_markdown_note(content, &stem))
 }

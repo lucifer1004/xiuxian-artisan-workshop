@@ -1,6 +1,4 @@
-use crate::zhenfa_router::native::semantic_check::docs_governance::parsing::{
-    collect_lines, parse_footer_block,
-};
+use crate::parsers::docs_governance::{collect_lines, parse_footer_block};
 use crate::zhenfa_router::native::semantic_check::docs_governance::rendering::render_index_footer_with_values;
 use crate::zhenfa_router::native::semantic_check::docs_governance::types::{
     INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE,

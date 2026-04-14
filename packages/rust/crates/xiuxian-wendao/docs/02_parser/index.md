@@ -27,12 +27,24 @@ claim that an Org parser implementation is active today.
 - [blocks.md](blocks.md): Parser-owned shared block core, Markdown block
   naming surface, parser-owned block extraction, and the Wendao page-index
   addressing boundary.
+- [code_observation.md](code_observation.md): Parser-owned Markdown
+  `:OBSERVE:` parsing, extraction, scope matching, and the Wendao semantic
+  consumption boundary.
+- [docs_governance.md](docs_governance.md): Parser-owned docs-governance
+  line/path parsing, the semantic-check consumer boundary, and the rule that
+  `zhenfa_router` does not own parsing.
+- [semantic_check.md](semantic_check.md): Parser-owned semantic-check link,
+  contract, and suggested-ID grammar helpers plus the rule that
+  `zhenfa_router` only consumes this grammar.
 - [document.md](document.md): Parser-owned cross-format document core,
   shared document-envelope wrapper, Markdown document naming surface, and
   the Wendao `LinkGraphDocument` adapter boundary.
 - [note.md](note.md): Parser-owned Markdown note aggregation and the Wendao
   workspace-aware note adapter boundary, including the shared note-core shape
   and shared top-level note aggregate.
+- [toc.md](toc.md): Parser-owned Markdown TOC/document-structure aggregation,
+  the shared `TocDocument<Document, Section>` surface, and the Wendao
+  projected page-index consumer boundary.
 - [targets.md](targets.md): Parser-owned target-occurrence core, Markdown
   target-occurrence naming surface, parser-visible source ranges, and the
   Wendao target-normalization and section-partition adapter boundary.
@@ -43,6 +55,9 @@ claim that an Org parser implementation is active today.
 - [references.md](references.md): Unified ordinary Markdown reference grammar
   for `[...](...)` and `[[...]]`, plus the shared `ReferenceCore<Kind>`
   boundary and current parser-owned consumers.
+- [section_create.md](section_create.md): Parser-owned Markdown section-create
+  insertion planning, heading-chain rendering, and the `semantic_edit`
+  consumer boundary.
 - [wikilinks.md](wikilinks.md): Obsidian-aligned ordinary body wikilink
   grammar, comrak-backed extraction, and the `link_graph_refs` consumer
   boundary.
@@ -57,16 +72,21 @@ claim that an Org parser implementation is active today.
 
 - `packages/rust/crates/xiuxian-wendao-parsers/src/addressed_target.rs`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/blocks/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/code_observation/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/document/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/frontmatter/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/literal_addressed_target.rs`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/note/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/reference_core.rs`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/references/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/section_create/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/sections/`
+- `packages/rust/crates/xiuxian-wendao-parsers/src/toc/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/targets/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/wikilinks/`
 - `packages/rust/crates/xiuxian-wendao-parsers/src/sourcepos.rs`
+- `src/parsers/docs_governance/`
+- `src/parsers/semantic_check/`
 - `src/parsers/markdown/`
 - `src/parsers/link_graph/query/`
 - `src/parsers/zhixing/tasks/`
@@ -108,13 +128,20 @@ claim that an Org parser implementation is active today.
     separated from Wendao-side block-path addressing
 15. How shared syntax-only document parsing should be separated from
     Wendao-owned domain adapters for cross-crate consumers
+16. How docs-governance parsing stays under `src/parsers/` while
+    `zhenfa_router` only owns semantic-check policy and tool wiring
+17. How semantic-check grammar helpers stay under `src/parsers/` while
+    `zhenfa_router` only consumes the grammar for checks and testing
+18. How Markdown section-create planning stays parser-owned while
+    `semantic_edit` consumes it without `zhenfa_router` owning the helper
+    surface
 
 :RELATIONS:
-:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]], [[03_features/210_search_queries_architecture]], [[02_parser/addressed_target]], [[02_parser/blocks]], [[02_parser/document]], [[02_parser/note]], [[02_parser/targets]], [[02_parser/sections]], [[02_parser/references]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]]
+:LINKS: [[01_core/103_package_layering]], [[06_roadmap/405_large_rust_modularization]], [[06_roadmap/419_parser_substrate_separation]], [[03_features/210_search_queries_architecture]], [[02_parser/addressed_target]], [[02_parser/blocks]], [[02_parser/code_observation]], [[02_parser/document]], [[02_parser/note]], [[02_parser/toc]], [[02_parser/targets]], [[02_parser/sections]], [[02_parser/references]], [[02_parser/section_create]], [[02_parser/wikilinks]], [[02_parser/relation_semantics]], [[02_parser/semantic_check]]
 :END:
 
 ---
 
 :FOOTER:
-:LAST_SYNC: 2026-04-12
+:LAST_SYNC: 2026-04-14
 :END:

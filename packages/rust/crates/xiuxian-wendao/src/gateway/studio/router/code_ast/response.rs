@@ -37,7 +37,8 @@ pub fn build_code_ast_analysis_response(
             label: module.qualified_name.clone(),
             kind: CodeAstNodeKind::Module,
             path: Some(module.path.clone()),
-            line: Some(line),
+            line_start: Some(line),
+            line_end: Some(line),
         });
         let content = format!("{}|{}", module.qualified_name, module.path);
         let declaration_locator = format!("l{line}");
@@ -92,7 +93,8 @@ pub fn build_code_ast_analysis_response(
             label: symbol.name.clone(),
             kind,
             path: Some(symbol.path.clone()),
-            line: symbol.line_start,
+            line_start: symbol.line_start,
+            line_end: symbol.line_end.or(symbol.line_start),
         });
         let semantic_type = retrieval_semantic_type(symbol, same_file);
         let declaration_locator = format!("l{}", symbol.line_start.unwrap_or(0));
@@ -252,6 +254,8 @@ pub fn build_code_ast_analysis_response(
         repo_id,
         path,
         language: language.to_string(),
+        node_count: nodes.len(),
+        edge_count: edges.len(),
         nodes,
         edges,
         projections,
@@ -314,7 +318,8 @@ fn build_import_code_ast_nodes(
                     label: import.import_name.clone(),
                     kind: CodeAstNodeKind::ExternalSymbol,
                     path: Some(path.to_string()),
-                    line: import.line_start,
+                    line_start: import.line_start,
+                    line_end: import.line_start,
                 },
                 CodeAstEdge {
                     id: format!("{}-{}-imports", import.module_id, import_id),

@@ -1,15 +1,22 @@
-use std::collections::{BTreeMap, HashSet};
+#[cfg(feature = "repo-lexical-index")]
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 
 use crate::analyzers::records::ModuleRecord;
 use crate::analyzers::service::helpers::normalized_rank_score;
-use crate::search::{FuzzyMatcher, FuzzySearchOptions, LexicalMatcher, SearchDocumentIndex};
+#[cfg(feature = "repo-lexical-index")]
+use crate::search::SearchDocumentIndex;
+use crate::search::{FuzzyMatcher, FuzzySearchOptions, LexicalMatcher};
 
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::documents::{
     build_search_document_index, module_search_document,
 };
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::indexed_exact::{
     indexed_module_exact_matches, indexed_module_prefix_matches,
 };
+#[cfg(feature = "repo-lexical-index")]
 use crate::analyzers::service::search::indexed_fuzzy::indexed_module_fuzzy_matches;
 use crate::analyzers::service::search::legacy::legacy_module_matches;
 
@@ -45,18 +52,26 @@ pub(crate) fn ranked_module_matches(
     modules: &[ModuleRecord],
     limit: usize,
 ) -> Vec<RankedSearchRecord<ModuleRecord>> {
-    let lookup = modules
-        .iter()
-        .map(|module| (module.module_id.clone(), module.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let Some(index) = build_search_document_index(modules.iter().map(module_search_document))
-    else {
-        return ranked_module_matches_without_index(query, modules, limit);
-    };
-    ranked_module_matches_from_index(query, modules, &lookup, &index, limit)
+    #[cfg(feature = "repo-lexical-index")]
+    {
+        let lookup = modules
+            .iter()
+            .map(|module| (module.module_id.clone(), module.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let Some(index) = build_search_document_index(modules.iter().map(module_search_document))
+        else {
+            return ranked_module_matches_without_index(query, modules, limit);
+        };
+        ranked_module_matches_from_index(query, modules, &lookup, &index, limit)
+    }
+
+    #[cfg(not(feature = "repo-lexical-index"))]
+    {
+        ranked_module_matches_without_index(query, modules, limit)
+    }
 }
 
-#[cfg(feature = "studio")]
+#[cfg(all(feature = "studio", feature = "repo-lexical-index"))]
 pub(crate) fn ranked_module_matches_with_artifacts(
     query: &str,
     modules: &[ModuleRecord],
@@ -67,6 +82,7 @@ pub(crate) fn ranked_module_matches_with_artifacts(
     ranked_module_matches_from_index(query, modules, lookup, index, limit)
 }
 
+#[cfg(feature = "repo-lexical-index")]
 fn ranked_module_matches_from_index(
     query: &str,
     modules: &[ModuleRecord],

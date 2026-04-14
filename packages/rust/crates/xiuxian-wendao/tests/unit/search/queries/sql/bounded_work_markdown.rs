@@ -53,6 +53,14 @@ async fn registers_bounded_work_markdown_rows_into_sql_surface() -> TestResult {
     assert!(
         rows.iter().any(|row| {
             row.path == "blueprint/blueprint.md"
+                && row.heading_path.is_empty()
+                && row.title == "Blueprint"
+        }),
+        "expected a document root row titled from the parsed markdown document"
+    );
+    assert!(
+        rows.iter().any(|row| {
+            row.path == "blueprint/blueprint.md"
                 && row.surface == "blueprint"
                 && row.heading_path == "Blueprint/Boundary"
         }),

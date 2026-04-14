@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::repo_index::RepoCodeDocument;
 use crate::search::repo_entity::build::RepoEntityBuildPlan;
 use crate::search::repo_entity::schema::RepoEntityRow;
-use crate::search::repo_staging::{RepoStagedMutationConfig, RepoStagedMutationPayload};
+use crate::search::repo_staging::{
+    RepoStagedMutationConfig, RepoStagedMutationPayload, repo_file_fingerprint_changed,
+};
 use crate::search::{
     SearchCorpusKind, SearchFileFingerprint, SearchPlaneService, plan_repo_staged_mutation,
 };
@@ -22,7 +24,8 @@ pub(crate) fn plan_repo_entity_build(
     let changed_paths = file_fingerprints
         .iter()
         .filter_map(|(path, fingerprint)| {
-            (previous_fingerprints.get(path) != Some(fingerprint)).then_some(path.clone())
+            repo_file_fingerprint_changed(previous_fingerprints, path.as_str(), fingerprint)
+                .then_some(path.clone())
         })
         .collect::<BTreeSet<_>>();
     let changed_rows = rows

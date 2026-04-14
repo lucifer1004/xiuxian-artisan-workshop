@@ -6,6 +6,7 @@ use serde_json::json;
 use xiuxian_config_core::resolve_project_root;
 use xiuxian_qianhuan::EmbeddedManifestationTemplateCatalog;
 
+use crate::contracts::{FlowhubGraphContract, FlowhubGraphTopology};
 use crate::error::QianjiError;
 use crate::markdown::{MarkdownShowSection, render_show_surface};
 
@@ -15,31 +16,21 @@ use super::discover::{
 };
 use super::load::load_flowhub_root_manifest;
 use super::mermaid::{
-    ALLOWED_SCENARIO_GRAPH_NODE_LABELS, MermaidNodeKind, parse_mermaid_flowchart,
+    MermaidNodeKind, analyze_mermaid_flowchart_topology, parse_mermaid_flowchart,
+    scenario_graph_label_is_allowed,
 };
 
 const FLOWHUB_GRAPH_NODE_TEMPLATE_NAME: &str = "flowhub_graph_node_semantics.md.j2";
 const FLOWHUB_GRAPH_NODE_TEMPLATE_SOURCE: &str =
     include_str!("../../resources/templates/control_plane/flowhub_graph_node_semantics.md.j2");
-const FLOWHUB_GRAPH_LOCAL_CONTRACT_TEMPLATE_NAME: &str =
-    "flowhub_graph_local_contract_template.md.j2";
-const FLOWHUB_GRAPH_LOCAL_CONTRACT_TEMPLATE_SOURCE: &str = include_str!(
-    "../../resources/templates/control_plane/flowhub_graph_local_contract_template.md.j2"
-);
 
 static FLOWHUB_GRAPH_TEMPLATE_CATALOG: EmbeddedManifestationTemplateCatalog =
     EmbeddedManifestationTemplateCatalog::new(
         "Flowhub graph show template renderer",
-        &[
-            (
-                FLOWHUB_GRAPH_NODE_TEMPLATE_NAME,
-                FLOWHUB_GRAPH_NODE_TEMPLATE_SOURCE,
-            ),
-            (
-                FLOWHUB_GRAPH_LOCAL_CONTRACT_TEMPLATE_NAME,
-                FLOWHUB_GRAPH_LOCAL_CONTRACT_TEMPLATE_SOURCE,
-            ),
-        ],
+        &[(
+            FLOWHUB_GRAPH_NODE_TEMPLATE_NAME,
+            FLOWHUB_GRAPH_NODE_TEMPLATE_SOURCE,
+        )],
     );
 
 /// One Flowhub Mermaid graph contract preview.
@@ -47,10 +38,15 @@ static FLOWHUB_GRAPH_TEMPLATE_CATALOG: EmbeddedManifestationTemplateCatalog =
 pub struct FlowhubGraphShow {
     /// Mermaid graph file on disk.
     pub graph_path: PathBuf,
-    /// Stable graph identity derived from the filename stem.
+    /// Stable graph identity resolved from `[[graph]].name` or the filename
+    /// stem fallback.
     pub merimind_graph_name: String,
     /// Stable graph kind shown to Codex.
     pub kind: String,
+    /// Resolved topology from petgraph analysis.
+    pub topology: FlowhubGraphTopology,
+    /// Optional module-owned declared topology.
+    pub declared_topology: Option<FlowhubGraphTopology>,
     /// Raw Mermaid source.
     pub mermaid: String,
     /// Owning Flowhub module reference.
@@ -67,10 +63,12 @@ pub struct FlowhubGraphShow {
     pub missing_registered_modules: Vec<String>,
     /// Mermaid nodes outside the registered-module set and allowed graph vocabulary.
     pub unknown_graph_nodes: Vec<String>,
+    /// Node labels grouped by cyclic SCC when the graph loops.
+    pub cyclic_components: Vec<Vec<String>>,
     /// Expected bounded work-surface entries that Codex should materialize.
     pub expected_work_surface: Vec<String>,
-    /// Minimal local workdir contract template that Codex should materialize.
-    pub local_contract_template: String,
+    /// Owning module manifest source.
+    pub owning_module_manifest_toml: String,
 }
 
 /// One parsed Flowhub Mermaid node summary with semantic guidance.
@@ -148,6 +146,13 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
     let root_manifest = load_flowhub_root_manifest(flowhub_root.join("qianji.toml"))?;
     let registered_modules = root_manifest.contract.register;
     let module_exports = load_registered_module_exports(&flowhub_root, &registered_modules)?;
+    let owning_module_manifest_toml =
+        fs::read_to_string(&owning_module.manifest_path).map_err(|error| {
+            QianjiError::Topology(format!(
+                "Failed to read Flowhub module manifest `{}`: {error}",
+                owning_module.manifest_path.display()
+            ))
+        })?;
 
     let source = fs::read_to_string(graph_path).map_err(|error| {
         QianjiError::Topology(format!(
@@ -155,7 +160,7 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
             graph_path.display()
         ))
     })?;
-    let merimind_graph_name = graph_path
+    let fallback_graph_name = graph_path
         .file_stem()
         .and_then(|stem| stem.to_str())
         .ok_or_else(|| {
@@ -164,6 +169,10 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
                 graph_path.display()
             ))
         })?;
+    let declared_graph = declared_graph_contract(&owning_module, graph_path);
+    let merimind_graph_name = declared_graph.map_or(fallback_graph_name, |graph| {
+        graph.resolved_name_or(fallback_graph_name)
+    });
     let flowchart = parse_mermaid_flowchart(&source, merimind_graph_name, &registered_modules)
         .map_err(|error| {
             QianjiError::Topology(format!(
@@ -171,23 +180,18 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
                 graph_path.display()
             ))
         })?;
+    let topology_analysis = analyze_mermaid_flowchart_topology(&flowchart);
 
     let nodes_by_id = flowchart
         .nodes
         .iter()
         .map(|node| (node.id.as_str(), node.label.as_str()))
         .collect::<BTreeMap<_, _>>();
-    let declared_module_labels = flowchart
-        .nodes
-        .iter()
-        .filter(|node| node.kind == MermaidNodeKind::Module)
-        .map(|node| node.label.clone())
-        .collect::<BTreeSet<_>>();
     let unknown_graph_nodes = flowchart
         .nodes
         .iter()
         .filter(|node| node.kind != MermaidNodeKind::Module)
-        .filter(|node| !ALLOWED_SCENARIO_GRAPH_NODE_LABELS.contains(&node.label.as_str()))
+        .filter(|node| !scenario_graph_label_is_allowed(node.label.as_str()))
         .map(|node| node.label.clone())
         .collect::<BTreeSet<_>>()
         .into_iter()
@@ -205,8 +209,7 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
             let exports = module_ref
                 .as_deref()
                 .and_then(|module_name| module_exports.get(module_name));
-            let is_allowed_graph_node =
-                ALLOWED_SCENARIO_GRAPH_NODE_LABELS.contains(&node.label.as_str());
+            let is_allowed_graph_node = scenario_graph_label_is_allowed(node.label.as_str());
             let kind = classify_graph_node_kind(
                 node.label.as_str(),
                 module_ref.as_deref(),
@@ -249,16 +252,16 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
         })
         .collect::<Vec<_>>();
 
-    let missing_registered_modules = registered_modules
-        .iter()
-        .filter(|module_name| !declared_module_labels.contains(module_name.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
+    let missing_registered_modules = Vec::new();
+
+    let expected_work_surface = expected_work_surface(&owning_module);
 
     Ok(FlowhubGraphShow {
         graph_path: graph_path.to_path_buf(),
         merimind_graph_name: flowchart.merimind_graph_name,
         kind: "scenario".to_string(),
+        topology: topology_analysis.topology,
+        declared_topology: declared_graph.map(|graph| graph.topology),
         mermaid: source,
         owning_module_ref: owning_module.module_ref,
         flowhub_root,
@@ -267,13 +270,9 @@ pub fn show_flowhub_graph(graph_path: impl AsRef<Path>) -> Result<FlowhubGraphSh
         edges,
         missing_registered_modules,
         unknown_graph_nodes,
-        expected_work_surface: vec![
-            "qianji.toml".to_string(),
-            "flowchart.mmd".to_string(),
-            "blueprint/".to_string(),
-            "plan/".to_string(),
-        ],
-        local_contract_template: render_local_contract_template(),
+        cyclic_components: topology_analysis.cyclic_components,
+        expected_work_surface,
+        owning_module_manifest_toml,
     })
 }
 
@@ -290,12 +289,12 @@ pub fn render_flowhub_graph_show(show: &FlowhubGraphShow) -> String {
             lines: render_node_section_lines(&show.nodes),
         },
         MarkdownShowSection {
-            title: "Expected work surface".into(),
+            title: "Module contract".into(),
             lines: render_expected_work_surface_lines(show),
         },
         MarkdownShowSection {
-            title: "Local qianji.toml template".into(),
-            lines: render_local_contract_template_lines(show),
+            title: "Owning qianji.toml".into(),
+            lines: render_owning_module_manifest_lines(show),
         },
     ];
 
@@ -305,6 +304,8 @@ pub fn render_flowhub_graph_show(show: &FlowhubGraphShow) -> String {
             format!("Name: {}", show.merimind_graph_name),
             format!("Path: {}", display_graph_path(&show.graph_path)),
             format!("Kind: {}", show.kind),
+            format!("Topology: {}", show.topology.as_str()),
+            render_declared_topology_line(show.declared_topology),
         ],
         &sections,
     )
@@ -386,6 +387,13 @@ fn render_mermaid_section_lines(show: &FlowhubGraphShow) -> Vec<String> {
     lines
 }
 
+fn render_declared_topology_line(topology: Option<FlowhubGraphTopology>) -> String {
+    match topology {
+        Some(value) => format!("Declared topology: {}", value.as_str()),
+        None => "Declared topology: (none)".to_string(),
+    }
+}
+
 fn render_node_section_lines(nodes: &[FlowhubGraphNodeSummary]) -> Vec<String> {
     if nodes.is_empty() {
         return vec!["- none".to_string()];
@@ -423,19 +431,16 @@ fn render_node_section_lines(nodes: &[FlowhubGraphNodeSummary]) -> Vec<String> {
 }
 
 fn render_expected_work_surface_lines(show: &FlowhubGraphShow) -> Vec<String> {
-    let mut lines = vec!["<plan-workdir>/".to_string()];
-    lines.extend(
-        show.expected_work_surface
-            .iter()
-            .map(|entry| format!("  {entry}")),
-    );
-    lines
+    show.expected_work_surface
+        .iter()
+        .map(|entry| format!("- {entry}"))
+        .collect()
 }
 
-fn render_local_contract_template_lines(show: &FlowhubGraphShow) -> Vec<String> {
+fn render_owning_module_manifest_lines(show: &FlowhubGraphShow) -> Vec<String> {
     let mut lines = vec!["```toml".to_string()];
     lines.extend(
-        show.local_contract_template
+        show.owning_module_manifest_toml
             .lines()
             .map(ToString::to_string),
     );
@@ -443,31 +448,12 @@ fn render_local_contract_template_lines(show: &FlowhubGraphShow) -> Vec<String> 
     lines
 }
 
-fn render_local_contract_template() -> String {
-    render_embedded_graph_block(
-        FLOWHUB_GRAPH_LOCAL_CONTRACT_TEMPLATE_NAME,
-        json!({
-            "plan_name": "<plan-name>",
-        }),
-    )
-    .map(|lines| lines.join("\n"))
-    .unwrap_or_else(|error| {
-        log::warn!(
-            "failed to render Flowhub graph local contract template through qianhuan; falling back to inline format: {error}"
-        );
-        [
-            "version = 1",
-            "",
-            "[plan]",
-            r#"name = "<plan-name>""#,
-            r#"surface = ["flowchart.mmd", "blueprint", "plan"]"#,
-            "",
-            "[check]",
-            r#"require = ["qianji.toml", "flowchart.mmd", "blueprint", "plan", "blueprint/**/*.md", "plan/**/*.md"]"#,
-            r#"flowchart = ["blueprint", "plan"]"#,
-        ]
-        .join("\n")
-    })
+fn expected_work_surface(owning_module: &super::discover::FlowhubDiscoveredModule) -> Vec<String> {
+    let mut entries = vec!["qianji.toml".to_string()];
+    if let Some(contract) = &owning_module.manifest.contract {
+        entries.extend(contract.required.iter().cloned());
+    }
+    entries
 }
 
 fn render_embedded_graph_block(
@@ -508,6 +494,18 @@ fn display_graph_path(path: &Path) -> String {
     }
 }
 
+fn declared_graph_contract<'a>(
+    owning_module: &'a super::discover::FlowhubDiscoveredModule,
+    graph_path: &Path,
+) -> Option<&'a FlowhubGraphContract> {
+    let file_name = graph_path.file_name()?.to_str()?;
+    owning_module
+        .manifest
+        .graph
+        .iter()
+        .find(|graph| graph.path == file_name)
+}
+
 fn classify_graph_node_kind(
     label: &str,
     module_ref: Option<&str>,
@@ -530,7 +528,8 @@ fn classify_graph_node_kind(
         "validator_gate" | "domain_validators" => FlowhubGraphNodeKind::Validator,
         "done_gate" => FlowhubGraphNodeKind::Gate,
         "codex_write_bounded_surface" | "diagnostics" => FlowhubGraphNodeKind::Process,
-        _ if module_ref.is_some() => FlowhubGraphNodeKind::Unknown,
+        _ if is_exact_http_request_label(label) => FlowhubGraphNodeKind::Process,
+        _ if module_ref.is_some() => FlowhubGraphNodeKind::Context,
         _ => FlowhubGraphNodeKind::Unknown,
     }
 }
@@ -563,6 +562,9 @@ fn graph_node_role(label: &str, kind: FlowhubGraphNodeKind) -> &'static str {
         "done_gate" => "allow completion only when required guards and validators pass",
         "codex_write_bounded_surface" => "write the bounded work surface from the graph contract",
         "diagnostics" => "capture blocking diagnostics for bounded-surface repair",
+        _ if is_exact_http_request_label(label) => {
+            "invoke the exact HTTP request surface carried by this graph node"
+        }
         _ => match kind {
             FlowhubGraphNodeKind::Context => "define upstream context for the bounded slice",
             FlowhubGraphNodeKind::Constraint => {
@@ -608,6 +610,9 @@ fn graph_node_agent_action(label: &str, kind: FlowhubGraphNodeKind) -> &'static 
             "write qianji.toml, flowchart.mmd, blueprint/, and plan/ for the bounded slice"
         }
         "diagnostics" => "use diagnostics to repair the bounded work surface before retrying",
+        _ if is_exact_http_request_label(label) => {
+            "resolve placeholders and call this HTTP surface exactly as written"
+        }
         _ => match kind {
             FlowhubGraphNodeKind::Context => {
                 "treat as upstream scope and project it into writable artifacts"
@@ -627,6 +632,16 @@ fn graph_node_agent_action(label: &str, kind: FlowhubGraphNodeKind) -> &'static 
             FlowhubGraphNodeKind::Unknown => unreachable!("unknown handled above"),
         },
     }
+}
+
+fn is_exact_http_request_label(label: &str) -> bool {
+    let Some((method, target)) = label.split_once(' ') else {
+        return false;
+    };
+    matches!(method, "GET" | "POST" | "PUT" | "PATCH" | "DELETE")
+        && !target.is_empty()
+        && target.starts_with('/')
+        && !target.contains(' ')
 }
 
 fn graph_node_kind_label(kind: FlowhubGraphNodeKind) -> &'static str {

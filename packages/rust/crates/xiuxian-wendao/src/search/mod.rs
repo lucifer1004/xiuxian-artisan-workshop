@@ -19,6 +19,8 @@ mod local_symbol;
 #[cfg(feature = "search-runtime")]
 mod manifest;
 #[cfg(feature = "search-runtime")]
+mod markdown_snapshot;
+#[cfg(feature = "search-runtime")]
 mod project_fingerprint;
 /// Shared query-language adapters that sit above the Wendao search runtime.
 pub mod queries;
@@ -38,10 +40,15 @@ pub(crate) mod repo_search;
 #[cfg(feature = "search-runtime")]
 mod repo_staging;
 #[cfg(feature = "search-runtime")]
+mod semantic_fingerprint;
+#[cfg(feature = "search-runtime")]
 mod service;
+#[cfg(feature = "search-runtime")]
+mod source_snapshot;
 #[cfg(feature = "search-runtime")]
 mod status;
 /// Shared Tantivy-backed search primitives.
+#[cfg(feature = "repo-lexical-index")]
 pub mod tantivy;
 
 #[cfg(feature = "search-runtime")]
@@ -73,11 +80,22 @@ pub use manifest::{
     SearchRepoPublicationRecord, SearchRepoRuntimeRecord,
 };
 #[cfg(feature = "search-runtime")]
-#[allow(unused_imports)]
+pub(crate) use markdown_snapshot::{
+    MarkdownProjectSnapshot, MarkdownSnapshotEntry, build_markdown_snapshot_entry,
+    markdown_snapshot_entry_cache_key,
+};
+#[cfg(feature = "search-runtime")]
 pub(crate) use project_fingerprint::{
-    ProjectScannedFile, fingerprint_note_projects, fingerprint_source_projects,
-    fingerprint_symbol_projects, scan_note_project_files, scan_source_project_files,
-    scan_symbol_project_files,
+    ProjectScanInventory, ProjectScannedFile, fingerprint_note_projects_from_scanned_files,
+    fingerprint_source_projects_from_scanned_files, fingerprint_symbol_projects_from_scanned_files,
+    scan_supported_project_files,
+};
+#[cfg(all(test, feature = "search-runtime"))]
+pub(crate) use project_fingerprint::{
+    fingerprint_note_projects, fingerprint_note_projects_with_scanned_files,
+    fingerprint_source_projects, fingerprint_source_projects_with_scanned_files,
+    fingerprint_symbol_projects, fingerprint_symbol_projects_with_scanned_files,
+    scan_note_project_files, scan_source_project_files, scan_symbol_project_files,
 };
 #[cfg(feature = "search-runtime")]
 pub(crate) use reference_occurrence::ReferenceOccurrenceSearchError;
@@ -85,6 +103,8 @@ pub(crate) use reference_occurrence::ReferenceOccurrenceSearchError;
 pub(crate) use reference_occurrence::{reference_occurrence_batches, reference_occurrence_schema};
 #[cfg(feature = "search-runtime")]
 pub(crate) use repo_content_chunk::RepoContentChunkSearchFilters;
+#[cfg(all(test, feature = "search-runtime"))]
+pub(crate) use repo_content_chunk::repo_content_chunk_file_fingerprints;
 #[cfg(all(test, feature = "search-runtime"))]
 pub(crate) use repo_entity::publish_repo_entities;
 #[cfg(feature = "search-runtime")]
@@ -97,13 +117,24 @@ pub(crate) use repo_staging::{
     RepoStagedMutationAction, RepoStagedMutationPlan, plan_repo_staged_mutation,
 };
 #[cfg(feature = "search-runtime")]
+pub(crate) use semantic_fingerprint::{
+    ast_hits_fingerprint, attachment_hits_fingerprint, reference_hits_fingerprint,
+    stable_payload_fingerprint,
+};
+#[cfg(feature = "search-runtime")]
 pub(crate) use service::RepoSearchAvailability;
 #[cfg(feature = "search-runtime")]
 pub(crate) use service::RepoSearchPublicationState;
 #[cfg(feature = "search-runtime")]
 pub(crate) use service::RepoSearchQueryCacheKeyInput;
 #[cfg(feature = "search-runtime")]
+pub(crate) use service::SearchBuildRepeatWorkTelemetry;
+#[cfg(feature = "search-runtime")]
 pub use service::SearchPlaneService;
+#[cfg(feature = "search-runtime")]
+pub(crate) use source_snapshot::{
+    SourceSnapshotEntry, build_source_snapshot_entry, source_snapshot_entry_cache_key,
+};
 #[cfg(feature = "search-runtime")]
 pub use status::{
     SearchCorpusIssue, SearchCorpusIssueCode, SearchCorpusIssueFamily, SearchCorpusIssueSummary,
@@ -112,6 +143,7 @@ pub use status::{
     SearchMaintenanceStatus, SearchPlanePhase, SearchPlaneStatusSnapshot, SearchQueryTelemetry,
     SearchQueryTelemetrySource, SearchRepoReadPressure,
 };
+#[cfg(feature = "repo-lexical-index")]
 pub use tantivy::{
     SearchDocument, SearchDocumentFields, SearchDocumentHit, SearchDocumentIndex,
     SearchDocumentMatchField, TantivyDocumentMatch, TantivyMatcher,

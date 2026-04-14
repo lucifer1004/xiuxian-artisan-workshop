@@ -1,16 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
+use dashmap::DashMap;
 use tokio::sync::{Semaphore, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 use crate::search::coordinator::SearchCompactionReason;
+use crate::search::service::core::repeat_work::SearchBuildRepeatWorkTelemetryState;
 use crate::search::{
-    SearchCorpusKind, SearchManifestKeyspace, SearchPlaneCoordinator, SearchQueryTelemetry,
-    SearchRepoCorpusRecord, SearchRepoRuntimeRecord,
+    MarkdownSnapshotEntry, SearchCorpusKind, SearchManifestKeyspace, SearchPlaneCoordinator,
+    SearchQueryTelemetry, SearchRepoCorpusRecord, SearchRepoRuntimeRecord, SourceSnapshotEntry,
 };
 use xiuxian_vector_store::SearchEngineContext;
 
@@ -122,6 +124,9 @@ pub(crate) struct RepoSearchDispatchRuntime {
     pub(crate) fanout_capped: bool,
 }
 
+pub(crate) type MarkdownSnapshotEntryCell = Arc<OnceLock<Arc<MarkdownSnapshotEntry>>>;
+pub(crate) type SourceSnapshotEntryCell = Arc<OnceLock<Arc<SourceSnapshotEntry>>>;
+
 /// Project-scoped entrypoint for the search-plane domain.
 #[derive(Clone)]
 pub struct SearchPlaneService {
@@ -139,6 +144,9 @@ pub struct SearchPlaneService {
     pub(crate) repo_maintenance: Arc<Mutex<RepoMaintenanceRuntime>>,
     pub(crate) query_telemetry:
         Arc<RwLock<std::collections::BTreeMap<SearchCorpusKind, SearchQueryTelemetry>>>,
+    pub(crate) markdown_snapshot_entries: Arc<DashMap<String, MarkdownSnapshotEntryCell>>,
+    pub(crate) source_snapshot_entries: Arc<DashMap<String, SourceSnapshotEntryCell>>,
+    pub(crate) repeat_work_telemetry: Arc<RwLock<SearchBuildRepeatWorkTelemetryState>>,
     pub(super) repo_corpus_records:
         Arc<RwLock<std::collections::BTreeMap<(SearchCorpusKind, String), SearchRepoCorpusRecord>>>,
 }

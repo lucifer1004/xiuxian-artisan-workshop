@@ -187,7 +187,8 @@ async fn load_code_ast_analysis_response_supports_import_backed_modelica_package
                 "id": node.id,
                 "label": node.label,
                 "path": node.path,
-                "line": node.line,
+                "line_start": node.line_start,
+                "line_end": node.line_end,
             }))
             .collect::<Vec<_>>(),
         "import_edges": response
@@ -295,7 +296,8 @@ async fn load_code_ast_analysis_response_supports_search_only_ast_grep_rust_repo
                 "label": node.label,
                 "kind": node.kind,
                 "path": node.path,
-                "line": node.line,
+                "line_start": node.line_start,
+                "line_end": node.line_end,
             }))
             .collect::<Vec<_>>(),
         "retrieval_atoms": response
@@ -395,7 +397,8 @@ async fn load_code_ast_analysis_response_supports_search_only_ast_grep_toml_repo
                 "label": node.label,
                 "kind": node.kind,
                 "path": node.path,
-                "line": node.line,
+                "line_start": node.line_start,
+                "line_end": node.line_end,
             }))
             .collect::<Vec<_>>(),
         "retrieval_atoms": response
@@ -448,7 +451,7 @@ fn configure_repo_project(
     repository: &RegisteredRepository,
     plugins: Vec<String>,
 ) {
-    studio.set_ui_config(UiConfig {
+    studio.apply_eager_ui_config(UiConfig {
         projects: Vec::new(),
         repo_projects: vec![UiRepoProjectConfig {
             id: repository.id.clone(),

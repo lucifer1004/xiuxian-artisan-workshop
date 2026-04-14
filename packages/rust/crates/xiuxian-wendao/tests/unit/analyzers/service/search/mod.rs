@@ -84,6 +84,7 @@ fn sample_search_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
         imports: vec![ImportRecord {
             repo_id: repo_id.to_string(),
             module_id: module_id.clone(),
+            path: "src/ProjectionPkg.jl".to_string(),
             import_name: "solve".to_string(),
             target_package: "SciMLBase".to_string(),
             source_module: "BaseModelica".to_string(),

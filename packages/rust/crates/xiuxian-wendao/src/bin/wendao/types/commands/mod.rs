@@ -2,6 +2,7 @@ mod agentic;
 mod attachments;
 mod audit;
 mod command;
+mod docs;
 mod fix;
 #[cfg(feature = "zhenfa-router")]
 mod gateway;
@@ -18,6 +19,7 @@ pub(crate) use agentic::AgenticCommand;
 pub(crate) use attachments::AttachmentsArgs;
 pub(crate) use audit::AuditArgs;
 pub(crate) use command::Command;
+pub(crate) use docs::DocsCommand;
 pub(crate) use fix::FixArgs;
 #[cfg(feature = "zhenfa-router")]
 pub(crate) use gateway::{GatewayArgs, GatewayCommand, GatewayStartArgs};

@@ -16,15 +16,17 @@ are cleanly separated from Wendao domain records.
 
 ## Canonical Parser Families
 
-| Namespace                                             | Input shape                        | Canonical output                           | Notes                                                                                                                                                                                                                                                                                                             |
-| ----------------------------------------------------- | ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parsers::markdown`                                   | Markdown notes                     | sections, code observations, note adapters | Shared by indexing, search, enhancement, and semantic checks; frontmatter, block extraction, document metadata, target occurrences, note aggregation, references, wikilinks, sourcepos, and parser-owned section structure now live in `xiuxian-wendao-parsers`, while Wendao keeps enrichments and note adapters |
-| `parsers::link_graph::query`                          | link-graph search query strings    | `ParsedLinkGraphQuery`                     | Shared query-language parsing                                                                                                                                                                                                                                                                                     |
-| `parsers::zhixing::tasks`                             | zhixing task lines                 | task projections and normalized identities | Shared by ingest and stats                                                                                                                                                                                                                                                                                        |
-| `parsers::languages::rust::cargo::dependencies`       | `Cargo.toml` dependency tables     | dependency projections                     | Shared by dependency indexing                                                                                                                                                                                                                                                                                     |
-| `parsers::languages::python::pyproject::dependencies` | `pyproject.toml` dependency tables | dependency projections                     | Shared by dependency indexing                                                                                                                                                                                                                                                                                     |
-| `parsers::search::repo_code_query`                    | repo-code search query strings     | typed repo-code query                      | Shared by repo-search flows                                                                                                                                                                                                                                                                                       |
-| `parsers::graph::persistence`                         | graph JSON dicts                   | `Entity` and `Relation`                    | Shared by graph save/load persistence                                                                                                                                                                                                                                                                             |
+| Namespace                                             | Input shape                         | Canonical output                           | Notes                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------- | ----------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parsers::docs_governance`                            | docs-governance markdown/path lines | line slices, drawer/footer/link helpers    | Shared by semantic-check docs governance and Studio markdown metadata; keeps path/line parsing out of `zhenfa_router`, while issue policy, rendering, and tool registration stay in `zhenfa_router`; currently Wendao-local because the grammar is still Wendao-specific docs governance policy                                                                                                            |
+| `parsers::semantic_check`                             | semantic-check wiki links/contracts | reference helpers, contract parse helpers  | Shared by semantic-check checks and test bridges; keeps semantic-check grammar and helper types out of `zhenfa_router`, while issue policy, rendering, and tool registration stay in `zhenfa_router`; currently Wendao-local because the grammar is still Wendao-specific semantic-check policy                                                                                                            |
+| `parsers::markdown`                                   | Markdown notes                      | sections, note adapters                    | Shared by indexing, search, enhancement, semantic checks, and semantic edit; frontmatter, code observation parsing, block extraction, document metadata, target occurrences, note aggregation, references, wikilinks, sourcepos, parser-owned section structure, and parser-owned section-create planning/rendering now live in `xiuxian-wendao-parsers`, while Wendao keeps enrichments and note adapters |
+| `parsers::link_graph::query`                          | link-graph search query strings     | `ParsedLinkGraphQuery`                     | Shared query-language parsing                                                                                                                                                                                                                                                                                                                                                                              |
+| `parsers::zhixing::tasks`                             | zhixing task lines                  | task projections and normalized identities | Shared by ingest and stats                                                                                                                                                                                                                                                                                                                                                                                 |
+| `parsers::languages::rust::cargo::dependencies`       | `Cargo.toml` dependency tables      | dependency projections                     | Shared by dependency indexing                                                                                                                                                                                                                                                                                                                                                                              |
+| `parsers::languages::python::pyproject::dependencies` | `pyproject.toml` dependency tables  | dependency projections                     | Shared by dependency indexing                                                                                                                                                                                                                                                                                                                                                                              |
+| `parsers::search::repo_code_query`                    | repo-code search query strings      | typed repo-code query                      | Shared by repo-search flows                                                                                                                                                                                                                                                                                                                                                                                |
+| `parsers::graph::persistence`                         | graph JSON dicts                    | `Entity` and `Relation`                    | Shared by graph save/load persistence                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Parser vs Local Helper Rule
 
@@ -55,6 +57,8 @@ Code stays outside `src/parsers/` when it is one of these:
 4. Parser-owned unit coverage should live under `tests/unit/parsers/<family>/`.
 5. Consumer subsystems may import parser services, but they do not own
    duplicate parser namespaces.
+6. `zhenfa_router` may consume parser helpers, but it must not become the
+   ownership home for parser grammar or parser-owned intermediate types.
 
 ## Cross-Crate Reuse Rule
 
@@ -135,10 +139,25 @@ Markdown section extraction is now split across five explicit contracts:
 4. `xiuxian_wendao_parsers::sections::MarkdownSection` is the Markdown-local
    naming surface over `SectionCore`
 5. `xiuxian_wendao::parsers::markdown::ParsedSection` is an enriched adapter
-   that adds Wendao-owned `entities` and `CodeObservation` rows
+   that adds Wendao-owned `entities` and parser-owned `CodeObservation` rows
 6. property-relation parsing can consume the parser-owned section contract
    because it only needs heading scope and parser-owned metadata attributes
 7. note parsing that assembles `LinkGraphDocument` remains Wendao-owned
+
+## Code Observation Boundary
+
+Markdown `:OBSERVE:` handling is now split across four explicit contracts:
+
+1. `xiuxian_wendao_parsers::code_observation::CodeObservation` owns the
+   parser-owned parsed observation entry
+2. `xiuxian_wendao_parsers::code_observation::extract_observations` owns
+   parser-owned extraction from one attribute map
+3. `xiuxian_wendao_parsers::code_observation::path_matches_scope` owns
+   parser-owned scope matching for observation filters
+4. `xiuxian_wendao::parsers::markdown::code_observation` is now adapter-only
+   and re-exports the parser-owned contract
+5. semantic-check issue policy and downstream interpretation remain
+   Wendao-owned
 
 ## Document Contract Boundary
 
@@ -179,6 +198,62 @@ Markdown note parsing is now split across four explicit contracts:
    sections, and final `LinkGraphDocument` assembly
 6. this keeps parser orchestration reusable without moving filesystem or graph
    semantics into the parser crate
+7. `xiuxian_wendao::search::markdown_snapshot` is now an explicit mixed
+   consumer: it builds markdown AST/property/observation hits from parser-owned
+   `MarkdownSection` rows, then adapts the same parser-owned note into
+   Wendao `ParsedNote` for knowledge-section and attachment consumers without
+   reparsing the markdown body
+
+## TOC Boundary
+
+Markdown TOC/document-structure parsing is now split across four explicit
+contracts:
+
+1. `xiuxian_wendao_parsers::toc::TocDocument<Document, Section>` owns one
+   reusable `document + ordered sections` aggregate shape
+2. `xiuxian_wendao_parsers::toc::MarkdownTocDocument` is the Markdown-local
+   alias over `TocDocument<MarkdownDocument, MarkdownSection>`
+3. `xiuxian_wendao_parsers::toc::parse_markdown_toc` is the parser-owned
+   entry point for Markdown document structure without repo or filesystem-root
+   semantics
+4. `xiuxian_wendao::analyzers::projection::markdown` consumes that parser-owned
+   TOC surface for projected page-index document parsing, while Wendao keeps
+   projected `doc_id` derivation and repo-scoped page-index outputs local
+5. `DocsToolService::get_toc_documents()` remains a Wendao capability opener
+   over repo-scoped projected page-index documents rather than the parser
+   owner for Markdown TOC extraction
+
+## Section Create Boundary
+
+Markdown section-create planning is now split across five explicit contracts:
+
+1. `xiuxian_wendao_parsers::section_create::InsertionInfo` owns the
+   parser-owned insertion-byte, start-level, remaining-path, and sibling-context
+   contract
+2. `xiuxian_wendao_parsers::section_create::find_insertion_point` owns
+   parser-owned heading traversal and insertion planning for one Markdown
+   heading path
+3. `xiuxian_wendao_parsers::section_create::build_new_sections_content_with_options`
+   owns parser-owned heading-chain rendering with optional `:ID:` drawers
+4. `xiuxian_wendao::parsers::markdown::section_create` is now adapter-only and
+   re-exports the parser-owned helper surface
+5. `xiuxian_wendao::zhenfa_router::native::semantic_edit` remains the consumer
+   that owns mutation policy, XML response rendering, and file writes
+
+## Docs Governance Boundary
+
+Docs-governance parsing is now split across four explicit contracts:
+
+1. `xiuxian_wendao::parsers::docs_governance` owns line/path parsing helpers
+   for opaque IDs, canonical-doc classification, line slicing, relations
+   blocks, footer blocks, and hidden-path link extraction
+2. `zhenfa_router::native::semantic_check::docs_governance` owns issue policy,
+   workspace traversal, rendering, and fix planning
+3. `gateway::studio::analysis::markdown::metadata` consumes the same parser
+   helper surface directly rather than importing parsing from `zhenfa_router`
+4. this surface stays local to Wendao for now because the grammar is still a
+   Wendao docs-governance policy surface rather than a proven cross-crate
+   parser contract
 
 ## Addressed Target and Reference Boundary
 

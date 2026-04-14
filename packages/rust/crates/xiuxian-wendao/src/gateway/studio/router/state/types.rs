@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 use serde::Serialize;
 
 use crate::analyzers::registry::PluginRegistry;
+use crate::gateway::studio::router::state::cold_start::StudioSearchColdStartTelemetryState;
 use crate::gateway::studio::symbol_index::{SymbolIndexCoordinator, timestamp_now};
 use crate::gateway::studio::types::UiConfig;
 use crate::link_graph::LinkGraphIndex;
@@ -74,8 +76,10 @@ impl StudioBootstrapBackgroundIndexingTelemetry {
 pub struct StudioState {
     pub(crate) project_root: PathBuf,
     pub(crate) config_root: PathBuf,
-    pub(crate) bootstrap_config_path: Option<PathBuf>,
     pub(crate) bootstrap_background_indexing: bool,
+    pub(crate) cold_start_process_started_at: String,
+    pub(crate) cold_start_process_started_instant: Instant,
+    pub(crate) cold_start_telemetry: Arc<RwLock<StudioSearchColdStartTelemetryState>>,
     pub(crate) bootstrap_background_indexing_deferred_activation:
         Arc<RwLock<Option<DeferredBootstrapBackgroundIndexingActivation>>>,
     pub(crate) ui_config: Arc<RwLock<UiConfig>>,

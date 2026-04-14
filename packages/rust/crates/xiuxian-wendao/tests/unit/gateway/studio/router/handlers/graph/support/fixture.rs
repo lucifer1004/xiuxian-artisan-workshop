@@ -28,7 +28,7 @@ pub(crate) fn build_fixture_with_projects(
     let mut studio_state = StudioState::new();
     studio_state.project_root = temp_dir.path().to_path_buf();
     studio_state.config_root = temp_dir.path().to_path_buf();
-    studio_state.set_ui_config(UiConfig {
+    studio_state.apply_eager_ui_config(UiConfig {
         projects,
         repo_projects: Vec::new(),
     });

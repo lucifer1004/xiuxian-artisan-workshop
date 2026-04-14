@@ -6,7 +6,9 @@ mod coverage;
 mod documents;
 mod example;
 mod imports;
+#[cfg(feature = "repo-lexical-index")]
 mod indexed_exact;
+#[cfg(feature = "repo-lexical-index")]
 mod indexed_fuzzy;
 mod legacy;
 mod module;

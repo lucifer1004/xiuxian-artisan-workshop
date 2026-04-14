@@ -179,6 +179,7 @@ pub(crate) fn build_import_search_result(
         let import = ImportRecord {
             repo_id: repo_id.to_string(),
             module_id: row.module_id.clone().unwrap_or_default(),
+            path: row.path.clone(),
             import_name: row.name.clone(),
             target_package: row.summary.clone().unwrap_or_default(),
             source_module: row.signature.clone().unwrap_or_default(),

@@ -11,7 +11,7 @@ use super::{
     bundled_wendao_gateway_openapi_document, bundled_wendao_gateway_openapi_path,
     load_bundled_wendao_gateway_openapi_document,
 };
-use crate::gateway::openapi::paths::{API_UI_CONFIG_OPENAPI_PATH, WENDAO_GATEWAY_ROUTE_CONTRACTS};
+use crate::gateway::openapi::paths::WENDAO_GATEWAY_ROUTE_CONTRACTS;
 
 fn operation_summary(operation: &Value) -> &str {
     operation
@@ -133,18 +133,6 @@ fn bundled_gateway_openapi_document_covers_declared_route_inventory() {
     }
 }
 
-#[test]
-fn bundled_gateway_openapi_document_keeps_ui_config_post_example() {
-    let document = load_bundled_wendao_gateway_openapi_document()
-        .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
-    let post = &document["paths"][API_UI_CONFIG_OPENAPI_PATH]["post"];
-
-    assert!(
-        post["requestBody"]["content"]["application/json"]["example"].is_object(),
-        "POST /api/ui/config should include an example request body"
-    );
-}
-
 #[cfg(feature = "julia")]
 #[test]
 fn bundled_gateway_openapi_document_declares_rerank_plugin_artifact_examples() {
@@ -239,6 +227,10 @@ fn bundled_gateway_openapi_document_omits_flight_only_http_paths() {
     assert!(
         !paths.contains_key("/api/analysis/code-ast"),
         "bundled gateway OpenAPI must not expose the retired code-ast HTTP path"
+    );
+    assert!(
+        !paths.contains_key("/api/ui/config"),
+        "bundled gateway OpenAPI must not expose the retired UI config HTTP path"
     );
     assert!(
         !paths.contains_key("/api/analysis/markdown/retrieval-arrow"),

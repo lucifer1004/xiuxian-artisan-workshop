@@ -11,6 +11,9 @@ use crate::gateway::studio::types::{
     UiCapabilities, UiConfig, UiProjectConfig, UiRepoProjectConfig,
 };
 use crate::repo_index::RepoIndexStatusResponse;
+use crate::search::SearchCorpusKind;
+
+const CONFIG_APPLY_SOURCE: &str = "config_apply";
 
 impl StudioState {
     pub(crate) fn ui_config(&self) -> UiConfig {
@@ -26,7 +29,7 @@ impl StudioState {
         let mut seen_repositories = HashSet::new();
         let supported_repositories = ui_config
             .repo_projects
-            .into_iter()
+            .iter()
             .filter_map(|project| {
                 let repository_id = project.id.trim().to_string();
                 if repository_id.is_empty() || !seen_repositories.insert(repository_id.clone()) {
@@ -51,6 +54,8 @@ impl StudioState {
         let supported_languages = supported_languages.into_iter().collect();
 
         UiCapabilities {
+            projects: ui_config.projects,
+            repo_projects: ui_config.repo_projects,
             languages: supported_languages,
             repositories: supported_repositories,
             kinds: supported_code_kinds(),
@@ -63,7 +68,8 @@ impl StudioState {
         }
     }
 
-    pub(crate) fn set_ui_config(&self, config: UiConfig) {
+    #[cfg(test)]
+    pub(crate) fn apply_eager_ui_config(&self, config: UiConfig) {
         self.apply_ui_config(config, true);
     }
 
@@ -82,28 +88,65 @@ impl StudioState {
         if !configured_projects.is_empty() {
             self.record_deferred_bootstrap_background_indexing_activation(source);
             let search_projects = configured_projects.clone();
+            let scan_inventory = self
+                .search_plane
+                .scan_supported_projects_with_repeat_work_details(
+                    source,
+                    self.project_root.as_path(),
+                    self.config_root.as_path(),
+                    search_projects.as_slice(),
+                );
+            let note_files = scan_inventory.note_files();
+            let source_files = scan_inventory.source_files();
             self.symbol_index_coordinator
                 .sync_projects(configured_projects, Arc::clone(&self.symbol_index));
-            self.search_plane.ensure_knowledge_section_index_started(
-                self.project_root.as_path(),
-                self.config_root.as_path(),
-                search_projects.as_slice(),
-            );
-            self.search_plane.ensure_local_symbol_index_started(
-                self.project_root.as_path(),
-                self.config_root.as_path(),
-                search_projects.as_slice(),
-            );
-            self.search_plane.ensure_attachment_index_started(
-                self.project_root.as_path(),
-                self.config_root.as_path(),
-                search_projects.as_slice(),
-            );
-            self.search_plane.ensure_reference_occurrence_index_started(
-                self.project_root.as_path(),
-                self.config_root.as_path(),
-                search_projects.as_slice(),
-            );
+            if self
+                .search_plane
+                .ensure_knowledge_section_index_started_with_scanned_files(
+                    self.project_root.as_path(),
+                    self.config_root.as_path(),
+                    search_projects.as_slice(),
+                    note_files.as_slice(),
+                )
+            {
+                self.record_local_corpus_index_started(SearchCorpusKind::KnowledgeSection, source);
+            }
+            if self
+                .search_plane
+                .ensure_local_symbol_index_started_with_scanned_files(
+                    self.project_root.as_path(),
+                    self.config_root.as_path(),
+                    search_projects.as_slice(),
+                    scan_inventory.symbol_files(),
+                )
+            {
+                self.record_local_corpus_index_started(SearchCorpusKind::LocalSymbol, source);
+            }
+            if self
+                .search_plane
+                .ensure_attachment_index_started_with_scanned_files(
+                    self.project_root.as_path(),
+                    self.config_root.as_path(),
+                    search_projects.as_slice(),
+                    note_files.as_slice(),
+                )
+            {
+                self.record_local_corpus_index_started(SearchCorpusKind::Attachment, source);
+            }
+            if self
+                .search_plane
+                .ensure_reference_occurrence_index_started_with_scanned_files(
+                    self.project_root.as_path(),
+                    self.config_root.as_path(),
+                    search_projects.as_slice(),
+                    source_files.as_slice(),
+                )
+            {
+                self.record_local_corpus_index_started(
+                    SearchCorpusKind::ReferenceOccurrence,
+                    source,
+                );
+            }
         }
         self.ensure_repo_background_indexing_started(source);
     }
@@ -118,7 +161,7 @@ impl StudioState {
         if guard.projects == sanitized_projects && guard.repo_projects == sanitized_repo_projects {
             drop(guard);
             if eager_background_indexing {
-                self.ensure_background_indexes_started("set_ui_config");
+                self.ensure_background_indexes_started(CONFIG_APPLY_SOURCE);
             }
             return;
         }
@@ -148,7 +191,7 @@ impl StudioState {
         drop(vfs_guard);
 
         if eager_background_indexing {
-            self.ensure_background_indexes_started("set_ui_config");
+            self.ensure_background_indexes_started(CONFIG_APPLY_SOURCE);
         }
     }
 
