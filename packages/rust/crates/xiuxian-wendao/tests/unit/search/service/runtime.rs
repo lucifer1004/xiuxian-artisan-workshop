@@ -1,5 +1,28 @@
 use crate::search::service::tests::support::*;
 
+fn ready_repo_status_rows(repo_ids: &[&str]) -> RepoIndexStatusResponse {
+    RepoIndexStatusResponse {
+        total: repo_ids.len(),
+        active: 0,
+        queued: 0,
+        checking: 0,
+        syncing: 0,
+        indexing: 0,
+        ready: repo_ids.len(),
+        unsupported: 0,
+        failed: 0,
+        target_concurrency: 1,
+        max_concurrency: 1,
+        sync_concurrency_limit: 1,
+        current_repo_id: None,
+        active_repo_ids: Vec::new(),
+        repos: repo_ids
+            .iter()
+            .map(|repo_id| repo_status_entry(repo_id, RepoIndexPhase::Ready))
+            .collect(),
+    }
+}
+
 #[tokio::test]
 async fn status_with_repo_runtime_hydrates_repo_corpus_status_from_snapshot_cache() {
     let temp_dir = temp_dir();
@@ -73,6 +96,64 @@ async fn status_with_repo_runtime_hydrates_repo_corpus_status_from_snapshot_cach
     assert_eq!(repo_content.phase, SearchPlanePhase::Ready);
     assert!(repo_content.active_epoch.is_some());
     assert!(repo_content.row_count.unwrap_or_default() > 0);
+}
+
+#[tokio::test]
+async fn status_with_repo_runtime_is_stable_for_reordered_ready_published_repo_rows() {
+    let temp_dir = temp_dir();
+    let keyspace = unique_test_manifest_keyspace("status-row-order");
+    let service = SearchPlaneService::with_runtime(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        keyspace.clone(),
+        SearchMaintenancePolicy::default(),
+        SearchPlaneCache::for_tests(keyspace),
+    );
+    let documents = vec![RepoCodeDocument {
+        path: "src/lib.rs".to_string(),
+        language: Some("rust".to_string()),
+        contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
+    }];
+    publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-1")).await;
+    publish_repo_bundle(&service, "beta/repo", &documents, Some("rev-1")).await;
+
+    service
+        .synchronize_repo_runtime_for_test(&ready_repo_status_rows(&["alpha/repo", "beta/repo"]))
+        .await;
+    let left_snapshot = service.status_with_repo_runtime().await;
+
+    service.clear_all_in_memory_repo_runtime_for_test();
+    service
+        .synchronize_repo_runtime_for_test(&ready_repo_status_rows(&["beta/repo", "alpha/repo"]))
+        .await;
+    let right_snapshot = service.status_with_repo_runtime().await;
+
+    assert_eq!(
+        corpus_status(
+            &left_snapshot,
+            SearchCorpusKind::RepoEntity,
+            "left repo entity row",
+        ),
+        corpus_status(
+            &right_snapshot,
+            SearchCorpusKind::RepoEntity,
+            "right repo entity row",
+        )
+    );
+    assert_eq!(
+        corpus_status(
+            &left_snapshot,
+            SearchCorpusKind::RepoContentChunk,
+            "left repo content row",
+        ),
+        corpus_status(
+            &right_snapshot,
+            SearchCorpusKind::RepoContentChunk,
+            "right repo content row",
+        )
+    );
 }
 
 #[test]

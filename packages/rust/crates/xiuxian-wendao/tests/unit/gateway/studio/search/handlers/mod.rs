@@ -13,5 +13,5 @@ pub(crate) use helpers::{
 };
 pub(crate) use helpers::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
-    test_studio_state,
+    test_studio_state, test_studio_state_with_cache,
 };

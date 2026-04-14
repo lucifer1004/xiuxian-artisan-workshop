@@ -32,6 +32,27 @@ fn some_or_panic<T>(value: Option<T>, context: &str) -> T {
     value.unwrap_or_else(|| panic!("{context}"))
 }
 
+fn mixed_modelica_rust_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("modelica".to_string()),
+        RepositoryPluginConfig::Id("rust".to_string()),
+    ]
+}
+
+fn mixed_rust_unknown_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("rust".to_string()),
+        RepositoryPluginConfig::Id("ast-grep".to_string()),
+    ]
+}
+
+fn mixed_modelica_unknown_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("modelica".to_string()),
+        RepositoryPluginConfig::Id("ast-grep".to_string()),
+    ]
+}
+
 fn sample_analysis_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
     RepositoryAnalysisCacheKey {
         repo_id: repo_id.to_string(),
@@ -97,6 +118,72 @@ fn build_repository_analysis_cache_key_sorts_and_deduplicates_plugin_ids() {
     );
     assert!(!key.analysis_identity.is_empty());
     assert_eq!(key.checkout_revision, Some("rev-1".to_string()));
+}
+
+#[test]
+fn build_repository_analysis_cache_key_normalizes_mixed_plugin_declarations() {
+    let first_repository = RegisteredRepository {
+        id: "repo-cache-key-normalized".to_string(),
+        path: Some(PathBuf::from("/tmp/repo-cache-key-normalized")),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+            RepositoryPluginConfig::Id("julia".to_string()),
+            RepositoryPluginConfig::Config {
+                id: "modelica".to_string(),
+                options: serde_json::json!({
+                    "mode": "parser-summary"
+                }),
+            },
+        ],
+    };
+    let reordered_repository = RegisteredRepository {
+        plugins: vec![
+            RepositoryPluginConfig::Config {
+                id: "modelica".to_string(),
+                options: serde_json::json!({
+                    "mode": "doc-surface"
+                }),
+            },
+            RepositoryPluginConfig::Id("julia".to_string()),
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+        ],
+        ..first_repository.clone()
+    };
+    let source = MaterializedRepo {
+        checkout_root: PathBuf::from("/tmp/repo-cache-key-normalized"),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let metadata = Some(LocalCheckoutMetadata {
+        revision: Some("rev-1".to_string()),
+        remote_url: None,
+    });
+
+    let first_key =
+        build_repository_analysis_cache_key(&first_repository, &source, metadata.as_ref());
+    let second_key =
+        build_repository_analysis_cache_key(&reordered_repository, &source, metadata.as_ref());
+
+    assert_eq!(
+        first_key.plugin_ids,
+        vec![
+            "ast-grep".to_string(),
+            "julia".to_string(),
+            "modelica".to_string()
+        ]
+    );
+    assert_eq!(first_key, second_key);
+    assert_eq!(first_key.analysis_identity, second_key.analysis_identity);
 }
 
 #[test]
@@ -555,6 +642,488 @@ fn build_repository_analysis_cache_key_reuses_mixed_julia_modelica_identity_for_
 }
 
 #[test]
+#[serial(mixed_modelica_rust_live)]
+fn build_repository_analysis_cache_key_reuses_mixed_modelica_rust_identity_for_rust_ast_equivalent_source_churn()
+-> Result<(), Box<dyn std::error::Error>> {
+    ensure_linked_modelica_parser_summary_service()?;
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let rust_source_path = tempdir.path().join("src/lib.rs");
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-mixed-modelica-rust-rust".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_modelica_rust_plugin_configs(),
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_eq!(first_key.analysis_identity, second_key.analysis_identity);
+    Ok(())
+}
+
+#[test]
+#[serial(mixed_modelica_rust_live)]
+fn build_repository_analysis_cache_key_reuses_mixed_modelica_rust_identity_for_modelica_ast_equivalent_source_churn()
+-> Result<(), Box<dyn std::error::Error>> {
+    ensure_linked_modelica_parser_summary_service()?;
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    let modelica_source_path = tempdir.path().join("PI.mo");
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-mixed-modelica-rust-modelica".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_modelica_rust_plugin_configs(),
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n// semantic no-op\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Modelica source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_eq!(first_key.analysis_identity, second_key.analysis_identity);
+    Ok(())
+}
+
+#[test]
+fn build_repository_analysis_cache_key_invalidates_mixed_rust_unknown_plugin_ast_equivalent_source_churn()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let rust_source_path = tempdir.path().join("src/lib.rs");
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-mixed-rust-unknown".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_rust_unknown_plugin_configs(),
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_ne!(first_key.analysis_identity, second_key.analysis_identity);
+}
+
+#[test]
+#[serial(mixed_modelica_unknown_live)]
+fn build_repository_analysis_cache_key_invalidates_mixed_modelica_unknown_plugin_ast_equivalent_source_churn()
+-> Result<(), Box<dyn std::error::Error>> {
+    ensure_linked_modelica_parser_summary_service()?;
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    let modelica_source_path = tempdir.path().join("PI.mo");
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-mixed-modelica-unknown".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_modelica_unknown_plugin_configs(),
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n// semantic no-op\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Modelica source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_ne!(first_key.analysis_identity, second_key.analysis_identity);
+    Ok(())
+}
+
+#[test]
+fn build_repository_analysis_cache_key_reuses_generic_rust_identity_for_ast_equivalent_source_churn()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/lib.rs");
+    fs::write(&source_path, "fn solve(x: i32) -> i32 {\n    x + 1\n}\n")
+        .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-rust-semantic".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("rust".to_string())],
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_eq!(first_key.analysis_identity, second_key.analysis_identity);
+}
+
+#[test]
+fn build_repository_analysis_cache_key_invalidates_on_generic_rust_signature_change() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/lib.rs");
+    fs::write(&source_path, "fn solve(x: i32) -> i32 {\n    x + 1\n}\n")
+        .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-rust-change".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("rust".to_string())],
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &source_path,
+        "fn solve(x: i32, y: i32) -> i32 {\n    x + y\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_ne!(first_key.analysis_identity, second_key.analysis_identity);
+}
+
+#[test]
+fn build_repository_analysis_cache_key_reuses_generic_rust_identity_without_repo_plugin_config() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/lib.rs");
+    fs::write(&source_path, "fn solve(x: i32) -> i32 {\n    x + 1\n}\n")
+        .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-rust-generic-no-plugin".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: Vec::new(),
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_eq!(first_key.analysis_identity, second_key.analysis_identity);
+}
+
+#[test]
+fn build_repository_analysis_cache_key_invalidates_generic_rust_identity_without_repo_plugin_config()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/lib.rs");
+    fs::write(&source_path, "fn solve(x: i32) -> i32 {\n    x + 1\n}\n")
+        .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+
+    let repository = RegisteredRepository {
+        id: "repo-cache-identity-rust-generic-no-plugin-change".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: Vec::new(),
+    };
+    let source = MaterializedRepo {
+        checkout_root: tempdir.path().to_path_buf(),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let first_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-1".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    fs::write(
+        &source_path,
+        "fn solve(x: i32, y: i32) -> i32 {\n    x + y\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    let second_key = build_repository_analysis_cache_key(
+        &repository,
+        &source,
+        Some(&LocalCheckoutMetadata {
+            revision: Some("rev-2".to_string()),
+            remote_url: None,
+        }),
+    );
+
+    assert_ne!(first_key.analysis_identity, second_key.analysis_identity);
+}
+
+#[test]
 fn repository_search_artifacts_cache_roundtrip_uses_analysis_identity() {
     let key = sample_analysis_key("artifact-cache-roundtrip");
     let stored = ok_or_panic(
@@ -649,4 +1218,86 @@ fn repository_search_query_cache_isolated_by_endpoint_and_filter() {
 
     assert_eq!(module_value, vec!["module".to_string()]);
     assert_eq!(projected_value, vec!["projected".to_string()]);
+}
+
+#[test]
+fn repository_search_query_cache_key_is_stable_for_normalized_plugin_identity() {
+    let source = MaterializedRepo {
+        checkout_root: PathBuf::from("/tmp/repo-query-cache-normalized"),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let metadata = Some(LocalCheckoutMetadata {
+        revision: Some("rev-1".to_string()),
+        remote_url: None,
+    });
+    let first_analysis_key = build_repository_analysis_cache_key(
+        &RegisteredRepository {
+            id: "repo-query-cache-normalized".to_string(),
+            path: Some(PathBuf::from("/tmp/repo-query-cache-normalized")),
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![
+                RepositoryPluginConfig::Id("ast-grep".to_string()),
+                RepositoryPluginConfig::Id("julia".to_string()),
+                RepositoryPluginConfig::Config {
+                    id: "modelica".to_string(),
+                    options: serde_json::json!({
+                        "mode": "parser-summary"
+                    }),
+                },
+            ],
+        },
+        &source,
+        metadata.as_ref(),
+    );
+    let second_analysis_key = build_repository_analysis_cache_key(
+        &RegisteredRepository {
+            id: "repo-query-cache-normalized".to_string(),
+            path: Some(PathBuf::from("/tmp/repo-query-cache-normalized")),
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![
+                RepositoryPluginConfig::Config {
+                    id: "modelica".to_string(),
+                    options: serde_json::json!({
+                        "mode": "doc-surface"
+                    }),
+                },
+                RepositoryPluginConfig::Id("ast-grep".to_string()),
+                RepositoryPluginConfig::Id("julia".to_string()),
+                RepositoryPluginConfig::Id("ast-grep".to_string()),
+            ],
+        },
+        &source,
+        metadata.as_ref(),
+    );
+    let options = FuzzySearchOptions::document_search();
+    let first_query_key = RepositorySearchQueryCacheKey::new(
+        &first_analysis_key,
+        "repo.projected-page-search",
+        "solve",
+        Some("reference".to_string()),
+        options,
+        10,
+    );
+    let second_query_key = RepositorySearchQueryCacheKey::new(
+        &second_analysis_key,
+        "repo.projected-page-search",
+        "solve",
+        Some("reference".to_string()),
+        options,
+        10,
+    );
+
+    assert_eq!(first_analysis_key, second_analysis_key);
+    assert_eq!(first_query_key, second_query_key);
 }

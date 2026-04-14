@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::gateway::studio::search::handlers::code_search::search::build_repo_content_search_hits;
 use crate::gateway::studio::search::handlers::knowledge::build_intent_search_response;
+use crate::gateway::studio::search::handlers::knowledge::intent::build_intent_cache_key;
 use crate::gateway::studio::search::handlers::knowledge::load_intent_search_response_with_metadata;
 use crate::gateway::studio::search::handlers::queries::SearchQuery;
 #[cfg(feature = "duckdb")]
@@ -15,11 +16,92 @@ use crate::gateway::studio::search::handlers::tests::{
 };
 use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
-    test_studio_state,
+    test_studio_state, test_studio_state_with_cache,
 };
 use crate::repo_index::{
     RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
 };
+
+#[tokio::test]
+async fn build_intent_cache_key_is_stable_for_reordered_repo_config() {
+    let studio = test_studio_state_with_cache();
+    studio.apply_ui_config(
+        crate::gateway::studio::types::UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![
+                crate::gateway::studio::types::UiRepoProjectConfig {
+                    id: "alpha".to_string(),
+                    root: Some(".".to_string()),
+                    url: None,
+                    git_ref: None,
+                    refresh: None,
+                    plugins: vec!["julia".to_string()],
+                },
+                crate::gateway::studio::types::UiRepoProjectConfig {
+                    id: "beta".to_string(),
+                    root: Some(".".to_string()),
+                    url: None,
+                    git_ref: None,
+                    refresh: None,
+                    plugins: vec!["modelica".to_string()],
+                },
+            ],
+        },
+        false,
+    );
+    let left_key = build_intent_cache_key(
+        &studio,
+        "solve",
+        "solve",
+        None,
+        10,
+        Some("code_search"),
+        true,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("left intent cache key: {error:?}"));
+    studio.apply_ui_config(
+        crate::gateway::studio::types::UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![
+                crate::gateway::studio::types::UiRepoProjectConfig {
+                    id: "beta".to_string(),
+                    root: Some(".".to_string()),
+                    url: None,
+                    git_ref: None,
+                    refresh: None,
+                    plugins: vec!["modelica".to_string()],
+                },
+                crate::gateway::studio::types::UiRepoProjectConfig {
+                    id: "alpha".to_string(),
+                    root: Some(".".to_string()),
+                    url: None,
+                    git_ref: None,
+                    refresh: None,
+                    plugins: vec!["julia".to_string()],
+                },
+            ],
+        },
+        false,
+    );
+    let right_key = build_intent_cache_key(
+        &studio,
+        "solve",
+        "solve",
+        None,
+        10,
+        Some("code_search"),
+        true,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("right intent cache key: {error:?}"));
+
+    assert!(
+        left_key.is_some(),
+        "expected left intent cache key to exist"
+    );
+    assert_eq!(left_key, right_key);
+}
 
 #[tokio::test]
 async fn build_intent_search_response_includes_repo_content_hits_for_debug_lookup() {

@@ -1,11 +1,14 @@
 use std::time::Duration;
 
+use crate::analyzers::RegisteredRepository;
 use crate::gateway::studio::router::{
     StudioApiError, StudioState, configured_repositories, configured_repository,
     map_repo_intelligence_error,
 };
 use crate::gateway::studio::types::SearchResponse;
-use crate::parsers::search::repo_code_query::parse_repo_code_search_query_with_repo_hint;
+use crate::parsers::search::repo_code_query::{
+    ParsedRepoCodeSearchQuery, parse_repo_code_search_query_with_repo_hint,
+};
 use crate::search::repo_search::{
     RepoCodeSearchExecutionError, search_repo_code_outcome_for_query,
 };
@@ -15,6 +18,14 @@ use crate::gateway::studio::search::handlers::code_search::query::{
     infer_repo_hint_from_repositories, query_uses_redundant_repo_seed, repo_search_result_limits,
     repo_wide_code_search_timeout,
 };
+
+struct ResolvedCodeSearchScope {
+    parsed: ParsedRepoCodeSearchQuery,
+    effective_repo_hint: Option<String>,
+    effective_repo_wide_budget: Option<Duration>,
+    selected_repository: Option<RegisteredRepository>,
+    repo_ids: Vec<String>,
+}
 
 /// Build one code-search response from the Studio search plane.
 ///
@@ -46,59 +57,16 @@ pub(crate) async fn build_code_search_response_with_budget(
     limit: usize,
     repo_wide_budget: Option<Duration>,
 ) -> Result<SearchResponse, StudioApiError> {
-    let mut parsed = parse_repo_code_search_query_with_repo_hint(raw_query.as_str(), repo_hint);
-    let configured_repositories = configured_repositories(studio);
-    if parsed.repo.is_none() {
-        parsed.repo =
-            infer_repo_hint_from_repositories(&parsed, configured_repositories.as_slice());
-    }
-    let effective_repo_hint = parsed.repo.as_deref();
-    let effective_repo_wide_budget = if effective_repo_hint.is_some() {
-        None
-    } else {
-        repo_wide_budget.or_else(|| repo_wide_code_search_timeout(None))
-    };
-    let selected_repository = if let Some(repo_id) = effective_repo_hint {
-        Some(configured_repository(studio, repo_id).map_err(map_repo_intelligence_error)?)
-    } else {
-        None
-    };
-    if let Some(repository) = selected_repository.as_ref()
-        && query_uses_redundant_repo_seed(&parsed, repository)
-    {
-        parsed.search_term = None;
-    }
-    let repo_ids = if let Some(repository) = selected_repository.as_ref() {
-        vec![repository.id.clone()]
-    } else {
-        configured_repositories
-            .into_iter()
-            .map(|repository| repository.id)
-            .collect()
-    };
-
-    if repo_ids.is_empty() {
-        return Err(StudioApiError::bad_request(
-            "UNKNOWN_REPOSITORY",
-            "No configured repository is available for code search",
-        ));
-    }
-    let cache_key = studio
-        .search_plane
-        .repo_search_query_cache_key(RepoSearchQueryCacheKeyInput {
-            scope: "code_search",
-            corpora: &[],
-            repo_corpora: &[
-                SearchCorpusKind::RepoEntity,
-                SearchCorpusKind::RepoContentChunk,
-            ],
-            repo_ids: repo_ids.as_slice(),
-            query: raw_query.as_str(),
-            limit,
-            intent: Some("code_search"),
-            repo_hint: effective_repo_hint,
-        })
-        .await;
+    let scope = resolve_code_search_scope(studio, raw_query.as_str(), repo_hint, repo_wide_budget)?;
+    let cache_key =
+        build_code_search_cache_key_for_scope(studio, raw_query.as_str(), limit, &scope).await;
+    let ResolvedCodeSearchScope {
+        parsed,
+        effective_repo_hint,
+        effective_repo_wide_budget,
+        selected_repository,
+        repo_ids,
+    } = scope;
     if let Some(cache_key) = cache_key.as_ref()
         && let Some(cached) = studio
             .search_plane
@@ -113,7 +81,7 @@ pub(crate) async fn build_code_search_response_with_budget(
         repo_ids,
         raw_query.as_str(),
         &parsed,
-        repo_search_result_limits(effective_repo_hint, limit),
+        repo_search_result_limits(effective_repo_hint.as_deref(), limit),
         effective_repo_wide_budget,
     )
     .await
@@ -177,4 +145,90 @@ pub(crate) async fn build_code_search_response_with_budget(
             .await;
     }
     Ok(response)
+}
+
+fn resolve_code_search_scope(
+    studio: &StudioState,
+    raw_query: &str,
+    repo_hint: Option<&str>,
+    repo_wide_budget: Option<Duration>,
+) -> Result<ResolvedCodeSearchScope, StudioApiError> {
+    let mut parsed = parse_repo_code_search_query_with_repo_hint(raw_query, repo_hint);
+    let configured_repositories = configured_repositories(studio);
+    if parsed.repo.is_none() {
+        parsed.repo =
+            infer_repo_hint_from_repositories(&parsed, configured_repositories.as_slice());
+    }
+    let effective_repo_hint = parsed.repo.clone();
+    let effective_repo_wide_budget = if effective_repo_hint.is_some() {
+        None
+    } else {
+        repo_wide_budget.or_else(|| repo_wide_code_search_timeout(None))
+    };
+    let selected_repository = if let Some(repo_id) = effective_repo_hint.as_deref() {
+        Some(configured_repository(studio, repo_id).map_err(map_repo_intelligence_error)?)
+    } else {
+        None
+    };
+    if let Some(repository) = selected_repository.as_ref()
+        && query_uses_redundant_repo_seed(&parsed, repository)
+    {
+        parsed.search_term = None;
+    }
+    let repo_ids = if let Some(repository) = selected_repository.as_ref() {
+        vec![repository.id.clone()]
+    } else {
+        configured_repositories
+            .into_iter()
+            .map(|repository| repository.id)
+            .collect()
+    };
+    if repo_ids.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "UNKNOWN_REPOSITORY",
+            "No configured repository is available for code search",
+        ));
+    }
+    Ok(ResolvedCodeSearchScope {
+        parsed,
+        effective_repo_hint,
+        effective_repo_wide_budget,
+        selected_repository,
+        repo_ids,
+    })
+}
+
+async fn build_code_search_cache_key_for_scope(
+    studio: &StudioState,
+    raw_query: &str,
+    limit: usize,
+    scope: &ResolvedCodeSearchScope,
+) -> Option<String> {
+    studio
+        .search_plane
+        .repo_search_query_cache_key(RepoSearchQueryCacheKeyInput {
+            scope: "code_search",
+            corpora: &[],
+            repo_corpora: &[
+                SearchCorpusKind::RepoEntity,
+                SearchCorpusKind::RepoContentChunk,
+            ],
+            repo_ids: scope.repo_ids.as_slice(),
+            query: raw_query,
+            limit,
+            intent: Some("code_search"),
+            repo_hint: scope.effective_repo_hint.as_deref(),
+        })
+        .await
+}
+
+#[cfg(test)]
+pub(crate) async fn build_code_search_cache_key(
+    studio: &StudioState,
+    raw_query: &str,
+    repo_hint: Option<&str>,
+    limit: usize,
+) -> Result<Option<String>, StudioApiError> {
+    let scope = resolve_code_search_scope(studio, raw_query, repo_hint, None)?;
+    Ok(build_code_search_cache_key_for_scope(studio, raw_query, limit, &scope).await)
 }

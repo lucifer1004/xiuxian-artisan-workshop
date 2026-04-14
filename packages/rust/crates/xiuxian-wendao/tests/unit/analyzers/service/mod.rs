@@ -13,9 +13,10 @@ use crate::analyzers::records::{
 use crate::analyzers::registry::PluginRegistry;
 use crate::analyzers::{
     AnalysisContext, PluginAnalysisOutput, RepoIntelligenceError, RepoIntelligencePlugin,
-    RepoSourceFile, RepositoryAnalysisOutput, RepositoryPluginConfig,
+    RepoSourceFile, RepositoryAnalysisOutput, RepositoryPluginConfig, bootstrap_builtin_registry,
     resolve_registered_repository_source,
 };
+use crate::gateway::studio::search::handlers::tests::linked_parser_summary::ensure_linked_modelica_parser_summary_service;
 use crate::gateway::studio::test_support::{commit_all, init_git_repository};
 use xiuxian_git_repo::{LocalCheckoutMetadata, SyncMode};
 
@@ -204,6 +205,199 @@ impl RepoIntelligencePlugin for CountingJuliaPlugin {
                 uuid: None,
                 dependencies: Vec::new(),
             }),
+            ..RepositoryAnalysisOutput::default()
+        })
+    }
+}
+
+#[derive(Clone)]
+struct CountingRustPlugin {
+    calls: Arc<AtomicUsize>,
+}
+
+impl RepoIntelligencePlugin for CountingRustPlugin {
+    fn id(&self) -> &'static str {
+        "rust"
+    }
+
+    fn supports_repository(&self, _repository: &RegisteredRepository) -> bool {
+        true
+    }
+
+    fn analyze_file(
+        &self,
+        context: &AnalysisContext,
+        file: &RepoSourceFile,
+    ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
+        let module_id = format!("repo:{}:module:fixture", context.repository.id);
+        Ok(PluginAnalysisOutput {
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: module_id.clone(),
+                qualified_name: "fixture".to_string(),
+                path: file.path.clone(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:solve", context.repository.id),
+                module_id: Some(module_id),
+                name: "solve".to_string(),
+                qualified_name: "fixture.solve".to_string(),
+                kind: RepoSymbolKind::Function,
+                path: file.path.clone(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("solve(x)".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
+            imports: Vec::new(),
+            examples: Vec::new(),
+            docs: Vec::new(),
+            diagnostics: Vec::new(),
+        })
+    }
+
+    fn analyze_repository(
+        &self,
+        context: &AnalysisContext,
+        repository_root: &Path,
+    ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(RepositoryAnalysisOutput {
+            repository: Some(RepositoryRecord {
+                repo_id: context.repository.id.clone(),
+                name: "fixture".to_string(),
+                path: repository_root.display().to_string(),
+                url: None,
+                revision: None,
+                version: None,
+                uuid: None,
+                dependencies: Vec::new(),
+            }),
+            ..RepositoryAnalysisOutput::default()
+        })
+    }
+}
+
+fn mixed_modelica_rust_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("modelica".to_string()),
+        RepositoryPluginConfig::Id("rust".to_string()),
+    ]
+}
+
+fn mixed_rust_unknown_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("rust".to_string()),
+        RepositoryPluginConfig::Id("ast-grep".to_string()),
+    ]
+}
+
+fn mixed_modelica_unknown_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("modelica".to_string()),
+        RepositoryPluginConfig::Id("ast-grep".to_string()),
+    ]
+}
+
+fn bootstrap_builtin_registry_with_counting_rust_plugin(calls: Arc<AtomicUsize>) -> PluginRegistry {
+    let mut registry =
+        bootstrap_builtin_registry().unwrap_or_else(|error| panic!("bootstrap registry: {error}"));
+    registry
+        .register(CountingRustPlugin { calls })
+        .unwrap_or_else(|error| panic!("register Rust plugin: {error}"));
+    registry
+}
+
+#[derive(Clone)]
+struct CountingModelicaPlugin {
+    calls: Arc<AtomicUsize>,
+}
+
+impl RepoIntelligencePlugin for CountingModelicaPlugin {
+    fn id(&self) -> &'static str {
+        "modelica"
+    }
+
+    fn supports_repository(&self, _repository: &RegisteredRepository) -> bool {
+        true
+    }
+
+    fn analyze_file(
+        &self,
+        context: &AnalysisContext,
+        file: &RepoSourceFile,
+    ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
+        let module_id = format!("repo:{}:module:DemoLib", context.repository.id);
+        Ok(PluginAnalysisOutput {
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: module_id.clone(),
+                qualified_name: "DemoLib".to_string(),
+                path: file.path.clone(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:PI", context.repository.id),
+                module_id: Some(module_id),
+                name: "PI".to_string(),
+                qualified_name: "DemoLib.PI".to_string(),
+                kind: RepoSymbolKind::Type,
+                path: file.path.clone(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("model PI".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
+            imports: Vec::new(),
+            examples: Vec::new(),
+            docs: Vec::new(),
+            diagnostics: Vec::new(),
+        })
+    }
+
+    fn analyze_repository(
+        &self,
+        context: &AnalysisContext,
+        repository_root: &Path,
+    ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(RepositoryAnalysisOutput {
+            repository: Some(RepositoryRecord {
+                repo_id: context.repository.id.clone(),
+                name: "DemoLib".to_string(),
+                path: repository_root.display().to_string(),
+                url: None,
+                revision: None,
+                version: None,
+                uuid: None,
+                dependencies: Vec::new(),
+            }),
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: format!("repo:{}:module:DemoLib", context.repository.id),
+                qualified_name: "DemoLib".to_string(),
+                path: "PI.mo".to_string(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:PI", context.repository.id),
+                module_id: Some(format!("repo:{}:module:DemoLib", context.repository.id)),
+                name: "PI".to_string(),
+                qualified_name: "DemoLib.PI".to_string(),
+                kind: RepoSymbolKind::Type,
+                path: "PI.mo".to_string(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("model PI".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
             ..RepositoryAnalysisOutput::default()
         })
     }
@@ -537,6 +731,345 @@ fn analyze_repository_invalidates_cached_analysis_for_julia_source_change() {
     let second =
         analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
             .unwrap_or_else(|error| panic!("second analysis should succeed: {error}"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_ne!(
+        first.cache_key.analysis_identity,
+        second.cache_key.analysis_identity
+    );
+}
+
+#[test]
+fn analyze_repository_reuses_cached_analysis_for_generic_rust_ast_equivalent_source_churn() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/lib.rs");
+    fs::write(&source_path, "fn solve(x: i32) -> i32 {\n    x + 1\n}\n")
+        .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    commit_all(tempdir.path(), "initial");
+
+    let repository = RegisteredRepository {
+        id: "counting-rust-cache".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        git_ref: None,
+        plugins: vec![RepositoryPluginConfig::Id("rust".to_string())],
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(CountingRustPlugin {
+            calls: Arc::clone(&calls),
+        })
+        .unwrap_or_else(|error| panic!("register test plugin: {error}"));
+
+    let first =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("first analysis should succeed: {error}"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    fs::write(
+        &source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "ast-equivalent");
+
+    let second =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("second analysis should succeed: {error}"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        first.cache_key.analysis_identity,
+        second.cache_key.analysis_identity
+    );
+}
+
+#[test]
+fn analyze_repository_invalidates_cached_analysis_for_generic_rust_signature_change() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let source_path = tempdir.path().join("src/lib.rs");
+    fs::write(&source_path, "fn solve(x: i32) -> i32 {\n    x + 1\n}\n")
+        .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    commit_all(tempdir.path(), "initial");
+
+    let repository = RegisteredRepository {
+        id: "counting-rust-cache-change".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        git_ref: None,
+        plugins: vec![RepositoryPluginConfig::Id("rust".to_string())],
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(CountingRustPlugin {
+            calls: Arc::clone(&calls),
+        })
+        .unwrap_or_else(|error| panic!("register test plugin: {error}"));
+
+    let first =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("first analysis should succeed: {error}"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    fs::write(
+        &source_path,
+        "fn solve(x: i32, y: i32) -> i32 {\n    x + y\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "affecting");
+
+    let second =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("second analysis should succeed: {error}"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_ne!(
+        first.cache_key.analysis_identity,
+        second.cache_key.analysis_identity
+    );
+}
+
+#[test]
+fn analyze_repository_reuses_cached_analysis_for_ast_equivalent_mixed_modelica_rust_rust_source_churn()
+ {
+    ensure_linked_modelica_parser_summary_service()
+        .unwrap_or_else(|error| panic!("linked Modelica parser-summary service: {error}"));
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let rust_source_path = tempdir.path().join("src/lib.rs");
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+    commit_all(tempdir.path(), "initial");
+
+    let repository = RegisteredRepository {
+        id: "counting-mixed-modelica-rust-rust".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        git_ref: None,
+        plugins: mixed_modelica_rust_plugin_configs(),
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let registry = bootstrap_builtin_registry_with_counting_rust_plugin(Arc::clone(&calls));
+
+    let first =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("first mixed analysis should succeed: {error}"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "ast-equivalent mixed rust");
+
+    let second =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("second mixed analysis should succeed: {error}"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        first.cache_key.analysis_identity,
+        second.cache_key.analysis_identity
+    );
+}
+
+#[test]
+fn analyze_repository_reuses_cached_analysis_for_ast_equivalent_mixed_modelica_rust_modelica_source_churn()
+ {
+    ensure_linked_modelica_parser_summary_service()
+        .unwrap_or_else(|error| panic!("linked Modelica parser-summary service: {error}"));
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    let modelica_source_path = tempdir.path().join("PI.mo");
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+    commit_all(tempdir.path(), "initial");
+
+    let repository = RegisteredRepository {
+        id: "counting-mixed-modelica-rust-modelica".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        git_ref: None,
+        plugins: mixed_modelica_rust_plugin_configs(),
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let registry = bootstrap_builtin_registry_with_counting_rust_plugin(Arc::clone(&calls));
+
+    let first =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("first mixed analysis should succeed: {error}"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n// semantic no-op\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Modelica source: {error}"));
+    commit_all(tempdir.path(), "ast-equivalent mixed modelica");
+
+    let second =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("second mixed analysis should succeed: {error}"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        first.cache_key.analysis_identity,
+        second.cache_key.analysis_identity
+    );
+}
+
+#[test]
+fn analyze_repository_invalidates_cached_analysis_for_ast_equivalent_mixed_rust_unknown_plugin_source_churn()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    let rust_source_path = tempdir.path().join("src/lib.rs");
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    commit_all(tempdir.path(), "initial");
+
+    let repository = RegisteredRepository {
+        id: "counting-mixed-rust-unknown".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        git_ref: None,
+        plugins: mixed_rust_unknown_plugin_configs(),
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(CountingRustPlugin {
+            calls: Arc::clone(&calls),
+        })
+        .unwrap_or_else(|error| panic!("register Rust plugin: {error}"));
+
+    let first =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("first mixed analysis should succeed: {error}"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    fs::write(
+        &rust_source_path,
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "ast-equivalent mixed rust unknown");
+
+    let second =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| panic!("second mixed analysis should succeed: {error}"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_ne!(
+        first.cache_key.analysis_identity,
+        second.cache_key.analysis_identity
+    );
+}
+
+#[test]
+fn analyze_repository_invalidates_cached_analysis_for_ast_equivalent_mixed_modelica_unknown_plugin_source_churn()
+ {
+    ensure_linked_modelica_parser_summary_service()
+        .unwrap_or_else(|error| panic!("linked Modelica parser-summary service: {error}"));
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    let modelica_source_path = tempdir.path().join("PI.mo");
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+    commit_all(tempdir.path(), "initial");
+
+    let repository = RegisteredRepository {
+        id: "counting-mixed-modelica-unknown".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        git_ref: None,
+        plugins: mixed_modelica_unknown_plugin_configs(),
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(CountingModelicaPlugin {
+            calls: Arc::clone(&calls),
+        })
+        .unwrap_or_else(|error| panic!("register Modelica plugin: {error}"));
+
+    let first =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| {
+                panic!("first mixed Modelica analysis should succeed: {error}")
+            });
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    fs::write(
+        &modelica_source_path,
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n// semantic no-op\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Modelica source: {error}"));
+    commit_all(tempdir.path(), "ast-equivalent mixed modelica unknown");
+
+    let second =
+        analyze_registered_repository_bundle_with_registry(&repository, tempdir.path(), &registry)
+            .unwrap_or_else(|error| {
+                panic!("second mixed Modelica analysis should succeed: {error}")
+            });
 
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     assert_ne!(

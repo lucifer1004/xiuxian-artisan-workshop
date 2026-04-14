@@ -7,6 +7,8 @@ mod sources;
 mod types;
 
 #[cfg(test)]
+pub(crate) use cache::build_intent_cache_key;
+#[cfg(test)]
 pub use entry::build_intent_search_response;
 #[cfg(test)]
 pub(crate) use entry::load_intent_search_response_with_metadata;

@@ -34,6 +34,7 @@ xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs"
 
 mod chunk;
 mod extract;
+mod fingerprint;
 mod item;
 mod lang;
 mod python;
@@ -70,6 +71,7 @@ pub use security::{SecurityConfig, SecurityScanner, SecurityViolation};
 
 // Code extraction utilities
 pub use extract::{ExtractResult, extract_items, extract_skeleton, get_skeleton_patterns};
+pub use fingerprint::{semantic_fingerprint, supports_semantic_fingerprint};
 
 // Code chunking utilities
 pub use chunk::{CodeChunk, chunk_code};

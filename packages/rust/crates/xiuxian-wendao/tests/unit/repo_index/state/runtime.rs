@@ -1,11 +1,16 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::analyzers::RepoSourceFile;
 use crate::analyzers::query::{RepoSourceKind, RepoSyncResult};
+use crate::analyzers::records::{ModuleRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord};
+use crate::analyzers::registry::PluginRegistry;
 use crate::analyzers::{
-    RegisteredRepository, RepositoryAnalysisOutput, RepositoryPluginConfig,
+    AnalysisContext, PluginAnalysisOutput, RegisteredRepository, RepoIntelligenceError,
+    RepoIntelligencePlugin, RepositoryAnalysisOutput, RepositoryPluginConfig,
     RepositoryRefreshPolicy, analyze_registered_repository_with_registry,
     bootstrap_builtin_registry,
 };
@@ -65,6 +70,214 @@ fn mixed_julia_modelica_plugin_configs(
         julia_parser_summary_plugin_config(julia_base_url),
         modelica_parser_summary_plugin_config(modelica_base_url),
     ]
+}
+
+fn mixed_modelica_rust_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("modelica".to_string()),
+        RepositoryPluginConfig::Id("rust".to_string()),
+    ]
+}
+
+fn mixed_rust_unknown_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("rust".to_string()),
+        RepositoryPluginConfig::Id("ast-grep".to_string()),
+    ]
+}
+
+fn mixed_modelica_unknown_plugin_configs() -> Vec<RepositoryPluginConfig> {
+    vec![
+        RepositoryPluginConfig::Id("modelica".to_string()),
+        RepositoryPluginConfig::Id("ast-grep".to_string()),
+    ]
+}
+
+#[derive(Clone)]
+struct RuntimeRustPlugin;
+
+impl RepoIntelligencePlugin for RuntimeRustPlugin {
+    fn id(&self) -> &'static str {
+        "rust"
+    }
+
+    fn supports_repository(&self, _repository: &RegisteredRepository) -> bool {
+        true
+    }
+
+    fn analyze_file(
+        &self,
+        context: &AnalysisContext,
+        file: &RepoSourceFile,
+    ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
+        let module_id = format!("repo:{}:module:fixture", context.repository.id);
+        Ok(PluginAnalysisOutput {
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: module_id.clone(),
+                qualified_name: "fixture".to_string(),
+                path: file.path.clone(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:solve", context.repository.id),
+                module_id: Some(module_id),
+                name: "solve".to_string(),
+                qualified_name: "fixture.solve".to_string(),
+                kind: RepoSymbolKind::Function,
+                path: file.path.clone(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("solve(x)".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
+            imports: Vec::new(),
+            examples: Vec::new(),
+            docs: Vec::new(),
+            diagnostics: Vec::new(),
+        })
+    }
+
+    fn analyze_repository(
+        &self,
+        context: &AnalysisContext,
+        repository_root: &std::path::Path,
+    ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+        Ok(RepositoryAnalysisOutput {
+            repository: Some(RepositoryRecord {
+                repo_id: context.repository.id.clone(),
+                name: "fixture".to_string(),
+                path: repository_root.display().to_string(),
+                url: None,
+                revision: None,
+                version: None,
+                uuid: None,
+                dependencies: Vec::new(),
+            }),
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: format!("repo:{}:module:fixture", context.repository.id),
+                qualified_name: "fixture".to_string(),
+                path: "src/lib.rs".to_string(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:solve", context.repository.id),
+                module_id: Some(format!("repo:{}:module:fixture", context.repository.id)),
+                name: "solve".to_string(),
+                qualified_name: "fixture.solve".to_string(),
+                kind: RepoSymbolKind::Function,
+                path: "src/lib.rs".to_string(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("solve(x)".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
+            ..RepositoryAnalysisOutput::default()
+        })
+    }
+}
+
+#[derive(Clone)]
+struct RuntimeModelicaPlugin;
+
+impl RepoIntelligencePlugin for RuntimeModelicaPlugin {
+    fn id(&self) -> &'static str {
+        "modelica"
+    }
+
+    fn supports_repository(&self, _repository: &RegisteredRepository) -> bool {
+        true
+    }
+
+    fn analyze_file(
+        &self,
+        context: &AnalysisContext,
+        file: &RepoSourceFile,
+    ) -> Result<PluginAnalysisOutput, RepoIntelligenceError> {
+        let module_id = format!("repo:{}:module:DemoLib", context.repository.id);
+        Ok(PluginAnalysisOutput {
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: module_id.clone(),
+                qualified_name: "DemoLib".to_string(),
+                path: file.path.clone(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:PI", context.repository.id),
+                module_id: Some(module_id),
+                name: "PI".to_string(),
+                qualified_name: "DemoLib.PI".to_string(),
+                kind: RepoSymbolKind::Type,
+                path: file.path.clone(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("model PI".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
+            imports: Vec::new(),
+            examples: Vec::new(),
+            docs: Vec::new(),
+            diagnostics: Vec::new(),
+        })
+    }
+
+    fn analyze_repository(
+        &self,
+        context: &AnalysisContext,
+        repository_root: &std::path::Path,
+    ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+        Ok(RepositoryAnalysisOutput {
+            repository: Some(RepositoryRecord {
+                repo_id: context.repository.id.clone(),
+                name: "DemoLib".to_string(),
+                path: repository_root.display().to_string(),
+                url: None,
+                revision: None,
+                version: None,
+                uuid: None,
+                dependencies: Vec::new(),
+            }),
+            modules: vec![ModuleRecord {
+                repo_id: context.repository.id.clone(),
+                module_id: format!("repo:{}:module:DemoLib", context.repository.id),
+                qualified_name: "DemoLib".to_string(),
+                path: "PI.mo".to_string(),
+            }],
+            symbols: vec![SymbolRecord {
+                repo_id: context.repository.id.clone(),
+                symbol_id: format!("repo:{}:symbol:PI", context.repository.id),
+                module_id: Some(format!("repo:{}:module:DemoLib", context.repository.id)),
+                name: "PI".to_string(),
+                qualified_name: "DemoLib.PI".to_string(),
+                kind: RepoSymbolKind::Type,
+                path: "PI.mo".to_string(),
+                line_start: Some(1),
+                line_end: Some(1),
+                signature: Some("model PI".to_string()),
+                audit_status: None,
+                verification_state: None,
+                attributes: BTreeMap::new(),
+            }],
+            ..RepositoryAnalysisOutput::default()
+        })
+    }
+}
+
+fn bootstrap_builtin_registry_with_runtime_rust_plugin() -> Arc<PluginRegistry> {
+    let mut registry =
+        bootstrap_builtin_registry().unwrap_or_else(|error| panic!("bootstrap registry: {error}"));
+    registry
+        .register(RuntimeRustPlugin)
+        .unwrap_or_else(|error| panic!("register Rust runtime plugin: {error}"));
+    Arc::new(registry)
 }
 
 #[tokio::test]
@@ -610,6 +823,150 @@ async fn prepare_incremental_analysis_reuses_cached_analysis_for_ast_equivalent_
     assert_eq!(analysis.symbols, baseline.symbols);
     assert_eq!(analysis.examples, baseline.examples);
     guard.kill();
+}
+
+#[tokio::test]
+async fn prepare_incremental_analysis_reuses_cached_analysis_for_ast_equivalent_generic_rust_source_churn()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    commit_all(tempdir.path(), "initial");
+    let previous_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover previous revision"));
+
+    let repository = RegisteredRepository {
+        id: "incremental-generic-rust-ast-equivalent".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("rust".to_string())],
+    };
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(RuntimeRustPlugin)
+        .unwrap_or_else(|error| panic!("register Rust runtime plugin: {error}"));
+    let registry = Arc::new(registry);
+    let coordinator = new_coordinator_with_registry(
+        SearchPlaneService::new(PathBuf::from(".")),
+        Arc::clone(&registry),
+    );
+    let baseline =
+        analyze_registered_repository_with_registry(&repository, tempdir.path(), registry.as_ref())
+            .unwrap_or_else(|error| panic!("seed Rust analysis cache: {error}"));
+
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "ast equivalent rust change");
+    let current_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover current revision"));
+
+    let prepared = coordinator
+        .prepare_incremental_analysis(
+            &repository,
+            &RepoSyncResult {
+                repo_id: repository.id.clone(),
+                source_kind: RepoSourceKind::LocalCheckout,
+                checkout_path: tempdir.path().display().to_string(),
+                revision: Some(current_revision),
+                ..RepoSyncResult::default()
+            },
+            Some(previous_revision.as_str()),
+        )
+        .unwrap_or_else(|error| panic!("prepare generic Rust reuse: {error}"));
+
+    let analysis = match prepared {
+        Some(PreparedIncrementalAnalysis::Analysis(analysis)) => analysis,
+        Some(PreparedIncrementalAnalysis::RefreshOnly) => {
+            panic!("expected cached analysis reuse, got refresh-only incremental result")
+        }
+        None => panic!("expected cached analysis reuse, got full-analysis fallback"),
+    };
+    assert_eq!(analysis.modules, baseline.modules);
+    assert_eq!(analysis.symbols, baseline.symbols);
+    assert_eq!(analysis.imports, baseline.imports);
+    assert_eq!(analysis.examples, baseline.examples);
+    assert_eq!(analysis.docs, baseline.docs);
+    assert_eq!(analysis.relations, baseline.relations);
+}
+
+#[tokio::test]
+async fn prepare_incremental_analysis_returns_none_for_semantic_generic_rust_source_change() {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    commit_all(tempdir.path(), "initial");
+    let previous_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover previous revision"));
+
+    let repository = RegisteredRepository {
+        id: "incremental-generic-rust-semantic-change".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: vec![RepositoryPluginConfig::Id("rust".to_string())],
+    };
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(RuntimeRustPlugin)
+        .unwrap_or_else(|error| panic!("register Rust runtime plugin: {error}"));
+    let registry = Arc::new(registry);
+    let coordinator = new_coordinator_with_registry(
+        SearchPlaneService::new(PathBuf::from(".")),
+        Arc::clone(&registry),
+    );
+    let _baseline =
+        analyze_registered_repository_with_registry(&repository, tempdir.path(), registry.as_ref())
+            .unwrap_or_else(|error| panic!("seed Rust analysis cache: {error}"));
+
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32, y: i32) -> i32 {\n    x + y\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "semantic rust change");
+    let current_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover current revision"));
+
+    let prepared = coordinator
+        .prepare_incremental_analysis(
+            &repository,
+            &RepoSyncResult {
+                repo_id: repository.id.clone(),
+                source_kind: RepoSourceKind::LocalCheckout,
+                checkout_path: tempdir.path().display().to_string(),
+                revision: Some(current_revision),
+                ..RepoSyncResult::default()
+            },
+            Some(previous_revision.as_str()),
+        )
+        .unwrap_or_else(|error| panic!("prepare generic Rust semantic change: {error}"));
+
+    assert!(
+        prepared.is_none(),
+        "semantic Rust change should stay on full-analysis fallback"
+    );
 }
 
 #[tokio::test]
@@ -1668,6 +2025,310 @@ async fn prepare_incremental_analysis_reuses_cached_analysis_for_ast_equivalent_
     assert_eq!(analysis.relations, baseline.relations);
     julia_guard.kill();
     modelica_guard.kill();
+}
+
+#[tokio::test]
+async fn prepare_incremental_analysis_reuses_cached_analysis_for_ast_equivalent_mixed_modelica_rust_rust_source_churn()
+ {
+    ensure_linked_modelica_parser_summary_service()
+        .unwrap_or_else(|error| panic!("linked Modelica parser-summary service: {error}"));
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write leaf Modelica source: {error}"));
+    commit_all(tempdir.path(), "initial");
+    let previous_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover previous revision"));
+
+    let repository = RegisteredRepository {
+        id: "incremental-mixed-modelica-rust-rust".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_modelica_rust_plugin_configs(),
+    };
+    let registry = bootstrap_builtin_registry_with_runtime_rust_plugin();
+    let coordinator = new_coordinator_with_registry(
+        SearchPlaneService::new(PathBuf::from(".")),
+        Arc::clone(&registry),
+    );
+    let baseline =
+        analyze_registered_repository_with_registry(&repository, tempdir.path(), registry.as_ref())
+            .unwrap_or_else(|error| panic!("seed mixed analysis cache: {error}"));
+
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "ast equivalent mixed Rust change");
+    let current_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover current revision"));
+
+    let prepared = coordinator
+        .prepare_incremental_analysis(
+            &repository,
+            &RepoSyncResult {
+                repo_id: repository.id.clone(),
+                source_kind: RepoSourceKind::LocalCheckout,
+                checkout_path: tempdir.path().display().to_string(),
+                revision: Some(current_revision),
+                ..RepoSyncResult::default()
+            },
+            Some(previous_revision.as_str()),
+        )
+        .unwrap_or_else(|error| panic!("prepare mixed Rust reuse: {error}"));
+
+    let Some(PreparedIncrementalAnalysis::Analysis(analysis)) = prepared else {
+        panic!("expected cached analysis reuse for mixed Rust AST-equivalent change");
+    };
+    assert_eq!(analysis.modules, baseline.modules);
+    assert_eq!(analysis.symbols, baseline.symbols);
+    assert_eq!(analysis.imports, baseline.imports);
+    assert_eq!(analysis.examples, baseline.examples);
+    assert_eq!(analysis.docs, baseline.docs);
+    assert_eq!(analysis.relations, baseline.relations);
+}
+
+#[tokio::test]
+async fn prepare_incremental_analysis_reuses_cached_analysis_for_ast_equivalent_mixed_modelica_rust_modelica_source_churn()
+ {
+    ensure_linked_modelica_parser_summary_service()
+        .unwrap_or_else(|error| panic!("linked Modelica parser-summary service: {error}"));
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write leaf Modelica source: {error}"));
+    commit_all(tempdir.path(), "initial");
+    let previous_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover previous revision"));
+
+    let repository = RegisteredRepository {
+        id: "incremental-mixed-modelica-rust-modelica".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_modelica_rust_plugin_configs(),
+    };
+    let registry = bootstrap_builtin_registry_with_runtime_rust_plugin();
+    let coordinator = new_coordinator_with_registry(
+        SearchPlaneService::new(PathBuf::from(".")),
+        Arc::clone(&registry),
+    );
+    let baseline =
+        analyze_registered_repository_with_registry(&repository, tempdir.path(), registry.as_ref())
+            .unwrap_or_else(|error| panic!("seed mixed analysis cache: {error}"));
+
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n// semantic no-op\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Modelica source: {error}"));
+    commit_all(tempdir.path(), "ast equivalent mixed Modelica change");
+    let current_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover current revision"));
+
+    let prepared = coordinator
+        .prepare_incremental_analysis(
+            &repository,
+            &RepoSyncResult {
+                repo_id: repository.id.clone(),
+                source_kind: RepoSourceKind::LocalCheckout,
+                checkout_path: tempdir.path().display().to_string(),
+                revision: Some(current_revision),
+                ..RepoSyncResult::default()
+            },
+            Some(previous_revision.as_str()),
+        )
+        .unwrap_or_else(|error| panic!("prepare mixed Modelica reuse: {error}"));
+
+    let Some(PreparedIncrementalAnalysis::Analysis(analysis)) = prepared else {
+        panic!("expected cached analysis reuse for mixed Modelica AST-equivalent change");
+    };
+    assert_eq!(analysis.modules, baseline.modules);
+    assert_eq!(analysis.symbols, baseline.symbols);
+    assert_eq!(analysis.imports, baseline.imports);
+    assert_eq!(analysis.examples, baseline.examples);
+    assert_eq!(analysis.docs, baseline.docs);
+    assert_eq!(analysis.relations, baseline.relations);
+}
+
+#[tokio::test]
+async fn prepare_incremental_analysis_returns_none_for_ast_equivalent_mixed_rust_unknown_plugin_source_churn()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::create_dir_all(tempdir.path().join("src"))
+        .unwrap_or_else(|error| panic!("create src: {error}"));
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("write Rust source: {error}"));
+    commit_all(tempdir.path(), "initial");
+    let previous_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover previous revision"));
+
+    let repository = RegisteredRepository {
+        id: "incremental-mixed-rust-unknown".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_rust_unknown_plugin_configs(),
+    };
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(RuntimeRustPlugin)
+        .unwrap_or_else(|error| panic!("register Rust runtime plugin: {error}"));
+    let registry = Arc::new(registry);
+    let coordinator = new_coordinator_with_registry(
+        SearchPlaneService::new(PathBuf::from(".")),
+        Arc::clone(&registry),
+    );
+    let _baseline =
+        analyze_registered_repository_with_registry(&repository, tempdir.path(), registry.as_ref())
+            .unwrap_or_else(|error| panic!("seed mixed analysis cache: {error}"));
+
+    fs::write(
+        tempdir.path().join("src/lib.rs"),
+        "fn solve(x: i32) -> i32 {\n    // semantic no-op\n    x + 1\n}\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Rust source: {error}"));
+    commit_all(tempdir.path(), "ast equivalent mixed Rust unknown change");
+    let current_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover current revision"));
+
+    let prepared = coordinator
+        .prepare_incremental_analysis(
+            &repository,
+            &RepoSyncResult {
+                repo_id: repository.id.clone(),
+                source_kind: RepoSourceKind::LocalCheckout,
+                checkout_path: tempdir.path().display().to_string(),
+                revision: Some(current_revision),
+                ..RepoSyncResult::default()
+            },
+            Some(previous_revision.as_str()),
+        )
+        .unwrap_or_else(|error| panic!("prepare mixed Rust unknown fallback: {error}"));
+
+    assert!(
+        prepared.is_none(),
+        "unknown plugin mix should stay on full-analysis fallback"
+    );
+}
+
+#[tokio::test]
+async fn prepare_incremental_analysis_returns_none_for_ast_equivalent_mixed_modelica_unknown_plugin_source_churn()
+ {
+    let tempdir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    init_git_repository(tempdir.path());
+    fs::write(
+        tempdir.path().join("package.mo"),
+        "within ;\npackage DemoLib\nend DemoLib;\n",
+    )
+    .unwrap_or_else(|error| panic!("write root package: {error}"));
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n",
+    )
+    .unwrap_or_else(|error| panic!("write Modelica source: {error}"));
+    commit_all(tempdir.path(), "initial");
+    let previous_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover previous revision"));
+
+    let repository = RegisteredRepository {
+        id: "incremental-mixed-modelica-unknown".to_string(),
+        path: Some(tempdir.path().to_path_buf()),
+        url: None,
+        git_ref: None,
+        refresh: RepositoryRefreshPolicy::Fetch,
+        plugins: mixed_modelica_unknown_plugin_configs(),
+    };
+    let mut registry = PluginRegistry::new();
+    registry
+        .register(RuntimeModelicaPlugin)
+        .unwrap_or_else(|error| panic!("register Modelica runtime plugin: {error}"));
+    let registry = Arc::new(registry);
+    let coordinator = new_coordinator_with_registry(
+        SearchPlaneService::new(PathBuf::from(".")),
+        Arc::clone(&registry),
+    );
+    let _baseline =
+        analyze_registered_repository_with_registry(&repository, tempdir.path(), registry.as_ref())
+            .unwrap_or_else(|error| panic!("seed mixed analysis cache: {error}"));
+
+    fs::write(
+        tempdir.path().join("PI.mo"),
+        "within DemoLib;\nmodel PI\n  parameter Real k = 1;\nend PI;\n// semantic no-op\n",
+    )
+    .unwrap_or_else(|error| panic!("rewrite Modelica source: {error}"));
+    commit_all(
+        tempdir.path(),
+        "ast equivalent mixed Modelica unknown change",
+    );
+    let current_revision = xiuxian_git_repo::discover_checkout_metadata(tempdir.path())
+        .and_then(|metadata| metadata.revision)
+        .unwrap_or_else(|| panic!("discover current revision"));
+
+    let prepared = coordinator
+        .prepare_incremental_analysis(
+            &repository,
+            &RepoSyncResult {
+                repo_id: repository.id.clone(),
+                source_kind: RepoSourceKind::LocalCheckout,
+                checkout_path: tempdir.path().display().to_string(),
+                revision: Some(current_revision),
+                ..RepoSyncResult::default()
+            },
+            Some(previous_revision.as_str()),
+        )
+        .unwrap_or_else(|error| panic!("prepare mixed Modelica unknown fallback: {error}"));
+
+    assert!(
+        prepared.is_none(),
+        "unknown plugin mix should stay on full-analysis fallback"
+    );
 }
 
 #[tokio::test]

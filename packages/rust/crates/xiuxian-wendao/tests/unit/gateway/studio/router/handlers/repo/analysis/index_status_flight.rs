@@ -183,6 +183,115 @@ async fn repo_index_status_diagnostics_recompute_summary_counts_from_rows() {
     );
 }
 
+#[tokio::test]
+async fn repo_index_status_diagnostics_ignore_repo_row_order_when_active_order_is_fixed() {
+    let left = RepoIndexStatusResponse {
+        total: 0,
+        active: 0,
+        queued: 0,
+        checking: 0,
+        syncing: 0,
+        indexing: 0,
+        ready: 0,
+        unsupported: 0,
+        failed: 0,
+        target_concurrency: 2,
+        max_concurrency: 4,
+        sync_concurrency_limit: 1,
+        current_repo_id: Some("stale-current".to_string()),
+        active_repo_ids: vec!["gateway-sync".to_string(), "gateway-ready".to_string()],
+        repos: vec![
+            RepoIndexEntryStatus {
+                repo_id: "gateway-ready".to_string(),
+                phase: RepoIndexPhase::Ready,
+                queue_position: None,
+                last_error: None,
+                last_revision: Some("rev:456".to_string()),
+                updated_at: Some("2026-04-03T19:16:00Z".to_string()),
+                attempt_count: 1,
+            },
+            RepoIndexEntryStatus {
+                repo_id: "gateway-sync".to_string(),
+                phase: RepoIndexPhase::Syncing,
+                queue_position: None,
+                last_error: None,
+                last_revision: Some("rev:789".to_string()),
+                updated_at: Some("2026-04-03T19:18:00Z".to_string()),
+                attempt_count: 2,
+            },
+        ],
+    };
+    let right = RepoIndexStatusResponse {
+        repos: vec![
+            RepoIndexEntryStatus {
+                repo_id: "gateway-sync".to_string(),
+                phase: RepoIndexPhase::Syncing,
+                queue_position: None,
+                last_error: None,
+                last_revision: Some("rev:789".to_string()),
+                updated_at: Some("2026-04-03T19:18:00Z".to_string()),
+                attempt_count: 2,
+            },
+            RepoIndexEntryStatus {
+                repo_id: "gateway-ready".to_string(),
+                phase: RepoIndexPhase::Ready,
+                queue_position: None,
+                last_error: None,
+                last_revision: Some("rev:456".to_string()),
+                updated_at: Some("2026-04-03T19:16:00Z".to_string()),
+                attempt_count: 1,
+            },
+        ],
+        ..left.clone()
+    };
+
+    let left_summary = summarize_repo_index_status_diagnostics(&left)
+        .await
+        .unwrap_or_else(|error| panic!("left diagnostics summary should build: {error}"));
+    let right_summary = summarize_repo_index_status_diagnostics(&right)
+        .await
+        .unwrap_or_else(|error| panic!("right diagnostics summary should build: {error}"));
+    assert_eq!(left_summary, right_summary);
+    assert_eq!(
+        left_summary.active_repo_ids,
+        vec!["gateway-sync".to_string(), "gateway-ready".to_string()]
+    );
+    assert_eq!(
+        left_summary.current_repo_id.as_deref(),
+        Some("gateway-sync")
+    );
+
+    let left_response = repo_index_status_response_with_diagnostics(&left).await;
+    let right_response = repo_index_status_response_with_diagnostics(&right).await;
+    assert_eq!(
+        left_response.active_repo_ids,
+        vec!["gateway-sync".to_string(), "gateway-ready".to_string()]
+    );
+    assert_eq!(
+        left_response.current_repo_id.as_deref(),
+        Some("gateway-sync")
+    );
+    assert_eq!(left_response.total, right_response.total);
+    assert_eq!(left_response.active, right_response.active);
+    assert_eq!(left_response.queued, right_response.queued);
+    assert_eq!(left_response.checking, right_response.checking);
+    assert_eq!(left_response.syncing, right_response.syncing);
+    assert_eq!(left_response.indexing, right_response.indexing);
+    assert_eq!(left_response.ready, right_response.ready);
+    assert_eq!(left_response.unsupported, right_response.unsupported);
+    assert_eq!(left_response.failed, right_response.failed);
+    assert_eq!(
+        left_response.current_repo_id,
+        right_response.current_repo_id
+    );
+    assert_eq!(
+        left_response.active_repo_ids,
+        right_response.active_repo_ids
+    );
+    assert_eq!(left_response.repos, left.repos);
+    assert_eq!(right_response.repos, right.repos);
+}
+
 #[cfg(feature = "duckdb")]
 #[tokio::test]
 async fn repo_index_status_diagnostics_select_duckdb_when_enabled() {

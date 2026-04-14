@@ -10,7 +10,7 @@ pub(super) fn fingerprint(repository: &RegisteredRepository) -> String {
         repository.url,
         repository.git_ref,
         repository.refresh,
-        repository.repo_intelligence_plugin_ids()
+        repository.configured_plugin_ids()
     )
 }
 

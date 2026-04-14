@@ -54,14 +54,84 @@ Acceptance:
 Target:
 
 - collect Rust module graph and visibility metadata
-- enforce interface-only `mod.rs`, visibility discipline, and public API error docs
+- enforce repository-local `mod.rs` facade policy, visibility discipline, and public API error docs
 
 Delivered seed in this pass:
 
 - `ModularityRulePack` implemented in `xiuxian-testing` with deterministic checks for:
-  - `MOD-R001`: non-interface logic inside `mod.rs`
+  - `MOD-R001`: non-interface logic inside `mod.rs` under the repository's
+    facade-only house style
   - `MOD-R002`: broad `pub` visibility in internal module files
   - `MOD-R003`: public `Result` APIs missing `# Errors` docs
+  - `MOD-R006`: large multi-responsibility Rust source files that should be
+    split into dedicated module seams; the rule does not treat a higher number
+    of focused sibling files as a problem
+  - `MOD-R007`: folder-root modules that fan out into several sibling modules
+    but still accumulate enough implementation logic to stop acting as a
+    navigational TOC for coding agents
+  - `MOD-R008`: root facades that re-export too many child-module symbols and
+    become flat export lists instead of small curated entry surfaces
+  - `MOD-R009`: multi-hop relative imports such as `super::super::...` that
+    should use a crate-qualified path for a clearer ownership seam
+  - `MOD-R010`: public alias re-exports in root facades that obscure the
+    canonical child-module symbol name
+  - `MOD-R011`: root seams with several child modules that provide no first-hop
+    doc hint or visible entry export for coding agents
+  - `MOD-R012`: root seams that visibly export from helper/detail child modules
+    instead of canonical owner modules
+  - `MOD-R013`: folder-root seams that expose child modules directly through
+    visible `pub mod` or `pub(crate) mod` declarations instead of a curated
+    root facade
+  - `MOD-R014`: doc-only root seams whose `//!` hint never names any declared
+    child module, leaving the first leaf hop ambiguous for coding agents
+  - `MOD-R015`: root seams whose visible entry exports span several peer child
+    modules without a dominant source module or named primary owner
+  - `MOD-R016`: root seams whose `//!` doc names one owner module while the
+    visible entry surface only exports from different child modules
+  - `MOD-R017`: root seams whose doc-named owner appears in the visible seam
+    but another child module silently becomes the dominant visible owner
+  - `MOD-R018`: internal root seams whose parent module is private or
+    restricted but whose child-owner entry seam still uses plain `pub use`
+  - `MOD-R019`: internal root seams whose visible entry surface still spans
+    several child-owner modules instead of converging on one canonical owner
+  - `MOD-R020`: internal root seams that already expose one canonical visible
+    owner but whose root doc still inventories every declared child module
+- current bounded implementation note: `MOD-R001` now proves the `mod.rs`
+  contract from native Rust syntax parsing inside `xiuxian-testing`, so
+  visible module declarations, block-bodied inline modules, private `use`
+  imports, glob re-exports, and syntax failures surface as deterministic
+  findings without adding a new dependency edge to `xiuxian-ast`; `MOD-R006`
+  complements that by warning on monolithic ownership sinks while remaining
+  compatible with folder-first, sibling-friendly layouts that work well with
+  coding agents; `MOD-R007` adds one root-module navigation check so feature
+  folders can keep a small TOC seam instead of turning the root back into a
+  sink; `MOD-R008` then keeps the same seam selective by warning on noisy
+  top-level re-export surfaces; `MOD-R009` complements both by preferring
+  crate-qualified imports over repeated `super` hops when describing the same
+  in-crate ownership path; `MOD-R010` keeps the same root seam aligned with
+  the canonical leaf symbol names instead of teaching coding agents a second
+  public alias at the entry point; `MOD-R011` then asks the same root seam to
+  provide at least one explicit first-hop signal when the folder has already
+  split into several sibling modules; `MOD-R012` then keeps that first hop
+  pointed at a canonical owner module instead of a helper/detail bucket; and
+  `MOD-R013` keeps the folder-root seam itself curated by rejecting visible
+  child-module declarations that would turn leaf module paths into the visible
+  boundary; `MOD-R014` then keeps doc-only root seams actionable by asking the
+  root `//!` hint to name at least one declared child module when no visible
+  entry export exists; `MOD-R015` then keeps visible multi-owner entry seams
+  focused by asking the root to identify one primary owner module instead of
+  leaving coding agents with a small but still flat peer list; `MOD-R016` then
+  keeps the doc-guided primary owner aligned with the visible entry seam so the
+  root doc and root exports do not point coding agents at different owners;
+  `MOD-R017` then keeps that partial alignment from drifting by asking the
+  dominant visible owner to converge on the same owner module named in the
+  root doc; and `MOD-R018` then keeps that same internal root seam from
+  syntactically over-amplifying the owner surface with plain `pub use` when
+  the parent module itself is still private or restricted; and `MOD-R019` then
+  keeps the remaining restricted visible seam curated by preferring one
+  canonical child-owner module instead of a small internal peer list; and
+  `MOD-R020` then keeps the matching root doc from regressing into a prose
+  mirror of the folder tree once the canonical visible owner is already clear
 
 Suggested first consumers:
 

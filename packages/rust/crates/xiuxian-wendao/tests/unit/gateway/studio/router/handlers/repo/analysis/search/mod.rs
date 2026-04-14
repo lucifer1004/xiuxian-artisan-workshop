@@ -6,16 +6,19 @@ use std::sync::{
 };
 
 use crate::analyzers::cache::{
-    build_repository_analysis_cache_key, store_cached_repository_analysis,
+    RepositorySearchQueryCacheKey, build_repository_analysis_cache_key,
+    store_cached_repository_analysis,
 };
 use crate::analyzers::{
-    ExampleRecord, ImportKind, ImportRecord, ModuleRecord, RepoSymbolKind,
-    RepositoryAnalysisOutput, SymbolRecord, bootstrap_builtin_registry,
-    resolve_registered_repository_source,
+    ExampleRecord, ImportKind, ImportRecord, ModuleRecord, RegisteredRepository, RepoSymbolKind,
+    RepositoryAnalysisOutput, RepositoryPluginConfig, RepositoryRefreshPolicy, SymbolRecord,
+    bootstrap_builtin_registry, resolve_registered_repository_source,
 };
 use crate::gateway::studio::router::StudioApiError;
 use crate::gateway::studio::router::configured_repository;
-use crate::gateway::studio::router::handlers::repo::analysis::search::cache::with_cached_repo_search_result;
+use crate::gateway::studio::router::handlers::repo::analysis::search::cache::{
+    repository_search_key, with_cached_repo_search_result,
+};
 use crate::gateway::studio::router::handlers::repo::analysis::search::service::run_repo_import_search;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::test_support::{
@@ -28,9 +31,13 @@ use crate::query_core::{
 };
 use crate::repo_index::RepoCodeDocument;
 use crate::search::{
-    SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService, publish_repo_entities,
+    FuzzySearchOptions, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
+    publish_repo_entities,
 };
-use xiuxian_git_repo::{SyncMode, discover_checkout_metadata};
+use xiuxian_git_repo::{
+    LocalCheckoutMetadata, MaterializedRepo, RepoDriftState, RepoLifecycleState, RepoSourceKind,
+    SyncMode, discover_checkout_metadata,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct CachedRepoSearchProbe {
@@ -42,6 +49,72 @@ fn unique_repo_gateway_keyspace(label: &str, root: &std::path::Path) -> SearchMa
         "xiuxian:test:repo_gateway:{label}:{}",
         blake3::hash(root.to_string_lossy().as_bytes()).to_hex()
     ))
+}
+
+fn normalized_gateway_analysis_keys() -> (
+    crate::analyzers::cache::RepositoryAnalysisCacheKey,
+    crate::analyzers::cache::RepositoryAnalysisCacheKey,
+) {
+    let source = MaterializedRepo {
+        checkout_root: PathBuf::from("/tmp/gateway-repo-search-normalized"),
+        mirror_root: None,
+        mirror_revision: Some("mirror-1".to_string()),
+        tracking_revision: Some("tracking-1".to_string()),
+        last_fetched_at: None,
+        drift_state: RepoDriftState::NotApplicable,
+        mirror_state: RepoLifecycleState::NotApplicable,
+        checkout_state: RepoLifecycleState::Validated,
+        source_kind: RepoSourceKind::LocalCheckout,
+    };
+    let metadata = Some(LocalCheckoutMetadata {
+        revision: Some("rev-1".to_string()),
+        remote_url: None,
+    });
+    let first_analysis_key = build_repository_analysis_cache_key(
+        &RegisteredRepository {
+            id: "gateway/normalized".to_string(),
+            path: Some(PathBuf::from("/tmp/gateway-repo-search-normalized")),
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![
+                RepositoryPluginConfig::Id("ast-grep".to_string()),
+                RepositoryPluginConfig::Id("julia".to_string()),
+                RepositoryPluginConfig::Config {
+                    id: "modelica".to_string(),
+                    options: serde_json::json!({
+                        "mode": "parser-summary"
+                    }),
+                },
+            ],
+        },
+        &source,
+        metadata.as_ref(),
+    );
+    let second_analysis_key = build_repository_analysis_cache_key(
+        &RegisteredRepository {
+            id: "gateway/normalized".to_string(),
+            path: Some(PathBuf::from("/tmp/gateway-repo-search-normalized")),
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![
+                RepositoryPluginConfig::Config {
+                    id: "modelica".to_string(),
+                    options: serde_json::json!({
+                        "mode": "doc-surface"
+                    }),
+                },
+                RepositoryPluginConfig::Id("ast-grep".to_string()),
+                RepositoryPluginConfig::Id("julia".to_string()),
+                RepositoryPluginConfig::Id("ast-grep".to_string()),
+            ],
+        },
+        &source,
+        metadata.as_ref(),
+    );
+
+    (first_analysis_key, second_analysis_key)
 }
 
 #[tokio::test]
@@ -99,6 +172,54 @@ async fn cached_repo_search_result_reuses_hot_query_payload() {
     assert_eq!(first, second);
     assert_eq!(first.value, "first");
     assert_eq!(load_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn repository_search_key_is_stable_for_normalized_plugin_identity() {
+    let (first_analysis_key, second_analysis_key) = normalized_gateway_analysis_keys();
+
+    let first_key = repository_search_key(
+        &first_analysis_key,
+        "repo.module-search",
+        "solve",
+        10,
+        FuzzySearchOptions::document_search(),
+    );
+    let second_key = repository_search_key(
+        &second_analysis_key,
+        "repo.module-search",
+        "solve",
+        10,
+        FuzzySearchOptions::document_search(),
+    );
+
+    assert_eq!(first_analysis_key, second_analysis_key);
+    assert_eq!(first_key, second_key);
+}
+
+#[test]
+fn projected_page_search_cache_key_is_stable_for_normalized_plugin_identity() {
+    let (first_analysis_key, second_analysis_key) = normalized_gateway_analysis_keys();
+
+    let first_key = RepositorySearchQueryCacheKey::new(
+        &first_analysis_key,
+        "repo.projected-page-search",
+        "solve",
+        Some("reference".to_string()),
+        FuzzySearchOptions::document_search(),
+        10,
+    );
+    let second_key = RepositorySearchQueryCacheKey::new(
+        &second_analysis_key,
+        "repo.projected-page-search",
+        "solve",
+        Some("reference".to_string()),
+        FuzzySearchOptions::document_search(),
+        10,
+    );
+
+    assert_eq!(first_analysis_key, second_analysis_key);
+    assert_eq!(first_key, second_key);
 }
 
 #[tokio::test]

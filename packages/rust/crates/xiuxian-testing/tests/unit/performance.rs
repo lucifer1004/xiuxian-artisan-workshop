@@ -8,7 +8,7 @@ use super::{
     run_sync_budget,
 };
 
-fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(msg) = payload.downcast_ref::<String>() {
         return msg.clone();
     }
@@ -107,7 +107,7 @@ fn assert_perf_budget_emits_stable_failure_message() {
         Ok(()) => panic!("expected budget assertion to fail"),
         Err(payload) => payload,
     };
-    let message = panic_message(payload);
+    let message = panic_message(payload.as_ref());
     assert!(message.contains("performance budget gate failed"));
     assert!(message.contains("p95 latency exceeded"));
     assert!(message.contains("throughput below floor"));

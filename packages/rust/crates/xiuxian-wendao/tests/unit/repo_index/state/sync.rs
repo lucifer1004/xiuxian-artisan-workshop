@@ -55,7 +55,7 @@ fn sync_repositories_skips_repositories_with_only_search_only_plugins() {
 }
 
 #[test]
-fn sync_repositories_ignores_search_only_plugin_changes_for_fingerprint() {
+fn sync_repositories_reenqueues_repositories_when_configured_plugin_set_changes() {
     let coordinator = new_coordinator(SearchPlaneService::new(PathBuf::from(".")));
     let repository = repo("sciml", "./sciml");
     let repository_with_ast_grep = RegisteredRepository {
@@ -68,6 +68,48 @@ fn sync_repositories_ignores_search_only_plugin_changes_for_fingerprint() {
 
     let first = coordinator.sync_repositories(vec![repository]);
     let second = coordinator.sync_repositories(vec![repository_with_ast_grep]);
+
+    assert_eq!(first, vec!["sciml".to_string()]);
+    assert_eq!(second, vec!["sciml".to_string()]);
+    assert_eq!(
+        coordinator.pending_repo_ids_for_test(),
+        vec!["sciml".to_string()]
+    );
+}
+
+#[test]
+fn sync_repositories_does_not_reenqueue_repositories_when_configured_plugin_order_only_changes() {
+    let coordinator = new_coordinator(SearchPlaneService::new(PathBuf::from(".")));
+    let repository = RegisteredRepository {
+        plugins: vec![
+            RepositoryPluginConfig::Id("julia".to_string()),
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+            RepositoryPluginConfig::Config {
+                id: "modelica".to_string(),
+                options: serde_json::json!({
+                    "mode": "parser-summary"
+                }),
+            },
+        ],
+        ..repo("sciml", "./sciml")
+    };
+    let reordered_repository = RegisteredRepository {
+        plugins: vec![
+            RepositoryPluginConfig::Config {
+                id: "modelica".to_string(),
+                options: serde_json::json!({
+                    "mode": "doc-surface"
+                }),
+            },
+            RepositoryPluginConfig::Id("julia".to_string()),
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+            RepositoryPluginConfig::Id("ast-grep".to_string()),
+        ],
+        ..repository.clone()
+    };
+
+    let first = coordinator.sync_repositories(vec![repository]);
+    let second = coordinator.sync_repositories(vec![reordered_repository]);
 
     assert_eq!(first, vec!["sciml".to_string()]);
     assert!(second.is_empty());

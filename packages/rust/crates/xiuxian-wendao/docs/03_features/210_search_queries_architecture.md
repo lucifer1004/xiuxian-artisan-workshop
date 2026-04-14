@@ -445,6 +445,88 @@ parser-summary semantic fingerprints instead of falling back to raw contents
 just because the repository is mixed. Repositories that include unknown plugin
 owners remain on the conservative raw-contents path until a broader capability
 registry lands.
+The next bounded generalization is now present too: `xiuxian-ast` owns a
+generic structural semantic fingerprint helper for supported languages such as
+Rust, Python, JavaScript, TypeScript, Go, and TOML, and analyzer-cache
+identity now dispatches per file instead of treating every non-Julia/Modelica
+case as a new hard-coded branch. Specialized parser-summary owners still win
+for `.jl` and `.mo` files, but every remaining AST-supported file can now fall
+through to the generic structural owner by file language alone instead of
+requiring a matching repo-intelligence plugin id. Unowned paths still fall
+back to raw contents.
+Repo-index incremental preflight now reuses the same semantic-owner dispatcher
+too, but it keeps a stricter safety gate than cache identity: the repository
+plugin set must stay inside known semantic-owner ids, and modified directory
+diff entries recurse into child semantic-owner files before cached-analysis
+reuse is approved.
+That same bounded rule now has a code-proven mixed specialized-plus-generic
+shape too. When a repository only registers `modelica` plus one generic
+AST-supported owner such as `rust`, `.mo` files still use the Modelica
+parser-summary owner while `.rs` files use the generic structural owner, and
+both analyzer-cache identity and repo-index incremental preflight can reuse
+cached analysis on AST-equivalent churn without collapsing the whole mixed
+repository back to raw contents or full-analysis fallback.
+The same mixed repository shape is now also proven through the repository
+analysis bundle cache itself. `analyze_registered_repository_bundle(...)` keeps
+the cached full analysis when either the generic Rust path or the specialized
+Modelica path changes in an AST-equivalent way, so the mixed semantic-owner
+contract now holds across cache-key assembly, incremental preflight, and the
+bundle-level analyzer-service reuse path.
+The conservative side of the contract is now code-proven too. Semantic-owner
+dispatch no longer keys off only the repo-intelligence subset; it now looks at
+all configured plugin identifiers. That means bounded unknown mixes such as
+`rust+ast-grep` and `modelica+ast-grep` stay on the raw-contents or
+full-analysis fallback path across cache identity, analyzer-service bundle
+caching, and repo-index incremental preflight instead of silently keeping
+semantic-owner reuse active. Repo-index coordinator fingerprinting now follows
+that same all-configured-plugin contract too, so adding or removing a
+search-only or otherwise unknown plugin such as `ast-grep` changes queue and
+status identity instead of being treated as a fingerprint-identical repo sync.
+That configured-plugin contract is now also regression-locked as a normalized
+set, not an order-sensitive list: reordering plugin declarations or repeating
+the same id in config does not churn repo-index identity.
+The same normalization contract now also holds one layer higher for repository
+analysis cache keys and repo query cache keys. Reordered or duplicate-only
+plugin declarations yield the same `RepositoryAnalysisCacheKey`, so
+repo-scoped query cache keys built on top of that analysis identity stay
+stable too.
+That same normalized analysis identity is now also regression-locked at the
+gateway caller layer. Both repo search handlers and projected-page search
+handlers build their hot-query keys from the cached
+`RepositoryAnalysisCacheKey` instead of reconstructing plugin-sensitive
+fragments, so reorder-only or duplicate-only plugin churn does not change the
+gateway hot-query cache surface either.
+The shared repo-aware hot-query builder now also treats `repo_ids` as a
+normalized set. Gateway callers such as intent hybrid and code search can pass
+repo scopes in whatever configured order they discover them, and the
+underlying cache key still stays stable under reorder-only or duplicate-only
+repo-set churn.
+That inherited caller contract is now also direct-proofed for intent hybrid:
+`build_intent_cache_key(...)` yields the same code-biased cache key when the
+same repo set appears in a different studio config order.
+The same direct caller proof now also covers code search:
+`build_code_search_response(...)` yields the same repo-aware code-search cache
+key when the same repo set appears in a different studio config order and no
+explicit repository hint is present.
+That normalization contract now also has one higher-level repo-backed status
+proof: `SearchPlaneService::synthesize_repo_table_status(...)` yields the same
+ready published corpus status when the same repo publication/runtime records
+arrive in a different iteration order.
+One transport layer above that, repo index status diagnostics now also has an
+explicit boundary proof: reordering the `repos` payload rows does not change
+the recomputed diagnostics summary or injected summary fields when the explicit
+`active_repo_ids` order stays fixed, while the raw `repos` payload itself keeps
+its incoming order.
+One higher-level consumer above that is now locked too:
+`SearchPlaneService::status_with_repo_runtime(...)` yields the same repo-backed
+entity and content corpus status rows when the same ready published repo rows
+arrive in a different order, so runtime hydration depends on effective
+published/runtime state rather than incidental repo row order.
+The direct Studio status transport above that now has the same bounded proof:
+`search_index_status(...)` yields the same repo-backed status fields and corpus
+rows when the same ready published repo rows are reordered before
+synchronization, so the handler inherits the normalized runtime contract
+instead of reconstructing an order-sensitive repo-backed payload.
 so standalone corpus builds outside those coordinated startup paths still read
 the current filesystem directly and remain the next scan-duplication audit
 surface if repeat-detect flags reappear there.

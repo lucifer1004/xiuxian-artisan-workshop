@@ -30,6 +30,38 @@ pub(crate) fn test_studio_state() -> crate::gateway::studio::router::StudioState
     )
 }
 
+pub(crate) fn test_studio_state_with_cache() -> crate::gateway::studio::router::StudioState {
+    let nonce = format!(
+        "search-plane-handlers-cache-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|error| panic!("system time before unix epoch: {error}"))
+            .as_nanos()
+    );
+    let project_root = xiuxian_io::PrjDirs::project_root();
+    let search_plane_root = std::env::temp_dir().join(nonce);
+    let manifest_keyspace = crate::search::SearchManifestKeyspace::new(format!(
+        "xiuxian:test:search_plane:{}",
+        blake3::hash(search_plane_root.to_string_lossy().as_bytes()).to_hex()
+    ));
+    let search_plane = crate::search::SearchPlaneService::with_test_cache(
+        project_root.clone(),
+        search_plane_root,
+        manifest_keyspace,
+        crate::search::SearchMaintenancePolicy::default(),
+    );
+    crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane(
+        Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ),
+        project_root.clone(),
+        project_root,
+        search_plane,
+    )
+}
+
 #[cfg(feature = "duckdb")]
 pub(crate) fn configure_local_workspace(
     studio: &mut crate::gateway::studio::router::StudioState,

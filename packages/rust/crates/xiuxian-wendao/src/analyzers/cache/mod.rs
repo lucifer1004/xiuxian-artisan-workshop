@@ -24,6 +24,7 @@ pub use artifacts::{
 #[cfg(feature = "zhenfa-router")]
 pub(crate) use identity::{
     FingerprintMode, analysis_fingerprint_mode, change_affects_analysis_identity,
+    plugin_ids_support_semantic_owner_reuse, semantic_fingerprint_for_file,
 };
 pub(crate) use keys::build_repository_analysis_cache_key;
 pub use keys::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};

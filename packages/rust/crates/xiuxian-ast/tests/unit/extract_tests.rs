@@ -234,6 +234,55 @@ impl User {
 }
 
 #[test]
+fn test_semantic_fingerprint_reuses_rust_structure_for_comment_only_churn() {
+    let first = semantic_fingerprint(
+        r#"
+fn hello(name: &str) -> String {
+    format!("Hello, {name}")
+}
+"#,
+        Lang::Rust,
+    )
+    .unwrap_or_else(|| panic!("semantic fingerprint should exist"));
+    let second = semantic_fingerprint(
+        r#"
+fn hello(name: &str) -> String {
+    // semantic no-op
+    format!("Hello, {name}")
+}
+"#,
+        Lang::Rust,
+    )
+    .unwrap_or_else(|| panic!("semantic fingerprint should exist"));
+
+    assert_eq!(first, second);
+}
+
+#[test]
+fn test_semantic_fingerprint_invalidates_on_rust_signature_change() {
+    let first = semantic_fingerprint(
+        r#"
+fn hello(name: &str) -> String {
+    format!("Hello, {name}")
+}
+"#,
+        Lang::Rust,
+    )
+    .unwrap_or_else(|| panic!("semantic fingerprint should exist"));
+    let second = semantic_fingerprint(
+        r#"
+fn hello(name: &str, suffix: &str) -> String {
+    format!("Hello, {name}{suffix}")
+}
+"#,
+        Lang::Rust,
+    )
+    .unwrap_or_else(|| panic!("semantic fingerprint should exist"));
+
+    assert_ne!(first, second);
+}
+
+#[test]
 fn test_get_skeleton_patterns() {
     let py_patterns = get_skeleton_patterns(Lang::Python);
     assert!(py_patterns.contains(&"def $NAME"));

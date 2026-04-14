@@ -33,6 +33,19 @@ pub struct RegisteredRepository {
 }
 
 impl RegisteredRepository {
+    /// Returns all configured plugin identifiers in sorted order.
+    #[must_use]
+    pub fn configured_plugin_ids(&self) -> Vec<String> {
+        let mut plugin_ids = self
+            .plugins
+            .iter()
+            .map(|plugin| plugin.id().to_string())
+            .collect::<Vec<_>>();
+        plugin_ids.sort_unstable();
+        plugin_ids.dedup();
+        plugin_ids
+    }
+
     /// Returns the configured repo-intelligence plugins for this repository.
     pub fn repo_intelligence_plugins(&self) -> impl Iterator<Item = &RepositoryPluginConfig> + '_ {
         self.plugins
@@ -49,13 +62,11 @@ impl RegisteredRepository {
     /// Returns the stable repo-intelligence plugin identifiers in sorted order.
     #[must_use]
     pub fn repo_intelligence_plugin_ids(&self) -> Vec<String> {
-        let mut plugin_ids = self
-            .repo_intelligence_plugins()
+        self.repo_intelligence_plugins()
             .map(|plugin| plugin.id().to_string())
-            .collect::<Vec<_>>();
-        plugin_ids.sort_unstable();
-        plugin_ids.dedup();
-        plugin_ids
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 }
 

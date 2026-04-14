@@ -87,6 +87,83 @@ async fn repo_search_query_cache_key_uses_synchronized_runtime_state() {
 }
 
 #[tokio::test]
+async fn repo_search_query_cache_key_normalizes_repo_id_order_and_duplicates() {
+    let temp_dir = temp_dir();
+    let keyspace = service_test_manifest_keyspace();
+    let service = SearchPlaneService::with_runtime(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        keyspace.clone(),
+        SearchMaintenancePolicy::default(),
+        SearchPlaneCache::for_tests(keyspace),
+    );
+
+    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
+        total: 2,
+        active: 0,
+        queued: 0,
+        checking: 0,
+        syncing: 0,
+        indexing: 0,
+        ready: 2,
+        unsupported: 0,
+        failed: 0,
+        target_concurrency: 1,
+        max_concurrency: 1,
+        sync_concurrency_limit: 1,
+        current_repo_id: None,
+        active_repo_ids: Vec::new(),
+        repos: vec![
+            repo_status_entry("alpha/repo", RepoIndexPhase::Ready),
+            repo_status_entry("beta/repo", RepoIndexPhase::Ready),
+        ],
+    });
+
+    let unordered = some_or_panic(
+        service
+            .repo_search_query_cache_key(RepoSearchQueryCacheKeyInput {
+                scope: "code_search",
+                corpora: &[],
+                repo_corpora: &[
+                    SearchCorpusKind::RepoEntity,
+                    SearchCorpusKind::RepoContentChunk,
+                ],
+                repo_ids: &[
+                    String::from("beta/repo"),
+                    String::from("alpha/repo"),
+                    String::from("alpha/repo"),
+                ],
+                query: "solve",
+                limit: 10,
+                intent: Some("code_search"),
+                repo_hint: None,
+            })
+            .await,
+        "unordered repo-set cache key should exist",
+    );
+    let normalized = some_or_panic(
+        service
+            .repo_search_query_cache_key(RepoSearchQueryCacheKeyInput {
+                scope: "code_search",
+                corpora: &[],
+                repo_corpora: &[
+                    SearchCorpusKind::RepoEntity,
+                    SearchCorpusKind::RepoContentChunk,
+                ],
+                repo_ids: &[String::from("alpha/repo"), String::from("beta/repo")],
+                query: "solve",
+                limit: 10,
+                intent: Some("code_search"),
+                repo_hint: None,
+            })
+            .await,
+        "normalized repo-set cache key should exist",
+    );
+
+    assert_eq!(unordered, normalized);
+}
+
+#[tokio::test]
 async fn recorded_repo_publication_remains_available_by_revision() {
     let temp_dir = temp_dir();
     let keyspace = service_test_manifest_keyspace();

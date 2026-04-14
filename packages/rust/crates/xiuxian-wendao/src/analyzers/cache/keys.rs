@@ -126,7 +126,7 @@ pub(crate) fn build_repository_analysis_cache_key(
     source: &MaterializedRepo,
     metadata: Option<&LocalCheckoutMetadata>,
 ) -> RepositoryAnalysisCacheKey {
-    let plugin_ids = repository.repo_intelligence_plugin_ids();
+    let plugin_ids = repository.configured_plugin_ids();
     let analysis_identity = collect_repository_analysis_identity(
         repository,
         source.checkout_root.as_path(),

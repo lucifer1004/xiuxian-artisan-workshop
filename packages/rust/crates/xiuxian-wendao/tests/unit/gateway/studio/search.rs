@@ -1,5 +1,8 @@
 use super::test_prelude::*;
 use super::*;
+use crate::analyzers::{
+    ExampleRecord, ModuleRecord, RepoSymbolKind, RepositoryAnalysisOutput, SymbolRecord,
+};
 use crate::gateway::studio::build_ast_index;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::search::handlers::knowledge::intent::ensure_intent_indices;
@@ -7,7 +10,10 @@ use crate::gateway::studio::search::handlers::status::search_index_status;
 use crate::gateway::studio::search::support::strip_option;
 use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f64};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
-use crate::repo_index::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot};
+use crate::repo_index::{
+    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
+    RepoIndexStatusResponse,
+};
 use crate::search::SearchPlaneService;
 use chrono::DateTime;
 use serde_json::json;
@@ -94,6 +100,128 @@ fn cold_start_corpus<'a>(
         .iter()
         .find(|entry| entry.corpus == corpus)
         .unwrap_or_else(|| panic!("missing cold-start telemetry corpus `{corpus}`"))
+}
+
+fn ready_repo_status_rows(repo_ids: &[&str]) -> RepoIndexStatusResponse {
+    RepoIndexStatusResponse {
+        total: repo_ids.len(),
+        active: 0,
+        queued: 0,
+        checking: 0,
+        syncing: 0,
+        indexing: 0,
+        ready: repo_ids.len(),
+        unsupported: 0,
+        failed: 0,
+        target_concurrency: 1,
+        max_concurrency: 1,
+        sync_concurrency_limit: 1,
+        current_repo_id: None,
+        active_repo_ids: Vec::new(),
+        repos: repo_ids
+            .iter()
+            .map(|repo_id| RepoIndexEntryStatus {
+                repo_id: (*repo_id).to_string(),
+                phase: RepoIndexPhase::Ready,
+                queue_position: None,
+                last_error: None,
+                last_revision: Some("rev-1".to_string()),
+                updated_at: Some("2026-04-14T12:00:00Z".to_string()),
+                attempt_count: 1,
+            })
+            .collect(),
+    }
+}
+
+async fn publish_repo_bundle_for_search_status(state: &Arc<GatewayState>, repo_id: &str) {
+    let documents = vec![RepoCodeDocument {
+        path: "src/BaseModelica.jl".to_string(),
+        language: Some("julia".to_string()),
+        contents: Arc::<str>::from(
+            "module BaseModelica\nexport reexport\nreexport() = nothing\nend\n",
+        ),
+        size_bytes: 61,
+        modified_unix_ms: 10,
+    }];
+    let analysis = RepositoryAnalysisOutput {
+        modules: vec![ModuleRecord {
+            repo_id: repo_id.to_string(),
+            module_id: "module:BaseModelica".to_string(),
+            qualified_name: "BaseModelica".to_string(),
+            path: "src/BaseModelica.jl".to_string(),
+        }],
+        symbols: vec![SymbolRecord {
+            repo_id: repo_id.to_string(),
+            symbol_id: "symbol:reexport".to_string(),
+            module_id: Some("module:BaseModelica".to_string()),
+            name: "reexport".to_string(),
+            qualified_name: "BaseModelica.reexport".to_string(),
+            kind: RepoSymbolKind::Function,
+            path: "src/BaseModelica.jl".to_string(),
+            line_start: Some(2),
+            line_end: Some(3),
+            signature: Some("reexport()".to_string()),
+            audit_status: Some("verified".to_string()),
+            verification_state: Some("verified".to_string()),
+            attributes: std::collections::BTreeMap::new(),
+        }],
+        examples: vec![ExampleRecord {
+            repo_id: repo_id.to_string(),
+            example_id: "example:reexport".to_string(),
+            title: "Reexport example".to_string(),
+            path: "examples/reexport.jl".to_string(),
+            summary: Some("Shows how to reexport ModelingToolkit".to_string()),
+        }],
+        ..RepositoryAnalysisOutput::default()
+    };
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_repo_entities_with_revision(repo_id, &analysis, &documents, Some("rev-1"))
+            .await,
+        "publish repo entity status fixture",
+    );
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_repo_content_chunks_with_revision(repo_id, &documents, Some("rev-1"))
+            .await,
+        "publish repo content status fixture",
+    );
+}
+
+fn search_index_status_payload_view(payload: &serde_json::Value) -> serde_json::Value {
+    json!({
+        "total": payload.get("total").cloned().unwrap_or(serde_json::Value::Null),
+        "idle": payload.get("idle").cloned().unwrap_or(serde_json::Value::Null),
+        "indexing": payload.get("indexing").cloned().unwrap_or(serde_json::Value::Null),
+        "ready": payload.get("ready").cloned().unwrap_or(serde_json::Value::Null),
+        "degraded": payload.get("degraded").cloned().unwrap_or(serde_json::Value::Null),
+        "failed": payload.get("failed").cloned().unwrap_or(serde_json::Value::Null),
+        "compactionPending": payload
+            .get("compactionPending")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+        "statusReason": payload
+            .get("statusReason")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+        "maintenanceSummary": payload
+            .get("maintenanceSummary")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+        "queryTelemetrySummary": payload
+            .get("queryTelemetrySummary")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+        "repoReadPressure": payload
+            .get("repoReadPressure")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+        "corpora": payload.get("corpora").cloned().unwrap_or(serde_json::Value::Null),
+    })
 }
 
 async fn publish_local_symbol_index(state: &Arc<GatewayState>) {
@@ -575,6 +703,51 @@ async fn search_index_status_handler_includes_cold_start_telemetry() {
                 })
             }),
         "repeat-work telemetry should surface detector findings for repeated hot paths"
+    );
+}
+
+#[tokio::test]
+async fn search_index_status_handler_is_stable_for_reordered_ready_published_repo_rows() {
+    let fixture = make_state_with_docs(Vec::new());
+    publish_repo_bundle_for_search_status(&fixture.state, "alpha/repo").await;
+    publish_repo_bundle_for_search_status(&fixture.state, "beta/repo").await;
+
+    fixture
+        .state
+        .studio
+        .search_plane
+        .synchronize_repo_runtime_for_test(&ready_repo_status_rows(&["alpha/repo", "beta/repo"]))
+        .await;
+    let left_payload = serde_json::to_value(
+        search_index_status(State(Arc::clone(&fixture.state)))
+            .await
+            .unwrap_or_else(|error| panic!("left status handler should resolve: {error:?}"))
+            .0,
+    )
+    .unwrap_or_else(|error| panic!("serialize left status payload: {error}"));
+
+    fixture
+        .state
+        .studio
+        .search_plane
+        .clear_all_in_memory_repo_runtime_for_test();
+    fixture
+        .state
+        .studio
+        .search_plane
+        .synchronize_repo_runtime_for_test(&ready_repo_status_rows(&["beta/repo", "alpha/repo"]))
+        .await;
+    let right_payload = serde_json::to_value(
+        search_index_status(State(Arc::clone(&fixture.state)))
+            .await
+            .unwrap_or_else(|error| panic!("right status handler should resolve: {error:?}"))
+            .0,
+    )
+    .unwrap_or_else(|error| panic!("serialize right status payload: {error}"));
+
+    assert_eq!(
+        search_index_status_payload_view(&left_payload),
+        search_index_status_payload_view(&right_payload)
     );
 }
 

@@ -13,6 +13,7 @@ ast-grep, plus the Python tree-sitter parser used by the active Rust lanes.
 - Pattern-based code search
 - Syntax tree traversal
 - Code transformation support
+- Structural semantic fingerprints for supported generic AST languages
 
 ## Usage
 
