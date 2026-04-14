@@ -68,6 +68,9 @@
         #     };
         #   };
         # };
+        "xiuxian-wendao" = {
+          drvConfig.mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+        };
         "xiuxian-zhenfa" = {
           depsDrvConfig.mkDerivation = {
             buildInputs = [
