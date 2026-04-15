@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 
 use crate::dependency_indexer::extract_symbols;
 use crate::gateway::studio::types::UiProjectConfig;
-use crate::unified_symbol::UnifiedSymbolIndex;
+use crate::unified_symbol::{UnifiedSymbol, UnifiedSymbolIndex};
 
 use super::filters::should_skip_entry;
 use crate::gateway::studio::search::project_scope::{
@@ -20,6 +20,7 @@ pub(crate) fn build_symbol_index(
     projects: &[UiProjectConfig],
 ) -> UnifiedSymbolIndex {
     let mut index = UnifiedSymbolIndex::new();
+    let mut symbols = Vec::new();
 
     for root in configured_project_scan_roots(config_root, projects) {
         for entry in WalkDir::new(root.as_path())
@@ -37,19 +38,20 @@ pub(crate) fn build_symbol_index(
             let normalized_path = index_path_for_entry(project_root, entry.path());
             let crate_name = infer_crate_name(Path::new(normalized_path.as_str()));
 
-            if let Ok(symbols) = extract_symbols(entry.path(), language) {
-                for symbol in symbols {
+            if let Ok(extracted) = extract_symbols(entry.path(), language) {
+                for symbol in extracted {
                     let location = format!("{normalized_path}:{}", symbol.line);
-                    index.add_project_symbol(
+                    symbols.push(UnifiedSymbol::new_project(
                         symbol.name.as_str(),
                         symbol_kind_label(&symbol.kind),
                         location.as_str(),
                         crate_name.as_str(),
-                    );
+                    ));
                 }
             }
         }
     }
 
+    index.add_symbols_batch(symbols);
     index
 }
