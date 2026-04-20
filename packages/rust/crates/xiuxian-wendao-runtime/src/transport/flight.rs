@@ -7,7 +7,7 @@ use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient as TonicFlightServiceClient;
 use arrow_schema::DataType;
 use futures::{TryStreamExt, stream};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 use tonic::transport::Endpoint;
 use xiuxian_vector_store::EngineRecordBatch;
 
@@ -16,8 +16,12 @@ use super::query_contract::{
     WENDAO_SCHEMA_VERSION_HEADER, flight_descriptor_path, normalize_flight_route,
 };
 
-/// Lazy Arrow Flight client aligned to the workspace Arrow Flight transport line.
-pub(crate) const DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES: usize = 64 * 1024 * 1024;
+/// Lazy Arrow Flight client aligned to the workspace Arrow Flight transport
+/// line.
+///
+/// This matches the `WendaoSearch` parser-summary server default so dense
+/// parser-summary responses do not silently truncate below the server ceiling.
+pub(crate) const DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct ArrowFlightTransportClient {
@@ -28,6 +32,7 @@ pub(crate) struct ArrowFlightTransportClient {
     timeout: Duration,
     endpoint: Endpoint,
     client: Arc<Mutex<Option<FlightClient>>>,
+    in_flight_gate: Arc<Semaphore>,
 }
 
 impl ArrowFlightTransportClient {
@@ -42,9 +47,15 @@ impl ArrowFlightTransportClient {
         route: impl Into<String>,
         schema_version: impl Into<String>,
         timeout: Duration,
+        max_in_flight_requests: usize,
     ) -> Result<Self, String> {
         if timeout.is_zero() {
             return Err("Arrow Flight timeout must be greater than zero".to_string());
+        }
+        if max_in_flight_requests == 0 {
+            return Err(
+                "Arrow Flight max_in_flight_requests must be greater than zero".to_string(),
+            );
         }
 
         let base_url = base_url.into();
@@ -67,6 +78,7 @@ impl ArrowFlightTransportClient {
             timeout,
             endpoint,
             client: Arc::new(Mutex::new(None)),
+            in_flight_gate: Arc::new(Semaphore::new(max_in_flight_requests)),
         })
     }
 
@@ -96,6 +108,20 @@ impl ArrowFlightTransportClient {
         self.timeout
     }
 
+    /// Return the configured in-flight request budget.
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn max_in_flight_requests(&self) -> usize {
+        self.in_flight_gate.available_permits()
+    }
+
+    /// Return the shared in-flight request gate.
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn request_gate(&self) -> Arc<Semaphore> {
+        Arc::clone(&self.in_flight_gate)
+    }
+
     /// Send one Arrow engine batch through the Flight transport.
     ///
     /// # Errors
@@ -122,11 +148,20 @@ impl ArrowFlightTransportClient {
         if batches.is_empty() {
             return Err("Arrow Flight request batches cannot be empty".to_string());
         }
+        let _in_flight_request_permit = Arc::clone(&self.in_flight_gate)
+            .acquire_owned()
+            .await
+            .map_err(|_| "Arrow Flight in-flight request gate unexpectedly closed".to_string())?;
 
+        let first_batch = batches
+            .first()
+            .ok_or_else(|| "Arrow Flight request batches cannot be empty".to_string())?;
         let rerank_dimension_header = rerank_dimension_header(self.route.as_str(), batches)?;
         let request_batches = batches.to_vec();
         let request_stream = FlightDataEncoderBuilder::new()
+            .with_schema(first_batch.schema())
             .with_flight_descriptor(Some(flight_descriptor(self.route.as_str())))
+            .with_max_flight_data_size(DEFAULT_FLIGHT_MESSAGE_SIZE_BYTES)
             .build(stream::iter(request_batches.into_iter().map(
                 Ok::<EngineRecordBatch, arrow_flight::error::FlightError>,
             )));

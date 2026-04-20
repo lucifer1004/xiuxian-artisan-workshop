@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use serde_json::Value;
-use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::{
     capabilities::{ContractVersion, PluginCapabilityBinding, PluginProviderSelector},
     ids::{CapabilityId, PluginId},
@@ -12,9 +11,11 @@ use xiuxian_wendao_core::{
     transport::{PluginTransportEndpoint, PluginTransportKind},
 };
 use xiuxian_wendao_runtime::transport::{
-    DEFAULT_FLIGHT_BASE_URL, FLIGHT_SCHEMA_VERSION_METADATA_KEY, NegotiatedFlightTransportClient,
-    negotiate_flight_transport_client_from_bindings, normalize_flight_route,
-    validate_flight_schema_version, validate_flight_timeout_secs,
+    DEFAULT_FLIGHT_MAX_IN_FLIGHT_REQUESTS, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+    NegotiatedFlightTransportClient, negotiate_flight_transport_client_from_bindings,
+    normalize_flight_route, resolve_default_flight_base_url,
+    validate_flight_max_in_flight_requests, validate_flight_schema_version,
+    validate_flight_timeout_secs,
 };
 
 use arrow::record_batch::RecordBatch;
@@ -23,17 +24,27 @@ use super::contract::{
     validate_modelica_parser_summary_request_batches,
     validate_modelica_parser_summary_response_batches,
 };
+use crate::arrow_metadata::attach_record_batch_metadata;
 
 const MODELICA_PLUGIN_ID: &str = "modelica";
 const MODELICA_PARSER_SUMMARY_CAPABILITY_ID: &str = "parser-summary";
 const PARSER_SUMMARY_TRANSPORT_KEY: &str = "parser_summary_transport";
 const FILE_SUMMARY_TRANSPORT_KEY: &str = "file_summary";
 const DEFAULT_MODELICA_HEALTH_ROUTE: &str = "/healthz";
-const DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL: &str = "http://127.0.0.1:41081";
+const DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL_FALLBACK: &str = "http://127.0.0.1:41081";
+const PARSER_SUMMARY_BASE_URL_ENV: &str = "WENDAO_PARSER_SUMMARY_BASE_URL";
 const DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS: u64 = 120;
+
+fn resolve_parser_summary_base_url() -> String {
+    std::env::var(PARSER_SUMMARY_BASE_URL_ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL_FALLBACK.to_string())
+}
 
 pub(crate) const MODELICA_PARSER_SUMMARY_SCHEMA_VERSION: &str = "v3";
 pub(crate) const MODELICA_FILE_SUMMARY_ROUTE: &str = "/wendao/code-parser/modelica/file-summary";
+pub(crate) const MODELICA_AST_QUERY_ROUTE: &str = "/wendao/code-parser/modelica/ast-query";
 
 static LINKED_MODELICA_PARSER_SUMMARY_BASE_URL: OnceLock<String> = OnceLock::new();
 static MODELICA_PARSER_SUMMARY_CLIENT_CACHE: OnceLock<
@@ -45,6 +56,7 @@ static NEXT_MODELICA_PARSER_SUMMARY_CLIENT_SLOT: AtomicUsize = AtomicUsize::new(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParserSummaryRouteKind {
     FileSummary,
+    AstQuery,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -53,6 +65,7 @@ struct ParserSummaryTransportCacheKey {
     route: String,
     schema_version: String,
     timeout_secs: u64,
+    max_in_flight_requests: u64,
 }
 
 #[derive(Clone)]
@@ -66,12 +79,14 @@ impl ParserSummaryRouteKind {
     pub(crate) fn option_key(self) -> &'static str {
         match self {
             Self::FileSummary => FILE_SUMMARY_TRANSPORT_KEY,
+            Self::AstQuery => "ast_query",
         }
     }
 
     pub(crate) fn route(self) -> &'static str {
         match self {
             Self::FileSummary => MODELICA_FILE_SUMMARY_ROUTE,
+            Self::AstQuery => MODELICA_AST_QUERY_ROUTE,
         }
     }
 }
@@ -103,6 +118,15 @@ pub fn set_linked_modelica_parser_summary_base_url_for_tests(
     LINKED_MODELICA_PARSER_SUMMARY_BASE_URL
         .set(base_url)
         .map_err(|_| "failed to store linked Modelica parser-summary base_url".to_string())
+}
+
+/// Clear the process-local Modelica parser-summary Flight client cache used by
+/// linked test hosts.
+pub fn clear_modelica_parser_summary_transport_cache_for_tests() {
+    modelica_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clear();
 }
 
 pub(crate) fn build_modelica_parser_summary_flight_transport_client(
@@ -172,7 +196,28 @@ pub(crate) async fn process_modelica_parser_summary_flight_batches_for_repositor
     batches: &[RecordBatch],
 ) -> Result<Vec<RecordBatch>, RepoIntelligenceError> {
     let client = build_modelica_parser_summary_flight_transport_client(repository, route_kind)?;
-    process_modelica_parser_summary_flight_batches(&client, route_kind, batches).await
+    match process_modelica_parser_summary_flight_batches(&client, route_kind, batches).await {
+        Ok(response_batches) => Ok(response_batches),
+        Err(error) if parser_summary_transport_error_requires_client_refresh(&error) => {
+            evict_modelica_parser_summary_cached_client(repository, route_kind)?;
+            let refreshed_client =
+                build_modelica_parser_summary_flight_transport_client(repository, route_kind)?;
+            process_modelica_parser_summary_flight_batches(&refreshed_client, route_kind, batches)
+                .await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub(crate) fn modelica_parser_summary_timeout_secs_for_repository(
+    repository: &RegisteredRepository,
+    route_kind: ParserSummaryRouteKind,
+) -> Result<u64, RepoIntelligenceError> {
+    let binding = build_parser_summary_flight_transport_binding(repository, route_kind)?;
+    Ok(binding
+        .endpoint
+        .timeout_secs
+        .unwrap_or(DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS))
 }
 
 fn modelica_parser_summary_provider_selector() -> PluginProviderSelector {
@@ -185,6 +230,27 @@ fn modelica_parser_summary_provider_selector() -> PluginProviderSelector {
 fn modelica_parser_summary_client_cache()
 -> &'static Mutex<HashMap<ParserSummaryTransportCacheKey, CachedParserSummaryFlightClient>> {
     MODELICA_PARSER_SUMMARY_CLIENT_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn evict_modelica_parser_summary_cached_client(
+    repository: &RegisteredRepository,
+    route_kind: ParserSummaryRouteKind,
+) -> Result<(), RepoIntelligenceError> {
+    let binding = build_parser_summary_flight_transport_binding(repository, route_kind)?;
+    let cache_key = parser_summary_transport_cache_key(&binding, repository, route_kind)?;
+    modelica_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&cache_key);
+    Ok(())
+}
+
+fn parser_summary_transport_error_requires_client_refresh(error: &RepoIntelligenceError) -> bool {
+    matches!(
+        error,
+        RepoIntelligenceError::AnalysisFailed { message }
+            if message.contains("Service was not ready: transport error")
+    )
 }
 
 fn parser_summary_transport_cache_key(
@@ -210,6 +276,10 @@ fn parser_summary_transport_cache_key(
             .endpoint
             .timeout_secs
             .unwrap_or(DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS),
+        max_in_flight_requests: binding
+            .endpoint
+            .max_in_flight_requests
+            .unwrap_or(DEFAULT_FLIGHT_MAX_IN_FLIGHT_REQUESTS as u64),
     })
 }
 
@@ -302,6 +372,21 @@ fn build_parser_summary_flight_transport_binding(
         })?,
         None => DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS,
     };
+    let max_in_flight_requests = match options.max_in_flight_requests {
+        Some(max_in_flight_requests) => {
+            validate_flight_max_in_flight_requests(max_in_flight_requests).map_err(|error| {
+                RepoIntelligenceError::ConfigLoad {
+                    message: format!(
+                        "repo `{}` Modelica parser-summary max_in_flight_requests for `{}` is invalid: {error}",
+                        repository.id,
+                        route_kind.route(),
+                    ),
+                }
+            })?;
+            Some(max_in_flight_requests)
+        }
+        None => None,
+    };
 
     Ok(PluginCapabilityBinding {
         selector: modelica_parser_summary_provider_selector(),
@@ -309,11 +394,12 @@ fn build_parser_summary_flight_transport_binding(
             base_url: Some(
                 options
                     .base_url
-                    .unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string()),
+                    .unwrap_or_else(resolve_default_flight_base_url),
             ),
             route: Some(route),
             health_route: Some(health_route),
             timeout_secs: Some(timeout_secs),
+            max_in_flight_requests,
         },
         launch: None,
         transport: PluginTransportKind::ArrowFlight,
@@ -344,6 +430,7 @@ struct ParserSummaryTransportOptions {
     health_route: Option<String>,
     schema_version: Option<String>,
     timeout_secs: Option<u64>,
+    max_in_flight_requests: Option<u64>,
 }
 
 fn missing_parser_summary_transport_error(
@@ -427,6 +514,11 @@ fn resolve_parser_summary_transport_options(
                 .transpose()?
                 .flatten()
                 .or(u64_option(transport, "timeout_secs", repository)?),
+            max_in_flight_requests: route_override
+                .map(|value| u64_option(value, "max_in_flight_requests", repository))
+                .transpose()?
+                .flatten()
+                .or(u64_option(transport, "max_in_flight_requests", repository)?),
         }));
     }
 
@@ -438,17 +530,19 @@ fn resolve_parser_summary_transport_options(
             health_route: None,
             schema_version: Some(MODELICA_PARSER_SUMMARY_SCHEMA_VERSION.to_string()),
             timeout_secs: None,
+            max_in_flight_requests: None,
         }));
     }
 
     if saw_modelica_plugin {
         return Ok(Some(ParserSummaryTransportOptions {
             enabled: Some(true),
-            base_url: Some(DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL.to_string()),
+            base_url: Some(resolve_parser_summary_base_url()),
             route: None,
             health_route: None,
             schema_version: Some(MODELICA_PARSER_SUMMARY_SCHEMA_VERSION.to_string()),
             timeout_secs: None,
+            max_in_flight_requests: None,
         }));
     }
 

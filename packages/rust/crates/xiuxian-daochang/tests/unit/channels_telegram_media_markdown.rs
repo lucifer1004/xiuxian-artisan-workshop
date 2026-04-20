@@ -1,14 +1,11 @@
 //! Telegram media-group markdown rendering tests.
 
-#[path = "telegram_media_support/bootstrap.rs"]
-mod bootstrap;
-#[path = "telegram_media_support/media_api.rs"]
-mod media_api;
-
 use anyhow::Result;
 use xiuxian_daochang::{Channel, TelegramChannel};
 
-use media_api::{spawn_mock_telegram_media_api, spawn_mock_telegram_media_api_with_markdown_error};
+use super::telegram_media_support::{
+    spawn_mock_telegram_media_api, spawn_mock_telegram_media_api_with_markdown_error,
+};
 
 #[tokio::test]
 async fn telegram_media_group_caption_markdown_preserves_fenced_code_language_identifier()
@@ -56,7 +53,7 @@ async fn telegram_media_group_caption_markdown_preserves_fenced_code_language_id
         first_media
             .get("caption")
             .and_then(serde_json::Value::as_str),
-        Some("```rust\nlet value = a_b * 2;\n```")
+        Some("```Rust\nlet value = a_b * 2;\n```")
     );
 
     handle.abort();
@@ -113,7 +110,7 @@ async fn telegram_media_group_caption_markdown_fallback_keeps_original_fenced_co
         first_media
             .get("caption")
             .and_then(serde_json::Value::as_str),
-        Some("```rust\nlet value = a_b * 2;\n```")
+        Some("```Rust\nlet value = a_b * 2;\n```")
     );
     assert!(
         second_media.get("parse_mode").is_none(),
@@ -131,7 +128,7 @@ async fn telegram_media_group_caption_markdown_fallback_keeps_original_fenced_co
 }
 
 #[tokio::test]
-async fn telegram_media_group_caption_markdown_drops_unsupported_fenced_code_language_identifier()
+async fn telegram_media_group_caption_markdown_filters_unsupported_fenced_code_language_identifier()
 -> Result<()> {
     let Some((api_base, state, handle)) = spawn_mock_telegram_media_api().await? else {
         return Ok(());
@@ -169,7 +166,7 @@ async fn telegram_media_group_caption_markdown_drops_unsupported_fenced_code_lan
         first_media
             .get("caption")
             .and_then(serde_json::Value::as_str),
-        Some("```\nlet value = 1;\n```")
+        Some("```foobar\nlet value = 1;\n```")
     );
 
     handle.abort();

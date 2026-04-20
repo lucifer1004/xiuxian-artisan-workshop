@@ -16,7 +16,7 @@ mod parquet;
 mod runtime;
 
 #[cfg(test)]
-#[path = "../../tests/unit/duckdb/mod.rs"]
+#[path = "../../tests/unit/duckdb/mod/mod.rs"]
 mod tests;
 
 #[cfg(feature = "duckdb")]
@@ -33,4 +33,6 @@ pub use engine::{
 pub use parquet::DuckDbParquetQueryEngine;
 pub use parquet::{DataFusionParquetQueryEngine, ParquetQueryEngine};
 pub use runtime::resolve_search_duckdb_runtime;
-pub use xiuxian_wendao_runtime::config::{DuckDbDatabasePath, SearchDuckDbRuntimeConfig};
+pub use xiuxian_wendao_runtime::config::{
+    DuckDbDatabasePath, SearchDuckDbExecutionConfig, SearchDuckDbRuntimeConfig,
+};

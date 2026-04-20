@@ -7,9 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-# PyO3 for Python bindings
-pyo3 = { workspace = true, features = ["experimental-async"] }
-
 # Async execution
 tokio = { workspace = true, features = ["process", "io-util", "time"] }
 
@@ -17,20 +14,8 @@ tokio = { workspace = true, features = ["process", "io-util", "time"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
-# Error handling
-thiserror = { workspace = true }
-
 # Async trait for trait objects
-async-trait = "0.1"
-
-# Unix process limits
-nix = "0.29"
-
-# Time handling
-chrono = { workspace = true }
-
-# Binary path detection
-which = "6.0"
+async-trait = { workspace = true }
 xiuxian-testing = { path = "../xiuxian-testing" }
 
 [dev-dependencies]

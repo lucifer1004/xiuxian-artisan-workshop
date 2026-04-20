@@ -9,9 +9,7 @@
     }:
     let
       # The dumped Metal toolchain
-      apple-metal-toolchain =
-        pkgs.callPackage ../../packages/apple-metal-toolchain.nix
-          { };
+      apple-metal-toolchain = pkgs.callPackage ../../packages/apple-metal-toolchain.nix { };
 
       # The native Nixpkgs SDK
       apple-sdk = pkgs.apple-sdk_15;
@@ -24,6 +22,25 @@
           apple-sdk
         ];
       };
+      commonProjectEnv = {
+        PYO3_PYTHON = "${pkgs.python3}/bin/python";
+        PROTOC = "${pkgs.protobuf}/bin/protoc";
+        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+      };
+      commonProjectDrvConfig = {
+        mkDerivation = {
+          nativeBuildInputs = [
+            pkgs.pkg-config
+            pkgs.protobuf
+          ];
+          buildInputs = [
+            pkgs.openssl
+            pkgs.cacert
+          ];
+        };
+        env = commonProjectEnv;
+      };
     in
     {
       _module.args.apple-metal-toolchain = apple-metal-toolchain;
@@ -31,22 +48,8 @@
       nci.projects."cyber-xiuxian-workshop" = {
         path = workspaceRoot;
         export = true;
-        depsDrvConfig = {
-          mkDerivation = {
-            buildInputs = [
-              pkgs.pkg-config
-              pkgs.openssl
-              pkgs.cacert
-              pkgs.protobuf
-            ];
-          };
-          env = {
-            PYO3_PYTHON = "${pkgs.python3}/bin/python";
-            PROTOC = "${pkgs.protobuf}/bin/protoc";
-            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-            NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-          };
-        };
+        drvConfig = commonProjectDrvConfig;
+        depsDrvConfig = commonProjectDrvConfig;
       };
       # configure crates
       nci.crates = {
@@ -70,11 +73,25 @@
         # };
         "xiuxian-wendao" = {
           drvConfig.mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+          profiles.release.runTests = false;
         };
         "xiuxian-daochang" = {
           drvConfig.mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+          profiles.release.runTests = false;
         };
         "xiuxian-zhenfa" = {
+          profiles.release.runTests = false;
+          drvConfig.mkDerivation = {
+            nativeBuildInputs = [ pkgs.pkg-config ];
+            buildInputs = [
+              pkgs.libxml2
+              pkgs.cacert
+            ];
+          };
+          drvConfig.env = {
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          };
           depsDrvConfig.mkDerivation = {
             buildInputs = [
               pkgs.libxml2
@@ -89,24 +106,43 @@
         "xiuxian-qianji" = {
           depsDrvConfig = {
             mkDerivation = {
-              buildInputs = [ pkgs.protobuf ];
+              buildInputs = [
+                pkgs.protobuf
+                pkgs.libxml2
+              ];
             };
           };
         };
+        "xiuxian-lance" = {
+          drvConfig.mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+          drvConfig.env.PROTOC = "${pkgs.protobuf}/bin/protoc";
+          depsDrvConfig.mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+          depsDrvConfig.env.PROTOC = "${pkgs.protobuf}/bin/protoc";
+        };
+        "xiuxian-io" = {
+          profiles.release.runTests = false;
+        };
+        "xiuxian-memory-engine" = {
+          profiles.release.runTests = false;
+        };
+        "xiuxian-skills" = {
+          profiles.release.runTests = false;
+        };
         "xiuxian-vector" = {
+          drvConfig.mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+          drvConfig.env.PROTOC = "${pkgs.protobuf}/bin/protoc";
           depsDrvConfig = {
-            mkDerivation.buildInputs = [ pkgs.protobuf ];
+            mkDerivation.nativeBuildInputs = [ pkgs.protobuf ];
+            env.PROTOC = "${pkgs.protobuf}/bin/protoc";
           };
         };
       };
 
-      packages.xiuxian-core-rs-python-bindings =
-        pkgs.callPackage ../../packages/xiuxian-core-rs.nix
-          {
-            inherit workspaceRoot;
-            cargoDeps =
-              config.nci.outputs."xiuxian-core-rs".packages.release.config.rust-cargo-vendor.vendoredSources;
-            version = config.nci.outputs."xiuxian-core-rs".packages.release.config.version;
-          };
+      packages.xiuxian-core-rs-python-bindings = pkgs.callPackage ../../packages/xiuxian-core-rs.nix {
+        inherit workspaceRoot;
+        cargoDeps =
+          config.nci.outputs."xiuxian-core-rs".packages.release.config.rust-cargo-vendor.vendoredSources;
+        version = config.nci.outputs."xiuxian-core-rs".packages.release.config.version;
+      };
     };
 }

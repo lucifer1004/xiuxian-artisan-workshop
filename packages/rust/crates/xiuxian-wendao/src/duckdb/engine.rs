@@ -3,11 +3,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
+#[cfg(feature = "duckdb")]
+use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
 use datafusion::datasource::MemTable;
 use datafusion::execution::context::SessionContext;
 use datafusion::prelude::SessionConfig;
 use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
+#[cfg(feature = "duckdb")]
+use xiuxian_wendao_sql::{
+    LocalRelationEngine as BoundedSqlLocalRelationEngine,
+    LocalRelationEngineKind as BoundedSqlLocalRelationEngineKind,
+    LocalRelationMaterializationState as BoundedSqlLocalRelationMaterializationState,
+    LocalRelationRegistrationHint as BoundedSqlLocalRelationRegistrationHint,
+};
 
 #[cfg(feature = "duckdb")]
 use arrow::datatypes::DataType;
@@ -278,7 +287,7 @@ impl DuckDbLocalRelationEngine {
     }
 
     fn registration_strategy_for_row_count(&self, total_rows: usize) -> DuckDbRegistrationStrategy {
-        if self.runtime.prefer_virtual_arrow
+        if self.runtime.execution.prefer_virtual_arrow
             && (total_rows as u64) < self.runtime.materialize_threshold_rows
         {
             DuckDbRegistrationStrategy::VirtualArrow
@@ -492,7 +501,8 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
         schema: SchemaRef,
         batches: Vec<EngineRecordBatch>,
     ) -> Result<(), String> {
-        self.register_record_batches_with_hint(
+        LocalRelationEngine::register_record_batches_with_hint(
+            self,
             table_name,
             schema,
             batches,
@@ -550,6 +560,74 @@ impl LocalRelationEngine for DuckDbLocalRelationEngine {
             .as_ref()
             .and_then(peak_temp_storage_bytes_from_profiling);
         Ok(batches)
+    }
+}
+
+#[cfg(feature = "duckdb")]
+#[async_trait]
+impl BoundedSqlLocalRelationEngine for DuckDbLocalRelationEngine {
+    fn kind(&self) -> BoundedSqlLocalRelationEngineKind {
+        match LocalRelationEngine::kind(self) {
+            LocalRelationEngineKind::DataFusion => BoundedSqlLocalRelationEngineKind::DataFusion,
+            LocalRelationEngineKind::DuckDb => BoundedSqlLocalRelationEngineKind::DuckDb,
+        }
+    }
+
+    fn register_record_batches(
+        &self,
+        table_name: &str,
+        schema: SchemaRef,
+        batches: Vec<RecordBatch>,
+    ) -> Result<(), String> {
+        LocalRelationEngine::register_record_batches(self, table_name, schema, batches)
+    }
+
+    fn register_record_batches_with_hint(
+        &self,
+        table_name: &str,
+        schema: SchemaRef,
+        batches: Vec<RecordBatch>,
+        hint: BoundedSqlLocalRelationRegistrationHint,
+    ) -> Result<(), String> {
+        let hint = match hint {
+            BoundedSqlLocalRelationRegistrationHint::Default => {
+                LocalRelationRegistrationHint::Default
+            }
+            BoundedSqlLocalRelationRegistrationHint::RepeatedUse => {
+                LocalRelationRegistrationHint::RepeatedUse
+            }
+        };
+        LocalRelationEngine::register_record_batches_with_hint(
+            self, table_name, schema, batches, hint,
+        )
+    }
+
+    fn relation_registration_strategy(&self, table_name: &str) -> Option<&'static str> {
+        LocalRelationEngine::relation_registration_strategy(self, table_name)
+    }
+
+    fn relation_materialization_state(
+        &self,
+        table_name: &str,
+    ) -> Option<BoundedSqlLocalRelationMaterializationState> {
+        LocalRelationEngine::relation_materialization_state(self, table_name).map(|state| {
+            match state {
+                LocalRelationMaterializationState::Materialized => {
+                    BoundedSqlLocalRelationMaterializationState::Materialized
+                }
+                LocalRelationMaterializationState::Virtual => {
+                    BoundedSqlLocalRelationMaterializationState::Virtual
+                }
+            }
+        })
+    }
+
+    fn last_query_temp_storage_peak_bytes(&self) -> Option<u64> {
+        LocalRelationEngine::last_query_temp_storage_peak_bytes(self)
+    }
+
+    async fn query_batches(&self, sql: &str) -> Result<Vec<RecordBatch>, String> {
+        LocalRelationEngine::query_batches(self, sql).await
     }
 }
 
@@ -649,7 +727,12 @@ pub(crate) fn build_duckdb_parquet_view_sql(
 ) -> Result<String, String> {
     ensure_duckdb_identifier(table_name, "table")?;
     let quoted_table_name = quoted_duckdb_identifier(table_name);
-    let escaped_path = table_path.to_string_lossy().replace('\'', "''");
+    let read_path = if table_path.is_dir() {
+        table_path.join("*.parquet")
+    } else {
+        table_path.to_path_buf()
+    };
+    let escaped_path = read_path.to_string_lossy().replace('\'', "''");
     Ok(format!(
         "{drop_sql}\nCREATE TEMP VIEW {quoted_table_name} AS SELECT * FROM read_parquet('{escaped_path}');",
         drop_sql = build_drop_duckdb_registered_relation_sql(table_name),

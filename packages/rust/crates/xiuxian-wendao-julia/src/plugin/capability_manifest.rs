@@ -4,7 +4,6 @@ use arrow::array::{Array, BooleanArray, StringArray, UInt64Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use serde_json::Value;
-use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::{
     capabilities::{ContractVersion, PluginCapabilityBinding, PluginProviderSelector},
     ids::{CapabilityId, PluginId},
@@ -12,12 +11,14 @@ use xiuxian_wendao_core::{
     transport::{PluginTransportEndpoint, PluginTransportKind},
 };
 use xiuxian_wendao_runtime::transport::{
-    DEFAULT_FLIGHT_BASE_URL, DEFAULT_FLIGHT_TIMEOUT_SECS, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+    DEFAULT_FLIGHT_TIMEOUT_SECS, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
     NegotiatedFlightTransportClient, negotiate_flight_transport_client_from_bindings,
-    normalize_flight_route, validate_flight_schema_version, validate_flight_timeout_secs,
+    normalize_flight_route, resolve_default_flight_base_url, validate_flight_schema_version,
+    validate_flight_timeout_secs,
 };
 
 use super::graph_structural::GraphStructuralRouteKind;
+use crate::arrow_metadata::attach_record_batch_metadata;
 use crate::compatibility::link_graph::{
     JULIA_CAPABILITY_MANIFEST_CAPABILITY_ID, JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID,
     julia_capability_manifest_provider_selector,
@@ -196,6 +197,7 @@ impl JuliaPluginCapabilityManifestRow {
                 route: Some(route),
                 health_route,
                 timeout_secs,
+                max_in_flight_requests: None,
             },
             launch: None,
             transport,
@@ -824,11 +826,12 @@ fn build_capability_manifest_transport_binding(
             base_url: Some(
                 options
                     .base_url
-                    .unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string()),
+                    .unwrap_or_else(resolve_default_flight_base_url),
             ),
             route: Some(route),
             health_route: Some(health_route),
             timeout_secs: Some(timeout_secs),
+            max_in_flight_requests: None,
         },
         launch: None,
         transport: PluginTransportKind::ArrowFlight,

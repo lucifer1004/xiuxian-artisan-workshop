@@ -35,7 +35,7 @@ Primary characteristics:
 
 ```text
 Python (foundation/core/agent)
-  -> Rust bindings (xiuxian-core-rs)
+  -> package-local transport or facade layers
   -> Rust core (xiuxian-vector)
 ```
 
@@ -80,5 +80,4 @@ Do not add new dependencies on the removed `xiuxian-vector` checkpoint module.
 
 ## Related Docs
 
-- `docs/99_llm/native-workflow-guide.md`
 - `docs/01_core/wendao/roadmap.md`

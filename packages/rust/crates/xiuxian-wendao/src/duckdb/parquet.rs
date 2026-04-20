@@ -1,4 +1,8 @@
+#[cfg(feature = "duckdb")]
+use std::collections::BTreeMap;
 use std::path::Path;
+#[cfg(feature = "duckdb")]
+use std::path::PathBuf;
 #[cfg(feature = "duckdb")]
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -31,7 +35,13 @@ impl DataFusionParquetQueryEngine {
 /// DuckDB-backed repo publication Parquet query engine.
 #[cfg(feature = "duckdb")]
 pub struct DuckDbParquetQueryEngine {
-    connection: Mutex<SearchDuckDbConnection>,
+    runtime: Mutex<DuckDbParquetRuntime>,
+}
+
+#[cfg(feature = "duckdb")]
+struct DuckDbParquetRuntime {
+    connection: SearchDuckDbConnection,
+    registered_parquet_views: BTreeMap<String, PathBuf>,
 }
 
 #[cfg(feature = "duckdb")]
@@ -46,12 +56,15 @@ impl DuckDbParquetQueryEngine {
         let connection =
             SearchDuckDbConnection::from_runtime(runtime).map_err(VectorStoreError::General)?;
         Ok(Self {
-            connection: Mutex::new(connection),
+            runtime: Mutex::new(DuckDbParquetRuntime {
+                connection,
+                registered_parquet_views: BTreeMap::new(),
+            }),
         })
     }
 
-    fn lock_connection(&self) -> Result<MutexGuard<'_, SearchDuckDbConnection>, VectorStoreError> {
-        self.connection.lock().map_err(|_| {
+    fn lock_runtime(&self) -> Result<MutexGuard<'_, DuckDbParquetRuntime>, VectorStoreError> {
+        self.runtime.lock().map_err(|_| {
             VectorStoreError::General("search DuckDB connection mutex is poisoned".to_string())
         })
     }
@@ -164,24 +177,43 @@ impl DuckDbParquetQueryEngine {
         table_name: &str,
         table_path: &Path,
     ) -> Result<(), VectorStoreError> {
+        let normalized_path = table_path.to_path_buf();
+        let mut guard = self.lock_runtime()?;
+        if guard
+            .registered_parquet_views
+            .get(table_name)
+            .is_some_and(|existing_path| existing_path == &normalized_path)
+        {
+            return Ok(());
+        }
         let sql = build_duckdb_parquet_view_sql(table_name, table_path)
             .map_err(VectorStoreError::General)?;
-        let guard = self.lock_connection()?;
-        guard.connection().execute_batch(sql.as_str()).map_err(|error| {
-            VectorStoreError::General(format!(
-                "failed to register DuckDB repo publication parquet view `{table_name}`: {error}"
-            ))
-        })?;
+        guard
+            .connection
+            .connection()
+            .execute_batch(sql.as_str())
+            .map_err(|error| {
+                VectorStoreError::General(format!(
+                    "failed to register DuckDB repo publication parquet view `{table_name}`: {error}"
+                ))
+            })?;
+        guard
+            .registered_parquet_views
+            .insert(table_name.to_string(), normalized_path);
         Ok(())
     }
 
     fn query_batches(&self, sql: &str) -> Result<Vec<EngineRecordBatch>, VectorStoreError> {
-        let guard = self.lock_connection()?;
-        let mut statement = guard.connection().prepare(sql).map_err(|error| {
-            VectorStoreError::General(format!(
-                "failed to prepare DuckDB repo publication SQL `{sql}`: {error}"
-            ))
-        })?;
+        let guard = self.lock_runtime()?;
+        let mut statement = guard
+            .connection
+            .connection()
+            .prepare_cached(sql)
+            .map_err(|error| {
+                VectorStoreError::General(format!(
+                    "failed to prepare DuckDB repo publication SQL `{sql}`: {error}"
+                ))
+            })?;
         let batches = statement
             .query_arrow([])
             .map_err(|error| {
@@ -193,3 +225,7 @@ impl DuckDbParquetQueryEngine {
         Ok(batches)
     }
 }
+
+#[cfg(all(test, feature = "duckdb"))]
+#[path = "../../tests/unit/duckdb/parquet.rs"]
+mod tests;

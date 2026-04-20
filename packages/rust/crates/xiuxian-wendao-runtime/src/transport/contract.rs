@@ -2,6 +2,18 @@ use std::time::Duration;
 
 /// Default base URL for a local Flight-backed Julia analyzer.
 pub const DEFAULT_FLIGHT_BASE_URL: &str = "http://127.0.0.1:8815";
+
+/// Environment variable for overriding the default Flight base URL.
+const FLIGHT_BASE_URL_ENV: &str = "WENDAO_FLIGHT_BASE_URL";
+
+/// Resolve the default Flight base URL from env or compile-time constant.
+#[must_use]
+pub fn resolve_default_flight_base_url() -> String {
+    std::env::var(FLIGHT_BASE_URL_ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string())
+}
 /// Default Wendao Flight schema contract version.
 pub const DEFAULT_FLIGHT_SCHEMA_VERSION: &str = "v1";
 /// Canonical Arrow schema metadata key for the Wendao schema version.
@@ -10,6 +22,8 @@ pub const FLIGHT_SCHEMA_VERSION_METADATA_KEY: &str = "wendao.schema_version";
 pub const FLIGHT_TRACE_ID_METADATA_KEY: &str = "trace_id";
 /// Default timeout for runtime-owned Flight roundtrips.
 pub const DEFAULT_FLIGHT_TIMEOUT_SECS: u64 = 10;
+/// Default maximum concurrent in-flight Flight roundtrips per transport client.
+pub const DEFAULT_FLIGHT_MAX_IN_FLIGHT_REQUESTS: usize = 32;
 
 /// Validate a non-empty Flight schema version string.
 ///
@@ -36,6 +50,22 @@ pub fn validate_flight_timeout_secs(timeout_secs: u64) -> Result<u64, String> {
     Ok(timeout_secs)
 }
 
+/// Validate a non-zero in-flight request budget for Flight roundtrips.
+///
+/// # Errors
+///
+/// Returns an error when the provided budget is zero or does not fit into the
+/// current platform `usize`.
+pub fn validate_flight_max_in_flight_requests(
+    max_in_flight_requests: u64,
+) -> Result<usize, String> {
+    if max_in_flight_requests == 0 {
+        return Err("Flight max_in_flight_requests must be greater than zero".to_string());
+    }
+    usize::try_from(max_in_flight_requests)
+        .map_err(|_| "Flight max_in_flight_requests exceeds the current platform limit".to_string())
+}
+
 /// Resolve a runtime timeout from an optional `timeout_secs` override.
 ///
 /// # Errors
@@ -47,4 +77,21 @@ pub fn resolve_flight_timeout(timeout_secs: Option<u64>) -> Result<Duration, Str
         None => DEFAULT_FLIGHT_TIMEOUT_SECS,
     };
     Ok(Duration::from_secs(timeout_secs))
+}
+
+/// Resolve one in-flight request budget from an optional override.
+///
+/// # Errors
+///
+/// Returns an error when the provided in-flight budget is zero or too large
+/// for the current platform.
+pub fn resolve_flight_max_in_flight_requests(
+    max_in_flight_requests: Option<u64>,
+) -> Result<usize, String> {
+    match max_in_flight_requests {
+        Some(max_in_flight_requests) => {
+            validate_flight_max_in_flight_requests(max_in_flight_requests)
+        }
+        None => Ok(DEFAULT_FLIGHT_MAX_IN_FLIGHT_REQUESTS),
+    }
 }

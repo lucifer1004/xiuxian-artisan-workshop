@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use xiuxian_wendao::search::queries::sql::bounded_work_markdown::query_bounded_work_markdown_payload;
 use xiuxian_wendao_core::SqlQueryPayload;
+use xiuxian_wendao_sql::bounded_work_markdown::query_bounded_work_markdown_payload;
 
 use crate::error::QianjiError;
 
@@ -55,6 +55,9 @@ pub fn build_workdir_check_follow_up_query(
         .collect::<Vec<_>>();
 
     if surfaces.is_empty() {
+        if !report.workdir.join("qianji.toml").is_file() {
+            return None;
+        }
         surfaces = vec![
             WorkdirMarkdownSurface::Blueprint,
             WorkdirMarkdownSurface::Plan,

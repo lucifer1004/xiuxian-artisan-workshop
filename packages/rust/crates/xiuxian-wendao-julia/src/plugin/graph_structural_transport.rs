@@ -1,15 +1,16 @@
 use arrow::record_batch::RecordBatch;
 use serde_json::Value;
-use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::{
     capabilities::{ContractVersion, PluginCapabilityBinding},
     repo_intelligence::{RegisteredRepository, RepoIntelligenceError, RepositoryPluginConfig},
     transport::{PluginTransportEndpoint, PluginTransportKind},
 };
 use xiuxian_wendao_runtime::transport::{
-    DEFAULT_FLIGHT_BASE_URL, DEFAULT_FLIGHT_TIMEOUT_SECS, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+    DEFAULT_FLIGHT_TIMEOUT_SECS, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
     NegotiatedFlightTransportClient, negotiate_flight_transport_client_from_bindings,
-    normalize_flight_route, validate_flight_schema_version, validate_flight_timeout_secs,
+    normalize_flight_route, resolve_default_flight_base_url,
+    validate_flight_max_in_flight_requests, validate_flight_schema_version,
+    validate_flight_timeout_secs,
 };
 
 use super::capability_manifest::discover_julia_graph_structural_binding_from_manifest_for_repository;
@@ -19,6 +20,7 @@ use super::graph_structural::{
     validate_graph_structural_rerank_request_batch,
     validate_graph_structural_rerank_response_batch,
 };
+use crate::arrow_metadata::attach_record_batch_metadata;
 use crate::compatibility::link_graph::julia_graph_structural_provider_selector;
 
 const JULIA_PLUGIN_ID: &str = "julia";
@@ -214,6 +216,21 @@ fn build_graph_structural_flight_transport_binding_from_options(
         })?,
         None => DEFAULT_FLIGHT_TIMEOUT_SECS,
     };
+    let max_in_flight_requests = match options.max_in_flight_requests {
+        Some(max_in_flight_requests) => {
+            validate_flight_max_in_flight_requests(max_in_flight_requests).map_err(|error| {
+                RepoIntelligenceError::ConfigLoad {
+                    message: format!(
+                        "repo `{}` Julia graph-structural max_in_flight_requests for `{}` is invalid: {error}",
+                        repository.id,
+                        route_kind.route()
+                    ),
+                }
+            })?;
+            Some(max_in_flight_requests)
+        }
+        None => None,
+    };
 
     Ok(Some(PluginCapabilityBinding {
         selector: julia_graph_structural_provider_selector(),
@@ -221,11 +238,12 @@ fn build_graph_structural_flight_transport_binding_from_options(
             base_url: Some(
                 options
                     .base_url
-                    .unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string()),
+                    .unwrap_or_else(resolve_default_flight_base_url),
             ),
             route: Some(route),
             health_route: Some(health_route),
             timeout_secs: Some(timeout_secs),
+            max_in_flight_requests,
         },
         launch: None,
         transport: PluginTransportKind::ArrowFlight,
@@ -303,6 +321,7 @@ struct GraphStructuralTransportOptions {
     health_route: Option<String>,
     schema_version: Option<String>,
     timeout_secs: Option<u64>,
+    max_in_flight_requests: Option<u64>,
 }
 
 fn resolve_graph_structural_transport_options(
@@ -368,6 +387,11 @@ fn resolve_graph_structural_transport_options(
                 .transpose()?
                 .flatten()
                 .or(u64_option(transport, "timeout_secs", repository)?),
+            max_in_flight_requests: route_override
+                .map(|value| u64_option(value, "max_in_flight_requests", repository))
+                .transpose()?
+                .flatten()
+                .or(u64_option(transport, "max_in_flight_requests", repository)?),
         }));
     }
 

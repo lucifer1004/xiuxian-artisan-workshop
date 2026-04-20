@@ -1,6 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::repo_index::RepoCodeDocument;
+use crate::search::repo_content_chunk::build::partitions::{
+    repo_content_chunk_partition_count_for_document_count,
+    repo_content_chunk_partition_id_for_count,
+};
 use crate::search::repo_content_chunk::build::types::{
     REPO_CONTENT_CHUNK_EXTRACTOR_VERSION, RepoContentChunkBuildPlan,
 };
@@ -66,8 +70,86 @@ pub(crate) fn plan_repo_content_chunk_build(
     )
 }
 
+pub(crate) fn plan_repo_content_chunk_incremental_build(
+    repo_id: &str,
+    changed_documents: &[RepoCodeDocument],
+    file_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+    source_revision: Option<&str>,
+    previous_publication: Option<&crate::search::SearchRepoPublicationRecord>,
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+) -> RepoContentChunkBuildPlan {
+    let changed_paths = file_fingerprints
+        .iter()
+        .filter_map(|(path, fingerprint)| {
+            repo_file_fingerprint_changed(previous_fingerprints, path.as_str(), fingerprint)
+                .then_some(path.clone())
+        })
+        .collect::<BTreeSet<_>>();
+    let changed_documents = changed_documents
+        .iter()
+        .filter(|document| changed_paths.contains(document.path.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let deleted_paths = previous_fingerprints
+        .keys()
+        .filter(|path| !file_fingerprints.contains_key(*path))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+
+    plan_repo_staged_mutation(
+        RepoStagedMutationConfig {
+            repo_id,
+            table_name_prefix: SearchPlaneService::repo_content_chunk_table_name(repo_id).as_str(),
+            corpus: SearchCorpusKind::RepoContentChunk,
+            extractor_version: REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
+            source_revision,
+            previous_publication,
+            previous_fingerprints,
+        },
+        RepoStagedMutationPayload {
+            file_fingerprints: file_fingerprints.clone(),
+            replace_payload: changed_documents.clone(),
+            changed_payload: changed_documents,
+            changed_paths,
+            deleted_paths,
+        },
+    )
+}
+
+pub(crate) fn merge_repo_content_chunk_file_fingerprints(
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+    changed_documents: &[RepoCodeDocument],
+    deleted_paths: &BTreeSet<String>,
+) -> BTreeMap<String, SearchFileFingerprint> {
+    let next_document_count = previous_fingerprints
+        .len()
+        .saturating_add(changed_documents.len())
+        .saturating_sub(deleted_paths.len());
+    let partition_count =
+        repo_content_chunk_partition_count_for_document_count(next_document_count);
+    let mut file_fingerprints = previous_fingerprints.clone();
+    for path in deleted_paths {
+        file_fingerprints.remove(path);
+    }
+    file_fingerprints.extend(repo_content_chunk_file_fingerprints_with_partition_count(
+        changed_documents,
+        partition_count,
+    ));
+    file_fingerprints
+}
+
 pub(crate) fn repo_content_chunk_file_fingerprints(
     documents: &[RepoCodeDocument],
+) -> BTreeMap<String, SearchFileFingerprint> {
+    repo_content_chunk_file_fingerprints_with_partition_count(
+        documents,
+        repo_content_chunk_partition_count_for_document_count(documents.len()),
+    )
+}
+
+fn repo_content_chunk_file_fingerprints_with_partition_count(
+    documents: &[RepoCodeDocument],
+    partition_count: usize,
 ) -> BTreeMap<String, SearchFileFingerprint> {
     documents
         .iter()
@@ -76,6 +158,10 @@ pub(crate) fn repo_content_chunk_file_fingerprints(
                 REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
                 SearchCorpusKind::RepoContentChunk.schema_version(),
             );
+            fingerprint.partition_id = Some(repo_content_chunk_partition_id_for_count(
+                document.path.as_str(),
+                partition_count,
+            ));
             fingerprint.blake3 = Some(stable_payload_fingerprint(
                 "repo_content_chunk_document",
                 document.contents.as_ref(),

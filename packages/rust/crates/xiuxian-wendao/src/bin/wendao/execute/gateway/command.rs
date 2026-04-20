@@ -23,8 +23,8 @@ use tower::{BoxError, ServiceBuilder};
 
 use crate::execute::gateway::{
     config::{
-        GatewayRuntimeTomlConfig, get_gateway_runtime_from_config, resolve_config_path,
-        resolve_port, resolve_webhook_config,
+        GatewayRuntimeTomlConfig, get_gateway_runtime_from_config, resolve_bind_addr,
+        resolve_config_path, resolve_port, resolve_webhook_config,
     },
     health::health,
     query::{GATEWAY_QUERY_AXUM_PATH, query},
@@ -38,7 +38,7 @@ use xiuxian_wendao::LinkGraphIndex;
 #[cfg(feature = "zhenfa-router")]
 use xiuxian_wendao::gateway::studio::build_studio_flight_service_with_weights;
 use xiuxian_wendao::gateway::{
-    openapi::paths as openapi_paths,
+    self as openapi_paths,
     studio::{
         GatewayStartupHealthReport, describe_gateway_startup_health, probe_gateway_startup_health,
         studio_routes,
@@ -143,8 +143,9 @@ async fn handle_start(
     )?;
 
     // 4. Start the server
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    info!("Starting Wendao Gateway on port {port}");
+    let bind_addr = resolve_bind_addr(config_path.as_deref());
+    let addr = SocketAddr::from((bind_addr, port));
+    info!("Starting Wendao Gateway on {addr}");
     info!(
         "Gateway listener backlog={listen_backlog}, studio concurrency limit={studio_concurrency_limit}, studio request timeout={}s",
         studio_request_timeout.as_secs()

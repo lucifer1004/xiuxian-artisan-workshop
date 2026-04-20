@@ -90,21 +90,6 @@ let
                   run = ''cd agent/knowledge && repomix --config repomix.json --output "$PRJ_ROOT"/.data/project_knowledge.xml '';
                 };
                 # Add ruff for Python formatting
-                "format-python" = {
-                  glob = "*.py";
-                  exclude = [
-                    "assets/skills/_template/**" # Template folder - not real code
-                  ];
-                  run = "uv run ruff format {staged_files}";
-                };
-                cog-check = {
-                  # Still useful to check if types (feat/fix) are correct since last tag
-                  run = "cog check --from-latest-tag";
-                };
-                format-rust = {
-                  glob = "*.rs";
-                  run = "rustfmt -- {staged_files}";
-                };
                 format-nickel = {
                   glob = "*.ncl";
                   run = "nickel format -- {staged_files}";
@@ -113,6 +98,7 @@ let
               commit-msg = lefthook.default.data.commit-msg;
               # Remove unnecessary commands from default pre-commit
               commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
+                "cog-check"
                 "treefmt" # We use nixfmt instead
                 # "hunspell" # Not needed for LLM-generated content
                 # "typos" # Not needed for LLM-generated content

@@ -2,11 +2,9 @@ use std::sync::Arc;
 
 use xiuxian_wendao_runtime::transport::SearchFlightRouteResponse;
 
-use crate::gateway::studio::router::{StudioApiError, StudioState};
-use crate::gateway::studio::search::handlers::knowledge::intent::flight::{
-    search_hit_batch_from_hits, search_response_flight_app_metadata,
-};
+use super::{search_hit_batch_from_hits, search_response_flight_app_metadata};
 use crate::gateway::studio::types::SearchResponse;
+use crate::gateway::studio::{StudioApiError, StudioState};
 use crate::search::{SearchCorpusKind, SearchPlaneCacheTtl};
 
 pub(crate) async fn build_knowledge_search_response(

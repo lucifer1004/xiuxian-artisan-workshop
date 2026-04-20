@@ -4,8 +4,15 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use criterion::{Criterion, Throughput, black_box};
+use criterion::{BatchSize, Criterion, Throughput, black_box};
 use tempfile::{TempDir, tempdir};
+use xiuxian_wendao::repo_index::perf_support::{
+    RepoBootstrapBenchmarkFixture, benchmark_collect_full_repo_code_documents,
+    benchmark_collect_incremental_repo_code_documents,
+};
+use xiuxian_wendao::search::perf_support::{
+    RepoContentParquetMutationBenchmarkFixture, RepoContentQueryBenchmarkFixture,
+};
 use xiuxian_wendao::{
     LinkGraphHit, LinkGraphIndex, LinkGraphPprSubgraphMode, LinkGraphRelatedPprOptions,
     narrate_subgraph,
@@ -15,6 +22,12 @@ const NODE_COUNT: usize = 2_048;
 const HUB_COUNT: usize = 32;
 const RELATED_MAX_DISTANCE: usize = 4;
 const RELATED_LIMIT: usize = 24;
+const REPO_BENCH_FILE_COUNT: usize = 2_048;
+const REPO_BENCH_FILE_LINES: usize = 20;
+const REPO_BOOTSTRAP_BENCH_REPO_COUNT: usize = 10_000;
+const REPO_PUBLICATION_PARQUET_SMALL_DOC_COUNT: usize = 1_000;
+const REPO_PUBLICATION_PARQUET_LARGE_DOC_COUNT: usize = 10_000;
+const REPO_QUERY_BENCH_DOC_COUNT: usize = 100_000;
 
 fn note_id(i: usize) -> String {
     format!("note-{i:05}")
@@ -28,6 +41,21 @@ fn write_note(path: &Path, body: &str) {
     if let Err(error) = fs::write(path, body) {
         panic!("write benchmark fixture note {}: {error}", path.display());
     }
+}
+
+fn write_repo_file(path: &Path, module_name: &str, line_seed: usize) {
+    let mut body = format!("module {module_name}\n");
+    for line in 0..REPO_BENCH_FILE_LINES {
+        body.push_str(
+            format!(
+                "export symbol_{line_seed}_{line}\nfunction symbol_{line_seed}_{line}(x)\n    x + {}\nend\n\n",
+                line_seed + line
+            )
+            .as_str(),
+        );
+    }
+    body.push_str("end\n");
+    write_note(path, body.as_str());
 }
 
 fn build_fixture(root: &Path) {
@@ -60,6 +88,25 @@ fn build_fixture(root: &Path) {
         }
         let body = format!("# {hub}\n\nSynthetic benchmark hub {i}.\n\nOutbound links: {links}\n");
         write_note(&root.join(format!("{hub}.md")), &body);
+    }
+}
+
+fn repo_file_path(i: usize) -> String {
+    format!("src/module_{i:04}.jl")
+}
+
+fn build_repo_collection_fixture(root: &Path) {
+    let src = root.join("src");
+    if let Err(error) = fs::create_dir_all(src.as_path()) {
+        panic!("create repo benchmark src {}: {error}", src.display());
+    }
+    for i in 0..REPO_BENCH_FILE_COUNT {
+        let module_name = format!("Module{i:04}");
+        write_repo_file(
+            src.join(format!("module_{i:04}.jl")).as_path(),
+            module_name.as_str(),
+            i,
+        );
     }
 }
 
@@ -115,6 +162,178 @@ fn bench_related_ppr(c: &mut Criterion) {
     group.finish();
 }
 
+fn build_repo_collection_benchmark_fixture() -> (
+    TempDir,
+    std::collections::BTreeSet<String>,
+    std::collections::BTreeSet<String>,
+    std::collections::BTreeMap<String, xiuxian_wendao::search::SearchFileFingerprint>,
+) {
+    let tmp = match tempdir() {
+        Ok(tmp) => tmp,
+        Err(error) => panic!("create repo benchmark tempdir: {error}"),
+    };
+    build_repo_collection_fixture(tmp.path());
+    let baseline = benchmark_collect_full_repo_code_documents(tmp.path());
+
+    write_repo_file(
+        tmp.path().join(repo_file_path(7)).as_path(),
+        "Module0007",
+        7_000,
+    );
+    write_repo_file(
+        tmp.path().join(repo_file_path(512)).as_path(),
+        "Module0512",
+        51_200,
+    );
+    write_repo_file(
+        tmp.path().join("src/module_4096.jl").as_path(),
+        "Module4096",
+        409_600,
+    );
+    if let Err(error) = fs::remove_file(tmp.path().join(repo_file_path(1024))) {
+        panic!(
+            "remove repo benchmark file {}: {error}",
+            repo_file_path(1024)
+        );
+    }
+
+    (
+        tmp,
+        std::collections::BTreeSet::from([
+            repo_file_path(7),
+            repo_file_path(512),
+            "src/module_4096.jl".to_string(),
+        ]),
+        std::collections::BTreeSet::from([repo_file_path(1024)]),
+        baseline.file_fingerprints,
+    )
+}
+
+fn bench_incremental_repo_code_documents(c: &mut Criterion) {
+    let (tmp, changed_paths, deleted_paths, previous_fingerprints) =
+        build_repo_collection_benchmark_fixture();
+    let mut group = c.benchmark_group("incremental_repo_code_documents");
+    group.throughput(Throughput::Elements(
+        u64::try_from(REPO_BENCH_FILE_COUNT).unwrap_or(u64::MAX),
+    ));
+    group.bench_function("full_scan_2048_files", |bench| {
+        bench.iter(|| {
+            let snapshot = benchmark_collect_full_repo_code_documents(black_box(tmp.path()));
+            assert_eq!(snapshot.document_count, REPO_BENCH_FILE_COUNT);
+            black_box(snapshot.document_count)
+        });
+    });
+    group.bench_function("incremental_3_changes", |bench| {
+        bench.iter(|| {
+            let snapshot = benchmark_collect_incremental_repo_code_documents(
+                black_box(tmp.path()),
+                black_box(&changed_paths),
+                black_box(&deleted_paths),
+                black_box(&previous_fingerprints),
+            );
+            assert_eq!(snapshot.changed_document_count, 3);
+            assert_eq!(snapshot.deleted_path_count, 1);
+            assert_eq!(snapshot.file_fingerprints.len(), REPO_BENCH_FILE_COUNT);
+            black_box(snapshot.changed_document_count + snapshot.deleted_path_count)
+        });
+    });
+    group.finish();
+}
+
+fn bench_repo_bootstrap_statuses(c: &mut Criterion) {
+    let fixture = RepoBootstrapBenchmarkFixture::synthetic(REPO_BOOTSTRAP_BENCH_REPO_COUNT);
+    assert!(!fixture.snapshot_file_exists());
+
+    let mut group = c.benchmark_group("repo_bootstrap_statuses");
+    group.throughput(Throughput::Elements(
+        u64::try_from(fixture.repo_count()).unwrap_or(u64::MAX),
+    ));
+    group.bench_function("bootstrap_statuses_10k_repo_records", |bench| {
+        bench.iter(|| {
+            let status_count = fixture.bootstrap_status_count();
+            assert_eq!(status_count, fixture.repo_count());
+            black_box(status_count)
+        });
+    });
+    group.finish();
+}
+
+fn bench_repo_content_parquet_mutation(c: &mut Criterion) {
+    let small_fixture = RepoContentParquetMutationBenchmarkFixture::synthetic(
+        REPO_PUBLICATION_PARQUET_SMALL_DOC_COUNT,
+    );
+    let large_fixture = RepoContentParquetMutationBenchmarkFixture::synthetic(
+        REPO_PUBLICATION_PARQUET_LARGE_DOC_COUNT,
+    );
+
+    let mut group = c.benchmark_group("repo_content_parquet_mutation");
+    group.bench_function("clone_and_mutate_1k_documents", |bench| {
+        bench.iter_batched(
+            || small_fixture.prepare_iteration(),
+            |iteration| {
+                let snapshot = iteration.run();
+                assert_eq!(snapshot.row_count, small_fixture.expected_row_count());
+                assert_eq!(
+                    snapshot.added_query_paths,
+                    vec![small_fixture.added_path().to_string()]
+                );
+                assert!(snapshot.deleted_query_paths.is_empty());
+                black_box(snapshot.row_count)
+            },
+            BatchSize::SmallInput,
+        );
+    });
+    group.bench_function("clone_and_mutate_10k_documents", |bench| {
+        bench.iter_batched(
+            || large_fixture.prepare_iteration(),
+            |iteration| {
+                let snapshot = iteration.run();
+                assert_eq!(snapshot.row_count, large_fixture.expected_row_count());
+                assert_eq!(
+                    snapshot.added_query_paths,
+                    vec![large_fixture.added_path().to_string()]
+                );
+                assert!(snapshot.deleted_query_paths.is_empty());
+                black_box(snapshot.row_count)
+            },
+            BatchSize::SmallInput,
+        );
+    });
+    group.finish();
+}
+
+fn bench_repo_content_query(c: &mut Criterion) {
+    let fixture = RepoContentQueryBenchmarkFixture::synthetic(REPO_QUERY_BENCH_DOC_COUNT);
+
+    let mut group = c.benchmark_group("repo_content_query");
+    group.throughput(Throughput::Elements(
+        u64::try_from(REPO_QUERY_BENCH_DOC_COUNT).unwrap_or(u64::MAX),
+    ));
+    group.bench_function("hot_query_100k_documents", |bench| {
+        bench.iter_batched(
+            || fixture.prepare_iteration(),
+            |iteration| {
+                let sample = iteration.measure_hot_query_after_cold_warmup();
+                assert_eq!(sample.hit_count, 1);
+                black_box(sample.hit_count)
+            },
+            BatchSize::SmallInput,
+        );
+    });
+    group.bench_function("flight_batch_100k_documents", |bench| {
+        bench.iter_batched(
+            || fixture.prepare_iteration(),
+            |iteration| {
+                let sample = iteration.measure_flight_batch_after_cold_warmup();
+                assert_eq!(sample.row_count, 1);
+                black_box(sample.row_count)
+            },
+            BatchSize::SmallInput,
+        );
+    });
+    group.finish();
+}
+
 fn bench_narration_fusion(c: &mut Criterion) {
     let hits: Vec<LinkGraphHit> = (0..240)
         .map(|i| {
@@ -145,6 +364,10 @@ fn bench_narration_fusion(c: &mut Criterion) {
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_related_ppr(&mut criterion);
+    bench_incremental_repo_code_documents(&mut criterion);
+    bench_repo_bootstrap_statuses(&mut criterion);
+    bench_repo_content_parquet_mutation(&mut criterion);
+    bench_repo_content_query(&mut criterion);
     bench_narration_fusion(&mut criterion);
     criterion.final_summary();
 }

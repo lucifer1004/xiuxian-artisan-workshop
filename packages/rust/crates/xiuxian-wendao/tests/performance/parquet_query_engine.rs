@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use serial_test::file_serial;
 use tempfile::TempDir;
 use xiuxian_testing::{PerfBudget, PerfReport, PerfRunConfig, assert_perf_budget, run_sync_budget};
 use xiuxian_vector::{
@@ -8,7 +9,11 @@ use xiuxian_vector::{
     SearchEngineContext, write_lance_batches_to_parquet_file,
 };
 use xiuxian_wendao::duckdb::{
-    DataFusionParquetQueryEngine, DuckDbDatabasePath, ParquetQueryEngine, SearchDuckDbRuntimeConfig,
+    DataFusionParquetQueryEngine, DuckDbDatabasePath, ParquetQueryEngine,
+    SearchDuckDbExecutionConfig, SearchDuckDbRuntimeConfig,
+};
+use xiuxian_wendao_runtime::config::{
+    DEFAULT_SEARCH_DUCKDB_PARQUET_METADATA_CACHE, DEFAULT_SEARCH_DUCKDB_PRESERVE_INSERTION_ORDER,
 };
 
 use super::support::{env_f64, env_u64, env_usize};
@@ -28,6 +33,7 @@ ORDER BY line_no DESC \
 LIMIT 32";
 
 #[test]
+#[file_serial(wendao_perf_gate)]
 fn parquet_query_engine_duckdb_vs_datafusion_p95_gate() -> Result<(), String> {
     let fixture = build_parquet_fixture().map_err(|error| error.to_string())?;
     let datafusion_engine = ParquetQueryEngine::DataFusion(DataFusionParquetQueryEngine::new(
@@ -103,8 +109,14 @@ fn duckdb_runtime(root: &std::path::Path) -> SearchDuckDbRuntimeConfig {
         database_path: DuckDbDatabasePath::InMemory,
         temp_directory: root.join(".cache/duckdb-perf/tmp"),
         threads: 2,
+        execution: SearchDuckDbExecutionConfig {
+            preserve_insertion_order: DEFAULT_SEARCH_DUCKDB_PRESERVE_INSERTION_ORDER,
+            parquet_metadata_cache: DEFAULT_SEARCH_DUCKDB_PARQUET_METADATA_CACHE,
+            prefer_virtual_arrow: true,
+        },
+        memory_limit: None,
+        max_temp_directory_size: None,
         materialize_threshold_rows: 4_096,
-        prefer_virtual_arrow: true,
     }
 }
 
@@ -115,7 +127,10 @@ fn query_engine_once(
     let batches = runtime
         .block_on(engine.query_batches(SQL))
         .map_err(|error| format!("failed to execute parquet perf query: {error}"))?;
-    let row_count = batches.iter().map(|batch| batch.num_rows()).sum::<usize>();
+    let row_count = batches
+        .iter()
+        .map(xiuxian_vector::EngineRecordBatch::num_rows)
+        .sum::<usize>();
     if row_count != EXPECTED_RESULT_ROWS {
         return Err(format!(
             "expected {EXPECTED_RESULT_ROWS} parquet perf rows, got {row_count}"
@@ -152,13 +167,13 @@ fn p95_ratio(datafusion: &PerfReport, duckdb: &PerfReport) -> f64 {
 }
 
 struct ParquetFixture {
-    _temp_dir: TempDir,
+    temp_dir: TempDir,
     parquet_path: std::path::PathBuf,
 }
 
 impl ParquetFixture {
     fn root_path(&self) -> &std::path::Path {
-        self._temp_dir.path()
+        self.temp_dir.path()
     }
 
     fn parquet_path(&self) -> &std::path::Path {
@@ -219,7 +234,7 @@ fn build_parquet_fixture() -> Result<ParquetFixture, Box<dyn std::error::Error>>
     write_lance_batches_to_parquet_file(&parquet_path, &[batch])?;
 
     Ok(ParquetFixture {
-        _temp_dir: temp_dir,
+        temp_dir,
         parquet_path,
     })
 }

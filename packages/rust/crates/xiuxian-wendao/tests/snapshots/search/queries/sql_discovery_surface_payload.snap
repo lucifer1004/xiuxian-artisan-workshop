@@ -1,5 +1,6 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/src/search/queries/tests/snapshots.rs
+source: tests/unit/search/queries/snapshots.rs
+assertion_line: 9
 expression: value
 ---
 {

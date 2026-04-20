@@ -26,17 +26,18 @@ redis = { workspace = true, features = ["tokio-comp"] }
 log = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
-regex = "1"
+regex = { workspace = true }
 md5 = { workspace = true }
 include_dir = { workspace = true }
 walkdir = { workspace = true }
 globset = { workspace = true }
 tempfile = { workspace = true }
-merman-core = "0.4"
+merman-core = { workspace = true }
 quick-xml = { workspace = true, features = ["serialize"] }
 reqwest = { workspace = true }
 jsonschema = { workspace = true }
 xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
+xiuxian-wendao-sql = { path = "../xiuxian-wendao-sql" }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime" }
 xiuxian-wendao-parsers = { path = "../xiuxian-wendao-parsers" }
@@ -107,7 +108,7 @@ path = "tests/integration/flowhub_contracts/mod.rs"
 
 [[test]]
 name = "flowhub_manifest_contracts"
-path = "tests/integration/flowhub_manifest_contracts.rs"
+path = "tests/integration/flowhub_manifest_contracts/mod.rs"
 
 [[test]]
 name = "flowhub_materialize"

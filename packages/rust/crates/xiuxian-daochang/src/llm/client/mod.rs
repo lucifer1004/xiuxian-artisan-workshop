@@ -5,11 +5,13 @@ use std::sync::Arc;
 
 use tokio::sync::Semaphore;
 
+use crate::config::RuntimeSettings;
 use crate::session::ChatMessage;
 
 use super::backend::LlmBackendMode;
 #[cfg(feature = "agent-provider-litellm")]
 use super::compat::litellm::LiteLlmRuntime;
+#[cfg(feature = "agent-provider-litellm")]
 use super::providers::{LiteLlmProviderMode, LiteLlmWireApi};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,12 +31,15 @@ pub struct LlmClient {
     model: String,
     api_key: Option<String>,
     backend_mode: LlmBackendMode,
+    #[cfg(feature = "agent-provider-litellm")]
     litellm_provider_mode: LiteLlmProviderMode,
+    #[cfg(feature = "agent-provider-litellm")]
     litellm_wire_api: LiteLlmWireApi,
     #[cfg(feature = "agent-provider-litellm")]
     litellm_api_key_env: String,
     #[cfg(feature = "agent-provider-litellm")]
     minimax_api_base: String,
+    #[cfg(feature = "agent-provider-litellm")]
     inference_timeout_secs: u64,
     inference_max_tokens: Option<u32>,
     inference_max_in_flight: Option<usize>,
@@ -76,4 +81,16 @@ fn compute_saturation_pct(in_flight: usize, max_in_flight: usize) -> u8 {
     }
     let ratio = in_flight.saturating_mul(100) / max_in_flight;
     u8::try_from(ratio).unwrap_or(100).min(100)
+}
+
+pub(crate) fn test_resolve_backend_mode_for_inference_url(
+    runtime_settings: &RuntimeSettings,
+    inference_url: &str,
+    env_backend_raw: Option<&str>,
+) -> (LlmBackendMode, &'static str) {
+    init::test_resolve_backend_mode_for_inference_url(
+        runtime_settings,
+        inference_url,
+        env_backend_raw,
+    )
 }

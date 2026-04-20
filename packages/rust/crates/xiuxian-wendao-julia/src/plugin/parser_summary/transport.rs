@@ -1,22 +1,26 @@
-use std::sync::OnceLock;
+use std::collections::HashMap;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use arrow::record_batch::RecordBatch;
 use serde_json::Value;
-use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::{
     capabilities::{ContractVersion, PluginCapabilityBinding},
     repo_intelligence::{RegisteredRepository, RepoIntelligenceError, RepositoryPluginConfig},
     transport::{PluginTransportEndpoint, PluginTransportKind},
 };
 use xiuxian_wendao_runtime::transport::{
-    DEFAULT_FLIGHT_BASE_URL, FLIGHT_SCHEMA_VERSION_METADATA_KEY, NegotiatedFlightTransportClient,
-    negotiate_flight_transport_client_from_bindings, normalize_flight_route,
-    validate_flight_schema_version, validate_flight_timeout_secs,
+    DEFAULT_FLIGHT_MAX_IN_FLIGHT_REQUESTS, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+    NegotiatedFlightTransportClient, negotiate_flight_transport_client_from_bindings,
+    normalize_flight_route, validate_flight_max_in_flight_requests, validate_flight_schema_version,
+    validate_flight_timeout_secs,
 };
 
 use super::contract::{
     validate_julia_parser_summary_request_batches, validate_julia_parser_summary_response_batches,
 };
+use crate::arrow_metadata::attach_record_batch_metadata;
 use crate::compatibility::link_graph::julia_parser_summary_provider_selector;
 
 const JULIA_PLUGIN_ID: &str = "julia";
@@ -24,7 +28,15 @@ const PARSER_SUMMARY_TRANSPORT_KEY: &str = "parser_summary_transport";
 const FILE_SUMMARY_TRANSPORT_KEY: &str = "file_summary";
 const ROOT_SUMMARY_TRANSPORT_KEY: &str = "root_summary";
 const DEFAULT_JULIA_HEALTH_ROUTE: &str = "/healthz";
-const DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL: &str = "http://127.0.0.1:41081";
+const DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL_FALLBACK: &str = "http://127.0.0.1:41081";
+const PARSER_SUMMARY_BASE_URL_ENV: &str = "WENDAO_PARSER_SUMMARY_BASE_URL";
+
+fn resolve_parser_summary_base_url() -> String {
+    std::env::var(PARSER_SUMMARY_BASE_URL_ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL_FALLBACK.to_string())
+}
 const DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS: u64 = 120;
 
 pub(crate) const JULIA_PARSER_SUMMARY_SCHEMA_VERSION: &str = "v3";
@@ -32,11 +44,32 @@ pub(crate) const JULIA_FILE_SUMMARY_ROUTE: &str = "/wendao/code-parser/julia/fil
 pub(crate) const JULIA_ROOT_SUMMARY_ROUTE: &str = "/wendao/code-parser/julia/root-summary";
 
 static LINKED_JULIA_PARSER_SUMMARY_BASE_URL: OnceLock<String> = OnceLock::new();
+static JULIA_PARSER_SUMMARY_CLIENT_CACHE: OnceLock<
+    Mutex<HashMap<ParserSummaryTransportCacheKey, CachedParserSummaryFlightClient>>,
+> = OnceLock::new();
+#[cfg(test)]
+static NEXT_JULIA_PARSER_SUMMARY_CLIENT_SLOT: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParserSummaryRouteKind {
     FileSummary,
     RootSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ParserSummaryTransportCacheKey {
+    base_url: String,
+    route: String,
+    schema_version: String,
+    timeout_secs: u64,
+    max_in_flight_requests: u64,
+}
+
+#[derive(Clone)]
+struct CachedParserSummaryFlightClient {
+    #[cfg(test)]
+    slot_id: usize,
+    client: NegotiatedFlightTransportClient,
 }
 
 impl ParserSummaryRouteKind {
@@ -91,6 +124,14 @@ pub fn set_linked_julia_parser_summary_base_url_for_tests(
         .map_err(|_| "failed to store linked Julia parser-summary base_url".to_string())
 }
 
+#[cfg(test)]
+pub fn clear_julia_parser_summary_transport_cache_for_tests() {
+    julia_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clear();
+}
+
 /// Build a Julia parser-summary Flight transport client for one route kind.
 ///
 /// # Errors
@@ -103,7 +144,15 @@ pub(crate) fn build_julia_parser_summary_flight_transport_client(
     route_kind: ParserSummaryRouteKind,
 ) -> Result<NegotiatedFlightTransportClient, RepoIntelligenceError> {
     let binding = build_parser_summary_flight_transport_binding(repository, route_kind)?;
-
+    let cache_key = parser_summary_transport_cache_key(&binding, repository, route_kind)?;
+    {
+        let cache = julia_parser_summary_client_cache()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(cached) = cache.get(&cache_key) {
+            return Ok(cached.client.clone());
+        }
+    }
     let negotiated = negotiate_flight_transport_client_from_bindings(&[binding]).map_err(
         |error| RepoIntelligenceError::ConfigLoad {
             message: format!(
@@ -113,7 +162,19 @@ pub(crate) fn build_julia_parser_summary_flight_transport_client(
             ),
         },
     )?;
-    negotiated.ok_or_else(|| missing_parser_summary_transport_error(repository, route_kind))
+    let client =
+        negotiated.ok_or_else(|| missing_parser_summary_transport_error(repository, route_kind))?;
+    let mut cache = julia_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let cached = cache
+        .entry(cache_key)
+        .or_insert_with(|| CachedParserSummaryFlightClient {
+            #[cfg(test)]
+            slot_id: NEXT_JULIA_PARSER_SUMMARY_CLIENT_SLOT.fetch_add(1, Ordering::Relaxed),
+            client: client.clone(),
+        });
+    Ok(cached.client.clone())
 }
 
 /// Send parser-summary Arrow batches to one remote Julia Flight transport.
@@ -161,7 +222,113 @@ pub(crate) async fn process_julia_parser_summary_flight_batches_for_repository(
     batches: &[RecordBatch],
 ) -> Result<Vec<RecordBatch>, RepoIntelligenceError> {
     let client = build_julia_parser_summary_flight_transport_client(repository, route_kind)?;
-    process_julia_parser_summary_flight_batches(&client, route_kind, batches).await
+    match process_julia_parser_summary_flight_batches(&client, route_kind, batches).await {
+        Ok(response_batches) => Ok(response_batches),
+        Err(error) if parser_summary_transport_error_requires_client_refresh(&error) => {
+            evict_julia_parser_summary_cached_client(repository, route_kind)?;
+            let refreshed_client =
+                build_julia_parser_summary_flight_transport_client(repository, route_kind)?;
+            process_julia_parser_summary_flight_batches(&refreshed_client, route_kind, batches)
+                .await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub(crate) fn julia_parser_summary_timeout_secs_for_repository(
+    repository: &RegisteredRepository,
+    route_kind: ParserSummaryRouteKind,
+) -> Result<u64, RepoIntelligenceError> {
+    let binding = build_parser_summary_flight_transport_binding(repository, route_kind)?;
+    Ok(binding
+        .endpoint
+        .timeout_secs
+        .unwrap_or(DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS))
+}
+
+fn julia_parser_summary_client_cache()
+-> &'static Mutex<HashMap<ParserSummaryTransportCacheKey, CachedParserSummaryFlightClient>> {
+    JULIA_PARSER_SUMMARY_CLIENT_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn evict_julia_parser_summary_cached_client(
+    repository: &RegisteredRepository,
+    route_kind: ParserSummaryRouteKind,
+) -> Result<(), RepoIntelligenceError> {
+    let binding = build_parser_summary_flight_transport_binding(repository, route_kind)?;
+    let cache_key = parser_summary_transport_cache_key(&binding, repository, route_kind)?;
+    julia_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&cache_key);
+    Ok(())
+}
+
+fn parser_summary_transport_error_requires_client_refresh(error: &RepoIntelligenceError) -> bool {
+    matches!(
+        error,
+        RepoIntelligenceError::AnalysisFailed { message }
+            if message.contains("Service was not ready: transport error")
+    )
+}
+
+fn parser_summary_transport_cache_key(
+    binding: &PluginCapabilityBinding,
+    repository: &RegisteredRepository,
+    route_kind: ParserSummaryRouteKind,
+) -> Result<ParserSummaryTransportCacheKey, RepoIntelligenceError> {
+    let base_url = binding
+        .endpoint
+        .base_url
+        .clone()
+        .ok_or_else(|| missing_parser_summary_transport_error(repository, route_kind))?;
+    let route = binding
+        .endpoint
+        .route
+        .clone()
+        .ok_or_else(|| missing_parser_summary_transport_error(repository, route_kind))?;
+    Ok(ParserSummaryTransportCacheKey {
+        base_url,
+        route,
+        schema_version: binding.contract_version.0.clone(),
+        timeout_secs: binding
+            .endpoint
+            .timeout_secs
+            .unwrap_or(DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS),
+        max_in_flight_requests: binding
+            .endpoint
+            .max_in_flight_requests
+            .unwrap_or(DEFAULT_FLIGHT_MAX_IN_FLIGHT_REQUESTS as u64),
+    })
+}
+
+#[cfg(test)]
+fn julia_parser_summary_transport_cache_len_for_tests() -> usize {
+    julia_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .len()
+}
+
+#[cfg(test)]
+fn julia_parser_summary_transport_slot_id_for_tests(
+    repository: &RegisteredRepository,
+    route_kind: ParserSummaryRouteKind,
+) -> Result<usize, RepoIntelligenceError> {
+    let binding = build_parser_summary_flight_transport_binding(repository, route_kind)?;
+    let cache_key = parser_summary_transport_cache_key(&binding, repository, route_kind)?;
+    julia_parser_summary_client_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&cache_key)
+        .map(|cached| cached.slot_id)
+        .ok_or_else(|| RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "Julia parser-summary cached client missing for repo `{}` and route `{}`",
+                repository.id,
+                route_kind.route(),
+            ),
+        })
 }
 
 fn build_parser_summary_flight_transport_binding(
@@ -225,6 +392,21 @@ fn build_parser_summary_flight_transport_binding(
         })?,
         None => DEFAULT_PARSER_SUMMARY_TIMEOUT_SECS,
     };
+    let max_in_flight_requests = match options.max_in_flight_requests {
+        Some(max_in_flight_requests) => {
+            validate_flight_max_in_flight_requests(max_in_flight_requests).map_err(|error| {
+                RepoIntelligenceError::ConfigLoad {
+                    message: format!(
+                        "repo `{}` Julia parser-summary max_in_flight_requests for `{}` is invalid: {error}",
+                        repository.id,
+                        route_kind.route(),
+                    ),
+                }
+            })?;
+            Some(max_in_flight_requests)
+        }
+        None => None,
+    };
 
     Ok(PluginCapabilityBinding {
         selector: julia_parser_summary_provider_selector(),
@@ -232,11 +414,12 @@ fn build_parser_summary_flight_transport_binding(
             base_url: Some(
                 options
                     .base_url
-                    .unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string()),
+                    .unwrap_or_else(resolve_parser_summary_base_url),
             ),
             route: Some(route),
             health_route: Some(health_route),
             timeout_secs: Some(timeout_secs),
+            max_in_flight_requests,
         },
         launch: None,
         transport: PluginTransportKind::ArrowFlight,
@@ -280,6 +463,7 @@ struct ParserSummaryTransportOptions {
     health_route: Option<String>,
     schema_version: Option<String>,
     timeout_secs: Option<u64>,
+    max_in_flight_requests: Option<u64>,
 }
 
 fn resolve_parser_summary_transport_options(
@@ -350,6 +534,11 @@ fn resolve_parser_summary_transport_options(
                 .transpose()?
                 .flatten()
                 .or(u64_option(transport, "timeout_secs", repository)?),
+            max_in_flight_requests: route_override
+                .map(|value| u64_option(value, "max_in_flight_requests", repository))
+                .transpose()?
+                .flatten()
+                .or(u64_option(transport, "max_in_flight_requests", repository)?),
         }));
     }
 
@@ -361,17 +550,19 @@ fn resolve_parser_summary_transport_options(
             health_route: None,
             schema_version: Some(JULIA_PARSER_SUMMARY_SCHEMA_VERSION.to_string()),
             timeout_secs: None,
+            max_in_flight_requests: None,
         }));
     }
 
     if saw_julia_plugin {
         return Ok(Some(ParserSummaryTransportOptions {
             enabled: Some(true),
-            base_url: Some(DEFAULT_WENDAOSEARCH_PARSER_SUMMARY_BASE_URL.to_string()),
+            base_url: Some(resolve_parser_summary_base_url()),
             route: None,
             health_route: None,
             schema_version: Some(JULIA_PARSER_SUMMARY_SCHEMA_VERSION.to_string()),
             timeout_secs: None,
+            max_in_flight_requests: None,
         }));
     }
 

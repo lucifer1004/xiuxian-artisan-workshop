@@ -9,13 +9,16 @@
 //! # Data Flow
 //!
 //! 1. NCL exports configuration to JSON (nickel export --format json)
-//! 2. Python loads JSON and passes config path to Rust
+//! 2. A host runtime passes the config path to Rust
 //! 3. Rust executor reads JSON, spawns nsjail/seatbelt
 //! 4. Rust monitors resources and returns results
 
-xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
+use std::{env, ffi::OsStr, path::Path};
 
-use pyo3::prelude::*;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+xiuxian_testing::crate_test_policy_source_harness!("../tests/unit/lib_policy.rs");
 
 pub mod executor;
 
@@ -24,7 +27,6 @@ pub use executor::SeatbeltExecutor;
 pub use executor::{ExecutionResult, MountConfig, SandboxConfig};
 
 /// Platform detection
-#[pyfunction]
 #[must_use]
 pub fn detect_platform() -> String {
     if cfg!(target_os = "linux") {
@@ -37,36 +39,47 @@ pub fn detect_platform() -> String {
 }
 
 /// Check if nsjail is available
-#[pyfunction]
 #[must_use]
 pub fn is_nsjail_available() -> bool {
-    which::which("nsjail").is_ok()
+    is_command_available("nsjail")
 }
 
 /// Check if sandbox-exec is available (macOS)
-#[pyfunction]
 #[must_use]
 pub fn is_seatbelt_available() -> bool {
     if cfg!(target_os = "macos") {
-        which::which("sandbox-exec").is_ok()
+        is_command_available("sandbox-exec")
     } else {
         false
     }
 }
 
-/// Export Python module
-#[pymodule]
-fn xiuxian_sandbox(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(pyo3::wrap_pyfunction!(detect_platform, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(is_nsjail_available, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(is_seatbelt_available, m)?)?;
-
-    m.add_class::<ExecutionResult>()?;
-    m.add_class::<SandboxConfig>()?;
-    m.add_class::<MountConfig>()?;
-
-    m.add_class::<executor::NsJailExecutor>()?;
-    m.add_class::<executor::SeatbeltExecutor>()?;
-
-    Ok(())
+fn is_command_available(command: &str) -> bool {
+    command_in_path(command, env::var_os("PATH").as_deref())
 }
+
+fn command_in_path(command: &str, path_env: Option<&OsStr>) -> bool {
+    path_env.is_some_and(|paths| {
+        env::split_paths(paths).any(|path_dir| is_executable_file(&path_dir.join(command)))
+    })
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    match path.metadata() {
+        Ok(metadata) if metadata.is_file() => {
+            #[cfg(unix)]
+            {
+                metadata.permissions().mode() & 0o111 != 0
+            }
+            #[cfg(not(unix))]
+            {
+                true
+            }
+        }
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/unit/lib.rs"]
+mod tests;
